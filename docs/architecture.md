@@ -175,7 +175,86 @@ Features offline einfach ausgegraut mit „braucht Verbindung".
 
 ---
 
-## 7. Reconciliation & Rollback (UX)
+## 7. Kapazitätsgrenzen & Overflow (Lagerlimits)
+
+### Die gute Nachricht: offline überschreiten geht gar nicht
+
+Ein Lagerlimit ist eine **Regel innerhalb der Sim** — kein nachträglicher Server-Check. Der
+Client rechnet dieselbe Regel mit derselben Funktion. `simulate()` lehnt die Aktion ab oder
+clampt sie, lokal exakt wie am Server. Es gibt also kein „offline drüber gehen und beim Sync
+fällt's auf".
+
+Das ist ein Beispiel für ein allgemeines Prinzip, das viel Arbeit spart:
+
+> **Jede Regel, die in der Sim lebt, ist automatisch auch offline durchgesetzt.**
+> Nur Regeln, die die *geteilte Welt* brauchen, müssen online sein.
+
+### Was du entscheiden musst: was passiert am Limit
+
+Drei legitime Varianten — Hauptsache deterministisch:
+
+| Variante | Verhalten | Gefühl |
+| --- | --- | --- |
+| **Hard block** | Ernte nicht möglich, Feld bleibt reif stehen | kein Verlust, aber blockiert |
+| **Waste** | Ernte klappt, Überschuss verfällt | flüssig, aber stiller Verlust |
+| **Soft-Cap** | Überfüllen erlaubt, Produktion pausiert bis drunter | kulant, komplexer |
+
+**Empfehlung:** Hard block für *Spieleraktionen* (nie stiller Verlust bei etwas, das der
+Spieler selbst ausgelöst hat) + Produktionsstopp für *passive* Erzeugung.
+
+### Der eigentliche Fallstrick: gedeckelte Akkumulation
+
+Du bist 5h offline, das Lager ist nach 1h voll. Rechnet der Client `rate × Δt` und der Server
+tick-genau mit Clamping (oder umgekehrt) → **Divergenz → R1 → Rollback für einen ehrlichen
+Spieler.** Genau die Bug-Sorte, die das Konzept am meisten gefährdet.
+
+Regel: Produktion ist **eine geschlossene Funktion**, identisch auf beiden Seiten:
+
+```
+produce(fromTick, toTick, rate, capacity, contents) -> newContents
+```
+
+Niemals zwei Implementierungen („die schnelle im Client, die genaue am Server").
+
+**Bonus — das entschärft gleichzeitig R4:** Zwischen zwei Commands passiert nichts
+Spielerseitiges. Es genügt also, diese Funktion **pro Segment** auszuwerten (Segmente =
+Anzahl Commands + 1) statt Tick für Tick über 5h zu loopen. Ein Sync kostet damit
+`O(Commands)` statt `O(vergangene Zeit)`.
+
+### Der harte Fall: was *währenddessen* von außen ankommt
+
+Hier tut das Lagerlimit wirklich weh. Während du offline warst, ist server-seitig etwas
+passiert, das du unmöglich wissen konntest:
+
+- ein Nachbar schickt ein Geschenk
+- ein Marktverkauf geht durch, Gold/Restware kommt zurück
+- ein Live-Event schüttet Belohnungen aus
+
+Beim Sync wollen jetzt **deine offline produzierten Güter** *und* **diese Lieferungen** in ein
+Lager, das nicht für beide reicht.
+
+Regel: **Niemals etwas vernichten, von dem der Spieler nichts wissen konnte.**
+
+1. **Deine Offline-Aktionen zuerst.** Sie liegen in deiner Zeitlinie früher — und der Client
+   hat sie lokal genau so gerechnet. Jede andere Reihenfolge erzeugt Divergenz.
+2. **Server-Lieferungen danach in einen Overflow-Puffer („Postfach")**, nicht ins Lager
+   zwingen und nicht verfallen lassen. Der Spieler räumt auf und holt sie ab.
+3. Das Postfach hat selbst ein großzügiges Limit + Ablauffrist, damit es kein Zweitlager wird.
+
+Ein Postfach willst du für Geschenke, Event-Belohnungen und Entschädigungen ohnehin — es löst
+diesen Fall nebenbei sauber mit.
+
+### Nebeneffekt: Limits sind Inflationsschutz
+
+R6 warnt, dass offline produzierte Güter in den geteilten Markt fließen und jede
+Validierungslücke die Ökonomie *für alle* inflationiert. Ein Lagerlimit **deckelt strukturell**,
+wie viel Offline-Produktion überhaupt in die Wirtschaft gelangen kann — egal wie lange jemand
+weg war. Das ist ein zweites Netz unter der Zeit-Autorität aus §4: selbst wenn die Zeitprüfung
+mal versagt, begrenzt das Lager den Schaden.
+
+---
+
+## 8. Reconciliation & Rollback (UX)
 
 Der ehrliche Fall ist unsichtbar. Für die seltenen Konflikte (Client- und Server-Zustand
 weichen ab — durch Bug, Manipulation oder verlorene Verbindung mitten im Sync):
@@ -192,7 +271,7 @@ weichen ab — durch Bug, Manipulation oder verlorene Verbindung mitten im Sync)
 
 ---
 
-## 8. Grober Tech-Zuschnitt
+## 9. Grober Tech-Zuschnitt
 
 Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
@@ -209,12 +288,14 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
 ---
 
-## 9. Offene Fragen / nächste Schritte
+## 10. Offene Fragen / nächste Schritte
 
 - [ ] Tick-Auflösung festlegen (1s? 1min?) — Trade-off Präzision vs. Log-Größe.
 - [ ] Command-Set definieren (die vollständige Liste erlaubter Aktionen ist die eigentliche
       „Regel" des Spiels).
-- [ ] Konkrete Sim-Sprache/Portabilität wählen (§8).
+- [ ] Konkrete Sim-Sprache/Portabilität wählen (§9).
+- [ ] Verhalten am Lagerlimit festlegen (hard block / waste / soft-cap, §7).
+- [ ] Postfach: Kapazität, Ablauffrist, UI fürs Abholen (§7).
 - [ ] Snapshot-Format + Signaturschema.
 - [ ] Offline-Deckel (§4) und Balancing-Regeln.
 - [ ] Konfliktdarstellung im UI (Sync-Animation statt hartem Rollback).
