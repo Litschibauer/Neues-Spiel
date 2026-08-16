@@ -302,7 +302,7 @@ export class Server {
       const stillPending: MailItem[] = [];
       for (const item of this.pendingDeliveries) {
         if (withMail.mail.length < rules.mailCapacity) {
-          withMail.mail.push(item);
+          withMail.mail = withMail.mail.concat(item);
         } else {
           // Postfach voll — liegen lassen, nicht verwerfen. Der Spieler räumt
           // auf, dann kommt es beim nächsten Sync an.

@@ -93,16 +93,47 @@ export function initialState(fieldCount: number): State {
   };
 }
 
+/**
+ * Flache Kopie — die Arrays werden GETEILT, nicht kopiert.
+ *
+ * Der Grund ist Skalierung: Bei einer Tiefkopie kostet jedes einzelne Command
+ * den gesamten Zustand. Bei sechs Feldern fällt das nicht auf, bei einem Spiel
+ * mit tausenden Objekten wird der Sync dadurch teuer — obwohl ein Command
+ * fast immer nur ein einziges Ding anfasst.
+ *
+ * Preis dieser Entscheidung: **Arrays dürfen nie an Ort und Stelle verändert
+ * werden.** Wer etwas ändert, ersetzt das Array (siehe `replaceAt`). Sonst
+ * schlüge die Änderung auf ältere Zustände durch — und die Sim wäre keine
+ * reine Funktion mehr. Der Session-Fuzz und die Golden Vectors fangen solche
+ * Fehler zuverlässig, weil sie Zustände über viele Schritte vergleichen.
+ */
 export function cloneState(s: State): State {
   return {
     tick: s.tick,
-    fields: s.fields.map((f) => ({ crop: f.crop, plantedAt: f.plantedAt })),
+    fields: s.fields,
     wheat: s.wheat,
     eggs: s.eggs,
     gold: s.gold,
     coopProgress: s.coopProgress,
+    orders: s.orders,
+    mail: s.mail,
+    nextOrderId: s.nextOrderId,
+  };
+}
+
+/** Ein Element ersetzen, ohne das Original anzufassen. Eine Kopie statt N. */
+export function replaceAt<T>(list: readonly T[], index: number, value: T): T[] {
+  const next = list.slice();
+  next[index] = value;
+  return next;
+}
+
+/** Tiefkopie — nur dort, wo wirklich alles unabhängig sein muss (Tests, Migration). */
+export function deepCloneState(s: State): State {
+  return {
+    ...cloneState(s),
+    fields: s.fields.map((f) => ({ crop: f.crop, plantedAt: f.plantedAt })),
     orders: s.orders.map((o) => ({ ...o })),
     mail: s.mail.map((m) => ({ ...m })),
-    nextOrderId: s.nextOrderId,
   };
 }

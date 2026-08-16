@@ -118,3 +118,41 @@ test('Sync ist für den ehrlichen Spieler unsichtbar — nichts geht verloren', 
   assert.equal(client.state.gold, beforeGold);
   assert.equal(client.queue.length, 0);
 });
+
+test('geteilte Arrays: ein neuer Zustand verändert den alten nie', () => {
+  // `cloneState` teilt die Arrays aus Kostengründen. Das ist nur zulässig,
+  // solange niemand sie an Ort und Stelle verändert — sonst wäre `simulate`
+  // keine reine Funktion mehr, und ein Re-Sim liefe anders als der erste Lauf.
+  const rules = getRuleset(CURRENT_RULESET_VERSION);
+  const start = initialState(4);
+
+  const history: State[] = [start];
+  const snapshots: string[] = [hashState(start)];
+
+  const cmds: Command[] = [
+    { seq: 1, tick: 0, type: 'PLANT', field: 0 },
+    { seq: 2, tick: 1, type: 'PLANT', field: 1 },
+    { seq: 3, tick: 7200, type: 'HARVEST', field: 0 },
+    { seq: 4, tick: 7201, type: 'LIST_ORDER', item: 'wheat', amount: 5, price: 3 },
+    { seq: 5, tick: 7202, type: 'HARVEST', field: 1 },
+    { seq: 6, tick: 7203, type: 'SELL_NPC', item: 'wheat', amount: 5 },
+  ];
+
+  let s = start;
+  for (const cmd of cmds) {
+    s = simulate(s, cmd, rules);
+    history.push(s);
+    snapshots.push(hashState(s));
+  }
+
+  // Jeder frühere Zustand muss noch exakt so aussehen wie damals.
+  history.forEach((state, i) => {
+    assert.equal(hashState(state), snapshots[i], `Zustand ${i} wurde nachträglich verändert`);
+  });
+
+  // Und die Arrays dürfen sich nicht gegenseitig überschrieben haben.
+  assert.equal(history[0]!.fields[0]!.crop, null, 'Startzustand hat ein Feld bekommen');
+  assert.equal(history[1]!.fields[1]!.crop, null, 'Zustand 1 hat Feld 2 zu früh');
+  assert.equal(history[0]!.orders.length, 0);
+  assert.equal(history[3]!.orders.length, 0, 'Auftrag rückwirkend eingefügt');
+});

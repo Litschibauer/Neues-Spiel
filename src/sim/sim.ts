@@ -12,7 +12,7 @@
 
 import type { Ruleset } from './rules.ts';
 import type { State } from './state.ts';
-import { cloneState, spaceLeft } from './state.ts';
+import { cloneState, replaceAt, spaceLeft } from './state.ts';
 import { advanceCoop } from './produce.ts';
 import type { Command } from './commands.ts';
 import { SimError } from './commands.ts';
@@ -63,15 +63,20 @@ function expireOrders(s: State, rules: Ruleset): void {
   if (s.orders.length === 0) return;
 
   const survivors: typeof s.orders = [];
+  let mail = s.mail;
   for (const order of s.orders) {
     const expired = s.tick - order.listedAt >= rules.orderTtlTicks;
-    if (expired && s.mail.length < rules.mailCapacity) {
-      s.mail.push({ item: order.item, amount: order.amount, arrivedAt: s.tick });
+    if (expired && mail.length < rules.mailCapacity) {
+      // Neues Array statt push: `mail` wird mit älteren Zuständen geteilt.
+      mail = mail.concat({ item: order.item, amount: order.amount, arrivedAt: s.tick });
     } else {
       survivors.push(order);
     }
   }
-  s.orders = survivors;
+  if (survivors.length !== s.orders.length) {
+    s.orders = survivors;
+    s.mail = mail;
+  }
 }
 
 /**
@@ -92,7 +97,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (field.crop !== null) throw new SimError('FIELD_OCCUPIED');
 
       const next = cloneState(s);
-      next.fields[cmd.field] = { crop: 'wheat', plantedAt: s.tick };
+      next.fields = replaceAt(s.fields, cmd.field, { crop: 'wheat', plantedAt: s.tick });
       return next;
     }
 
@@ -105,7 +110,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (spaceLeft(s, rules.siloCapacity) < rules.wheatYield) throw new SimError('SILO_FULL');
 
       const next = cloneState(s);
-      next.fields[cmd.field] = { crop: null, plantedAt: 0 };
+      next.fields = replaceAt(s.fields, cmd.field, { crop: null, plantedAt: 0 });
       next.wheat += rules.wheatYield;
       return next;
     }
@@ -142,7 +147,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       if (cmd.item === 'wheat') next.wheat -= cmd.amount;
       else next.eggs -= cmd.amount;
-      next.orders.push({
+      next.orders = s.orders.concat({
         id: s.nextOrderId,
         item: cmd.item,
         amount: cmd.amount,
@@ -161,7 +166,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (spaceLeft(s, rules.siloCapacity) < order.amount) throw new SimError('SILO_FULL');
 
       const next = cloneState(s);
-      next.orders = next.orders.filter((o) => o.id !== cmd.orderId);
+      next.orders = s.orders.filter((o) => o.id !== cmd.orderId);
       if (order.item === 'wheat') next.wheat += order.amount;
       else next.eggs += order.amount;
       return next;
@@ -173,10 +178,11 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       const remaining: typeof next.mail = [];
       let collected = 0;
+      const inbox = s.mail;
 
       // In Ankunftsreihenfolge, damit das Ergebnis bei knappem Platz eindeutig
       // ist. Was nicht passt, bleibt liegen — nichts verfällt hier.
-      for (const item of next.mail) {
+      for (const item of inbox) {
         if (item.item === 'gold') {
           next.gold += item.amount;
           collected++;

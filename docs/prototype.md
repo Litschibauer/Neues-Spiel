@@ -125,12 +125,35 @@ echte Regeländerung gehört in eine neue Ruleset-Version (R2) — nicht in übe
 | Messung | Ergebnis |
 | --- | --- |
 | Kosten vs. Offline-**Dauer**, Log konstant | **flach** — 1 Stunde ≈ 1 Jahr ≈ ~15 µs |
-| Kosten vs. Command-**Anzahl** | linear, ~0,14 µs pro Command |
+| Kosten vs. Command-**Anzahl** | linear, ~0,07 µs pro Command |
+| Kosten vs. **Spielgröße** | 600 Objekte ≈ 43 µs, 3000 ≈ 185 µs |
 | Gegenüber Tick-für-Tick bei 30 Tagen offline | ~900× schneller |
-| Typischer Sync (60 Commands) | ~8 µs, also ~120.000 Syncs/s pro Kern |
+| Typischer Sync (60 Commands) | ~4 µs, also ~220.000 Syncs/s pro Kern |
 
 Damit ist die Behauptung aus §7 belegt: **O(Commands), nicht O(Offline-Dauer).** Die
 Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Größenordnungen.
+
+### Skaliert das auch für ein großes Spiel?
+
+Die Frage ist nicht „wie viele Features", sondern **wie viel Zustand ein einzelnes Command
+anfasst**. Ein Feld reift nicht „mit": Ob es reif ist, ergibt sich beim Lesen aus
+`(plantedAt, jetzt)`. Nur echte Fließproduktion wird fortgeschrieben, und die in
+geschlossener Form.
+
+Die Messung deckte dabei einen Engpass auf, den die Theorie nicht hatte: Der Sync war
+**linear in der Spielgröße**, weil jedes Command den ganzen Zustand tiefkopierte — bei sechs
+Feldern unsichtbar, bei 3000 Objekten 2 ms. Zustände teilen sich ihre Arrays jetzt und
+ersetzen nur das geänderte Element; das brachte Faktor 11.
+
+Ehrlich bleibt: Ganz flach ist es nicht. Ein Array-Ersetzen kopiert weiterhin Referenzen,
+also `O(Commands × Objekte)` mit sehr kleinem Faktor. Für Größenordnungen, die ein Farmgame
+je erreicht, sind das zweistellige Mikrosekunden. Wirklich flach würde es erst mit
+persistenten Datenstrukturen — lohnt sich, sobald ein Spielstand Zehntausende Objekte trägt.
+
+**Was mit der Komplexität wirklich wächst, ist nicht die Rechenzeit, sondern die
+Determinismus-Fläche.** Jedes Feature ist eine neue Gelegenheit, dass Client und Server
+auseinanderlaufen. Das ist die eigentliche Steuer auf diesem Ansatz — und sie fällt pro
+Feature an, dauerhaft.
 
 ---
 

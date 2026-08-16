@@ -151,7 +151,41 @@ console.log(`  Faktor insgesamt:                ~${Math.round(naiveTotal / close
 console.log('\n  Und der Abstand WÄCHST mit der Abwesenheit: die geschlossene Form');
 console.log('  bleibt bei denselben Mikrosekunden, die naive Variante nicht.');
 
-console.log('\n=== D) Durchsatz-Abschätzung ===\n');
+console.log('\n=== D) Kosten vs. SPIELGRÖSSE ===');
+console.log('Wächst der Sync mit, wenn das Spiel mehr Inhalt hat?\n');
+
+for (const fields of [6, 60, 600, 3000]) {
+  const log = makeLog(100, fields);
+  const now = Math.max(T0 + log[log.length - 1]!.tick * 1000, T0 + DAY_MS);
+
+  // Aufwärmen + messen mit passender Feldzahl.
+  const servers = Array.from(
+    { length: 500 },
+    () => new Server(initialState(fields), T0, CURRENT_RULESET_VERSION),
+  );
+  const req = { baseSeq: 0, rulesetVersion: CURRENT_RULESET_VERSION, commands: log };
+  for (let i = 0; i < 20; i++) {
+    new Server(initialState(fields), T0, CURRENT_RULESET_VERSION).sync(req, now);
+  }
+  const start = performance.now();
+  for (const srv of servers) srv.sync(req, now);
+  const ms = (performance.now() - start) / servers.length;
+
+  console.log(`  ${String(fields).padStart(5)} Felder, 100 Commands  ${(ms * 1000).toFixed(1).padStart(8)} µs`);
+}
+
+console.log('\n  Anfangs war das hier LINEAR und rund 11x teurer: Jeder einzelne');
+console.log('  Command hat den ganzen Zustand tiefkopiert. Bei sechs Feldern');
+console.log('  unsichtbar, bei einem großen Spiel der Engpass. Seither teilen');
+console.log('  Zustände ihre Arrays und ersetzen nur das geänderte Element.');
+console.log('\n  Ehrlich bleibt: Es ist NICHT flach. Ein Array-Ersetzen kopiert die');
+console.log('  Referenzen, also weiterhin O(Commands x Objekte) — nur mit sehr viel');
+console.log('  kleinerem Faktor. Für Spielgrößen, die ein Farmgame je erreicht');
+console.log('  (Hunderte Objekte), liegt das im zweistelligen Mikrosekundenbereich.');
+console.log('  Wirklich flach würde es erst mit persistenten Datenstrukturen —');
+console.log('  lohnt sich, wenn ein Spielstand mal Zehntausende Objekte trägt.');
+
+console.log('\n=== E) Durchsatz-Abschätzung ===\n');
 
 const typical = makeLog(60, 6);
 const typicalMs = timeSyncs(typical, T0 + 2 * DAY_MS, 3000);
