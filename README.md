@@ -42,5 +42,6 @@ geprüft. Noch kein Spiel: kein Orderbuch, kein Zufall, keine Spiel-UI, keine Ac
 
 ## Nächster Schritt
 
-Zufall (§5) und ein echtes Orderbuch für den geteilten Markt — die letzten großen Bausteine,
-die noch nur auf Papier stehen.
+Der Weg vom belegten Mechanismus zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** —
+in Phasen, mit dem, was jede absichert und kostet. Als Erstes: Inhalt als Daten, damit ein
+neuer Gegenstand eine Tabellenzeile ist und kein Code.
