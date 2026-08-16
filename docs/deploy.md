@@ -42,7 +42,7 @@ cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
 npm run conformance   # baut dist/field-test.html und dist/conformance.html
-npm test              # 68 Tests, sollte grün sein
+npm test              # 72 Tests, sollte grün sein
 ```
 
 ## 3. Token erzeugen
