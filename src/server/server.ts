@@ -8,7 +8,8 @@
 
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
-import type { State } from '../sim/state.ts';
+import type { MailItem, State } from '../sim/state.ts';
+import { cloneState } from '../sim/state.ts';
 import { getRuleset } from '../sim/rules.ts';
 import { advanceTo, simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
@@ -74,6 +75,21 @@ export class Server {
   targetRulesetVersion: number;
   /** Fehlgeschlagene Migrationen — Alarm fürs Monitoring, wie die Divergenzen. */
   migrationFailures: Array<{ fromVersion: number; toVersion: number; message: string }> = [];
+  /**
+   * Was die Außenwelt zugestellt hat, während der Spieler offline war:
+   * Geschenke, Erlöse aus gefüllten Aufträgen, Event-Belohnungen (§7, §8).
+   *
+   * Der Client konnte davon unmöglich wissen — deshalb landet es im Postfach
+   * und nie direkt im Lager.
+   */
+  pendingDeliveries: MailItem[] = [];
+  /** Zustellungen, die nicht mehr ins Postfach passten. */
+  undeliverable: MailItem[] = [];
+
+  /** Externes Ereignis: Geschenk, Auftrag gefüllt, Event-Belohnung. */
+  deliver(item: MailItem): void {
+    this.pendingDeliveries.push(item);
+  }
 
   constructor(initial: State, startTs: number, rulesetVersion: number, targetVersion?: number) {
     this.snapshot = { state: initial, seq: 0, serverTs: startTs, rulesetVersion };
@@ -206,6 +222,31 @@ export class Server {
           serverHash,
         });
       }
+    }
+
+    // ── Externe Zustellungen (§7) ────────────────────────────────────────
+    //
+    // ERST NACH dem Kanarienvogel-Vergleich. Der Client konnte von diesen
+    // Ereignissen unmöglich wissen — würden sie vor dem Vergleich einfließen,
+    // meldete der Hash bei jedem Geschenk einen Determinismus-Bug, den es
+    // gar nicht gibt. Der Kanarienvogel prüft die Kausalkette des SPIELERS.
+    //
+    // Und sie landen im Postfach, nie direkt im Lager: Nichts vernichten,
+    // wovon der Spieler nichts wissen konnte.
+    if (this.pendingDeliveries.length > 0) {
+      const withMail = cloneState(state);
+      const stillPending: MailItem[] = [];
+      for (const item of this.pendingDeliveries) {
+        if (withMail.mail.length < rules.mailCapacity) {
+          withMail.mail.push(item);
+        } else {
+          // Postfach voll — liegen lassen, nicht verwerfen. Der Spieler räumt
+          // auf, dann kommt es beim nächsten Sync an.
+          stillPending.push(item);
+        }
+      }
+      state = withMail;
+      this.pendingDeliveries = stillPending;
     }
 
     // Passive Produktion bis zur echten Serverzeit fortschreiben — noch unter

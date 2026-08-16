@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 48 Tests, keine Dependencies, kein Build-Step
+npm test        # 59 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 ```
@@ -36,7 +36,9 @@ test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 
 Modelliert ist das Nötigste, um die Mechanik echt zu belasten: Felder mit
 Wachstumszeit, ein Hühnerstall mit *gedeckelter passiver Produktion*, ein
-Lagerlimit über alle Waren und NPC-Verkauf.
+Lagerlimit über alle Waren, NPC-Verkauf sowie Verkaufsaufträge mit Escrow,
+Preisband und Ablauffrist — plus ein Postfach für verfallene Aufträge und
+externe Zustellungen.
 
 ---
 
@@ -49,14 +51,15 @@ Schicht 5 ist im Server angelegt:
 | --- | --- | --- |
 | **1 Verhindern** | `sim-purity.test.ts` | Ein CI-Wächter liest den Sim-Quelltext und blockiert Floats, Systemzeit, Locale, `for…in` und ungeschützte Division. Ein zweiter Test prüft, dass der Wächter selbst noch beißt. |
 | **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **20.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein. |
-| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge), jede über drei unabhängige Rechenwege. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
-| **4 Beweisen (Plattform)** | `golden.test.ts` | **20 Golden Vectors, 166 Commands** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
+| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge), jede über drei unabhängige Rechenwege — inklusive Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
+| **4 Beweisen (Plattform)** | `golden.test.ts` | **30 Golden Vectors, 218 Commands** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
 | **5 Erkennen** | `sync.test.ts` | Der Kanarienvogel-Hash schlägt bei Divergenz an — und blockiert den Sync **nicht**. |
 | — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
 | — | `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
 | — | `sync.test.ts` | Präfix-Commit, Idempotenz, Fork-Erkennung, veraltete Regelversion. |
 | — | `migration.test.ts` | Ein echter Balance-Patch quer durch eine Offline-Phase: Log unter alter Version validiert, Zustand danach gehoben, laufendes Wachstum fair umgerechnet, Version nicht frei wählbar. |
+| — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
@@ -144,8 +147,9 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
   Test ist derselbe Kern auf iOS, Android und Server. Integer-only macht das
   wahrscheinlich, aber bewiesen ist es damit nicht. Die Golden Vectors machen
   diesen Beweis *führbar* — sie ersetzen ihn nicht.
-- **Alles Geteilte.** Kein Markt, keine Nachbarn, kein Zufall, kein Escrow, kein
-  Postfach. Also nichts aus §5 und §8.
+- **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
+  das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
+  Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
 - **Persistenz.** Der Server hält Zustand und Command-Log im Speicher. Die reinen
   Re-Sim-Kosten sind gemessen (siehe oben), Datenbank und Netzwerk nicht.
 - **Snapshot-Signatur.** In §9 vorgesehen, hier nicht implementiert — der Server
@@ -158,7 +162,5 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 1. Denselben Kern nach WASM oder in eine Mobile-Runtime bringen und dort
    `test/vectors/golden.json` abspielen — der echte Plattform-Beweis, und dank
    der Vektoren nur noch ein Nachmittag Arbeit statt eines Projekts.
-2. Escrow, Auftrags-Slots und Postfach ergänzen, dann die Behälter-Invariante
-   aus §7 als Test formulieren: *Summe aller Behälter ist beschränkt.*
-3. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
+2. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
    an dem ehrliche Spieler noch Arbeit verlieren können.

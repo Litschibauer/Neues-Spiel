@@ -89,6 +89,24 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   if (stored(state) > rules.siloCapacity) {
     problems.push(`Lager über Limit: ${stored(state)} > ${rules.siloCapacity}`);
   }
+
+  // Die Behälter-Invariante aus §7: JEDER Ort, an dem Ware liegen kann, ist
+  // begrenzt. Ein einziger ungedeckelter Behälter macht das Lagerlimit — und
+  // damit die Inflationsbremse — wertlos.
+  if (state.orders.length > rules.orderSlots) {
+    problems.push(`zu viele Aufträge: ${state.orders.length} > ${rules.orderSlots}`);
+  }
+  if (state.mail.length > rules.mailCapacity) {
+    problems.push(`Postfach über Limit: ${state.mail.length} > ${rules.mailCapacity}`);
+  }
+  for (const o of state.orders) {
+    if (o.amount <= 0) problems.push(`Auftrag ${o.id} ohne Ware`);
+    if (o.listedAt > state.tick) problems.push(`Auftrag ${o.id} aus der Zukunft`);
+    if (o.id >= state.nextOrderId) problems.push(`Auftrags-ID ${o.id} nicht vergeben`);
+  }
+  for (const m of state.mail) {
+    if (m.amount <= 0) problems.push('Postfach-Eintrag ohne Inhalt');
+  }
   if (state.coopProgress < 0 || state.coopProgress >= rules.coopTicksPerEgg) {
     problems.push(`coopProgress außerhalb [0, ${rules.coopTicksPerEgg}): ${state.coopProgress}`);
   }

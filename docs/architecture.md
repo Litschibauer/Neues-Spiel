@@ -263,6 +263,21 @@ mal versagt, begrenzt das Lager den Schaden.
 > ausstehende Belohnungen. Ein einziger ungedeckelter Behälter macht das Lagerlimit wertlos.
 > Bei jedem neuen Feature prüfen: *Entsteht hier ein neuer Ort, an dem Zeug liegen kann?*
 
+**Und die Summe ist die Zahl, die zählt.** „Lagerlimit 100" ist nicht die Menge, die ein
+Spieler halten kann — die echte Obergrenze ist
+
+```
+Lager + Auftrags-Slots × Stapelgröße + Postfachplätze × Stapelgröße
+```
+
+Im Prototyp sind das mit `100 + 4×20 + 20×20` ganze **580 Einheiten**, also fast das
+Sechsfache des Lagerlimits. Das ist kein Leck — die Menge sättigt dort und wächst auch nach
+tausenden Angriffsrunden nicht weiter (per Test abgesichert). Aber es ist eine Zahl, die man
+**bewusst wählen** muss, statt sie aus drei unabhängig gesetzten Limits herausfallen zu lassen.
+
+Wer das Lagerlimit als Balancing-Hebel benutzt, muss also alle drei Limits zusammen
+betrachten — sonst reguliert er die eine Zahl, die den Spieler am wenigsten bindet.
+
 ---
 
 ## 8. Handel: was wirklich unmöglich ist — und was doch geht

@@ -22,7 +22,31 @@ export type SellNpcCommand = CommandBase & {
   amount: number;
 };
 
-export type Command = PlantCommand | HarvestCommand | SellNpcCommand;
+/**
+ * Ware zum Verkauf einstellen. Einseitig, also offline gültig (§8): Der Spieler
+ * committet Ware, die er nachweislich hat. Sie verlässt sofort das Lager
+ * (Escrow) — damit ist ein Doppelverkauf strukturell ausgeschlossen.
+ */
+export type ListOrderCommand = CommandBase & {
+  type: 'LIST_ORDER';
+  item: 'wheat' | 'eggs';
+  amount: number;
+  price: number;
+};
+
+/** Auftrag zurückziehen. Die Ware geht zurück ins Lager, sofern Platz ist. */
+export type CancelOrderCommand = CommandBase & { type: 'CANCEL_ORDER'; orderId: number };
+
+/** Postfach leeren, soweit das Lager es hergibt (§7). */
+export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
+
+export type Command =
+  | PlantCommand
+  | HarvestCommand
+  | SellNpcCommand
+  | ListOrderCommand
+  | CancelOrderCommand
+  | CollectMailCommand;
 
 /** Gründe, aus denen die Sim eine Aktion ablehnt. Client und Server nutzen dieselben. */
 export type SimErrorCode =
@@ -34,7 +58,11 @@ export type SimErrorCode =
   | 'NOT_ENOUGH_ITEMS'
   | 'BAD_AMOUNT'
   | 'TIME_WENT_BACKWARDS'
-  | 'UNKNOWN_COMMAND';
+  | 'UNKNOWN_COMMAND'
+  | 'NO_ORDER_SLOTS'
+  | 'PRICE_OUT_OF_BAND'
+  | 'NO_SUCH_ORDER'
+  | 'NOTHING_TO_COLLECT';
 
 export class SimError extends Error {
   code: SimErrorCode;

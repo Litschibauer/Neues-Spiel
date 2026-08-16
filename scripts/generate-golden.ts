@@ -41,6 +41,14 @@ const PROFILES: Array<{ name: string; opts: Omit<SessionOptions, 'fieldCount'>; 
       opts: { steps: 20, maxAdvance: 20_000, advanceChance: 0.6, chaosChance: 0.1 },
       seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
     },
+    {
+      // Lange Zeitachse, damit Aufträge die 24h-Frist reißen, ins Postfach
+      // fallen und wieder abgeholt werden. Ohne dieses Profil bliebe der ganze
+      // Verfalls- und Postfachpfad im Korpus unabgedeckt.
+      name: 'trade',
+      opts: { steps: 45, maxAdvance: 90_000, advanceChance: 0.4, chaosChance: 0.05 },
+      seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
+    },
   ];
 
 const vectors = [];

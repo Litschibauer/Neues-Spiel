@@ -50,9 +50,14 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   const commands = golden.vectors.reduce((n, v) => n + v.commands.length, 0);
   assert.ok(commands >= 100, `zu wenige Commands im Korpus: ${commands}`);
 
-  // Alle drei Command-Typen müssen vorkommen, sonst bleiben Regeln ungeprüft.
+  // Jeder Command-Typ muss vorkommen, sonst bleiben Regeln ungeprüft — und der
+  // Mobile-Port hätte für sie keinen Abgleich.
   const types = new Set(golden.vectors.flatMap((v) => v.commands.map((c) => c.type)));
-  assert.deepEqual([...types].sort(), ['HARVEST', 'PLANT', 'SELL_NPC']);
+  assert.deepEqual(
+    [...types].sort(),
+    ['CANCEL_ORDER', 'COLLECT_MAIL', 'HARVEST', 'LIST_ORDER', 'PLANT', 'SELL_NPC'],
+    'Korpus deckt nicht alle Command-Typen ab',
+  );
 });
 
 test('jeder Golden Vector reproduziert exakt seinen erwarteten Endzustand', () => {

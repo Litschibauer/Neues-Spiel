@@ -198,6 +198,10 @@ Dinge, die handelbar sind, brauchen die schärfste Validierung.
   ist, an dem Güter liegen können — Lager, Postfach, Handels-Escrow, ausstehende Belohnungen.
   Ein ungedeckelter Behälter (z.B. Escrow als Dauerparkplatz) hebelt die Bremse komplett aus.
   Siehe Architektur §7 (Invariante) und §8 (Auftrags-Slots, Preisbänder, Ablauffristen).
+  **Status: im Prototyp umgesetzt und als Sättigungstest abgesichert** — der Stash-Angriff
+  läuft gegen eine feste Obergrenze und wächst auch nach 2000 Runden nicht weiter. Dabei
+  zeigte sich, dass die effektive Haltemenge die *Summe* aller Behälter ist (im Prototyp
+  fast das Sechsfache des Lagerlimits) und deshalb bewusst gewählt werden muss.
 
 ---
 

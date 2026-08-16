@@ -26,20 +26,52 @@ import { SimError } from './commands.ts';
 export function advanceTo(state: State, toTick: number, rules: Ruleset): State {
   const elapsed = toTick - state.tick;
   if (elapsed < 0) throw new SimError('TIME_WENT_BACKWARDS');
-  if (elapsed === 0) return state;
-
-  const { eggs, coopProgress } = advanceCoop(
-    elapsed,
-    state.coopProgress,
-    spaceLeft(state, rules.siloCapacity),
-    rules.coopTicksPerEgg,
-  );
+  if (elapsed === 0 && state.orders.length === 0) return state;
 
   const next = cloneState(state);
-  next.tick = toTick;
-  next.eggs += eggs;
-  next.coopProgress = coopProgress;
+
+  if (elapsed > 0) {
+    const { eggs, coopProgress } = advanceCoop(
+      elapsed,
+      state.coopProgress,
+      spaceLeft(state, rules.siloCapacity),
+      rules.coopTicksPerEgg,
+    );
+    next.tick = toTick;
+    next.eggs += eggs;
+    next.coopProgress = coopProgress;
+  }
+
+  // Auch bei `elapsed === 0` prüfen. Sonst hinge das Ergebnis davon ab, WIE die
+  // Zeitachse in Segmente zerteilt wurde — und genau solche Abhängigkeiten
+  // sind es, die Client und Server auseinanderlaufen lassen (R1).
+  expireOrders(next, rules);
   return next;
+}
+
+/**
+ * Verfallene Aufträge ins Postfach zurückgeben (§8).
+ *
+ * Läuft am Segmentende statt tickgenau — das ist zulässig, weil zwischen zwei
+ * Commands niemand Aufträge oder Postfach liest. Die Reihenfolge (nach `id`)
+ * ist stabil, damit das Ergebnis bei vollem Postfach eindeutig bleibt.
+ *
+ * Passt nichts mehr ins Postfach, bleibt der Auftrag einfach stehen und
+ * verfällt später. Nie etwas vernichten, wovon der Spieler nichts wusste (§7).
+ */
+function expireOrders(s: State, rules: Ruleset): void {
+  if (s.orders.length === 0) return;
+
+  const survivors: typeof s.orders = [];
+  for (const order of s.orders) {
+    const expired = s.tick - order.listedAt >= rules.orderTtlTicks;
+    if (expired && s.mail.length < rules.mailCapacity) {
+      s.mail.push({ item: order.item, amount: order.amount, arrivedAt: s.tick });
+    } else {
+      survivors.push(order);
+    }
+  }
+  s.orders = survivors;
 }
 
 /**
@@ -87,6 +119,80 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (cmd.item === 'wheat') next.wheat -= cmd.amount;
       else next.eggs -= cmd.amount;
       next.gold += cmd.amount * rules.npcPrices[cmd.item];
+      return next;
+    }
+
+    case 'LIST_ORDER': {
+      if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
+      if (!Number.isInteger(cmd.price) || cmd.price <= 0) throw new SimError('BAD_AMOUNT');
+
+      // Der strukturelle Riegel gegen Escrow-als-Lager (§8).
+      if (s.orders.length >= rules.orderSlots) throw new SimError('NO_ORDER_SLOTS');
+
+      // Preisband: Was eingestellt wird, muss plausibel verkäuflich sein —
+      // sonst wäre der Auftrag nur ein Parkplatz für Ware.
+      const reference = rules.npcPrices[cmd.item];
+      const min = Math.floor((reference * rules.priceBandMinPct) / 100);
+      const max = Math.floor((reference * rules.priceBandMaxPct) / 100);
+      if (cmd.price < min || cmd.price > max) throw new SimError('PRICE_OUT_OF_BAND');
+
+      const have = cmd.item === 'wheat' ? s.wheat : s.eggs;
+      if (have < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+
+      const next = cloneState(s);
+      if (cmd.item === 'wheat') next.wheat -= cmd.amount;
+      else next.eggs -= cmd.amount;
+      next.orders.push({
+        id: s.nextOrderId,
+        item: cmd.item,
+        amount: cmd.amount,
+        price: cmd.price,
+        listedAt: s.tick,
+      });
+      next.nextOrderId = s.nextOrderId + 1;
+      return next;
+    }
+
+    case 'CANCEL_ORDER': {
+      const order = s.orders.find((o) => o.id === cmd.orderId);
+      if (!order) throw new SimError('NO_SUCH_ORDER');
+      // Zurücknehmen darf das Lager nicht sprengen — sonst wäre der Auftrag
+      // ein Weg, das Limit zu umgehen.
+      if (spaceLeft(s, rules.siloCapacity) < order.amount) throw new SimError('SILO_FULL');
+
+      const next = cloneState(s);
+      next.orders = next.orders.filter((o) => o.id !== cmd.orderId);
+      if (order.item === 'wheat') next.wheat += order.amount;
+      else next.eggs += order.amount;
+      return next;
+    }
+
+    case 'COLLECT_MAIL': {
+      if (s.mail.length === 0) throw new SimError('NOTHING_TO_COLLECT');
+
+      const next = cloneState(s);
+      const remaining: typeof next.mail = [];
+      let collected = 0;
+
+      // In Ankunftsreihenfolge, damit das Ergebnis bei knappem Platz eindeutig
+      // ist. Was nicht passt, bleibt liegen — nichts verfällt hier.
+      for (const item of next.mail) {
+        if (item.item === 'gold') {
+          next.gold += item.amount;
+          collected++;
+          continue;
+        }
+        if (spaceLeft(next, rules.siloCapacity) >= item.amount) {
+          if (item.item === 'wheat') next.wheat += item.amount;
+          else next.eggs += item.amount;
+          collected++;
+        } else {
+          remaining.push(item);
+        }
+      }
+
+      if (collected === 0) throw new SimError('SILO_FULL');
+      next.mail = remaining;
       return next;
     }
 

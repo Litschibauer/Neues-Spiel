@@ -20,6 +20,10 @@ import type { Command } from './commands.ts';
  */
 export function canonicalize(state: State): string {
   const fields = state.fields.map((f) => `${f.crop ?? '-'}:${f.plantedAt}`).join(',');
+  const orders = state.orders
+    .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
+    .join(',');
+  const mail = state.mail.map((m) => `${m.item}:${m.amount}:${m.arrivedAt}`).join(',');
   return [
     `tick=${state.tick}`,
     `fields=[${fields}]`,
@@ -27,6 +31,9 @@ export function canonicalize(state: State): string {
     `eggs=${state.eggs}`,
     `gold=${state.gold}`,
     `coopProgress=${state.coopProgress}`,
+    `orders=[${orders}]`,
+    `mail=[${mail}]`,
+    `nextOrderId=${state.nextOrderId}`,
   ].join('|');
 }
 
@@ -42,6 +49,12 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|HARVEST|${c.field}`;
     case 'SELL_NPC':
       return `${c.seq}|${c.tick}|SELL_NPC|${c.item}|${c.amount}`;
+    case 'LIST_ORDER':
+      return `${c.seq}|${c.tick}|LIST_ORDER|${c.item}|${c.amount}|${c.price}`;
+    case 'CANCEL_ORDER':
+      return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
+    case 'COLLECT_MAIL':
+      return `${c.seq}|${c.tick}|COLLECT_MAIL`;
     default:
       throw new Error('unknown command type');
   }

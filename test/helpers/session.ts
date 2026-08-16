@@ -133,7 +133,7 @@ export function playRandomSession(
       else if (s.tick - f.plantedAt >= rules.wheatGrowTicks) ripe.push(idx);
     });
 
-    switch (pick(4)) {
+    switch (pick(7)) {
       case 0:
         if (empty.length) client.plant(empty[pick(empty.length)]!);
         break;
@@ -143,8 +143,25 @@ export function playRandomSession(
       case 2:
         if (s.wheat > 0) client.sellNpc('wheat', 1 + pick(s.wheat));
         break;
-      default:
+      case 3:
         if (s.eggs > 0) client.sellNpc('eggs', 1 + pick(s.eggs));
+        break;
+      case 4: {
+        // Preis innerhalb des Bandes wählen, sonst wäre die Aktion fast immer
+        // ungültig und der Auftragspfad bliebe ungetestet.
+        const item = rnd() < 0.5 ? 'wheat' : 'eggs';
+        const have = item === 'wheat' ? s.wheat : s.eggs;
+        const ref = rules.npcPrices[item];
+        const min = Math.max(1, Math.floor((ref * rules.priceBandMinPct) / 100));
+        const max = Math.floor((ref * rules.priceBandMaxPct) / 100);
+        if (have > 0) client.listOrder(item, 1 + pick(have), min + pick(max - min + 1));
+        break;
+      }
+      case 5:
+        if (s.orders.length > 0) client.cancelOrder(s.orders[pick(s.orders.length)]!.id);
+        break;
+      default:
+        if (s.mail.length > 0) client.collectMail();
         break;
     }
   }

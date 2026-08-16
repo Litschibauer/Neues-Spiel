@@ -19,6 +19,22 @@ export type Ruleset = {
   coopTicksPerEgg: number;
   /** NPC-Ankaufpreise — kein geteilter knapper Zustand, daher offline gültig (§8). */
   npcPrices: { wheat: number; eggs: number };
+
+  /**
+   * Wie viele Verkaufsaufträge gleichzeitig offen sein dürfen.
+   *
+   * DAS ist der strukturelle Riegel gegen „Escrow als unendliches Lager" (§8).
+   * Ohne ihn könnte man Ware zu einem unverkäuflichen Preis einstellen, das
+   * Lager leeren und beliebig weiterproduzieren.
+   */
+  orderSlots: number;
+  /** Nach dieser Zeit verfällt ein Auftrag und die Ware geht ins Postfach. */
+  orderTtlTicks: number;
+  /** Preisband um den Referenzwert, in Prozent — verhindert Parkpreise (§8). */
+  priceBandMinPct: number;
+  priceBandMaxPct: number;
+  /** Auch das Postfach ist ein Behälter und braucht daher ein Limit (§7). */
+  mailCapacity: number;
 };
 
 const V1: Ruleset = {
@@ -28,6 +44,11 @@ const V1: Ruleset = {
   wheatYield: 10,
   coopTicksPerEgg: 600,
   npcPrices: { wheat: 3, eggs: 5 },
+  orderSlots: 4,
+  orderTtlTicks: 86_400,
+  priceBandMinPct: 25,
+  priceBandMaxPct: 150,
+  mailCapacity: 20,
 };
 
 /**
@@ -46,6 +67,14 @@ const V2: Ruleset = {
   wheatYield: 10,
   coopTicksPerEgg: 480,
   npcPrices: { wheat: 4, eggs: 6 },
+  // Mehr Slots als Progressions-Buff. Achtung: WENIGER Slots wären ein
+  // Migrationsproblem — bestehende Aufträge würden die Invariante verletzen
+  // und müssten in einem Migrationsschritt ins Postfach aufgelöst werden.
+  orderSlots: 6,
+  orderTtlTicks: 86_400,
+  priceBandMinPct: 25,
+  priceBandMaxPct: 150,
+  mailCapacity: 20,
 };
 
 /**

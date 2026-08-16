@@ -78,6 +78,19 @@ export class Client {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /** Auftrag einstellen — offline gültig, weil einseitig (§8). */
+  listOrder(item: 'wheat' | 'eggs', amount: number, price: number): ActionResult {
+    return this.apply({ type: 'LIST_ORDER', item, amount, price } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  cancelOrder(orderId: number): ActionResult {
+    return this.apply({ type: 'CANCEL_ORDER', orderId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  collectMail(): ActionResult {
+    return this.apply({ type: 'COLLECT_MAIL' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   /** Beim Reconnect: nur der Log geht hoch, nie der Zustand. Winzige Payload. */
   buildSyncRequest(): SyncRequest {
     return {
