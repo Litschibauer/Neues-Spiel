@@ -22,7 +22,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 77 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 80 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -42,5 +42,5 @@ geprüft. Noch kein Spiel: kein Orderbuch, kein Zufall, keine Spiel-UI, keine Ac
 
 ## Nächster Schritt
 
-Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte Punkt, an dem ehrliche
-Spieler noch Arbeit verlieren können.
+Zufall (§5) und ein echtes Orderbuch für den geteilten Markt — die letzten großen Bausteine,
+die noch nur auf Papier stehen.

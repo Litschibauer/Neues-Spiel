@@ -209,3 +209,81 @@ test('R1 — der Kanarienvogel schlägt bei einem Determinismus-Bug an', () => {
   assert.equal(server.divergenceAlerts.length, 1);
   assert.equal(server.divergenceAlerts[0]!.clientHash, 'deadbeefdeadbeef');
 });
+
+test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () => {
+  // Der Unterschied zu FORK_DETECTED: Diese Ablehnung kommt aus dem
+  // Aktiv-Gerät-Verfahren, nicht aus der Kollision. Der Client kann daraus
+  // eine Frage machen statt einer Fehlermeldung nach dem Verlust.
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+
+  const phone = new Client(server.snapshot, 'handy');
+  phone.plant(0);
+  phone.advanceClock(10);
+  assert.equal(server.sync(phone.buildSyncRequest(), T0 + 10_000).ok, true);
+  assert.equal(server.activeDevice?.id, 'handy');
+
+  // Das Tablet fragt nach — und erfährt es, ohne etwas riskiert zu haben.
+  assert.equal(server.isActiveDevice('tablet'), false);
+  assert.equal(server.isActiveDevice('handy'), true);
+
+  const tablet = new Client(server.snapshot, 'tablet');
+  tablet.plant(1);
+  tablet.advanceClock(10);
+  const res = server.sync(tablet.buildSyncRequest(), T0 + 20_000);
+
+  assert.equal(res.ok, false);
+  if (res.ok) return;
+  assert.equal(res.reason, 'NOT_ACTIVE_DEVICE');
+  // Der Stand des Handys ist unberührt.
+  assert.equal(server.snapshot.seq, 1);
+  assert.equal(server.snapshot.state.fields[1]!.crop, null);
+});
+
+test('R3 — ausdrückliche Übernahme geht durch', () => {
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const phone = new Client(server.snapshot, 'handy');
+  phone.plant(0);
+  phone.advanceClock(10);
+  server.sync(phone.buildSyncRequest(), T0 + 10_000);
+
+  const tablet = new Client(server.snapshot, 'tablet');
+  tablet.plant(1);
+  tablet.advanceClock(10);
+  tablet.takeover = true;
+
+  const res = server.sync(tablet.buildSyncRequest(), T0 + 20_000);
+  assert.equal(res.ok, true);
+  assert.equal(server.activeDevice?.id, 'tablet');
+  assert.equal(server.snapshot.state.fields[1]!.crop, 'wheat');
+
+  // Und jetzt ist das Handy dran mit Abgewiesenwerden — es erfährt es beim
+  // nächsten Sync, statt es nie zu erfahren.
+  const back = server.sync(
+    { baseSeq: 2, rulesetVersion: CURRENT_RULESET_VERSION, commands: [], deviceId: 'handy' },
+    T0 + 30_000,
+  );
+  assert.equal(back.ok, false);
+  if (back.ok) return;
+  assert.equal(back.reason, 'NOT_ACTIVE_DEVICE');
+});
+
+test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
+  // Skripte und Tests nehmen nicht teil — sonst wäre jede curl-Zeile ein
+  // Geräte-Wechsel.
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const withId = new Client(server.snapshot, 'handy');
+  withId.plant(0);
+  withId.advanceClock(10);
+  server.sync(withId.buildSyncRequest(), T0 + 10_000);
+
+  const script = server.sync(
+    {
+      baseSeq: 1,
+      rulesetVersion: CURRENT_RULESET_VERSION,
+      commands: [{ seq: 2, tick: 20, type: 'PLANT', field: 1 }],
+    },
+    T0 + 20_000,
+  );
+  assert.equal(script.ok, true, 'Anfragen ohne deviceId dürfen nicht gesperrt werden');
+  assert.equal(server.activeDevice?.id, 'handy', 'und sie beanspruchen die Rechte nicht');
+});

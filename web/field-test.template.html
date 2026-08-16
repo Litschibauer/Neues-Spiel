@@ -95,6 +95,17 @@
   .log .good { color: var(--live); }
 
   .hint { color: var(--muted); font-size: .82rem; margin: .5rem 0 0; }
+
+  /* Sperre, solange ein anderes Gerät die Schreibrechte hält (R3). */
+  .lease {
+    border: 1px solid var(--wait); background: var(--wait-bg); color: var(--wait);
+    border-radius: 4px; padding: .8rem .9rem;
+    display: flex; flex-direction: column; gap: .6rem;
+  }
+  .lease p { margin: 0; font-size: .86rem; }
+  .lease button { border-color: var(--wait); color: var(--wait); }
+  .lease button.primary { background: var(--wait); color: var(--surface); }
+  .locked .fields, .locked #actions { opacity: .45; pointer-events: none; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
 </style>
 
@@ -112,6 +123,11 @@
   </div>
 
   <div id="game" hidden style="display:flex;flex-direction:column;gap:1.15rem">
+    <div class="lease" id="lease" hidden>
+      <p id="lease-text">Ein anderes Gerät spielt gerade.</p>
+      <div class="row"><button class="primary" id="takeover">Hier übernehmen</button></div>
+    </div>
+
     <div class="card">
       <h2>Hof</h2>
       <dl class="stats">
@@ -131,7 +147,7 @@
 
     <div>
       <h2>Aktionen</h2>
-      <div class="row">
+      <div class="row" id="actions">
         <button id="sell-wheat">Weizen verkaufen</button>
         <button id="sell-eggs">Eier verkaufen</button>
         <button id="list">Auftrag einstellen</button>
@@ -186,6 +202,17 @@
   var CLOCK_SAFETY_TICKS = 3;
 
   var token = localStorage.getItem('ns-token') || '';
+
+  /**
+   * Kennung dieses Geräts (R3). Bleibt lokal und identifiziert nur, WELCHES
+   * Gerät gerade die Offline-Schreibrechte hält.
+   */
+  var deviceId = localStorage.getItem('ns-device');
+  if (!deviceId) {
+    deviceId = 'd-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    localStorage.setItem('ns-device', deviceId);
+  }
+  var isActive = true;
   var client = null, engine = null, rules = null;
   /** Serveruhr minus Geräteuhr. Die Geräteuhr allein ist wertlos (§4). */
   var clockOffsetMs = 0;
@@ -242,6 +269,41 @@
     return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
   }
 
+  /**
+   * Sperre setzen. Der Punkt des Ganzen: Der Spieler erfährt es, BEVOR er
+   * Arbeit investiert — nicht hinterher per FORK_DETECTED.
+   */
+  function setLease(active, since) {
+    isActive = active;
+    $('lease').hidden = active;
+    document.body.classList.toggle('locked', !active);
+    if (!active) {
+      var ago = since ? Math.round((Date.now() - since) / 1000) : null;
+      $('lease-text').textContent =
+        'Ein anderes Gerät hält gerade die Offline-Schreibrechte' +
+        (ago !== null ? ' (zuletzt vor ' + ago + ' s aktiv)' : '') +
+        '. Aktionen sind gesperrt, damit hier nichts entsteht, was später verworfen wird.';
+    }
+  }
+
+  /**
+   * Rechtestatus nachfragen, ohne den Zustand anzufassen.
+   *
+   * Nötig, weil ein Gerät mit leerer Warteschlange gar nichts sendet — es
+   * würde sonst nie erfahren, dass ein anderes Gerät übernommen hat, und den
+   * Spieler munter weiterspielen lassen, bis alles verworfen wird. Genau der
+   * Verlust, den das Verfahren verhindern soll.
+   */
+  function refreshLease() {
+    return api('/api/state?deviceId=' + encodeURIComponent(deviceId))
+      .then(function (data) {
+        var wasActive = isActive;
+        setLease(data.isActiveDevice !== false, data.activeSince);
+        if (wasActive && !isActive) log('Anderes Gerät hat übernommen — gesperrt', 'bad');
+      })
+      .catch(function () { /* offline: Status bleibt, wie er war */ });
+  }
+
   function adopt(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
@@ -285,12 +347,14 @@
   }
 
   function act(name, result) {
+    if (!isActive) return;
     if (result.ok) log(name, 'good');
     else log(name + ' abgelehnt: ' + result.code, 'bad');
     render();
   }
 
   function tapField(i) {
+    if (!isActive) return;
     client.localTick = tickNow();
     var f = client.preview().fields[i];
     if (f.crop === null) act('Feld ' + (i + 1) + ' bepflanzt', client.plant(i));
@@ -308,10 +372,15 @@
         if (r.ok) {
           if (r.kind === 'applied') log('Sync ok — bestätigt bis seq ' + r.snapshot.seq, 'good');
           else if (r.kind === 'duplicate') log('Antwort war verloren — Server hatte alles schon', 'good');
+        } else if (r.reason === 'NOT_ACTIVE_DEVICE') {
+          // Die Rechte sind woanders hingewandert, während wir spielten.
+          log('Anderes Gerät hat übernommen — Aktionen gesperrt', 'bad');
+          setLease(false, null);
         } else {
           log('Server hat abgelehnt: ' + r.reason, 'bad');
         }
-        adopt(r.snapshot, r.serverTime);
+        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') adopt(r.snapshot, r.serverTime);
+        if (r.ok) { setLease(true, null); client.takeover = false; }
       } else if (outcome.kind === 'dropped') {
         log('Ab seq ' + outcome.rejectedFrom + ' verworfen: ' + outcome.reason, 'bad');
         adopt(outcome.snapshot, outcome.serverTime);
@@ -327,7 +396,7 @@
 
   function start(snapshot, serverTime) {
     rules = NS.getRuleset(snapshot.rulesetVersion);
-    client = new NS.Client(snapshot);
+    client = new NS.Client(snapshot, deviceId);
     engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
     adopt(snapshot, serverTime);
 
@@ -339,8 +408,9 @@
     render();
     setInterval(render, 1000);
     setInterval(function () { attempt('timer'); }, 4000);
+    setInterval(refreshLease, 10000);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) attempt('sichtbar');
+      if (!document.hidden) { attempt('sichtbar'); refreshLease(); }
     });
     window.addEventListener('online', function () { log('Netz zurück'); attempt('online', true); });
     window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); });
@@ -350,9 +420,11 @@
     token = $('token').value.trim();
     if (!token) return;
     $('connect').disabled = true;
-    api('/api/state').then(function (data) {
+    api('/api/state?deviceId=' + encodeURIComponent(deviceId)).then(function (data) {
       localStorage.setItem('ns-token', token);
       start(data.snapshot, data.serverTime);
+      setLease(data.isActiveDevice !== false, data.activeSince);
+      if (!data.isActiveDevice) log('Anderes Gerät ist aktiv — Aktionen gesperrt', 'bad');
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message === 'UNAUTHORIZED' ? 'Token stimmt nicht.' : 'Server nicht erreichbar: ' + e.message);
@@ -362,20 +434,31 @@
   $('connect').addEventListener('click', connect);
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
   $('sync').addEventListener('click', function () { attempt('manuell', true); });
+  $('takeover').addEventListener('click', function () {
+    if (!confirm('Auf diesem Gerät weiterspielen? Nicht synchronisierte Arbeit auf dem anderen Gerät geht dabei verloren.')) return;
+    client.takeover = true;
+    // Ein leerer Log wird nicht gesendet — ein Platzhalter-Sync erzwingt die
+    // Übernahme also nicht. Stattdessen gilt sie ab dem nächsten echten Sync.
+    setLease(true, null);
+    log('Übernahme angemeldet — gilt ab der nächsten Aktion', 'good');
+  });
   $('forget').addEventListener('click', function () {
     localStorage.removeItem('ns-token');
     location.reload();
   });
 
   $('sell-wheat').addEventListener('click', function () {
+    if (!isActive) return;
     var s = client.preview();
     if (s.wheat > 0) act('Weizen verkauft (' + s.wheat + ')', client.sellNpc('wheat', s.wheat));
   });
   $('sell-eggs').addEventListener('click', function () {
+    if (!isActive) return;
     var s = client.preview();
     if (s.eggs > 0) act('Eier verkauft (' + s.eggs + ')', client.sellNpc('eggs', s.eggs));
   });
   $('list').addEventListener('click', function () {
+    if (!isActive) return;
     var s = client.preview();
     var item = s.eggs > 0 ? 'eggs' : 'wheat';
     var have = item === 'eggs' ? s.eggs : s.wheat;
@@ -383,6 +466,7 @@
     act('Auftrag: ' + have + ' ' + item, client.listOrder(item, have, rules.npcPrices[item]));
   });
   $('collect').addEventListener('click', function () {
+    if (!isActive) return;
     act('Postfach geleert', client.collectMail());
   });
 

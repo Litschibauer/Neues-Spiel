@@ -190,7 +190,14 @@ const server = createServer(async (req, res) => {
     if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
 
     if (url.pathname === '/api/state' && req.method === 'GET') {
-      return json(res, 200, { snapshot: game.snapshot, serverTime: Date.now() });
+      const deviceId = url.searchParams.get('deviceId') ?? undefined;
+      return json(res, 200, {
+        snapshot: game.snapshot,
+        serverTime: Date.now(),
+        // Damit ein zweites Gerät es erfährt, BEVOR es losspielt (R3).
+        isActiveDevice: game.isActiveDevice(deviceId),
+        activeSince: game.activeDevice?.lastSyncMs ?? null,
+      });
     }
 
     if (url.pathname === '/api/sync' && req.method === 'POST') {
@@ -246,6 +253,7 @@ const server = createServer(async (req, res) => {
           rulesetVersion: game.snapshot.rulesetVersion,
           targetRulesetVersion: game.targetRulesetVersion,
           pendingDeliveries: game.pendingDeliveries.length,
+          activeDevice: game.activeDevice,
           divergenceAlerts: game.divergenceAlerts.length,
           migrationFailures: game.migrationFailures.length,
           state: game.snapshot.state,

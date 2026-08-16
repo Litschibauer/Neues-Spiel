@@ -29,8 +29,16 @@ export class Client {
    * genau deshalb prüft der Server sie gegen sein eigenes Zeitbudget (§4).
    */
   localTick: number;
+  /**
+   * Kennung dieses Geräts (R3). Ohne sie nimmt der Client nicht am
+   * Aktiv-Gerät-Verfahren teil — dann bleibt es beim späten FORK_DETECTED.
+   */
+  deviceId: string | undefined;
+  /** Nächster Sync soll die Schreibrechte ausdrücklich übernehmen. */
+  takeover = false;
 
-  constructor(snapshot: Snapshot) {
+  constructor(snapshot: Snapshot, deviceId?: string) {
+    this.deviceId = deviceId;
     this.state = snapshot.state;
     this.baseSeq = snapshot.seq;
     this.rulesetVersion = snapshot.rulesetVersion;
@@ -98,6 +106,8 @@ export class Client {
       rulesetVersion: this.rulesetVersion,
       commands: [...this.queue],
       clientHash: this.queue.length > 0 ? hashState(this.state) : undefined,
+      deviceId: this.deviceId,
+      takeover: this.takeover || undefined,
     };
   }
 

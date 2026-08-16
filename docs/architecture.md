@@ -547,6 +547,26 @@ ehrliche Spieler verlöre alles. Die Auflösung:
 
 Deshalb ist Idempotenz keine Kür: Sie ist genau das, was den Tunnel harmlos macht.
 
+### Nur ein Gerät schreibt (R3)
+
+Zwei Geräte, die vom selben Snapshot aus offline weiterspielen, erzeugen zwangsläufig einen
+Fork. Erkennen lässt er sich erst beim Sync — dann ist die Arbeit des zweiten Geräts längst
+getan und geht verloren. **Die Warnung kommt bei diesem Weg grundsätzlich zu spät.**
+
+Deshalb hält genau ein Gerät die Offline-Schreibrechte:
+
+- Jedes Gerät hat eine lokale Kennung und schickt sie beim Sync mit.
+- Ein zweites Gerät erfährt **beim Verbinden**, dass es nicht dran ist, und sperrt seine
+  Aktionen. Es entsteht also gar keine Arbeit, die später verworfen werden müsste.
+- Wechseln geht jederzeit per ausdrücklicher **Übernahme** — mit Hinweis darauf, dass nicht
+  synchronisierte Arbeit auf dem anderen Gerät verfällt.
+- Das abgelöste Gerät erfährt es beim nächsten Sync. Weil ein Gerät mit leerer Warteschlange
+  aber gar nichts sendet, fragt der Client den Status zusätzlich regelmäßig nach — sonst
+  spielte es fröhlich weiter und liefe erneut in den Verlust.
+
+`FORK_DETECTED` bleibt als letzte Verteidigungslinie bestehen: für Geräte, die nicht am
+Verfahren teilnehmen, und für Fälle, die durch die Lücke rutschen.
+
 ### Thundering Herd
 
 Wenn ein ICE aus dem Tunnel fährt, kommen mehrere hundert Clients **gleichzeitig** zurück.

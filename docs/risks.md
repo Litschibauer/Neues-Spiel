@@ -119,9 +119,18 @@ Spielern.
 
 **Schärfe:** Hoch. Bei „mobile-first, aber multiplattform" ein realistisches Alltagsszenario.
 
+**Status: umgesetzt und auf echter Hardware ausgelöst.** Beim Feldtest über zwei Geräte trat
+der Fall genau so ein: fünf Ernten im Funkloch, dann `FORK_DETECTED` und alles verworfen —
+die Warnung kam erst nach dem Verlust. Genau das ist jetzt umgedreht.
+
 **Gegenmaßnahmen:**
-- **Aktiv-Gerät-Token:** Nur ein Gerät hält die „Offline-Schreibrechte". Andere Geräte sind
-  offline read-only, bis sie das Token übernehmen (mit Warnung).
+- **Aktiv-Gerät-Token (umgesetzt):** Nur ein Gerät hält die Offline-Schreibrechte. Ein zweites
+  erfährt das **beim Verbinden**, nicht beim Sync, und kann gar nichts erst einreihen. Wer
+  wechseln will, übernimmt ausdrücklich — mit Hinweis darauf, was das kostet.
+  Entscheidend ist der Zeitpunkt: Die Ablehnung `NOT_ACTIVE_DEVICE` ist eine *Frage vorher*,
+  `FORK_DETECTED` war eine *Fehlermeldung danach*.
+- Ein Gerät mit leerer Warteschlange sendet nichts und erführe sonst nie, dass es die Rechte
+  verloren hat. Deshalb fragt der Client den Status regelmäßig nach, statt nur beim Sync.
 - Alternativ: **Sync-Zwang beim App-Start**, sodass ein Gerät nie lange von einem veralteten
   Snapshot aus offline weiterläuft.
 - Klare UI-Kommunikation *bevor* der Verlust passiert, nie danach.

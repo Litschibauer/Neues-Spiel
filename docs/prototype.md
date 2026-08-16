@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 77 Tests, keine Dependencies, kein Build-Step
+npm test        # 80 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run conformance  # Prüfstand- und Feldtest-Seite bauen

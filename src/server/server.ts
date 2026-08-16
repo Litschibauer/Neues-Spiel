@@ -33,6 +33,13 @@ export type SyncRequest = {
   commands: Command[];
   /** Hash des Client-Zustands nach dem letzten Command (Kanarienvogel, R1). */
   clientHash?: string;
+  /**
+   * Wer schickt. Ohne Angabe nimmt das Gerät nicht am Aktiv-Gerät-Verfahren
+   * teil (R3) — nützlich für Skripte und Tests.
+   */
+  deviceId?: string;
+  /** Ausdrückliche Übernahme, obwohl ein anderes Gerät aktiv ist. */
+  takeover?: boolean;
 };
 
 export type SyncResult =
@@ -85,6 +92,24 @@ export class Server {
   pendingDeliveries: MailItem[] = [];
   /** Zustellungen, die nicht mehr ins Postfach passten. */
   undeliverable: MailItem[] = [];
+  /**
+   * Das Gerät mit den Offline-Schreibrechten (R3).
+   *
+   * Ein Fork entsteht dadurch, dass zwei Geräte vom selben Snapshot aus offline
+   * weiterspielen. Erkennen kann man ihn erst beim Sync — dann ist die Arbeit
+   * des zweiten Geräts schon getan und geht verloren. Die Warnung kommt also
+   * grundsätzlich zu spät.
+   *
+   * Das Aktiv-Gerät dreht die Reihenfolge um: Ein zweites Gerät erfährt
+   * *bevor* es losspielt, dass es nicht dran ist, und kann bewusst übernehmen.
+   */
+  activeDevice: { id: string; lastSyncMs: number } | null = null;
+
+  /** Darf dieses Gerät gerade schreiben? */
+  isActiveDevice(deviceId: string | undefined): boolean {
+    if (deviceId === undefined) return true; // nimmt nicht teil
+    return this.activeDevice === null || this.activeDevice.id === deviceId;
+  }
 
   /** Externes Ereignis: Geschenk, Auftrag gefüllt, Event-Belohnung. */
   deliver(item: MailItem): void {
@@ -113,6 +138,7 @@ export class Server {
     this.snapshot = { state: fresh, seq: 0, serverTs: nowMs, rulesetVersion };
     this.appliedLog = [];
     this.pendingDeliveries = [];
+    this.activeDevice = null;
     this.divergenceAlerts = [];
     this.migrationFailures = [];
   }
@@ -148,6 +174,18 @@ export class Server {
     // Snapshot gestempelt hat.
     if (req.rulesetVersion !== snap.rulesetVersion) {
       return { ok: false, kind: 'rejected', reason: 'RULESET_MISMATCH', snapshot: snap };
+    }
+
+    // ── Aktiv-Gerät (R3) ─────────────────────────────────────────────────
+    //
+    // Vor der Re-Simulation, damit ein zweites Gerät gar nicht erst Arbeit
+    // bestätigt bekommt. Das ist absichtlich eine eigene Ablehnung und kein
+    // FORK_DETECTED: Der Client kann daraus eine Frage machen („hier
+    // übernehmen?") statt einer Fehlermeldung nach dem Verlust.
+    if (req.deviceId !== undefined && !this.isActiveDevice(req.deviceId)) {
+      if (!req.takeover) {
+        return { ok: false, kind: 'rejected', reason: 'NOT_ACTIVE_DEVICE', snapshot: snap };
+      }
     }
 
     // ── Form des Batches ─────────────────────────────────────────────────
@@ -315,6 +353,10 @@ export class Server {
           message: err.message,
         });
       }
+    }
+
+    if (req.deviceId !== undefined) {
+      this.activeDevice = { id: req.deviceId, lastSyncMs: nowMs };
     }
 
     this.appliedLog.push(...accepted);
