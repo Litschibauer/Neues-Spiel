@@ -173,6 +173,9 @@ Faustregel: **Alles, was nur den eigenen Zustand betrifft und deterministisch is
 Alles, was geteilte Welt oder echten Zufall braucht → online.** In der UI werden Online-only-
 Features offline einfach ausgegraut mit „braucht Verbindung".
 
+> **Nuance beim Handel:** Online-only ist nur der *Abschluss*. Aufträge platzieren, NPC-Handel
+> und Geschenke funktionieren sehr wohl offline — siehe §8.
+
 ---
 
 ## 7. Kapazitätsgrenzen & Overflow (Lagerlimits)
@@ -254,7 +257,85 @@ mal versagt, begrenzt das Lager den Schaden.
 
 ---
 
-## 8. Reconciliation & Rollback (UX)
+## 8. Handel: was wirklich unmöglich ist — und was doch geht
+
+### Der harte Kern ist tatsächlich unmöglich
+
+Zwei offline Spieler können sich über **geteilten, knappen Zustand** nicht einigen. Wenn beide
+offline die letzte Charge Weizen kaufen, ist das **kein Cheat** — beide sind ehrlich, und
+trotzdem gibt es einen Konflikt.
+
+Das ist der entscheidende Punkt: Es ist ein **Konsistenz**problem, kein Sicherheitsproblem.
+Ohne gemeinsame Instanz während der Trennung gibt es keine Einigung — dieselbe Klasse Problem
+wie das CAP-Theorem. Kein Engineering-Aufwand löst das.
+
+> **Gleichzeitiger, bestätigter Handel zwischen offline Spielern = unmöglich. Punkt.**
+
+### Aber du brauchst gar keinen Handel offline — du brauchst *Absicht*
+
+Die Umdeutung, die fast alles rettet: Offline „handeln" heißt nicht *Trade abschließen*,
+sondern *Auftrag erteilen*. Und ein Auftrag ist ein ganz normales Command wie jedes andere.
+
+**Verkaufen ist einseitig → funktioniert offline gut.**
+
+- Du committest Ware, die du nachweislich hast.
+- **Escrow beim Command:** Der Weizen verlässt dein Lager in dem Moment, in dem du den Auftrag
+  offline erteilst. Deterministisch, lokal, und damit ist ein Doppelverkauf strukturell
+  ausgeschlossen.
+- Beim Sync stellt der Server das Angebot real ein.
+
+**Kaufen ist schwieriger → als Limit-Order lösen.**
+
+- „Kaufe bis zu 50 Weizen für max. 12 Gold" — das Gold wird escrowed.
+- Beim Sync füllt der Server, was verfügbar ist, und erstattet den Rest.
+- **UI-Regel:** Offline **niemals** „gekauft" anzeigen, immer „Auftrag platziert". Der
+  Unterschied zwischen Zusage und Absicht muss sichtbar sein — sonst fühlt sich ein nicht
+  gefüllter Auftrag wie ein Verlust an, obwohl nichts verloren ging.
+
+### Der NPC-Markt ist der eigentliche Held
+
+Ein Systemhändler mit definierten Preisen ist **kein geteilter knapper Zustand**, sondern eine
+reine Sim-Regel. Damit ist er **voll offline-fähig**: kaufen und verkaufen sofort, mit echter
+Bestätigung, ganz ohne Sync. Das deckt gefühlt den größten Teil von „Handel" ab.
+
+- Preise kommen aus dem versionierten Ruleset (R2), damit sie deterministisch sind.
+- ⚠️ Ein unbegrenzter NPC-Ankauf wäre eine Gold-Quelle, die man offline farmen kann. Gedeckelt
+  wird das schon automatisch durch Lagerlimit (§7) und Zeitautorität (§4) — mehr Ware, als Zeit
+  und Lager hergeben, existiert nicht. Zusätzlich sinnvoll: tägliche Ankaufkontingente.
+
+### Geschenke gehen offline
+
+Eine einseitige Übertragung braucht keinen Konsens: Escrow beim Senden, Zustellung beim Sync,
+Landung im Postfach des Empfängers (§7).
+
+### Der Spielermarkt offline: Snapshot + Auftragsbuch
+
+Der Client cached den Marktzustand vom letzten Sync. Offline browst du eine **veraltete
+Momentaufnahme**, deutlich markiert („Stand: vor 3 Stunden"). Aufträge werden dagegen platziert
+und beim Sync abgeglichen.
+
+Risiko: Der Spieler sieht ein Superangebot, das längst weg ist. Gegenmittel: Alter des
+Snapshots prominent anzeigen und Aufträge konsequent als *Absicht* framen, nie als Abschluss.
+
+### Der Glücksfall: das Genre macht es ohnehin schon so
+
+Farmgame-Märkte sind **bereits asynchron**. Du stellst Ware in den Hofladen und irgendwann
+kauft sie jemand — niemand erwartet dort die Sofortbestätigung eines Gegenübers.
+
+Das heißt: Das Offline-Modell **passt zum Genre, statt dagegen zu arbeiten.** Der gefühlte
+Verlust ist viel kleiner, als „Handel geht offline nicht" klingt.
+
+### Was ehrlich online-only bleibt
+
+- Live-Auktionen mit Echtzeit-Geboten
+- „Wer zuerst kommt"-Limitware, Flash Sales
+- Alles, wo **Gleichzeitigkeit selbst das Spielelement** ist
+
+Das ist kein Kompromiss, sondern korrekt: Gleichzeitigkeit braucht nun mal eine Verbindung.
+
+---
+
+## 9. Reconciliation & Rollback (UX)
 
 Der ehrliche Fall ist unsichtbar. Für die seltenen Konflikte (Client- und Server-Zustand
 weichen ab — durch Bug, Manipulation oder verlorene Verbindung mitten im Sync):
@@ -271,7 +352,7 @@ weichen ab — durch Bug, Manipulation oder verlorene Verbindung mitten im Sync)
 
 ---
 
-## 9. Grober Tech-Zuschnitt
+## 10. Grober Tech-Zuschnitt
 
 Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
@@ -288,12 +369,12 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
 ---
 
-## 10. Offene Fragen / nächste Schritte
+## 11. Offene Fragen / nächste Schritte
 
 - [ ] Tick-Auflösung festlegen (1s? 1min?) — Trade-off Präzision vs. Log-Größe.
 - [ ] Command-Set definieren (die vollständige Liste erlaubter Aktionen ist die eigentliche
       „Regel" des Spiels).
-- [ ] Konkrete Sim-Sprache/Portabilität wählen (§9).
+- [ ] Konkrete Sim-Sprache/Portabilität wählen (§10).
 - [ ] Verhalten am Lagerlimit festlegen (hard block / waste / soft-cap, §7).
 - [ ] Postfach: Kapazität, Ablauffrist, UI fürs Abholen (§7).
 - [ ] Snapshot-Format + Signaturschema.
