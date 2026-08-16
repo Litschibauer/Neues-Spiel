@@ -1,0 +1,1810 @@
+{
+  "$comment": "Golden Vectors für den Sim-Kern. Jede Plattform (iOS, Android, WASM, Server) muss diesen Korpus abspielen und exakt dieselben Endzustände liefern. Abweichung = Determinismus-Bug (R1). Nicht von Hand bearbeiten — siehe scripts/generate-golden.ts.",
+  "rulesetVersion": 1,
+  "vectorCount": 20,
+  "vectors": [
+    {
+      "name": "busy-001",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 1,
+          "tick": 9450
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 4,
+          "seq": 2,
+          "tick": 9450
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 3,
+          "tick": 9450
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 4,
+          "tick": 10059
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 15,
+          "seq": 5,
+          "tick": 12548
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 6,
+          "tick": 12548
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 7,
+          "tick": 12706
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 8,
+          "tick": 12706
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 9,
+          "tick": 15525
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 10,
+          "tick": 15525
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 6,
+          "seq": 11,
+          "tick": 16729
+        },
+        {
+          "type": "HARVEST",
+          "field": 4,
+          "seq": 12,
+          "tick": 17326
+        }
+      ],
+      "expectedStateHash": "c6020424c0ac8c8b",
+      "expectedState": {
+        "tick": 17326,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 15525
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 10059
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 9450
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 15525
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 12706
+          }
+        ],
+        "wheat": 10,
+        "eggs": 1,
+        "gold": 135,
+        "coopProgress": 526
+      }
+    },
+    {
+      "name": "busy-002",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 1,
+          "tick": 0
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 2,
+          "tick": 1697
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 3,
+          "tick": 1697
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 4,
+          "tick": 4556
+        },
+        {
+          "type": "HARVEST",
+          "field": 4,
+          "seq": 5,
+          "tick": 8446
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 6,
+          "seq": 6,
+          "tick": 11303
+        },
+        {
+          "type": "HARVEST",
+          "field": 5,
+          "seq": 7,
+          "tick": 14699
+        },
+        {
+          "type": "HARVEST",
+          "field": 2,
+          "seq": 8,
+          "tick": 14699
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 9,
+          "tick": 14699
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 6,
+          "seq": 10,
+          "tick": 17284
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 11,
+          "tick": 18666
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 12,
+          "tick": 21774
+        },
+        {
+          "type": "HARVEST",
+          "field": 5,
+          "seq": 13,
+          "tick": 27544
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 14,
+          "tick": 27544
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 15,
+          "tick": 27544
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 23,
+          "seq": 16,
+          "tick": 27544
+        }
+      ],
+      "expectedStateHash": "52409e7b9a82bb96",
+      "expectedState": {
+        "tick": 27544,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 27544
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 27544
+          }
+        ],
+        "wheat": 21,
+        "eggs": 31,
+        "gold": 157,
+        "coopProgress": 544
+      }
+    },
+    {
+      "name": "busy-003",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 1,
+          "tick": 4878
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 2,
+          "tick": 4878
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 3,
+          "seq": 3,
+          "tick": 4878
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 5,
+          "seq": 4,
+          "tick": 8388
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 6,
+          "seq": 5,
+          "tick": 8422
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 6,
+          "tick": 8422
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 7,
+          "tick": 10947
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 8,
+          "tick": 14781
+        }
+      ],
+      "expectedStateHash": "d61c259deadcf979",
+      "expectedState": {
+        "tick": 14781,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 8422
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 4878
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 14781
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 4878
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 9,
+        "gold": 75,
+        "coopProgress": 381
+      }
+    },
+    {
+      "name": "busy-005",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 1,
+          "tick": 8009
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 4,
+          "seq": 2,
+          "tick": 8009
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 3,
+          "tick": 10554
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 3,
+          "seq": 4,
+          "tick": 14283
+        },
+        {
+          "type": "HARVEST",
+          "field": 5,
+          "seq": 5,
+          "tick": 23337
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 9,
+          "seq": 6,
+          "tick": 26276
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 20,
+          "seq": 7,
+          "tick": 26276
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 8,
+          "tick": 26276
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 9,
+          "tick": 27285
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 1,
+          "seq": 10,
+          "tick": 28448
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 11,
+          "tick": 31583
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 12,
+          "tick": 31583
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 13,
+          "tick": 33631
+        }
+      ],
+      "expectedStateHash": "bdd7129f9ddc21c4",
+      "expectedState": {
+        "tick": 33631,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 31583
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 27285
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 31583
+          }
+        ],
+        "wheat": 10,
+        "eggs": 21,
+        "gold": 205,
+        "coopProgress": 31
+      }
+    },
+    {
+      "name": "busy-008",
+      "fieldCount": 2,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 1,
+          "tick": 7005
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 2,
+          "tick": 9229
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 3,
+          "tick": 9229
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 4,
+          "tick": 9229
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 5,
+          "tick": 13207
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 3,
+          "seq": 6,
+          "tick": 15546
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 2,
+          "seq": 7,
+          "tick": 15546
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 8,
+          "tick": 19825
+        },
+        {
+          "type": "HARVEST",
+          "field": 1,
+          "seq": 9,
+          "tick": 23606
+        },
+        {
+          "type": "HARVEST",
+          "field": 0,
+          "seq": 10,
+          "tick": 23606
+        }
+      ],
+      "expectedStateHash": "71a959dfeb3fb639",
+      "expectedState": {
+        "tick": 23606,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 20,
+        "eggs": 16,
+        "gold": 115,
+        "coopProgress": 206
+      }
+    },
+    {
+      "name": "busy-013",
+      "fieldCount": 5,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 1,
+          "tick": 0
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 2,
+          "tick": 16488
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 3,
+          "tick": 16488
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 4,
+          "tick": 20515
+        },
+        {
+          "type": "HARVEST",
+          "field": 1,
+          "seq": 5,
+          "tick": 27389
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 8,
+          "seq": 6,
+          "tick": 27389
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 2,
+          "seq": 7,
+          "tick": 27389
+        },
+        {
+          "type": "HARVEST",
+          "field": 4,
+          "seq": 8,
+          "tick": 27389
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 9,
+          "tick": 28624
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 10,
+          "tick": 28624
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 11,
+          "tick": 30602
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 49,
+          "seq": 12,
+          "tick": 30602
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 7,
+          "seq": 13,
+          "tick": 33972
+        }
+      ],
+      "expectedStateHash": "c246b3dcada02208",
+      "expectedState": {
+        "tick": 33972,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 28624
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 20515
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 28624
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 30602
+          }
+        ],
+        "wheat": 10,
+        "eggs": 0,
+        "gold": 310,
+        "coopProgress": 372
+      }
+    },
+    {
+      "name": "busy-021",
+      "fieldCount": 4,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 1,
+          "tick": 1361
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 2,
+          "tick": 3579
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 3,
+          "tick": 3579
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 5,
+          "seq": 4,
+          "tick": 3579
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 5,
+          "tick": 3579
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 6,
+          "tick": 3986
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 2,
+          "seq": 7,
+          "tick": 9030
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 8,
+          "tick": 9030
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 5,
+          "seq": 9,
+          "tick": 9376
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 2,
+          "seq": 10,
+          "tick": 13125
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 9,
+          "seq": 11,
+          "tick": 15914
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 3,
+          "seq": 12,
+          "tick": 24196
+        },
+        {
+          "type": "HARVEST",
+          "field": 2,
+          "seq": 13,
+          "tick": 26566
+        }
+      ],
+      "expectedStateHash": "8cf35626d96f021b",
+      "expectedState": {
+        "tick": 26566,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 3579
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 3579
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 10,
+        "eggs": 27,
+        "gold": 115,
+        "coopProgress": 166
+      }
+    },
+    {
+      "name": "busy-034",
+      "fieldCount": 5,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 1,
+          "tick": 1247
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 2,
+          "tick": 3287
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 9,
+          "seq": 3,
+          "tick": 5593
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 4,
+          "tick": 5593
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 5,
+          "tick": 7289
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 6,
+          "tick": 7289
+        },
+        {
+          "type": "HARVEST",
+          "field": 0,
+          "seq": 7,
+          "tick": 10436
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 7,
+          "seq": 8,
+          "tick": 10436
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 9,
+          "tick": 14204
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 10,
+          "tick": 17798
+        },
+        {
+          "type": "HARVEST",
+          "field": 4,
+          "seq": 11,
+          "tick": 17798
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 16,
+          "seq": 12,
+          "tick": 21700
+        }
+      ],
+      "expectedStateHash": "a9b7465f53e8e9a1",
+      "expectedState": {
+        "tick": 21700,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 3287
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 7289
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 30,
+        "eggs": 3,
+        "gold": 165,
+        "coopProgress": 100
+      }
+    },
+    {
+      "name": "busy-055",
+      "fieldCount": 4,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 1,
+          "tick": 3256
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 2,
+          "tick": 3256
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 3,
+          "tick": 6480
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 5,
+          "seq": 4,
+          "tick": 6480
+        },
+        {
+          "type": "HARVEST",
+          "field": 0,
+          "seq": 5,
+          "tick": 13360
+        },
+        {
+          "type": "HARVEST",
+          "field": 2,
+          "seq": 6,
+          "tick": 13617
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 5,
+          "seq": 7,
+          "tick": 18797
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 22,
+          "seq": 8,
+          "tick": 19878
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 17,
+          "seq": 9,
+          "tick": 23450
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 3,
+          "seq": 10,
+          "tick": 24393
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 11,
+          "tick": 24393
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 7,
+          "seq": 12,
+          "tick": 24393
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 13,
+          "tick": 24489
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 14,
+          "tick": 24489
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 1,
+          "seq": 15,
+          "tick": 24489
+        }
+      ],
+      "expectedStateHash": "365ead77f91222f6",
+      "expectedState": {
+        "tick": 24489,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 24393
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 24489
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 10,
+        "eggs": 0,
+        "gold": 260,
+        "coopProgress": 489
+      }
+    },
+    {
+      "name": "busy-089",
+      "fieldCount": 8,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 1,
+          "tick": 3469
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 3,
+          "seq": 2,
+          "tick": 14303
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 7,
+          "seq": 3,
+          "tick": 14303
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 4,
+          "tick": 14303
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 5,
+          "tick": 14303
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 6,
+          "tick": 17877
+        },
+        {
+          "type": "HARVEST",
+          "field": 5,
+          "seq": 7,
+          "tick": 17877
+        },
+        {
+          "type": "PLANT",
+          "field": 6,
+          "seq": 8,
+          "tick": 20018
+        },
+        {
+          "type": "HARVEST",
+          "field": 3,
+          "seq": 9,
+          "tick": 25885
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 7,
+          "seq": 10,
+          "tick": 25885
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 5,
+          "seq": 11,
+          "tick": 28938
+        },
+        {
+          "type": "HARVEST",
+          "field": 4,
+          "seq": 12,
+          "tick": 28938
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 21,
+          "seq": 13,
+          "tick": 28938
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "wheat",
+          "amount": 4,
+          "seq": 14,
+          "tick": 31414
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 15,
+          "tick": 34287
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 16,
+          "tick": 35034
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 30,
+          "seq": 17,
+          "tick": 35034
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 18,
+          "tick": 38340
+        }
+      ],
+      "expectedStateHash": "18c9ab91d9d0c082",
+      "expectedState": {
+        "tick": 38340,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 17877
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 35034
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 34287
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 20018
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 8,
+        "gold": 365,
+        "coopProgress": 540
+      }
+    },
+    {
+      "name": "idle-001",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 20,
+          "seq": 1,
+          "tick": 70855
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 80,
+          "seq": 2,
+          "tick": 70855
+        }
+      ],
+      "expectedStateHash": "384d8a540e621df7",
+      "expectedState": {
+        "tick": 70855,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 0,
+        "gold": 500,
+        "coopProgress": 0
+      }
+    },
+    {
+      "name": "idle-002",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 1,
+          "tick": 23212
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 3,
+          "seq": 2,
+          "tick": 42733
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 3,
+          "tick": 42733
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 4,
+          "tick": 85812
+        }
+      ],
+      "expectedStateHash": "fb59f08de5d7c7fb",
+      "expectedState": {
+        "tick": 85812,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 42733
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 85812
+          }
+        ],
+        "wheat": 0,
+        "eggs": 100,
+        "gold": 55,
+        "coopProgress": 0
+      }
+    },
+    {
+      "name": "idle-003",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 77,
+          "seq": 1,
+          "tick": 103747
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 2,
+          "tick": 125400
+        }
+      ],
+      "expectedStateHash": "bed161c013277893",
+      "expectedState": {
+        "tick": 125400,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 125400
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 59,
+        "gold": 385,
+        "coopProgress": 53
+      }
+    },
+    {
+      "name": "idle-005",
+      "fieldCount": 6,
+      "commands": [
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 5,
+          "seq": 1,
+          "tick": 11844
+        },
+        {
+          "type": "PLANT",
+          "field": 4,
+          "seq": 2,
+          "tick": 54190
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 3,
+          "tick": 69045
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 52,
+          "seq": 4,
+          "tick": 77197
+        },
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 5,
+          "tick": 77197
+        },
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 6,
+          "tick": 83501
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 7,
+          "tick": 90504
+        }
+      ],
+      "expectedStateHash": "57293f7b3914d065",
+      "expectedState": {
+        "tick": 90504,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 90504
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 77197
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 83501
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 54190
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 69045
+          }
+        ],
+        "wheat": 0,
+        "eggs": 70,
+        "gold": 285,
+        "coopProgress": 107
+      }
+    },
+    {
+      "name": "idle-008",
+      "fieldCount": 2,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 1,
+          "tick": 33873
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 2,
+          "tick": 90950
+        }
+      ],
+      "expectedStateHash": "4c6735ec74bdccb6",
+      "expectedState": {
+        "tick": 90950,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 33873
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 92,
+        "gold": 40,
+        "coopProgress": 0
+      }
+    },
+    {
+      "name": "idle-013",
+      "fieldCount": 5,
+      "commands": [
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 8,
+          "seq": 1,
+          "tick": 15139
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 2,
+          "tick": 53084
+        }
+      ],
+      "expectedStateHash": "13c44267cd2c50d2",
+      "expectedState": {
+        "tick": 53084,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 53084
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 80,
+        "gold": 40,
+        "coopProgress": 284
+      }
+    },
+    {
+      "name": "idle-021",
+      "fieldCount": 4,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 3,
+          "seq": 1,
+          "tick": 37533
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 32,
+          "seq": 2,
+          "tick": 103102
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 44,
+          "seq": 3,
+          "tick": 103102
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 13,
+          "seq": 4,
+          "tick": 114562
+        }
+      ],
+      "expectedStateHash": "2f3a6ac7cf975864",
+      "expectedState": {
+        "tick": 114562,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 37533
+          }
+        ],
+        "wheat": 0,
+        "eggs": 30,
+        "gold": 445,
+        "coopProgress": 60
+      }
+    },
+    {
+      "name": "idle-034",
+      "fieldCount": 5,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 1,
+          "tick": 36714
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 2,
+          "tick": 46914
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 26,
+          "seq": 3,
+          "tick": 81831
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 69,
+          "seq": 4,
+          "tick": 81831
+        }
+      ],
+      "expectedStateHash": "276dc7045220bd44",
+      "expectedState": {
+        "tick": 81831,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 36714
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 46914
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 0,
+        "eggs": 5,
+        "gold": 475,
+        "coopProgress": 0
+      }
+    },
+    {
+      "name": "idle-055",
+      "fieldCount": 4,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 2,
+          "seq": 1,
+          "tick": 40749
+        },
+        {
+          "type": "HARVEST",
+          "field": 2,
+          "seq": 2,
+          "tick": 48420
+        }
+      ],
+      "expectedStateHash": "3f550a84668de04b",
+      "expectedState": {
+        "tick": 48420,
+        "fields": [
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          }
+        ],
+        "wheat": 10,
+        "eggs": 80,
+        "gold": 0,
+        "coopProgress": 420
+      }
+    },
+    {
+      "name": "idle-089",
+      "fieldCount": 8,
+      "commands": [
+        {
+          "type": "PLANT",
+          "field": 7,
+          "seq": 1,
+          "tick": 17345
+        },
+        {
+          "type": "PLANT",
+          "field": 5,
+          "seq": 2,
+          "tick": 17345
+        },
+        {
+          "type": "PLANT",
+          "field": 0,
+          "seq": 3,
+          "tick": 20823
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 4,
+          "seq": 4,
+          "tick": 20823
+        },
+        {
+          "type": "SELL_NPC",
+          "item": "eggs",
+          "amount": 29,
+          "seq": 5,
+          "tick": 20823
+        },
+        {
+          "type": "PLANT",
+          "field": 1,
+          "seq": 6,
+          "tick": 70162
+        },
+        {
+          "type": "PLANT",
+          "field": 6,
+          "seq": 7,
+          "tick": 87437
+        }
+      ],
+      "expectedStateHash": "842ee44c4b8d0856",
+      "expectedState": {
+        "tick": 87437,
+        "fields": [
+          {
+            "crop": "wheat",
+            "plantedAt": 20823
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 70162
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": null,
+            "plantedAt": 0
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 17345
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 87437
+          },
+          {
+            "crop": "wheat",
+            "plantedAt": 17345
+          }
+        ],
+        "wheat": 0,
+        "eggs": 100,
+        "gold": 165,
+        "coopProgress": 0
+      }
+    }
+  ]
+}

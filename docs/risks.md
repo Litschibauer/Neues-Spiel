@@ -38,14 +38,27 @@ waren beim Lesen unsichtbar und wurden erst vom Fuzz gegen eine Tick-für-Tick-G
 gefunden. Details in [prototype.md](prototype.md). R1 ist damit keine Sorge mehr, sondern
 eine Beobachtung.
 
-**Gegenmaßnahmen:**
-- Der Sim-Kern ist **ein einziges Artefakt**, das identisch auf Client und Server läuft — nie
-  zwei Implementierungen.
-- **Property-based / Replay-Tests:** zufällige Command-Logs generieren, auf beiden Seiten
-  laufen lassen, Zustände müssen exakt gleich sein. In CI als Gate.
-- **Kanarienvögel:** Client schickt beim Sync einen Hash seines lokalen Zustands mit. Weicht er
-  vom Server-Hash ab, ist das ein *Alarm* (Determinismus-Bug), kein Cheat — getrennt behandeln,
-  loggen, nachforschen. Nie stillschweigend den Spieler bestrafen.
+**Gegenmaßnahmen** — fünf Schichten, weil kein einzelner Mechanismus reicht
+(Details in Architektur §9, umgesetzt im [Prototyp](prototype.md)):
+
+1. **Ein einziges Sim-Artefakt**, identisch auf Client und Server — nie zwei
+   Implementierungen, die auseinanderlaufen können.
+2. **Statischer CI-Wächter:** Floats, Systemzeit, Locale, `for…in` und ungeschützte Division
+   werden im Sim-Kern maschinell blockiert. Verlässt sich nicht auf Review-Disziplin.
+3. **Fuzz gegen eine Grundwahrheit:** Jede Optimierung (z.B. die geschlossene Produktionsformel)
+   tritt gegen eine langsame, offensichtlich korrekte Tick-für-Tick-Variante an — auf Funktions-
+   *und* auf Sitzungsebene.
+4. **Golden Vectors:** festgeschriebener Korpus expliziter Command-Logs mit erwarteten
+   Endzuständen, den jede Plattform abspielen muss. Macht den Cross-Plattform-Beweis führbar,
+   ohne alle Runtimes in einem Prozess zu haben.
+5. **Kanarienvogel + Quarantäne:** Client schickt seinen Zustands-Hash mit. Mismatch ⇒ Alarm,
+   nie Sanktion — und bei erhöhter Divergenzrate wird die betroffene Client-Version
+   eingeschränkt, statt eine ganze Kohorte kaputte Spielstände sammeln zu lassen.
+
+**Die entscheidende Weiche:** *illegaler Log* → Rollback (Cheat-Pfad). *Legaler Log mit
+abweichendem Hash* → **kein** Rollback, der Spieler behält seinen Fortschritt. Der Server hat
+den Log gerade selbst als regelkonform bestätigt — ihn dafür zurückzusetzen wäre exakt das
+Vertrauensproblem, das dieses Risiko beschreibt.
 
 ---
 

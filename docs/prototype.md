@@ -4,7 +4,8 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 21 Tests, keine Dependencies, kein Build-Step
+npm test        # 29 Tests, keine Dependencies, kein Build-Step
+npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 ```
 
 Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
@@ -24,6 +25,9 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
 
 src/client/       Optimistisches Offline-Spiel + Command-Queue
 src/server/       Zeitautorität, Re-Simulation, Snapshot, Rollback
+
+scripts/          Generator für die Golden Vectors
+test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 
 Modelliert ist das Nötigste, um die Mechanik echt zu belasten: Felder mit
@@ -34,16 +38,34 @@ Lagerlimit über alle Waren und NPC-Verkauf.
 
 ## Was der Prototyp beweist
 
-| Test | Aussage |
-| --- | --- |
-| `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **20.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein. |
-| `determinism.test.ts` | Eine ganze Offline-Sitzung liefert über **drei unabhängige Wege** (Client, Server-Re-Sim, Tick-für-Tick-Referenz) denselben Zustand. |
-| `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
-| `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
-| `sync.test.ts` | Sync ist atomar und idempotent; Fork und veraltete Regelversion werden erkannt. |
+Die fünf Verteidigungsschichten gegen R1 aus §9 — Schicht 1 bis 4 sind hier real,
+Schicht 5 ist im Server angelegt:
 
-Der wertvollste davon ist der erste: Er vergleicht die **Optimierung** gegen die
-**Grundwahrheit**. Alles andere hängt daran.
+| Schicht | Test | Aussage |
+| --- | --- | --- |
+| **1 Verhindern** | `sim-purity.test.ts` | Ein CI-Wächter liest den Sim-Quelltext und blockiert Floats, Systemzeit, Locale, `for…in` und ungeschützte Division. Ein zweiter Test prüft, dass der Wächter selbst noch beißt. |
+| **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **20.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein. |
+| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge), jede über drei unabhängige Rechenwege. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
+| **4 Beweisen (Plattform)** | `golden.test.ts` | **20 Golden Vectors, 166 Commands** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
+| **5 Erkennen** | `sync.test.ts` | Der Kanarienvogel-Hash schlägt bei Divergenz an — und blockiert den Sync **nicht**. |
+| — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
+| — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
+| — | `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
+| — | `sync.test.ts` | Sync ist atomar und idempotent; Fork und veraltete Regelversion werden erkannt. |
+
+Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
+abgelehnte Aktionen) und schlagen fehl, wenn nicht. Ein Fuzz, der nur Sonnenschein testet,
+beweist sonst nichts — und genau das war beim ersten Lauf der Fall.
+
+### Golden Vectors
+
+`test/vectors/golden.json` enthält **explizite Command-Logs**, keine Seeds. Das ist Absicht:
+Ein Seed setzte voraus, dass fremde Plattformen denselben PRNG bitgenau reproduzieren — also
+exakt die Annahme, die der Korpus prüfen soll.
+
+Neu erzeugen (`npm run golden`) ist eine **bewusste Handlung**. Verschieben sich Hashes, ohne
+dass jemand die Regeln absichtlich geändert hat, ist das der gesuchte Determinismus-Bug. Eine
+echte Regeländerung gehört in eine neue Ruleset-Version (R2) — nicht in überschriebene Vektoren.
 
 ---
 
@@ -85,7 +107,8 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
 - **Plattform-Determinismus.** Alles läuft hier in einer Node-Runtime. Der echte
   Test ist derselbe Kern auf iOS, Android und Server. Integer-only macht das
-  wahrscheinlich, aber bewiesen ist es damit nicht.
+  wahrscheinlich, aber bewiesen ist es damit nicht. Die Golden Vectors machen
+  diesen Beweis *führbar* — sie ersetzen ihn nicht.
 - **Ruleset-Migration (R2).** Versionierung ist vorgesehen und wird geprüft, aber
   es existiert nur eine Version — echte Balance-Patches sind ungetestet.
 - **Alles Geteilte.** Kein Markt, keine Nachbarn, kein Zufall, kein Escrow, kein
@@ -99,8 +122,9 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
 ## Nächste sinnvolle Schritte
 
-1. Denselben Kern nach WASM oder in eine Mobile-Runtime bringen und die
-   Fuzz-Tests dort laufen lassen — der echte Plattform-Beweis.
+1. Denselben Kern nach WASM oder in eine Mobile-Runtime bringen und dort
+   `test/vectors/golden.json` abspielen — der echte Plattform-Beweis, und dank
+   der Vektoren nur noch ein Nachmittag Arbeit statt eines Projekts.
 2. Ein zweites Ruleset einziehen und eine Migration durchspielen (R2).
 3. Escrow, Auftrags-Slots und Postfach ergänzen, dann die Behälter-Invariante
    aus §7 als Test formulieren: *Summe aller Behälter ist beschränkt.*

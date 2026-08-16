@@ -16,10 +16,12 @@ Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfäng
 ## Prototyp
 
 Der Sim-Kern existiert und die riskanteste Annahme ist geprüft: Client und Server rechnen
-bit-für-bit dasselbe.
+bit-für-bit dasselbe — abgesichert durch fünf gestapelte Verteidigungsschichten, von einem
+statischen CI-Wächter über Fuzzing gegen eine Grundwahrheit bis zu Golden Vectors für den
+Plattform-Beweis.
 
 ```bash
-npm test    # 21 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 29 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, und die zwei echten Determinismus-Bugs, die die Tests dabei

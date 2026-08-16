@@ -8,6 +8,7 @@
     "node": ">=22.6"
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test \"test/*.test.ts\""
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
+    "golden": "node --experimental-strip-types scripts/generate-golden.ts"
   }
 }

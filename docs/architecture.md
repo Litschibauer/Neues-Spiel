@@ -406,6 +406,53 @@ weichen ab — durch Bug, Manipulation oder verlorene Verbindung mitten im Sync)
 - **Manipulationsschutz des Snapshots:** Server signiert Snapshots (HMAC/Signatur). Der
   Client kann sie nicht fälschen, um mit einem besseren „letzten validen Stand" zu starten.
 
+### Die wichtigste Weiche: illegal ≠ divergent
+
+Determinismus wird nie 100 % erreicht. Deshalb braucht das System einen Plan für den
+Restfall — und der darf **nicht** derselbe sein wie der Plan für Cheater. Es gibt genau
+zwei Fälle, und sie werden strikt getrennt behandelt:
+
+| Fall | Was der Server sieht | Reaktion |
+| --- | --- | --- |
+| **Log ist illegal** | Ein Command verletzt die Regeln oder das Zeitbudget | **Rollback.** Das ist der beabsichtigte Cheat-Pfad. |
+| **Log ist legal, Hash weicht ab** | Alle Aktionen erlaubt, aber Client-Zustand ≠ Server-Zustand | **Kein Rollback.** Der Log wird angewandt, der Spieler behält seinen Fortschritt. |
+
+Der zweite Fall ist **immer ein Bug auf unserer Seite**, nie eine Schuld des Spielers: Der
+Server hat den Log ja soeben selbst als regelkonform bestätigt. Ihn dafür zurückzusetzen,
+wäre die schlimmste Reaktion — genau das Vertrauensproblem aus R1.
+
+> **Regel: Ein Hash-Mismatch erzeugt ein Ticket, keine Sanktion.**
+
+Konkret:
+
+- **Divergenz blockiert den Sync nicht.** Der Log wird angewandt, der Server-Zustand ist
+  kanonisch, die (typischerweise winzige) Differenz wird still korrigiert.
+- **Alarm ins Monitoring**, mit Client-Version, Ruleset-Version, Command-Log und beiden
+  Hashes — genug, um den Fall lokal nachzustellen.
+- **Keine automatische Entschädigung.** So verlockend „gib dem Spieler die Differenz" klingt:
+  Das wäre farmbar, sobald jemand Hash-Mismatches provozieren kann. Echte Vorfälle werden
+  operativ entschädigt (Postfach-Kampagne an die betroffene Kohorte), nicht automatisch.
+- **Blast Radius eindämmen:** Steigt die Divergenzrate einer Client-Version über einen
+  Schwellwert, wird diese Version **quarantänisiert** — kürzere Sync-Intervalle oder
+  vorübergehend online-only, bis der Patch draußen ist. Besser ein eingeschränktes Feature
+  als eine Kohorte mit kaputten Spielständen.
+
+### Verteidigung in der Tiefe
+
+Weil kein einzelner Mechanismus Determinismus garantiert, stapeln sich fünf Schichten —
+alle bis auf die letzte sind im [Prototyp](prototype.md) umgesetzt:
+
+1. **Verhindern:** Integer-only, keine Systemzeit, keine Locale — statisch per CI-Wächter
+   erzwungen, nicht per Code-Review-Disziplin.
+2. **Beweisen (Einheit):** Die optimierte Produktionsformel wird gegen eine Tick-für-Tick-
+   Grundwahrheit gefuzzt.
+3. **Beweisen (Sitzung):** Hunderte zufällige Offline-Sitzungen über drei unabhängige
+   Rechenwege — fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen.
+4. **Beweisen (Plattform):** Golden Vectors — ein festgeschriebener Korpus aus expliziten
+   Command-Logs mit erwarteten Endzuständen, den *jede* Plattform abspielen muss. Bewusst
+   ohne Seeds, denn ein Seed setzte gleichen PRNG voraus — also genau das, was zu prüfen ist.
+5. **Erkennen & eindämmen:** Kanarienvogel-Hash im Sync, Alarm, Quarantäne (siehe oben).
+
 ---
 
 ## 10. Grober Tech-Zuschnitt
