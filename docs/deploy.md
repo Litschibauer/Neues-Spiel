@@ -45,24 +45,34 @@ npm run conformance   # baut dist/field-test.html und dist/conformance.html
 npm test              # 72 Tests, sollte grün sein
 ```
 
-## 3. Token erzeugen
-
-Ohne Node, funktioniert auf jedem System:
+## 3. Starten
 
 ```bash
-head -c 24 /dev/urandom | base64 | tr '+/' '-_' | tr -d '='
+npm start
 ```
 
-Das Ergebnis merken — ohne Token startet der Server nicht, und ohne Token kommt
-kein Gerät rein.
+Beim ersten Start erzeugt der Server selbst ein Token, legt es unter
+`data/token` ab (nur für den Besitzer lesbar) und gibt es einmal aus. Danach
+findet er es dort von allein wieder.
 
-## 4. Starten
+**Token jederzeit nachschlagen:**
+
+```bash
+cat data/token
+```
+
+Ein eigenes vorgeben (überschreibt die Datei nicht, hat aber Vorrang):
 
 ```bash
 NEUES_SPIEL_TOKEN='dein-token' PORT=8787 npm start
 ```
 
-Prüfen — zuerst lokal auf dem Server:
+Neues Token erzwingen: `rm data/token`, dann neu starten. Am Token hängt nichts —
+der Spielstand kennt es nicht.
+
+## 4. Erreichbarkeit prüfen
+
+Zuerst lokal auf dem Server:
 
 ```bash
 curl http://127.0.0.1:8787/health
@@ -97,7 +107,7 @@ Type=simple
 User=deinuser
 WorkingDirectory=/home/deinuser/Neues-Spiel
 Environment=PORT=8787
-Environment=NEUES_SPIEL_TOKEN=dein-token
+# Kein Token nötig — der Dienst nimmt das aus data/token.
 ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts
 Restart=always
 RestartSec=5
@@ -114,7 +124,6 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo chmod 600 /etc/systemd/system/neues-spiel.service   # das Token steht drin
 sudo systemctl daemon-reload
 sudo systemctl enable --now neues-spiel
 journalctl -u neues-spiel -f
@@ -185,7 +194,7 @@ Log-Länge sonst frei (R4).
 
 Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 
-- Ein Spielstand, ein Token. Keine Accounts, keine Registrierung.
+- Ein Spielstand, ein Token in `data/token`. Keine Accounts, keine Registrierung.
 - JSON-Datei statt Datenbank. Atomar geschrieben, aber ohne Backups.
 - Kein TLS, kein Rate-Limit pro IP, keine Metriken.
 - Snapshot-Signatur (§9) fehlt — der Server hält ohnehin seine eigene Kopie.

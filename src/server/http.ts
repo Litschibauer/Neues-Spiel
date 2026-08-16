@@ -13,8 +13,8 @@
 
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
@@ -27,13 +27,50 @@ const PORT = Number(process.env.PORT ?? 8787);
 const SAVE_PATH = process.env.NEUES_SPIEL_SAVE ?? join(ROOT, 'data', 'save.json');
 const FIELD_COUNT = 6;
 
-/** Ohne Token startet der Server nicht — er soll erreichbar, nicht offen sein. */
-const TOKEN = process.env.NEUES_SPIEL_TOKEN;
-if (!TOKEN || TOKEN.length < 16) {
-  console.error('NEUES_SPIEL_TOKEN fehlt oder ist zu kurz (mindestens 16 Zeichen).');
-  console.error(`Vorschlag: ${randomBytes(24).toString('base64url')}`);
-  process.exit(1);
+const TOKEN_PATH = process.env.NEUES_SPIEL_TOKEN_FILE ?? join(ROOT, 'data', 'token');
+
+/**
+ * Token besorgen: Umgebungsvariable, sonst Datei, sonst neu erzeugen.
+ *
+ * Die Datei ist der bequeme Normalfall. Ein Token, das nur in der
+ * Umgebungsvariable steht, landet in der Shell-History und ist nach dem
+ * nächsten Neustart schlicht weg — dann steht man vor „wie finde ich das
+ * eigentlich wieder heraus".
+ *
+ * Erreichbar, aber nicht offen: Ohne Token läuft der Server nie. Wenn keines da
+ * ist, erzeugt er eines statt sich zu verweigern — das ist ebenso sicher und
+ * erspart den Umweg über ein Kommando, das man erst noch finden muss.
+ */
+function resolveToken(): string {
+  const fromEnv = process.env.NEUES_SPIEL_TOKEN;
+  if (fromEnv) {
+    if (fromEnv.length < 16) {
+      console.error('NEUES_SPIEL_TOKEN ist zu kurz (mindestens 16 Zeichen).');
+      process.exit(1);
+    }
+    return fromEnv;
+  }
+
+  if (existsSync(TOKEN_PATH)) {
+    const fromFile = readFileSync(TOKEN_PATH, 'utf8').trim();
+    if (fromFile.length >= 16) return fromFile;
+    console.error(`Token in ${TOKEN_PATH} ist zu kurz — bitte löschen, dann neu erzeugen.`);
+    process.exit(1);
+  }
+
+  const generated = randomBytes(24).toString('base64url');
+  mkdirSync(dirname(TOKEN_PATH), { recursive: true });
+  writeFileSync(TOKEN_PATH, generated + '\n', { mode: 0o600 });
+  console.log('\n' + '─'.repeat(52));
+  console.log('  Neues Zugangs-Token erzeugt:\n');
+  console.log(`  ${generated}\n`);
+  console.log(`  Liegt in ${TOKEN_PATH} — jederzeit wieder abrufbar mit:`);
+  console.log(`  cat ${TOKEN_PATH}`);
+  console.log('─'.repeat(52) + '\n');
+  return generated;
 }
+
+const TOKEN = resolveToken();
 
 // ── Zustand laden oder neu anlegen ─────────────────────────────────────
 const persisted = load(SAVE_PATH);
@@ -183,7 +220,8 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Feldtest-Server auf Port ${PORT}`);
   console.log(`Spielstand: ${SAVE_PATH}`);
-  console.log(`Seite: ${page ? 'eingebunden' : 'FEHLT (npm run web)'}`);
+  console.log(`Seite: ${page ? 'eingebunden' : 'FEHLT (npm run conformance)'}`);
+  console.log(`Token: …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
 });
 
 // Sauber beenden, damit der letzte Sync sicher auf der Platte liegt.
