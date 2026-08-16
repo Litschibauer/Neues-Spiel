@@ -197,6 +197,27 @@ Arbeit doppelt geschickt, nur den Rest anwenden (*resume*). Abweichend ⇒ echte
 
 ---
 
+## Feldtest auf echter Hardware
+
+Server auf einem 1-GB-VPS, Client auf iPhone und iPad über Mobilfunk. Alle Fälle aus
+[deploy.md](deploy.md) von Hand durchgespielt:
+
+| Fall | Ergebnis |
+| --- | --- |
+| **Tunnel** | Postfach geleert, zwei Aufträge eingestellt, alles im Funkloch — danach `Sync ok, bestätigt bis seq 50`. Nichts verloren, nichts doppelt. |
+| **Backoff** | 2 s → 4 s → 15 s → 28 s statt Dauerfeuer. |
+| **Regeln offline** | `SILO_FULL` beim Postfach-Leeren kam **vom Client ohne Server** — das Lagerlimit greift ohne Verbindung (§7). |
+| **Escrow** | Zwei Aufträge nahmen 77 Waren aus dem Lager; Postfach behielt, was nicht passte. |
+| **Zwei Geräte** | `FORK_DETECTED` korrekt ausgelöst — und war der Anlass für das Aktiv-Gerät-Token. |
+| **Neustart** | Spielstand unverändert. |
+| **Balance-Patch live** | v1 → v3 an einem laufenden Spielstand, laufende Felder fair umgerechnet. |
+
+Der wichtigste Eindruck lässt sich nicht als Zahl festhalten: **Während des Funklochs fühlt
+sich nichts anders an.** Kein Dialog, kein Reload, kein Hänger — nur ein Statuspunkt, der die
+Farbe wechselt.
+
+---
+
 ## Was der Prototyp NICHT beweist
 
 Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
@@ -204,6 +225,10 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 - **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
   das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
   Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
+- **Die App-Hülle offline.** Der Feldtest lädt die Seite vom Server, ein Reload
+  im Funkloch schlägt deshalb fehl. Ein Artefakt des Testaufbaus, kein
+  Architekturproblem — eine installierte App trägt ihre Hülle lokal. Im Browser
+  bräuchte es dafür einen Service Worker, und der verlangt HTTPS.
 - **Betrieb im Maßstab.** Der Feldtest-Server speichert in eine JSON-Datei und kennt
   einen einzigen Spielstand. Die reinen Re-Sim-Kosten sind gemessen, Datenbank,
   Accounts und Last unter vielen Spielern nicht.
