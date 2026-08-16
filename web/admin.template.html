@@ -1,0 +1,266 @@
+<title>Hof-Werkbank</title>
+<style>
+  :root {
+    --ground: #f5f3ee; --surface: #ffffff; --surface-2: #ece8df; --line: #d9d3c6;
+    --ink: #1c1813; --muted: #6d6455; --accent: #8a5a12;
+    --ok: #2c6e49; --bad: #a83246;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
+      --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
+      --ok: #79cfa2; --bad: #e88a99;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
+    --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
+    --ok: #79cfa2; --bad: #e88a99;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 40rem; margin: 0 auto; padding: 1.25rem 1rem 3rem;
+          display: flex; flex-direction: column; gap: 1.1rem; }
+  [hidden] { display: none !important; }
+
+  h1 { font-family: var(--mono); font-size: 1.1rem; font-weight: 600; margin: 0; }
+  h2 { font-family: var(--mono); font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
+       color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
+
+  .banner {
+    border: 1px dashed var(--accent); border-radius: 4px; padding: .6rem .8rem;
+    color: var(--accent); font-size: .82rem; font-family: var(--mono);
+  }
+
+  .card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: .85rem .9rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .7rem; }
+  .stat dt { font-family: var(--mono); font-size: .6rem; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--muted); }
+  .stat dd { margin: 0; font-family: var(--mono); font-size: 1rem; font-variant-numeric: tabular-nums; }
+
+  .row { display: flex; flex-wrap: wrap; gap: .4rem; }
+  button {
+    font-family: var(--mono); font-size: .76rem; padding: .5rem .7rem;
+    border: 1px solid var(--accent); border-radius: 3px; background: transparent;
+    color: var(--accent); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  button.primary { background: var(--accent); color: var(--surface); }
+  button.danger { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .4; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  input {
+    font-family: var(--mono); font-size: .85rem; padding: .55rem .65rem; width: 100%;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); color: var(--ink);
+  }
+
+  .log { font-family: var(--mono); font-size: .68rem; display: flex; flex-direction: column;
+         gap: .2rem; max-height: 11rem; overflow-y: auto; }
+  .log div { display: flex; gap: .5rem; }
+  .log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+  .log .good { color: var(--ok); }
+  .log .bad { color: var(--bad); }
+
+  .hint { color: var(--muted); font-size: .8rem; margin: .5rem 0 0; }
+  a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <h1>Hof-Werkbank</h1>
+  <div class="banner">
+    Testwerkzeug. Greift <strong>serverseitig</strong> ein — der Client kann sich
+    per Konstruktion nichts selbst geben.
+  </div>
+
+  <div class="card" id="setup">
+    <h2>Zugang</h2>
+    <input id="token" type="password" placeholder="Server-Token" autocomplete="off" spellcheck="false">
+    <div class="row" style="margin-top:.6rem"><button class="primary" id="connect">Verbinden</button></div>
+  </div>
+
+  <div id="panel" hidden style="display:flex;flex-direction:column;gap:1.1rem">
+    <div class="card">
+      <h2>Zustand</h2>
+      <dl class="stats">
+        <div class="stat"><dt>seq</dt><dd id="s-seq">—</dd></div>
+        <div class="stat"><dt>Tick</dt><dd id="s-tick">—</dd></div>
+        <div class="stat"><dt>Regelwerk</dt><dd id="s-rules">—</dd></div>
+        <div class="stat"><dt>Weizen</dt><dd id="s-wheat">—</dd></div>
+        <div class="stat"><dt>Eier</dt><dd id="s-eggs">—</dd></div>
+        <div class="stat"><dt>Gold</dt><dd id="s-gold">—</dd></div>
+        <div class="stat"><dt>Postfach</dt><dd id="s-mail">—</dd></div>
+        <div class="stat"><dt>Wartet</dt><dd id="s-pending">—</dd></div>
+        <div class="stat"><dt>Divergenz</dt><dd id="s-div">—</dd></div>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Zeit vorspulen</h2>
+      <div class="row">
+        <button data-time="60">+1 min</button>
+        <button data-time="600">+10 min</button>
+        <button data-time="3600">+1 h</button>
+        <button data-time="43200">+12 h</button>
+      </div>
+      <p class="hint">
+        Verstellt nur die Uhr, gegen die das Zeitbudget gemessen wird (§4) — kein
+        Griff in den Zustand. Felder reifen, der Stall legt nach. Im Spiel danach
+        einmal syncen.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Ware schenken</h2>
+      <div class="row">
+        <button data-grant="eggs">10 Eier</button>
+        <button data-grant="wheat">10 Weizen</button>
+        <button data-grant="gold">100 Gold</button>
+      </div>
+      <p class="hint">
+        Landet im <strong>Postfach</strong>, nie direkt im Lager — nichts darf
+        auftauchen, wovon der Spieler nichts wissen konnte (§7). Im Spiel dann
+        „Postfach leeren".
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Regelwerk umschalten</h2>
+      <div class="row">
+        <button data-rules="1">v1 normal</button>
+        <button data-rules="2">v2 gepatcht</button>
+        <button data-rules="3">v3 Feldtest-Tempo</button>
+      </div>
+      <p class="hint">
+        Greift beim nächsten Sync als echter Balance-Patch, inklusive fairer
+        Umrechnung laufender Felder (R2). Zurück geht es nicht.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Zurücksetzen</h2>
+      <div class="row">
+        <button class="danger" id="reset">Spielstand löschen</button>
+        <button id="refresh">Neu laden</button>
+      </div>
+      <p class="hint">Danach im Spiel die Seite neu laden.</p>
+    </div>
+
+    <div class="card">
+      <h2>Protokoll</h2>
+      <div class="log" id="log"></div>
+    </div>
+
+    <p class="hint">Zum Spiel: <a href="/">Feldtest-Hof</a></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var token = localStorage.getItem('ns-token') || '';
+
+  function log(msg, kind) {
+    var row = document.createElement('div');
+    var t = document.createElement('time');
+    t.textContent = new Date().toTimeString().slice(0, 8);
+    var s = document.createElement('span');
+    s.className = kind || '';
+    s.textContent = msg;
+    row.appendChild(t); row.appendChild(s);
+    var box = $('log');
+    box.insertBefore(row, box.firstChild);
+    while (box.childElementCount > 30) box.removeChild(box.lastChild);
+  }
+
+  function api(path, method) {
+    return fetch(path, {
+      method: method || 'GET',
+      headers: { authorization: 'Bearer ' + token },
+    }).then(function (r) {
+      if (r.status === 401) throw new Error('Token stimmt nicht');
+      if (r.status === 403) throw new Error('Admin ist abgeschaltet');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  }
+
+  function refresh() {
+    return api('/api/admin/status').then(function (s) {
+      $('s-seq').textContent = s.seq;
+      $('s-tick').textContent = s.tick;
+      $('s-rules').textContent = 'v' + s.rulesetVersion +
+        (s.targetRulesetVersion !== s.rulesetVersion ? ' → v' + s.targetRulesetVersion : '');
+      $('s-wheat').textContent = s.state.wheat;
+      $('s-eggs').textContent = s.state.eggs;
+      $('s-gold').textContent = s.state.gold;
+      $('s-mail').textContent = s.state.mail.length;
+      $('s-pending').textContent = s.pendingDeliveries;
+      $('s-div').textContent = s.divergenceAlerts;
+      return s;
+    });
+  }
+
+  function act(path, label) {
+    api(path, 'POST')
+      .then(function () { log(label, 'good'); return refresh(); })
+      .catch(function (e) { log(label + ' — ' + e.message, 'bad'); });
+  }
+
+  function connect() {
+    token = $('token').value.trim();
+    if (!token) return;
+    $('connect').disabled = true;
+    refresh().then(function () {
+      localStorage.setItem('ns-token', token);
+      $('setup').hidden = true;
+      $('panel').hidden = false;
+      log('Verbunden', 'good');
+      setInterval(function () { refresh().catch(function () {}); }, 5000);
+    }).catch(function (e) {
+      $('connect').disabled = false;
+      alert(e.message);
+    });
+  }
+
+  $('connect').addEventListener('click', connect);
+  $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
+  $('refresh').addEventListener('click', function () { refresh().catch(function () {}); });
+
+  document.querySelectorAll('[data-time]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var s = b.getAttribute('data-time');
+      act('/api/admin/time?seconds=' + s, b.textContent.trim() + ' Zeit gutgeschrieben');
+    });
+  });
+
+  document.querySelectorAll('[data-grant]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var item = b.getAttribute('data-grant');
+      var amount = item === 'gold' ? 100 : 10;
+      act('/api/admin/grant?item=' + item + '&amount=' + amount, amount + ' ' + item + ' ins Postfach');
+    });
+  });
+
+  document.querySelectorAll('[data-rules]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-rules');
+      act('/api/admin/ruleset?version=' + v, 'Zielversion v' + v);
+    });
+  });
+
+  $('reset').addEventListener('click', function () {
+    if (!confirm('Spielstand wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
+    act('/api/admin/reset', 'Spielstand zurückgesetzt');
+  });
+
+  if (token) { $('token').value = token; connect(); }
+})();
+</script>

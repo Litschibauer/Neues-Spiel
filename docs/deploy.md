@@ -227,15 +227,43 @@ verhält sich anders als eine Attrappe:
 
 ---
 
+## Werkbank: `/admin`
+
+Ein kleines Panel zum Herbeiführen von Situationen, auf die man sonst warten
+müsste. Erreichbar unter `http://<server-ip>:8787/admin`, gleiches Token.
+
+Der entscheidende Punkt: **Alle Eingriffe laufen über Mechanismen, die es
+ohnehin gibt.** Ein direkter Griff in Felder oder Bestände würde beim nächsten
+Sync den Kanarienvogel auslösen — der Client hätte ja anders gerechnet, und das
+Monitoring meldete einen Determinismus-Bug, den es gar nicht gibt.
+
+| Werkzeug | Was wirklich passiert |
+| --- | --- |
+| **Zeit vorspulen** | Nur `serverTs` wird zurückgestellt — die Uhr, gegen die das Zeitbudget aus §4 gemessen wird. Der Zustand bleibt unangetastet, Client und Server rechnen weiterhin dasselbe. |
+| **Ware schenken** | Geht als Zustellung ins **Postfach** (§7), nie direkt ins Lager. Derselbe Pfad wie ein Geschenk vom Nachbarn — und der wird bewusst erst nach dem Kanarienvogel-Vergleich angewandt. |
+| **Regelwerk umschalten** | Setzt nur die Zielversion. Der Wechsel passiert beim nächsten Sync als echter Balance-Patch mit fairer Umrechnung (R2). Downgrades werden abgelehnt. |
+| **Zurücksetzen** | Neuer Hof, `seq` zurück auf 0. Danach im Spiel neu laden. |
+
+Abschalten:
+
+```bash
+NEUES_SPIEL_ADMIN=0 npm start
+```
+
 ## Endpunkte
 
 | Route | Auth | Zweck |
 | --- | --- | --- |
 | `GET /` | — | Feldtest-Seite |
+| `GET /admin` | — | Werkbank (Aktionen brauchen das Token) |
 | `GET /health` | — | Lebenszeichen, aktuelle `seq` |
 | `GET /api/state` | Bearer | Snapshot + Serverzeit |
 | `POST /api/sync` | Bearer | Command-Log einreichen |
-| `POST /api/deliver` | Bearer | Zustellung ins Postfach (Test) |
+| `GET /api/admin/status` | Bearer | Vollständiger Serverzustand |
+| `POST /api/admin/time?seconds=N` | Bearer | Zeit gutschreiben |
+| `POST /api/admin/grant?item=…&amount=N` | Bearer | Ware ins Postfach |
+| `POST /api/admin/ruleset?version=N` | Bearer | Zielversion setzen |
+| `POST /api/admin/reset` | Bearer | Spielstand löschen |
 
 Grenzen: 512 kB pro Request, höchstens 5000 Commands — ein Angreifer wählt die
 Log-Länge sonst frei (R4).

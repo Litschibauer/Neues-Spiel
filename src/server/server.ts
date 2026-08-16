@@ -91,6 +91,32 @@ export class Server {
     this.pendingDeliveries.push(item);
   }
 
+  /**
+   * Zeit gutschreiben, ohne sie abzuwarten (Werkzeug für den Feldtest).
+   *
+   * Bewusst KEIN Eingriff in den Zustand: Es wird nur `serverTs` zurückgestellt,
+   * also die Uhr, gegen die das Zeitbudget aus §4 gemessen wird. Der Server
+   * glaubt danach, es sei mehr Realzeit vergangen — mehr nicht.
+   *
+   * Damit bleibt alles konsistent: Client und Server leiten ihre Spielzeit aus
+   * demselben `serverTs` ab, rechnen also weiterhin dasselbe. Ein direkter
+   * Griff in Felder oder Bestände würde dagegen sofort den Kanarienvogel
+   * auslösen — der Client hätte ja anders gerechnet.
+   */
+  grantTime(seconds: number): void {
+    if (!Number.isInteger(seconds) || seconds <= 0) return;
+    this.snapshot = { ...this.snapshot, serverTs: this.snapshot.serverTs - seconds * TICK_MS };
+  }
+
+  /** Von vorn anfangen. Der Client muss danach neu übernehmen. */
+  reset(fresh: State, nowMs: number, rulesetVersion: number): void {
+    this.snapshot = { state: fresh, seq: 0, serverTs: nowMs, rulesetVersion };
+    this.appliedLog = [];
+    this.pendingDeliveries = [];
+    this.divergenceAlerts = [];
+    this.migrationFailures = [];
+  }
+
   constructor(initial: State, startTs: number, rulesetVersion: number, targetVersion?: number) {
     this.snapshot = { state: initial, seq: 0, serverTs: startTs, rulesetVersion };
     this.targetRulesetVersion = targetVersion ?? rulesetVersion;

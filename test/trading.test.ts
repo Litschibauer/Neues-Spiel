@@ -298,3 +298,53 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
     }
   }
 });
+
+test('Admin-Zeitgutschrift löst keinen Divergenz-Fehlalarm aus', () => {
+  // Ein Eingriff, der den ZUSTAND anfasst, würde beim nächsten Sync den
+  // Kanarienvogel auslösen — der Client hätte ja anders gerechnet. Die
+  // Zeitgutschrift verstellt deshalb nur die Uhr aus §4, nicht den Zustand.
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot);
+
+  client.plant(0);
+  const first = server.sync(client.buildSyncRequest(), T0 + 1000);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  client.adopt(first.snapshot);
+
+  // Werkbank: die volle Wachstumszeit gutschreiben.
+  server.grantTime(rules.wheatGrowTicks);
+  client.adopt(server.snapshot);
+
+  // Der Client darf jetzt so weit vorspulen — und ernten.
+  client.advanceClock(rules.wheatGrowTicks);
+  assert.equal(client.harvest(0).ok, true, 'Feld muss durch die Zeitgutschrift reif sein');
+
+  const res = server.sync(client.buildSyncRequest(), T0 + 1000);
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  assert.equal(res.divergence, false, 'Kanarienvogel darf nicht anschlagen');
+  assert.deepEqual(server.divergenceAlerts, []);
+  assert.equal(res.snapshot.state.wheat, rules.wheatYield);
+});
+
+test('Zurücksetzen hinterlässt einen sauberen, leeren Hof', () => {
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot);
+  client.plant(0);
+  server.sync(client.buildSyncRequest(), T0 + 1000);
+  server.deliver({ item: 'eggs', amount: 5, arrivedAt: T0 });
+
+  server.reset(initialState(3), T0 + 5000, CURRENT_RULESET_VERSION);
+
+  assert.equal(server.snapshot.seq, 0);
+  assert.equal(server.appliedLog.length, 0);
+  assert.equal(server.pendingDeliveries.length, 0);
+  assert.equal(server.snapshot.state.fields[0]!.crop, null);
+  assertInvariants(server.snapshot.state, rules);
+
+  // Und ein frischer Client kann sofort weiterspielen.
+  const fresh = new Client(server.snapshot);
+  assert.equal(fresh.plant(0).ok, true);
+  assert.equal(server.sync(fresh.buildSyncRequest(), T0 + 6000).ok, true);
+});

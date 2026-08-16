@@ -20,7 +20,7 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState } from '../sim/state.ts';
-import { CURRENT_RULESET_VERSION } from '../sim/rules.ts';
+import { CURRENT_RULESET_VERSION, RULESETS } from '../sim/rules.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 const PORT = Number(process.env.PORT ?? 8787);
@@ -148,8 +148,16 @@ function readBody(req: IncomingMessage, limitBytes: number): Promise<string> {
   });
 }
 
-const PAGE_PATH = join(ROOT, 'dist', 'field-test.html');
-let page: string | null = existsSync(PAGE_PATH) ? readFileSync(PAGE_PATH, 'utf8') : null;
+function loadPage(name: string): string | null {
+  const path = join(ROOT, 'dist', name);
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+const page = loadPage('field-test.html');
+const adminPage = loadPage('admin.html');
+
+/** Das Admin-Panel ist ein Testwerkzeug — abschaltbar, ohne den Server zu ändern. */
+const ADMIN_ENABLED = process.env.NEUES_SPIEL_ADMIN !== '0';
 
 // ── Routen ─────────────────────────────────────────────────────────────
 const server = createServer(async (req, res) => {
@@ -163,6 +171,13 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/health') {
     return json(res, 200, { ok: true, seq: game.snapshot.seq, tick: game.snapshot.state.tick });
+  }
+
+  if (url.pathname === '/admin' && req.method === 'GET') {
+    if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
+    if (!adminPage) return json(res, 500, { error: 'Seite fehlt — `npm run conformance`.' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(adminPage);
   }
 
   if (url.pathname === '/' && req.method === 'GET') {
@@ -213,7 +228,79 @@ const server = createServer(async (req, res) => {
       return json(res, 200, result);
     }
 
-    // Geschenk von außen — zum Testen des Postfachs (§7).
+    // ── Admin-Werkzeuge ──────────────────────────────────────────────
+    //
+    // Alle Eingriffe laufen über Mechanismen, die es ohnehin gibt:
+    // Zustellungen ins Postfach (§7) und das Zeitbudget (§4). Kein direkter
+    // Griff in Felder oder Bestände — der würde beim nächsten Sync einen
+    // Divergenz-Alarm auslösen, obwohl gar kein Bug vorliegt.
+    if (url.pathname.startsWith('/api/admin/')) {
+      if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
+
+      if (url.pathname === '/api/admin/status') {
+        return json(res, 200, {
+          seq: game.snapshot.seq,
+          tick: game.snapshot.state.tick,
+          serverTs: game.snapshot.serverTs,
+          serverTime: Date.now(),
+          rulesetVersion: game.snapshot.rulesetVersion,
+          targetRulesetVersion: game.targetRulesetVersion,
+          pendingDeliveries: game.pendingDeliveries.length,
+          divergenceAlerts: game.divergenceAlerts.length,
+          migrationFailures: game.migrationFailures.length,
+          state: game.snapshot.state,
+        });
+      }
+
+      if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+
+      if (url.pathname === '/api/admin/time') {
+        const seconds = Number(url.searchParams.get('seconds') ?? '0');
+        if (!Number.isInteger(seconds) || seconds <= 0 || seconds > 90 * 86_400) {
+          return json(res, 400, { error: 'BAD_SECONDS' });
+        }
+        game.grantTime(seconds);
+        persist();
+        console.log(`[admin] ${seconds}s Zeit gutgeschrieben`);
+        return json(res, 200, { ok: true, serverTs: game.snapshot.serverTs });
+      }
+
+      if (url.pathname === '/api/admin/grant') {
+        const item = url.searchParams.get('item') ?? 'eggs';
+        const amount = Number(url.searchParams.get('amount') ?? '10');
+        if (!['wheat', 'eggs', 'gold'].includes(item) || !Number.isInteger(amount) || amount <= 0) {
+          return json(res, 400, { error: 'BAD_GRANT' });
+        }
+        game.deliver({ item: item as 'wheat' | 'eggs' | 'gold', amount, arrivedAt: Date.now() });
+        persist();
+        console.log(`[admin] ${amount} ${item} ins Postfach`);
+        return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
+      }
+
+      if (url.pathname === '/api/admin/ruleset') {
+        const version = Number(url.searchParams.get('version') ?? '0');
+        if (!RULESETS.has(version)) return json(res, 400, { error: 'UNKNOWN_RULESET' });
+        if (version < game.snapshot.rulesetVersion) {
+          // Downgrades sind bewusst nicht vorgesehen (siehe migrate.ts).
+          return json(res, 400, { error: 'DOWNGRADE_NOT_SUPPORTED' });
+        }
+        game.targetRulesetVersion = version;
+        persist();
+        console.log(`[admin] Zielversion v${version} — greift beim nächsten Sync`);
+        return json(res, 200, { ok: true, targetRulesetVersion: version });
+      }
+
+      if (url.pathname === '/api/admin/reset') {
+        game.reset(initialState(FIELD_COUNT), Date.now(), TARGET_RULESET);
+        persist();
+        console.log('[admin] Spielstand zurückgesetzt');
+        return json(res, 200, { ok: true });
+      }
+
+      return json(res, 404, { error: 'NOT_FOUND' });
+    }
+
+    // Alter Pfad, bleibt für Skripte erhalten.
     if (url.pathname === '/api/deliver' && req.method === 'POST') {
       const item = url.searchParams.get('item') ?? 'eggs';
       const amount = Number(url.searchParams.get('amount') ?? '5');
@@ -237,6 +324,7 @@ server.listen(PORT, () => {
   console.log(`Seite: ${page ? 'eingebunden' : 'FEHLT (npm run conformance)'}`);
   console.log(`Token: …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
   console.log(`Regelwerk: v${game.snapshot.rulesetVersion} → Ziel v${TARGET_RULESET}`);
+  console.log(`Admin: ${ADMIN_ENABLED ? '/admin (abschaltbar mit NEUES_SPIEL_ADMIN=0)' : 'aus'}`);
 });
 
 // Sauber beenden, damit der letzte Sync sicher auf der Platte liegt.

@@ -170,6 +170,15 @@ export function buildFieldTestPage(): string {
   return template.replace('<!--BUNDLE-->', () => buildClientBundle());
 }
 
+/**
+ * Das Admin-Panel braucht keinen Sim-Kern: Es ruft nur Serverendpunkte auf.
+ * Genau so soll es sein — Eingriffe gehören auf die Serverseite, nicht in eine
+ * zweite Simulation, die auseinanderlaufen könnte.
+ */
+export function buildAdminPage(): string {
+  return readFileSync(join(ROOT, 'web', 'admin.template.html'), 'utf8');
+}
+
 /** Nur ausführen, wenn direkt gestartet — beim Import aus Tests nicht. */
 if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const outDir = join(ROOT, 'dist');
@@ -184,8 +193,12 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const field = buildFieldTestPage();
   writeFileSync(join(outDir, 'field-test.html'), field);
 
+  const admin = buildAdminPage();
+  writeFileSync(join(outDir, 'admin.html'), admin);
+
   console.log(
     `Prüfstand ${(page.length / 1024).toFixed(1)} kB → dist/conformance.html\n` +
-      `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html`,
+      `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html\n` +
+      `Werkbank   ${(admin.length / 1024).toFixed(1)} kB → dist/admin.html`,
   );
 }
