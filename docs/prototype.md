@@ -4,7 +4,8 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 29 Tests, keine Dependencies, kein Build-Step
+npm test        # 37 Tests, keine Dependencies, kein Build-Step
+npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 ```
 
@@ -23,10 +24,12 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
   sim.ts          simulate(state, command) — die eine reine Funktion
   hash.ts         Zustands- und Batch-Hashes (Kanarienvogel, R1)
 
-src/client/       Optimistisches Offline-Spiel + Command-Queue
-src/server/       Zeitautorität, Re-Simulation, Snapshot, Rollback
+src/client/
+  client.ts       Optimistisches Offline-Spiel + Command-Queue
+  sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
+src/server/       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
 
-scripts/          Generator für die Golden Vectors
+scripts/          Golden-Vector-Generator + Lastmessung
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 
@@ -51,7 +54,8 @@ Schicht 5 ist im Server angelegt:
 | — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
 | — | `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
-| — | `sync.test.ts` | Sync ist atomar und idempotent; Fork und veraltete Regelversion werden erkannt. |
+| — | `sync.test.ts` | Präfix-Commit, Idempotenz, Fork-Erkennung, veraltete Regelversion. |
+| — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
 abgelehnte Aktionen) und schlagen fehl, wenn nicht. Ein Fuzz, der nur Sonnenschein testet,
@@ -69,7 +73,23 @@ echte Regeländerung gehört in eine neue Ruleset-Version (R2) — nicht in übe
 
 ---
 
-## Zwei echte Bugs, die die Tests gefunden haben
+## Gemessenes Lastverhalten (R4)
+
+`npm run bench`, auf einem Kern:
+
+| Messung | Ergebnis |
+| --- | --- |
+| Kosten vs. Offline-**Dauer**, Log konstant | **flach** — 1 Stunde ≈ 1 Jahr ≈ ~15 µs |
+| Kosten vs. Command-**Anzahl** | linear, ~0,14 µs pro Command |
+| Gegenüber Tick-für-Tick bei 30 Tagen offline | ~900× schneller |
+| Typischer Sync (60 Commands) | ~8 µs, also ~120.000 Syncs/s pro Kern |
+
+Damit ist die Behauptung aus §7 belegt: **O(Commands), nicht O(Offline-Dauer).** Die
+Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Größenordnungen.
+
+---
+
+## Drei echte Bugs, die die Tests gefunden haben
 
 Beide wären in Produktion genau das Szenario aus R1 gewesen — **ehrliche Spieler
 verlieren Fortschritt** —, und beide waren beim Lesen des Codes unsichtbar.
@@ -92,12 +112,25 @@ zwangsläufig dieselben Nummern für völlig verschiedene Aktionen (R3).
 
 Ergebnis: Das zweite Gerät bekam ein fröhliches „alles gut" — und seine gesamte
 Offline-Arbeit verschwand kommentarlos. Die Prüfung hängt jetzt am **Inhalt**
-des Batches (`hashCommands`), nicht an der Nummer.
+des Batches, nicht an der Nummer.
 
-> **Die Lehre:** R1 ist keine theoretische Sorge. In ~400 Zeilen sehr bewusst
-> geschriebenem Code steckten zwei Divergenzen. Die Fuzz- und
-> Referenz-Tests sind deshalb kein Extra, sondern Teil der Architektur —
-> sie gehören von Tag eins in die CI.
+### 3. Verlorene Antwort war von einem Fork ununterscheidbar
+
+Gefunden beim Durchdenken des Tunnel-Szenarios, bevor eine Zeile Code dazu existierte.
+
+Der Server wendet einen Batch an, die Antwort geht unterwegs verloren, der Spieler spielt
+weiter. Der Client schickt nun ab seinem alten `baseSeq` — inklusive der Commands, die längst
+drin sind, plus neue. Die damalige Prüfung sah nur „`baseSeq` passt nicht zum Snapshot" und
+lehnte **den kompletten Log** ab. Ein ehrlicher Spieler mit schlechtem Empfang hätte damit
+zuverlässig seine Offline-Sitzung verloren.
+
+Der Server vergleicht jetzt das überlappende Präfix Command für Command: identisch ⇒ dieselbe
+Arbeit doppelt geschickt, nur den Rest anwenden (*resume*). Abweichend ⇒ echter Fork.
+
+> **Die Lehre:** R1 ist keine theoretische Sorge. In sehr bewusst geschriebenem Code steckten
+> drei Fehler, die alle **ehrliche Spieler** getroffen hätten — und keiner war beim Lesen
+> sichtbar. Zwei fand der Fuzz, einen das Durchspielen eines realen Szenarios (Zug, Tunnel,
+> kein Empfang). Beide Methoden gehören von Tag eins in die Routine, nicht ans Ende.
 
 ---
 
@@ -113,8 +146,8 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
   es existiert nur eine Version — echte Balance-Patches sind ungetestet.
 - **Alles Geteilte.** Kein Markt, keine Nachbarn, kein Zufall, kein Escrow, kein
   Postfach. Also nichts aus §5 und §8.
-- **Persistenz und Maßstab.** Der Server hält den Zustand im Speicher. Re-Sim-
-  Kosten unter Last (R4) sind nicht gemessen.
+- **Persistenz.** Der Server hält Zustand und Command-Log im Speicher. Die reinen
+  Re-Sim-Kosten sind gemessen (siehe oben), Datenbank und Netzwerk nicht.
 - **Snapshot-Signatur.** In §9 vorgesehen, hier nicht implementiert — der Server
   hält ohnehin seine eigene Kopie.
 

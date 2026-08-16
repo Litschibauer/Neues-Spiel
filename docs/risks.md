@@ -30,13 +30,13 @@ bit* dasselbe rechnen. Jede Lücke trifft die Falschen.
 
 **Schärfe:** Sehr hoch. Das ist das zentrale Risiko des ganzen Ansatzes.
 
-**Status: empirisch bestätigt.** Der Prototyp hat in ~400 Zeilen bewusst sorgfältig
-geschriebenem Code **zwei echte Divergenzen** produziert — einen Off-by-one in der
-gedeckelten Produktion und eine Idempotenz-Prüfung, die einen Multi-Device-Fork als
-„schon erledigt" durchwinkte. Beide hätten ehrliche Spieler Fortschritt gekostet, beide
-waren beim Lesen unsichtbar und wurden erst vom Fuzz gegen eine Tick-für-Tick-Grundwahrheit
-gefunden. Details in [prototype.md](prototype.md). R1 ist damit keine Sorge mehr, sondern
-eine Beobachtung.
+**Status: empirisch bestätigt.** Der Prototyp hat in bewusst sorgfältig geschriebenem Code
+**drei Fehler** produziert, die alle *ehrliche* Spieler getroffen hätten: einen Off-by-one in
+der gedeckelten Produktion, eine Idempotenz-Prüfung, die einen Multi-Device-Fork als „schon
+erledigt" durchwinkte, und eine Sync-Prüfung, die eine verlorene Antwort von einem Fork nicht
+unterscheiden konnte. Keiner war beim Lesen sichtbar; zwei fand der Fuzz, einen das
+Durchspielen eines realen Szenarios. Details in [prototype.md](prototype.md). R1 ist damit
+keine Sorge mehr, sondern eine Beobachtung.
 
 **Gegenmaßnahmen** — fünf Schichten, weil kein einzelner Mechanismus reicht
 (Details in Architektur §9, umgesetzt im [Prototyp](prototype.md)):
@@ -106,6 +106,9 @@ Spielern.
 - Alternativ: **Sync-Zwang beim App-Start**, sodass ein Gerät nie lange von einem veralteten
   Snapshot aus offline weiterläuft.
 - Klare UI-Kommunikation *bevor* der Verlust passiert, nie danach.
+- **Nicht mit einer verlorenen Antwort verwechseln.** Beide sehen zunächst gleich aus: ein
+  Client meldet sich mit Sequenznummern, die der Server schon vergeben hat. Der Unterschied
+  liegt im Inhalt — identisches Präfix ⇒ Wiederaufsetzen, abweichendes ⇒ Fork (Architektur §10).
 
 ---
 
@@ -119,6 +122,12 @@ Und selbst ehrlich: bei Millionen Spielern ist Re-Sim ein echter CPU-Kostenblock
 nachrechnen" verschleiert.
 
 **Schärfe:** Mittel–hoch (Skalierungs-/Kostenrisiko, kein Korrektheitsrisiko).
+
+**Status: gemessen, entschärft.** `npm run bench` zeigt: Ein Sync kostet ~0,14 µs pro Command
+und ist **unabhängig von der Offline-Dauer** — eine Stunde und ein Jahr Abwesenheit kosten
+dasselbe. Ein typischer Sync liegt bei ~8 µs, ein Kern schafft ~120.000 davon pro Sekunde.
+Die Re-Simulation ist damit nicht der Engpass; Netzwerk und Persistenz dominieren. Die
+Obergrenzen unten bleiben trotzdem nötig, weil ein Angreifer die Log-Länge frei wählt.
 
 **Gegenmaßnahmen:**
 - **Harte Caps:** max. Log-Länge, max. Sync-Frequenz, Rate-Limiting pro Account.

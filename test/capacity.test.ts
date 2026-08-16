@@ -88,8 +88,12 @@ test('Server lehnt einen handgebauten Log ab, der das Limit verletzt', () => {
     T0 + 60_000 * 1000,
   );
 
-  assert.equal(res.ok, false);
-  if (res.ok) return;
+  // Präfix-Commit: Das legale Pflanzen bleibt, die illegale Ernte nicht.
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  assert.equal(res.kind, 'partial');
+  assert.equal(res.rejectedFrom, 2);
   assert.equal(res.reason, 'ILLEGAL_COMMAND:SILO_FULL');
-  assert.equal(res.snapshot.seq, 0);
+  assert.equal(res.snapshot.seq, 1);
+  assert.equal(res.snapshot.state.wheat, 0, 'die Ernte hat nicht stattgefunden');
 });

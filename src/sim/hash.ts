@@ -34,7 +34,7 @@ export function hashState(state: State): string {
   return createHash('sha256').update(canonicalize(state)).digest('hex').slice(0, 16);
 }
 
-function canonicalizeCommand(c: Command): string {
+export function canonicalizeCommand(c: Command): string {
   switch (c.type) {
     case 'PLANT':
       return `${c.seq}|${c.tick}|PLANT|${c.field}`;

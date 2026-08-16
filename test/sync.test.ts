@@ -12,7 +12,7 @@ import { initialState } from '../src/sim/state.ts';
 
 const T0 = 1_700_000_000_000;
 
-test('R8 — Sync ist atomar: ein illegales Command kippt den ganzen Batch', () => {
+test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor', () => {
   const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
 
   const res = server.sync(
@@ -28,12 +28,45 @@ test('R8 — Sync ist atomar: ein illegales Command kippt den ganzen Batch', () 
     T0 + 200 * 1000,
   );
 
+  // Das legale Präfix bleibt — sonst würde ein einziger Fehler ganz hinten im
+  // Log einem ehrlichen Spieler eine ganze Offline-Sitzung kosten.
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  assert.equal(res.kind, 'partial');
+  assert.equal(res.rejectedFrom, 2);
+  assert.equal(res.reason, 'ILLEGAL_COMMAND:FIELD_OCCUPIED');
+
+  assert.equal(server.snapshot.seq, 1);
+  assert.equal(server.snapshot.state.fields[0]!.crop, 'wheat');
+  // Alles ab dem Verstoß ist verworfen — auch das legale seq 3 dahinter,
+  // denn es wurde auf einem Zustand gerechnet, den es nie gab.
+  assert.equal(server.snapshot.state.fields[1]!.crop, null);
+});
+
+test('ist schon das erste neue Command illegal, wird gar nichts übernommen', () => {
+  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  server.sync(
+    {
+      baseSeq: 0,
+      rulesetVersion: CURRENT_RULESET_VERSION,
+      commands: [{ seq: 1, tick: 0, type: 'PLANT', field: 0 }],
+    },
+    T0 + 1000,
+  );
+
+  const res = server.sync(
+    {
+      baseSeq: 1,
+      rulesetVersion: CURRENT_RULESET_VERSION,
+      commands: [{ seq: 2, tick: 100, type: 'PLANT', field: 0 }], // belegt
+    },
+    T0 + 100 * 1000,
+  );
+
   assert.equal(res.ok, false);
   if (res.ok) return;
   assert.equal(res.reason, 'ILLEGAL_COMMAND:FIELD_OCCUPIED');
-  // Auch das legale erste Command wurde NICHT angewandt.
-  assert.equal(server.snapshot.seq, 0);
-  assert.equal(server.snapshot.state.fields[0]!.crop, null);
+  assert.equal(server.snapshot.seq, 1);
 });
 
 test('R8 — ein wiederholter Sync ist ein No-op, kein Fehler', () => {
@@ -79,7 +112,7 @@ test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
   const r2 = server.sync(tablet.buildSyncRequest(), T0 + 100 * 1000);
   assert.equal(r2.ok, false);
   if (r2.ok) return;
-  assert.equal(r2.reason, 'BASE_SEQ_MISMATCH');
+  assert.equal(r2.reason, 'FORK_DETECTED');
 
   // Das Tablet übernimmt den Server-Stand und verliert seine Offline-Arbeit —
   // genau der UX-Bruch, den ein Aktiv-Gerät-Token verhindern soll (R3).
@@ -111,7 +144,7 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
   const res = server.sync(forked, T0 + 2000);
   assert.equal(res.ok, false);
   if (res.ok) return;
-  assert.equal(res.reason, 'BASE_SEQ_MISMATCH');
+  assert.equal(res.reason, 'FORK_DETECTED');
 
   // Und der echte Replay bleibt weiterhin ein sauberes No-op.
   const replay = server.sync(original, T0 + 3000);

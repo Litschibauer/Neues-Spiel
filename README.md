@@ -18,14 +18,15 @@ Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfäng
 Der Sim-Kern existiert und die riskanteste Annahme ist geprüft: Client und Server rechnen
 bit-für-bit dasselbe — abgesichert durch fünf gestapelte Verteidigungsschichten, von einem
 statischen CI-Wächter über Fuzzing gegen eine Grundwahrheit bis zu Golden Vectors für den
-Plattform-Beweis.
+Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
+klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 29 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 37 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
-Was bewiesen ist, was nicht, und die zwei echten Determinismus-Bugs, die die Tests dabei
-gefunden haben: **[docs/prototype.md](docs/prototype.md)**.
+Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die drei echten Bugs, die dabei
+ans Licht kamen: **[docs/prototype.md](docs/prototype.md)**.
 
 ## Status
 

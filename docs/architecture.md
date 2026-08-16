@@ -93,8 +93,8 @@ Regeln für Determinismus (nicht verhandelbar):
                                                         │      commit, neuer Snapshot  │
                                                         │      "als wäre nix passiert"  │
                                                         │  3b. etwas invalide →        │
-                                                        │      Rollback auf S0,         │
-                                                        │      Client resynct           │
+                                                        │      legales Präfix bleibt,   │
+                                                        │      Rest verworfen (§9)      │
                                                         └──────────────────────────────┘
 ```
 
@@ -102,8 +102,11 @@ Regeln für Determinismus (nicht verhandelbar):
 
 - Ehrlicher Spieler: nahtlos. Seine Offline-Aktionen werden 1:1 bestätigt, der Client hatte
   ja lokal dasselbe gerechnet. Er merkt vom Sync nichts.
-- Cheater: Rollback. Der manipulierte Zustand wird verworfen. Genau das gewünschte Verhalten
-  — „gecheatet" heißt hier „passiert einfach nicht".
+- Cheater: Der manipulierte Zustand wird verworfen. Genau das gewünschte Verhalten —
+  „gecheatet" heißt hier „passiert einfach nicht".
+
+Was genau verworfen wird, ist bewusst fein abgestuft — ein illegales Command kippt nicht die
+legale Arbeit davor, und ein Determinismus-Bug kippt gar nichts. Details in §9.
 
 ---
 
@@ -421,6 +424,27 @@ Der zweite Fall ist **immer ein Bug auf unserer Seite**, nie eine Schuld des Spi
 Server hat den Log ja soeben selbst als regelkonform bestätigt. Ihn dafür zurückzusetzen,
 wäre die schlimmste Reaktion — genau das Vertrauensproblem aus R1.
 
+### Und selbst „illegal" rollt nicht alles zurück
+
+Auch im Cheat-Pfad wird nicht die ganze Sitzung verworfen. Der Server wendet das **legale
+Präfix** an und verwirft erst ab dem ersten Verstoß:
+
+```
+Log:  [1 ✓] [2 ✓] [3 ✓] … [198 ✓] [199 ✗ illegal] [200 …]
+                                    └── ab hier verworfen
+      └──────────── übernommen ────┘
+```
+
+Warum das wichtig ist: Ein einziger Fehler ganz hinten im Log — durch einen Client-Bug, eine
+Race Condition, eine kaputte Ruleset-Migration — würde sonst eine komplette Offline-Sitzung
+kosten. Der Cheat landet trotzdem nicht, denn das illegale Command wird ja gerade nicht
+angewandt. Alles *dahinter* fällt mit weg, weil es auf einem Zustand gerechnet wurde, den es
+nie gegeben hat.
+
+Das widerspricht der Atomarität aus R8 nicht: Der Sync bleibt **eine** Transaktion, die genau
+einmal schreibt. Sie schreibt nur das geprüfte Präfix statt alles-oder-nichts. Ist schon das
+erste neue Command illegal, wird gar nichts übernommen.
+
 > **Regel: Ein Hash-Mismatch erzeugt ein Ticket, keine Sanktion.**
 
 Konkret:
@@ -455,7 +479,96 @@ alle bis auf die letzte sind im [Prototyp](prototype.md) umgesetzt:
 
 ---
 
-## 10. Grober Tech-Zuschnitt
+## 10. Verbindungsmodell: es gibt keinen Offline-Modus
+
+Die wichtigste Entscheidung in diesem Kapitel ist eine Nicht-Entscheidung:
+
+> **Das Spiel hat nur einen Modus.** Es simuliert immer lokal und schreibt immer Commands in
+> eine Queue. Die Verbindung entscheidet ausschließlich darüber, ob der Hintergrund-Sync
+> gerade durchkommt.
+
+Zwei Modi bedeuten Übergänge, und Übergänge sind der klassische Ort für Bugs: halb
+umgeschaltete Zustände, doppelte Initialisierung, verlorene Eingaben im Moment des Wechsels.
+Wenn es nur einen Modus gibt, kann der Übergang nicht schiefgehen — es gibt keinen.
+
+**Der Tunnel ist damit kein Ereignis**, auf das das Spiel reagieren müsste, sondern nur ein
+fehlgeschlagener Hintergrund-Request. Kein Reload, kein Dialog, kein Bruch.
+
+### Was die Verbindung tatsächlich beeinflusst
+
+| Anzeige | Bedeutung | Auswirkung aufs Gameplay |
+| --- | --- | --- |
+| `live` | letzter Sync erfolgreich | — |
+| `catching-up` | Sync läuft gerade | — |
+| `offline` | letzter Versuch fehlgeschlagen | nur: Online-only-Features ausgegraut (§8) |
+
+Die Spalte rechts ist der Punkt: **In allen drei Zuständen verhält sich das Gameplay
+identisch.** Pflanzen, ernten, bauen, NPC-Handel laufen weiter. Nur was die geteilte Welt
+braucht, ist grau — und das war ohnehin schon so kategorisiert.
+
+Ebenso wichtig: **Kein Netzwerkaufruf liegt im Gameplay-Pfad.** Der Sync wird nie abgewartet,
+bevor der Spieler weitermachen darf. Ein hängender Request kann das Spiel deshalb nicht
+blockieren.
+
+### Der wirklich fiese Fall ist nicht „keine Verbindung"
+
+Keine Verbindung ist einfach: Commands bleiben in der Queue, später nochmal senden.
+
+Gefährlich ist die **verlorene Antwort**. Der Request kam an, der Server hat den Batch
+angewandt — nur die Antwort ging im Tunnel verloren. Der Client weiß nicht, ob seine Arbeit
+angekommen ist, und spielt weiter. Beim nächsten Versuch schickt er ab seinem alten Stand,
+inklusive der Commands, die längst drin sind.
+
+Ohne Gegenmaßnahme wäre das ununterscheidbar von einem Multi-Device-Fork (R3) — und der
+ehrliche Spieler verlöre alles. Die Auflösung:
+
+1. Der Client sendet **immer** ab seinem letzten *bestätigten* Snapshot. Nie raten, ob etwas
+   angekommen ist.
+2. Der Server vergleicht das überlappende Präfix Command für Command mit dem, was er bereits
+   angewandt hat.
+3. **Identisch** → dieselbe Arbeit doppelt geschickt. Der Server wendet nur den Rest an
+   (*resume*) und meldet Erfolg.
+4. **Abweichend** → gleiche Sequenznummern, andere Aktionen → echter Fork, Ablehnung.
+
+Deshalb ist Idempotenz keine Kür: Sie ist genau das, was den Tunnel harmlos macht.
+
+### Thundering Herd
+
+Wenn ein ICE aus dem Tunnel fährt, kommen mehrere hundert Clients **gleichzeitig** zurück.
+Ein festes Retry-Intervall lässt sie alle im selben Millisekundenfenster anklopfen — sie
+bauen sich ihre eigene Lastspitze.
+
+Darum: exponentielles Backoff **mit Jitter**. Der Zufallsanteil ist kein Detail, sondern der
+eigentliche Zweck — er verteilt die Rückkehr über das Fenster.
+
+### Lastverhalten (R4)
+
+Gemessen mit `npm run bench`, nicht behauptet:
+
+| Messung | Ergebnis |
+| --- | --- |
+| Kosten vs. Offline-**Dauer** (Log konstant) | **flach** — 1 Stunde und 1 Jahr kosten dasselbe |
+| Kosten vs. Command-**Anzahl** | linear, ~0,14 µs pro Command |
+| Gegenüber Tick-für-Tick bei 30 Tagen Abwesenheit | ~900× schneller, Abstand wächst mit der Dauer |
+| Typischer Sync (60 Commands) | ~8 µs |
+
+Das bestätigt die Aussage aus §7: Ein Sync kostet **O(Commands), nicht O(Offline-Dauer)**. Ein
+Spieler, der drei Wochen weg war, ist genauso billig wie einer, der drei Minuten weg war.
+
+Zwei Folgerungen für den Maßstab:
+
+- **Die Re-Simulation ist nicht der Engpass.** Netzwerk, Auth und Persistenz dominieren um
+  Größenordnungen. Der Farm-Sim-Teil ist zudem pro Spieler unabhängig, also trivial horizontal
+  skalierbar (nach Spieler-ID shardbar, keine spielerübergreifenden Sperren).
+- **Der geteilte Markt ist ein anderes System** mit einer anderen Skalierungsgeschichte — dort
+  gibt es echten Wettbewerb um denselben Zustand. Das ist genau die Trennlinie aus §8.
+
+Trotzdem nötig, weil ein Angreifer Logs frei wählen kann: Obergrenzen für Log-Länge und
+Sync-Frequenz pro Account (R4).
+
+---
+
+## 11. Grober Tech-Zuschnitt
 
 Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
@@ -472,12 +585,12 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
 ---
 
-## 11. Offene Fragen / nächste Schritte
+## 12. Offene Fragen / nächste Schritte
 
 - [ ] Tick-Auflösung festlegen (1s? 1min?) — Trade-off Präzision vs. Log-Größe.
 - [ ] Command-Set definieren (die vollständige Liste erlaubter Aktionen ist die eigentliche
       „Regel" des Spiels).
-- [ ] Konkrete Sim-Sprache/Portabilität wählen (§10).
+- [ ] Konkrete Sim-Sprache/Portabilität wählen (§11).
 - [ ] Verhalten am Lagerlimit festlegen (hard block / waste / soft-cap, §7).
 - [ ] Postfach: Kapazität, Ablauffrist, UI fürs Abholen (§7).
 - [ ] Auftrags-Slots: Anzahl, Freischaltung, Stapelgröße pro Slot (§8).
