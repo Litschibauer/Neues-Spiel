@@ -21,7 +21,7 @@ import { join } from 'node:path';
  * Es benutzt `node:crypto`, verändert aber keinen Zustand — SHA-256 ist selbst
  * plattformübergreifend deterministisch.
  */
-const PURE_FILES = ['rules.ts', 'state.ts', 'produce.ts', 'commands.ts', 'sim.ts'];
+const PURE_FILES = ['rules.ts', 'state.ts', 'produce.ts', 'commands.ts', 'sim.ts', 'migrate.ts'];
 
 const SIM_DIR = join(import.meta.dirname, '..', 'src', 'sim');
 

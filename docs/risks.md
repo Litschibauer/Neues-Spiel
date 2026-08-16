@@ -76,6 +76,15 @@ wissen, welche der Client benutzt hat.
 **Schärfe:** Sehr hoch. Das ist der Punkt, an dem „deterministisch" und „live-service" sich
 gegenseitig ins Knie schießen.
 
+**Status: im Prototyp gelöst und getestet.** Es gibt jetzt ein zweites Ruleset (V2) und einen
+durchgespielten Balance-Patch: Spieler geht offline → Patch wird geshippt → Sync rechnet den
+Log weiterhin unter V1 nach und hebt den Zustand *danach* auf V2. Laufendes Wachstum überlebt
+das fair, Invarianten werden nach jedem Schritt geprüft, und eine kaputte Migration
+beschädigt keinen Spielstand (der Log wird übernommen, die Version bleibt stehen).
+Dabei fiel eine Lücke auf, die im Konzept nicht stand: Der Client konnte sich seine
+Regelversion **selbst aussuchen** und sich so dauerhaft günstige alte Preise sichern.
+Maßgeblich ist jetzt allein die Version, die der Server auf den Snapshot gestempelt hat.
+
 **Gegenmaßnahmen:**
 - **Regeln/Balance als versionierte Daten**, nicht als Code. Jeder Command-Log deklariert seine
   `rulesetVersion`. Der Server validiert den Log unter *genau dieser* Version.
@@ -85,6 +94,15 @@ gegenseitig ins Knie schießen.
   Divergenz.
 - Balance-Patches idealerweise **nur zukunftswirksam** (neue Pflanzung nach Patch nutzt neue
   Zeiten; bereits laufende Pflanzung behält alte). Vermeidet die meisten Konflikte.
+- **Migration nur serverseitig**, das Ergebnis kommt fertig im Snapshot. Der Client rechnet nie
+  selbst um — damit kann die Migration gar nicht erst zwischen Client und Server divergieren.
+- **Ein Schritt pro Versionssprung**, nacheinander. Wer drei Patches verschlafen hat, läuft
+  durch dieselben getesteten Schritte wie alle anderen.
+- **Leitregel für jede Migration:** nie schlechter als ein Neuanfang unter den neuen Regeln,
+  nie besser als das, was der Spieler schon hatte.
+- **Invariantenprüfung nach jedem Schritt.** Eine Migration, die einen ungültigen Zustand
+  erzeugt, ist schlimmer als gar keine — sie lässt danach Aktionen scheitern, die erlaubt
+  sein müssten.
 
 ---
 

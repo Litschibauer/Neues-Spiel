@@ -31,13 +31,37 @@ const V1: Ruleset = {
 };
 
 /**
+ * Ein typischer Balance-Patch: Weizen wächst schneller, der Stall legt öfter,
+ * das Lager wird größer, Preise ziehen an.
+ *
+ * Genau so ein Patch ist der Grund für R2 — er ändert das deterministische
+ * Ergebnis. Ein Spieler, der offline unter V1 gehandelt hat, muss weiterhin
+ * unter V1 nachgerechnet werden, sonst weicht der Server garantiert von seinem
+ * Client ab (R1).
+ */
+const V2: Ruleset = {
+  version: 2,
+  siloCapacity: 120,
+  wheatGrowTicks: 5400,
+  wheatYield: 10,
+  coopTicksPerEgg: 480,
+  npcPrices: { wheat: 4, eggs: 6 },
+};
+
+/**
  * Der Server hält bewusst mehrere Versionen vor (R2). Ein Client, dessen Version
  * hier nicht mehr steht, muss vor dem Sync updaten — sauberer, angekündigter
  * Bruch statt stiller Divergenz.
  */
-export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([[1, V1]]);
+export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
+  [1, V1],
+  [2, V2],
+]);
 
 export const CURRENT_RULESET_VERSION = 1;
+
+/** Die Version, auf die der Server neue Snapshots hebt. */
+export const LATEST_RULESET_VERSION = 2;
 
 export function getRuleset(version: number): Ruleset {
   const r = RULESETS.get(version);

@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 37 Tests, keine Dependencies, kein Build-Step
+npm test        # 48 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 ```
@@ -21,6 +21,7 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
   state.ts        Zustand, ausschließlich Integer
   produce.ts      Gedeckelte passive Produktion, geschlossene Form (§7)
   commands.ts     Das Command-Set = das Regelwerk des Spiels (§2.1)
+  migrate.ts      Ruleset-Migration + Invariantenprüfung (R2)
   sim.ts          simulate(state, command) — die eine reine Funktion
   hash.ts         Zustands- und Batch-Hashes (Kanarienvogel, R1)
 
@@ -55,6 +56,7 @@ Schicht 5 ist im Server angelegt:
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
 | — | `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
 | — | `sync.test.ts` | Präfix-Commit, Idempotenz, Fork-Erkennung, veraltete Regelversion. |
+| — | `migration.test.ts` | Ein echter Balance-Patch quer durch eine Offline-Phase: Log unter alter Version validiert, Zustand danach gehoben, laufendes Wachstum fair umgerechnet, Version nicht frei wählbar. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
@@ -91,8 +93,8 @@ Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Gr
 
 ## Drei echte Bugs, die die Tests gefunden haben
 
-Beide wären in Produktion genau das Szenario aus R1 gewesen — **ehrliche Spieler
-verlieren Fortschritt** —, und beide waren beim Lesen des Codes unsichtbar.
+Alle drei wären in Produktion genau das Szenario aus R1 gewesen — **ehrliche Spieler
+verlieren Fortschritt** —, und keiner war beim Lesen des Codes sichtbar.
 
 ### 1. Off-by-one am Lagerlimit
 
@@ -142,8 +144,6 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
   Test ist derselbe Kern auf iOS, Android und Server. Integer-only macht das
   wahrscheinlich, aber bewiesen ist es damit nicht. Die Golden Vectors machen
   diesen Beweis *führbar* — sie ersetzen ihn nicht.
-- **Ruleset-Migration (R2).** Versionierung ist vorgesehen und wird geprüft, aber
-  es existiert nur eine Version — echte Balance-Patches sind ungetestet.
 - **Alles Geteilte.** Kein Markt, keine Nachbarn, kein Zufall, kein Escrow, kein
   Postfach. Also nichts aus §5 und §8.
 - **Persistenz.** Der Server hält Zustand und Command-Log im Speicher. Die reinen
@@ -158,6 +158,7 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 1. Denselben Kern nach WASM oder in eine Mobile-Runtime bringen und dort
    `test/vectors/golden.json` abspielen — der echte Plattform-Beweis, und dank
    der Vektoren nur noch ein Nachmittag Arbeit statt eines Projekts.
-2. Ein zweites Ruleset einziehen und eine Migration durchspielen (R2).
-3. Escrow, Auftrags-Slots und Postfach ergänzen, dann die Behälter-Invariante
+2. Escrow, Auftrags-Slots und Postfach ergänzen, dann die Behälter-Invariante
    aus §7 als Test formulieren: *Summe aller Behälter ist beschränkt.*
+3. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
+   an dem ehrliche Spieler noch Arbeit verlieren können.

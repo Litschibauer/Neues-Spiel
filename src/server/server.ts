@@ -11,6 +11,7 @@ import { SimError } from '../sim/commands.ts';
 import type { State } from '../sim/state.ts';
 import { getRuleset } from '../sim/rules.ts';
 import { advanceTo, simulate } from '../sim/sim.ts';
+import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
 
 /** 1 Tick = 1 Sekunde Echtzeit. */
@@ -63,9 +64,20 @@ export class Server {
    * Produktion wird er hinter alten Snapshots abgeschnitten.
    */
   appliedLog: Command[] = [];
+  /**
+   * Version, auf die neue Snapshots gehoben werden (R2).
+   *
+   * Ein Balance-Patch besteht serverseitig genau darin, diesen Wert
+   * hochzusetzen. Spieler wandern dann bei ihrem nächsten Sync mit — nicht
+   * mittendrin, während sie offline sind.
+   */
+  targetRulesetVersion: number;
+  /** Fehlgeschlagene Migrationen — Alarm fürs Monitoring, wie die Divergenzen. */
+  migrationFailures: Array<{ fromVersion: number; toVersion: number; message: string }> = [];
 
-  constructor(initial: State, startTs: number, rulesetVersion: number) {
+  constructor(initial: State, startTs: number, rulesetVersion: number, targetVersion?: number) {
     this.snapshot = { state: initial, seq: 0, serverTs: startTs, rulesetVersion };
+    this.targetRulesetVersion = targetVersion ?? rulesetVersion;
   }
 
   /**
@@ -84,6 +96,16 @@ export class Server {
     } catch {
       // R2: zu alte Client-Version → erzwungenes Update statt stiller Divergenz.
       return { ok: false, kind: 'rejected', reason: 'UNSUPPORTED_RULESET', snapshot: snap };
+    }
+
+    // Der Client darf sich seine Regelversion NICHT aussuchen.
+    //
+    // Ohne diese Prüfung könnte jemand dauerhaft eine alte Version deklarieren
+    // und sich die jeweils günstigsten Regeln behalten — etwa alte Preise nach
+    // einem Nerf. Maßgeblich ist allein die Version, die der Server auf den
+    // Snapshot gestempelt hat.
+    if (req.rulesetVersion !== snap.rulesetVersion) {
+      return { ok: false, kind: 'rejected', reason: 'RULESET_MISMATCH', snapshot: snap };
     }
 
     // ── Form des Batches ─────────────────────────────────────────────────
@@ -186,15 +208,40 @@ export class Server {
       }
     }
 
-    // Passive Produktion bis zur echten Serverzeit fortschreiben.
+    // Passive Produktion bis zur echten Serverzeit fortschreiben — noch unter
+    // den ALTEN Regeln. Die gesamte Offline-Spanne gehört zu der Version, unter
+    // der der Spieler sie erlebt hat; ein Patch wirkt erst ab hier (R2).
     state = advanceTo(state, maxTick, rules);
+
+    // ── Ruleset-Migration (R2) ───────────────────────────────────────────
+    // Erst jetzt, nachdem alles unter der alten Version nachgerechnet ist,
+    // wird der Zustand auf die aktuelle Version gehoben. Das ist die einzige
+    // Stelle, an der ein Versionswechsel passiert — eine klare Grenze statt
+    // eines schleichenden Übergangs.
+    let newVersion = snap.rulesetVersion;
+    if (this.targetRulesetVersion !== snap.rulesetVersion) {
+      try {
+        state = migrateState(state, snap.rulesetVersion, this.targetRulesetVersion);
+        newVersion = this.targetRulesetVersion;
+      } catch (err) {
+        // Eine kaputte Migration darf keinen Spielstand beschädigen: Wir
+        // übernehmen den Log trotzdem, bleiben aber auf der alten Version.
+        // Der Spieler wandert beim nächsten Versuch mit, sobald der Fix da ist.
+        if (!(err instanceof MigrationError)) throw err;
+        this.migrationFailures.push({
+          fromVersion: snap.rulesetVersion,
+          toVersion: this.targetRulesetVersion,
+          message: err.message,
+        });
+      }
+    }
 
     this.appliedLog.push(...accepted);
     this.snapshot = {
       state,
       seq: accepted[accepted.length - 1]!.seq,
       serverTs: nowMs,
-      rulesetVersion: req.rulesetVersion,
+      rulesetVersion: newVersion,
     };
 
     if (!fullyApplied) {
