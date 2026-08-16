@@ -1,0 +1,513 @@
+<title>Determinismus-Prüfstand</title>
+<style>
+  :root {
+    --ground: #f2f5f6;
+    --surface: #ffffff;
+    --surface-2: #e9eef0;
+    --line: #d2dbde;
+    --ink: #0f1a1d;
+    --muted: #5a6f75;
+    --accent: #0f7f81;
+    --pass: #2c6e49;
+    --pass-bg: #e0efe7;
+    --pass-line: #a8cfba;
+    --fail: #a83246;
+    --fail-bg: #f7e3e6;
+    --fail-line: #e0b0b8;
+
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1417;
+      --surface: #131e22;
+      --surface-2: #1a272c;
+      --line: #27383e;
+      --ink: #e6eef0;
+      --muted: #8ca4ab;
+      --accent: #35b3b0;
+      --pass: #79cfa2;
+      --pass-bg: #13291d;
+      --pass-line: #2c5740;
+      --fail: #e88a99;
+      --fail-bg: #33161d;
+      --fail-line: #6b3440;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0d1417;
+    --surface: #131e22;
+    --surface-2: #1a272c;
+    --line: #27383e;
+    --ink: #e6eef0;
+    --muted: #8ca4ab;
+    --accent: #35b3b0;
+    --pass: #79cfa2;
+    --pass-bg: #13291d;
+    --pass-line: #2c5740;
+    --fail: #e88a99;
+    --fail-bg: #33161d;
+    --fail-line: #6b3440;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap {
+    max-width: 54rem;
+    margin: 0 auto;
+    padding: 2rem 1.15rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  header { display: flex; flex-direction: column; gap: .5rem; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.45rem, 5vw, 2rem);
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .lede { margin: 0; color: var(--muted); max-width: 42rem; }
+
+  /* ── Urteil ─────────────────────────────────────────── */
+  .verdict {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .verdict-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    padding: 1.15rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .verdict.is-pass .verdict-head { background: var(--pass-bg); border-bottom-color: var(--pass-line); }
+  .verdict.is-fail .verdict-head { background: var(--fail-bg); border-bottom-color: var(--fail-line); }
+
+  .status {
+    font-family: var(--mono);
+    font-size: clamp(1.3rem, 4.5vw, 1.7rem);
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  .verdict.is-pass .status { color: var(--pass); }
+  .verdict.is-fail .status { color: var(--fail); }
+  .verdict.is-busy .status { color: var(--muted); }
+
+  .tally {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: .95rem;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  }
+
+  .cell {
+    padding: .85rem 1.25rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 0;
+  }
+  .cell:nth-child(-n+2) { border-top: none; }
+
+  dt {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: .92rem;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Prüfraster ─────────────────────────────────────── */
+  section { display: flex; flex-direction: column; gap: .75rem; }
+  /* Muss NACH der display-Regel stehen: sonst gewinnt `display: flex`
+     gegen das hidden-Attribut und der Abschnitt bleibt sichtbar. */
+  [hidden] { display: none; }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    gap: .4rem;
+  }
+
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .45rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+  }
+
+  .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .n { color: var(--muted); margin-left: auto; }
+
+  .dot { width: .5rem; height: .5rem; border-radius: 50%; flex: none; }
+  .chip.ok { border-left: 2px solid var(--pass); }
+  .chip.ok .dot { background: var(--pass); }
+  .chip.bad { border-left: 2px solid var(--fail); background: var(--fail-bg); }
+  .chip.bad .dot { background: var(--fail); }
+
+  /* ── Abweichungen ───────────────────────────────────── */
+  .diff {
+    border: 1px solid var(--fail-line);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: .9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+  }
+
+  .diff h3 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: .85rem;
+    color: var(--fail);
+  }
+
+  .diff-row { display: flex; flex-direction: column; gap: .15rem; }
+
+  .diff-label {
+    font-family: var(--mono);
+    font-size: .64rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  pre {
+    margin: 0;
+    padding: .5rem .6rem;
+    background: var(--surface-2);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: .72rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  /* ── Bericht & Aktionen ─────────────────────────────── */
+  .actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+
+  button {
+    font-family: var(--mono);
+    font-size: .8rem;
+    padding: .5rem .9rem;
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:hover { background: var(--accent); color: var(--surface); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  textarea {
+    width: 100%;
+    min-height: 7rem;
+    resize: vertical;
+    padding: .7rem .8rem;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: .74rem;
+    line-height: 1.5;
+  }
+  textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: .15rem 0 .15rem .9rem;
+    color: var(--muted);
+    font-size: .9rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+  .note p { margin: 0; }
+
+  footer {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: .7rem;
+    border-top: 1px solid var(--line);
+    padding-top: 1rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .verdict, .chip { transition: background-color .18s ease, border-color .18s ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Neues Spiel · Risiko R1</p>
+    <h1>Determinismus-Prüfstand</h1>
+    <p class="lede">
+      Diese Seite spielt den kompletten Golden-Vector-Korpus des Sim-Kerns in der
+      JavaScript-Engine dieses Geräts ab. Stimmt jedes Ergebnis mit dem hinterlegten
+      überein, rechnet diese Engine bit-für-bit wie der Server.
+    </p>
+  </header>
+
+  <div class="verdict is-busy" id="verdict">
+    <div class="verdict-head">
+      <span class="status" id="status">Prüfung läuft …</span>
+      <span class="tally" id="tally"></span>
+    </div>
+    <dl>
+      <div class="cell"><dt>Engine</dt><dd id="engine">—</dd></div>
+      <div class="cell"><dt>Plattform</dt><dd id="platform">—</dd></div>
+      <div class="cell"><dt>Regelversion</dt><dd id="ruleset">—</dd></div>
+      <div class="cell"><dt>Rechenzeit</dt><dd id="duration">—</dd></div>
+    </dl>
+  </div>
+
+  <section>
+    <h2>Vektoren</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="diffs" hidden>
+    <h2>Abweichungen</h2>
+    <div id="diff-list" style="display:flex;flex-direction:column;gap:.6rem"></div>
+  </section>
+
+  <section>
+    <h2>Bericht</h2>
+    <div class="actions">
+      <button type="button" id="rerun">Nochmal prüfen</button>
+      <button type="button" id="copy">Bericht kopieren</button>
+    </div>
+    <textarea id="report" readonly spellcheck="false"></textarea>
+  </section>
+
+  <div class="note">
+    <p>
+      <strong>Warum das zählt.</strong> Der Sim-Kern wurde bisher nur in Node getestet,
+      also in V8. Safari auf iPhone und iPad benutzt JavaScriptCore — eine andere Engine,
+      anderer Compiler, andere Optimierungen. Läuft der Korpus hier durch, ist das der
+      erste echte Beleg dafür, dass die Simulation plattformübergreifend identisch rechnet.
+    </p>
+    <p>
+      Verglichen wird die <em>kanonische Form</em> des Endzustands, nicht ein Hash: Sie ist
+      die eigentliche deterministische Größe und braucht keine Krypto-API des Systems.
+    </p>
+  </div>
+
+  <footer id="foot">Sim-Kern und Vektoren sind in diese Seite eingebettet — keine Netzwerkzugriffe.</footer>
+</div>
+
+<script>
+/* Sim-Kern + Golden Vectors, erzeugt aus src/sim/ — siehe scripts/build-conformance.ts */
+<!--BUNDLE-->
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function engineName() {
+    var ua = navigator.userAgent;
+    // Reihenfolge zählt: Chrome und Edge behaupten beide, Safari zu sein.
+    if (/Edg\//.test(ua)) return 'Chromium (V8) · Edge';
+    if (/OPR\//.test(ua)) return 'Chromium (V8) · Opera';
+    if (/Firefox\//.test(ua)) return 'SpiderMonkey · Firefox';
+    if (/CriOS\//.test(ua)) return 'JavaScriptCore · Chrome iOS';
+    if (/FxiOS\//.test(ua)) return 'JavaScriptCore · Firefox iOS';
+    if (/Chrome\//.test(ua)) return 'Chromium (V8) · Chrome';
+    if (/Safari\//.test(ua)) return 'JavaScriptCore · Safari';
+    return 'unbekannt';
+  }
+
+  function platformName() {
+    var ua = navigator.userAgent;
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPadOS';
+    if (/iPhone/.test(ua)) return 'iOS';
+    if (/Android/.test(ua)) return 'Android';
+    if (/Macintosh/.test(ua)) return 'macOS';
+    if (/Windows/.test(ua)) return 'Windows';
+    if (/Linux/.test(ua)) return 'Linux';
+    return 'unbekannt';
+  }
+
+  function render(report, ms) {
+    var verdict = $('verdict');
+    var ok = report.passed === report.total;
+
+    verdict.className = 'verdict ' + (ok ? 'is-pass' : 'is-fail');
+    $('status').textContent = ok ? 'Deterministisch' : 'Abweichung gefunden';
+    $('tally').textContent = report.passed + ' / ' + report.total + ' Vektoren';
+    $('engine').textContent = engineName();
+    $('platform').textContent = platformName();
+    $('ruleset').textContent = 'v' + report.rulesetVersion;
+    $('duration').textContent = ms.toFixed(1) + ' ms';
+
+    var grid = $('grid');
+    grid.textContent = '';
+    report.results.forEach(function (r) {
+      var chip = document.createElement('div');
+      chip.className = 'chip ' + (r.pass ? 'ok' : 'bad');
+      var dot = document.createElement('i');
+      dot.className = 'dot';
+      var name = document.createElement('span');
+      name.textContent = r.name;
+      var n = document.createElement('b');
+      n.className = 'n';
+      n.textContent = r.commands;
+      chip.appendChild(dot);
+      chip.appendChild(name);
+      chip.appendChild(n);
+      grid.appendChild(chip);
+    });
+
+    var failures = report.results.filter(function (r) { return !r.pass; });
+    var diffs = $('diffs');
+    var list = $('diff-list');
+    list.textContent = '';
+    diffs.hidden = failures.length === 0;
+
+    failures.slice(0, 5).forEach(function (f) {
+      var box = document.createElement('div');
+      box.className = 'diff';
+      var h = document.createElement('h3');
+      h.textContent = f.name + (f.error ? ' — ' + f.error : '');
+      box.appendChild(h);
+      [['Berechnet', f.actual], ['Erwartet', f.expected]].forEach(function (pair) {
+        var row = document.createElement('div');
+        row.className = 'diff-row';
+        var label = document.createElement('div');
+        label.className = 'diff-label';
+        label.textContent = pair[0];
+        var pre = document.createElement('pre');
+        pre.textContent = pair[1] || '—';
+        row.appendChild(label);
+        row.appendChild(pre);
+        box.appendChild(row);
+      });
+      list.appendChild(box);
+    });
+
+    var lines = [
+      'Determinismus-Prüfstand — Neues Spiel',
+      'Ergebnis:      ' + (ok ? 'DETERMINISTISCH' : 'ABWEICHUNG'),
+      'Vektoren:      ' + report.passed + ' / ' + report.total,
+      'Engine:        ' + engineName(),
+      'Plattform:     ' + platformName(),
+      'Regelversion:  v' + report.rulesetVersion,
+      'Rechenzeit:    ' + ms.toFixed(1) + ' ms',
+      'User-Agent:    ' + navigator.userAgent,
+    ];
+    failures.forEach(function (f) {
+      lines.push('');
+      lines.push('FEHLER ' + f.name + (f.error ? ' — ' + f.error : ''));
+      lines.push('  ist  ' + f.actual);
+      lines.push('  soll ' + f.expected);
+    });
+    $('report').value = lines.join('\n');
+  }
+
+  function run() {
+    $('verdict').className = 'verdict is-busy';
+    $('status').textContent = 'Prüfung läuft …';
+
+    // Ein Frame Luft, damit der Zustandswechsel sichtbar wird.
+    requestAnimationFrame(function () {
+      try {
+        var t0 = performance.now();
+        var report = globalThis.NeuesSpielConformance.runVectors();
+        render(report, performance.now() - t0);
+      } catch (e) {
+        $('verdict').className = 'verdict is-fail';
+        $('status').textContent = 'Prüfung abgestürzt';
+        $('report').value = 'Fehler beim Ausführen:\n' + (e && e.stack ? e.stack : String(e));
+      }
+    });
+  }
+
+  $('rerun').addEventListener('click', run);
+  $('copy').addEventListener('click', function () {
+    var ta = $('report');
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    var done = false;
+    try { done = document.execCommand('copy'); } catch (e) { done = false; }
+    if (navigator.clipboard && !done) {
+      navigator.clipboard.writeText(ta.value).then(function () { done = true; }, function () {});
+    }
+    this.textContent = done ? 'Kopiert' : 'Text ist markiert';
+    var btn = this;
+    setTimeout(function () { btn.textContent = 'Bericht kopieren'; }, 2000);
+  });
+
+  run();
+})();
+</script>

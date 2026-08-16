@@ -10,6 +10,7 @@
   "scripts": {
     "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
     "golden": "node --experimental-strip-types scripts/generate-golden.ts",
-    "bench": "node --experimental-strip-types scripts/bench-sync.ts"
+    "bench": "node --experimental-strip-types scripts/bench-sync.ts",
+    "conformance": "node --experimental-strip-types scripts/build-conformance.ts"
   }
 }

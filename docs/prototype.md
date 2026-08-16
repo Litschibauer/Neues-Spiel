@@ -4,9 +4,10 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 59 Tests, keine Dependencies, kein Build-Step
+npm test        # 62 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
+npm run conformance  # Prüfstand-Seite für fremde Engines bauen (siehe unten)
 ```
 
 Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
@@ -22,6 +23,7 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
   produce.ts      Gedeckelte passive Produktion, geschlossene Form (§7)
   commands.ts     Das Command-Set = das Regelwerk des Spiels (§2.1)
   migrate.ts      Ruleset-Migration + Invariantenprüfung (R2)
+  canonical.ts    Kanonische Form — ohne Krypto, läuft in jeder Runtime
   sim.ts          simulate(state, command) — die eine reine Funktion
   hash.ts         Zustands- und Batch-Hashes (Kanarienvogel, R1)
 
@@ -30,7 +32,8 @@ src/client/
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
 src/server/       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
 
-scripts/          Golden-Vector-Generator + Lastmessung
+scripts/          Golden-Vector-Generator, Lastmessung, Prüfstand-Build
+web/              Vorlage der Prüfstand-Seite
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 
@@ -65,6 +68,22 @@ Schicht 5 ist im Server angelegt:
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
 abgelehnte Aktionen) und schlagen fehl, wenn nicht. Ein Fuzz, der nur Sonnenschein testet,
 beweist sonst nichts — und genau das war beim ersten Lauf der Fall.
+
+### Der Prüfstand für fremde Engines
+
+`npm run conformance` erzeugt `dist/conformance.html`: eine vollständig eigenständige Seite
+(kein einziger Netzwerkzugriff), die den Korpus in der JS-Engine des jeweiligen Geräts
+abspielt. Öffnet man sie in Safari auf iPhone oder iPad, läuft der Sim-Kern in
+**JavaScriptCore** statt V8 — anderer Compiler, andere Optimierungen. Genau dieser
+Engine-Wechsel ist der Test, der in Node prinzipiell nicht möglich ist.
+
+Der Bundle wird aus denselben Quelldateien gebaut, die Client und Server benutzen — ein
+nachgebauter Sim-Kern würde exakt das Risiko einführen, das geprüft werden soll.
+`conformance-bundle.test.ts` baut ihn deshalb bei jedem Testlauf neu, führt ihn isoliert aus
+und verlangt dieselben Ergebnisse. Ein grünes iPad ist nur dann etwas wert.
+
+Verglichen wird die **kanonische Form**, nicht ein Hash: Sie ist die eigentliche
+deterministische Größe und braucht keine Krypto-API der Plattform.
 
 ### Golden Vectors
 
