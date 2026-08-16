@@ -378,13 +378,21 @@
   function engineName() {
     var ua = navigator.userAgent;
     // Reihenfolge zählt: Chrome und Edge behaupten beide, Safari zu sein.
-    if (/Edg\//.test(ua)) return 'Chromium (V8) · Edge';
-    if (/OPR\//.test(ua)) return 'Chromium (V8) · Opera';
+    if (/Edg\//.test(ua)) return 'V8 · Edge';
+    if (/OPR\//.test(ua)) return 'V8 · Opera';
     if (/Firefox\//.test(ua)) return 'SpiderMonkey · Firefox';
-    if (/CriOS\//.test(ua)) return 'JavaScriptCore · Chrome iOS';
-    if (/FxiOS\//.test(ua)) return 'JavaScriptCore · Firefox iOS';
-    if (/Chrome\//.test(ua)) return 'Chromium (V8) · Chrome';
-    if (/Safari\//.test(ua)) return 'JavaScriptCore · Safari';
+    if (/CriOS\//.test(ua)) return 'JavaScriptCore · Chrome (iOS)';
+    if (/FxiOS\//.test(ua)) return 'JavaScriptCore · Firefox (iOS)';
+    if (/Chrome\//.test(ua)) return 'V8 · Chrome';
+
+    // Ab hier WebKit ohne Fremdbrowser-Kennung. Auf iOS und iPadOS schreibt
+    // Apple WebKit für jeden Browser UND jede eingebettete WebView vor — die
+    // Engine ist dort also unabhängig von der App immer JavaScriptCore.
+    if (/AppleWebKit\//.test(ua)) {
+      if (/Safari\//.test(ua)) return 'JavaScriptCore · Safari';
+      // Eine App-WebView (WKWebView) lässt das Safari-Token weg. Gleiche Engine.
+      return 'JavaScriptCore · App-WebView';
+    }
     return 'unbekannt';
   }
 

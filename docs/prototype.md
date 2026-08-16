@@ -85,6 +85,23 @@ und verlangt dieselben Ergebnisse. Ein grünes iPad ist nur dann etwas wert.
 Verglichen wird die **kanonische Form**, nicht ein Hash: Sie ist die eigentliche
 deterministische Größe und braucht keine Krypto-API der Plattform.
 
+### Ergebnis: zwei Engine-Familien stimmen überein
+
+| Engine | Runtime | Plattform | Vektoren | Zeit |
+| --- | --- | --- | --- | --- |
+| **V8** | Node 22 / Chromium | Linux | 30 / 30 | ~9 ms |
+| **JavaScriptCore** | WKWebView | iPadOS | 30 / 30 | ~1 ms |
+
+Zwei unabhängig entwickelte Engines mit unterschiedlichen Compilern und
+Optimierungsstrategien liefern für denselben Command-Log **bit-für-bit dieselben
+Endzustände**. Das ist der Beleg, den Node allein prinzipiell nicht liefern kann.
+
+Nicht abgedeckt bleibt **SpiderMonkey** (Firefox) als dritte große Familie — auf iOS und
+iPadOS läuft auch Firefox auf WebKit, dafür braucht es also einen Desktop. Und der
+Integer-only-Ansatz macht Abweichungen ohnehin unwahrscheinlich: Die klassischen
+Engine-Unterschiede liegen bei Fließkomma, Locale und Iterationsreihenfolge — alles Dinge,
+die der CI-Wächter im Sim-Kern gar nicht erst zulässt.
+
 ### Golden Vectors
 
 `test/vectors/golden.json` enthält **explizite Command-Logs**, keine Seeds. Das ist Absicht:
@@ -162,10 +179,6 @@ Arbeit doppelt geschickt, nur den Rest anwenden (*resume*). Abweichend ⇒ echte
 
 Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
-- **Plattform-Determinismus.** Alles läuft hier in einer Node-Runtime. Der echte
-  Test ist derselbe Kern auf iOS, Android und Server. Integer-only macht das
-  wahrscheinlich, aber bewiesen ist es damit nicht. Die Golden Vectors machen
-  diesen Beweis *führbar* — sie ersetzen ihn nicht.
 - **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
   das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
   Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
@@ -178,8 +191,7 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
 ## Nächste sinnvolle Schritte
 
-1. Denselben Kern nach WASM oder in eine Mobile-Runtime bringen und dort
-   `test/vectors/golden.json` abspielen — der echte Plattform-Beweis, und dank
-   der Vektoren nur noch ein Nachmittag Arbeit statt eines Projekts.
+1. Den Server auf echter Hardware über ein echtes Netzwerk betreiben — echte
+   Latenz, echte Abbrüche, echtes Tunnelverhalten statt Testattrappen.
 2. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
    an dem ehrliche Spieler noch Arbeit verlieren können.

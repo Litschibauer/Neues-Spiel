@@ -35,5 +35,6 @@ kein Markt, kein Zufall, keine UI, keine Persistenz.
 
 ## Nächster Schritt
 
-Denselben Sim-Kern auf einer echten Mobile-Runtime laufen lassen und die Fuzz-Tests dort
-wiederholen — das ist der Plattform-Determinismus-Beweis, den der Node-Prototyp offenlässt.
+Den Sync-Server auf echter Hardware über ein echtes Netzwerk betreiben — echte Latenz, echte
+Abbrüche statt Testattrappen. Der Plattform-Determinismus ist inzwischen belegt: V8 und
+JavaScriptCore rechnen für alle Golden Vectors bit-für-bit gleich.

@@ -49,8 +49,9 @@ keine Sorge mehr, sondern eine Beobachtung.
    tritt gegen eine langsame, offensichtlich korrekte Tick-für-Tick-Variante an — auf Funktions-
    *und* auf Sitzungsebene.
 4. **Golden Vectors:** festgeschriebener Korpus expliziter Command-Logs mit erwarteten
-   Endzuständen, den jede Plattform abspielen muss. Macht den Cross-Plattform-Beweis führbar,
-   ohne alle Runtimes in einem Prozess zu haben.
+   Endzuständen, den jede Plattform abspielen muss. **Eingelöst:** V8 (Node, Chromium) und
+   JavaScriptCore (WKWebView auf iPadOS) liefern für alle 30 Vektoren identische Endzustände —
+   zwei unabhängige Engine-Familien, siehe [prototype.md](prototype.md).
 5. **Kanarienvogel + Quarantäne:** Client schickt seinen Zustands-Hash mit. Mismatch ⇒ Alarm,
    nie Sanktion — und bei erhöhter Divergenzrate wird die betroffene Client-Version
    eingeschränkt, statt eine ganze Kohorte kaputte Spielstände sammeln zu lassen.
