@@ -24,15 +24,28 @@ const ROOT = join(import.meta.dirname, '..');
 const SIM = join(ROOT, 'src', 'sim');
 
 /**
- * In Abhängigkeitsreihenfolge. `hash.ts` fehlt bewusst: Es braucht
- * `node:crypto`. Verglichen wird deshalb über die kanonische Form aus
- * `canonical.ts`, die ohne jede Plattform-API auskommt — und die ohnehin die
- * eigentliche deterministische Größe ist.
+ * In Abhängigkeitsreihenfolge. Der Prüfstand vergleicht über die kanonische
+ * Form statt über einen Hash — sie ist ohnehin die eigentliche deterministische
+ * Größe, und so bleibt der Bundle so klein wie möglich.
  */
 const MODULES = ['rules.ts', 'state.ts', 'produce.ts', 'commands.ts', 'canonical.ts', 'sim.ts'];
 
-function toPlainJs(file: string): string {
-  const source = readFileSync(join(SIM, file), 'utf8');
+/** Zusätzlich für den Feldtest: der echte Client, nicht ein nachgebauter. */
+const CLIENT_MODULES = [
+  'sim/rules.ts',
+  'sim/state.ts',
+  'sim/produce.ts',
+  'sim/commands.ts',
+  'sim/canonical.ts',
+  'sim/sha256.ts',
+  'sim/hash.ts',
+  'sim/sim.ts',
+  'client/client.ts',
+  'client/sync-engine.ts',
+];
+
+function toPlainJs(relativePath: string): string {
+  const source = readFileSync(join(ROOT, 'src', relativePath), 'utf8');
   const stripped = stripTypeScriptTypes(source, { mode: 'strip' });
 
   return (
@@ -47,7 +60,7 @@ function toPlainJs(file: string): string {
 
 export function buildConformanceBundle(): string {
   const modules = MODULES.map(
-    (f) => `// ── src/sim/${f} ${'─'.repeat(Math.max(0, 46 - f.length))}\n${toPlainJs(f)}`,
+    (f) => `// ── src/sim/${f} ${'─'.repeat(Math.max(0, 46 - f.length))}\n${toPlainJs('sim/' + f)}`,
   ).join('\n');
 
   const golden = readFileSync(join(ROOT, 'test', 'vectors', 'golden.json'), 'utf8');
@@ -120,6 +133,43 @@ export function buildConformancePage(): string {
   return template.replace('<!--BUNDLE-->', () => buildConformanceBundle());
 }
 
+/**
+ * Bundle für den Feldtest-Client: Sim-Kern PLUS der echte `Client` und die
+ * echte `SyncEngine`. Kein nachgebautes Handy-Gegenstück — sonst prüfte der
+ * Feldtest eine andere Implementierung als die, die später ausgeliefert wird.
+ */
+export function buildClientBundle(): string {
+  const modules = CLIENT_MODULES.map(
+    (f) => `// ── src/${f} ${'─'.repeat(Math.max(0, 44 - f.length))}\n${toPlainJs(f)}`,
+  ).join('\n');
+
+  return `/* Erzeugt von scripts/build-conformance.ts — nicht von Hand bearbeiten. */
+(function () {
+  'use strict';
+
+${modules}
+
+  globalThis.NeuesSpiel = {
+    Client: Client,
+    SyncEngine: SyncEngine,
+    getRuleset: getRuleset,
+    initialState: initialState,
+    stored: stored,
+    totalGoods: totalGoods,
+    hashState: hashState,
+  };
+})();
+`;
+}
+
+export function buildFieldTestPage(): string {
+  const template = readFileSync(join(ROOT, 'web', 'field-test.template.html'), 'utf8');
+  if (!template.includes('<!--BUNDLE-->')) {
+    throw new Error('Platzhalter <!--BUNDLE--> fehlt in der Feldtest-Vorlage');
+  }
+  return template.replace('<!--BUNDLE-->', () => buildClientBundle());
+}
+
 /** Nur ausführen, wenn direkt gestartet — beim Import aus Tests nicht. */
 if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const outDir = join(ROOT, 'dist');
@@ -131,8 +181,11 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const page = buildConformancePage();
   writeFileSync(join(outDir, 'conformance.html'), page);
 
+  const field = buildFieldTestPage();
+  writeFileSync(join(outDir, 'field-test.html'), field);
+
   console.log(
-    `Bundle ${(bundle.length / 1024).toFixed(1)} kB · Seite ${(page.length / 1024).toFixed(1)} kB ` +
-      `→ dist/conformance.html`,
+    `Prüfstand ${(page.length / 1024).toFixed(1)} kB → dist/conformance.html\n` +
+      `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html`,
   );
 }

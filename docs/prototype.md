@@ -4,10 +4,11 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 62 Tests, keine Dependencies, kein Build-Step
+npm test        # 68 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
-npm run conformance  # Prüfstand-Seite für fremde Engines bauen (siehe unten)
+npm run conformance  # Prüfstand- und Feldtest-Seite bauen
+npm start       # Feldtest-Server (siehe docs/deploy.md)
 ```
 
 Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
@@ -30,10 +31,13 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
 src/client/
   client.ts       Optimistisches Offline-Spiel + Command-Queue
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
-src/server/       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
+src/server/
+  server.ts       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
+  http.ts         Feldtest-Server: HTTP-API + Handy-Client, ohne Abhängigkeiten
+  store.ts        Persistenz — atomar geschriebene JSON-Datei
 
-scripts/          Golden-Vector-Generator, Lastmessung, Prüfstand-Build
-web/              Vorlage der Prüfstand-Seite
+scripts/          Golden-Vector-Generator, Lastmessung, Seiten-Build
+web/              Vorlagen für Prüfstand- und Feldtest-Seite
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 
@@ -130,9 +134,9 @@ Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Gr
 
 ---
 
-## Drei echte Bugs, die die Tests gefunden haben
+## Vier echte Bugs, die die Tests gefunden haben
 
-Alle drei wären in Produktion genau das Szenario aus R1 gewesen — **ehrliche Spieler
+Alle vier wären in Produktion genau das Szenario aus R1 gewesen — **ehrliche Spieler
 verlieren Fortschritt** —, und keiner war beim Lesen des Codes sichtbar.
 
 ### 1. Off-by-one am Lagerlimit
@@ -155,6 +159,23 @@ Ergebnis: Das zweite Gerät bekam ein fröhliches „alles gut" — und seine ge
 Offline-Arbeit verschwand kommentarlos. Die Prüfung hängt jetzt am **Inhalt**
 des Batches, nicht an der Nummer.
 
+### 4. Der Server lief der Zeitachse des Clients davon
+
+Gefunden vom **echten** Feldtest über HTTP — kein Unit-Test hatte es gezeigt.
+
+Der Server schrieb seinen Zustand beim Sync bis „jetzt" fort. Nach einer verlorenen Antwort
+datierte der ahnungslos weiterspielende Client seine nächsten Commands auf Ticks, die der
+Server längst hinter sich hatte — und bekam `TIME_WENT_BACKWARDS`. Der ehrliche Spieler
+verlor seine Sitzung.
+
+Die bestehenden Tests trafen das nicht, weil sie zwischen den Aktionen großzügig die Uhr
+vorstellten. Im echten Betrieb tippt man einfach zweimal hintereinander.
+
+Ursache war ein Modellfehler: Passive Produktion ist eine *abgeleitete* Größe. Sie eifrig
+festzuschreiben bringt den Server der Zeitachse des Clients voraus. Der Zustand bleibt jetzt
+beim letzten Command stehen, und `serverTs` wird nur um die tatsächlich verbrauchten Ticks
+weitergestellt — die ungenutzte Realzeit bleibt dem Spieler erhalten.
+
 ### 3. Verlorene Antwort war von einem Fork ununterscheidbar
 
 Gefunden beim Durchdenken des Tunnel-Szenarios, bevor eine Zeile Code dazu existierte.
@@ -169,9 +190,10 @@ Der Server vergleicht jetzt das überlappende Präfix Command für Command: iden
 Arbeit doppelt geschickt, nur den Rest anwenden (*resume*). Abweichend ⇒ echter Fork.
 
 > **Die Lehre:** R1 ist keine theoretische Sorge. In sehr bewusst geschriebenem Code steckten
-> drei Fehler, die alle **ehrliche Spieler** getroffen hätten — und keiner war beim Lesen
-> sichtbar. Zwei fand der Fuzz, einen das Durchspielen eines realen Szenarios (Zug, Tunnel,
-> kein Empfang). Beide Methoden gehören von Tag eins in die Routine, nicht ans Ende.
+> vier Fehler, die alle **ehrliche Spieler** getroffen hätten — und keiner war beim Lesen
+> sichtbar. Zwei fand der Fuzz, einen das Durchdenken eines realen Szenarios, und einen erst
+> der Betrieb über echtes HTTP. Jede Methode fand etwas, das die anderen übersahen — deshalb
+> gehören alle drei von Tag eins in die Routine, nicht ans Ende.
 
 ---
 
@@ -182,8 +204,9 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 - **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
   das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
   Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
-- **Persistenz.** Der Server hält Zustand und Command-Log im Speicher. Die reinen
-  Re-Sim-Kosten sind gemessen (siehe oben), Datenbank und Netzwerk nicht.
+- **Betrieb im Maßstab.** Der Feldtest-Server speichert in eine JSON-Datei und kennt
+  einen einzigen Spielstand. Die reinen Re-Sim-Kosten sind gemessen, Datenbank,
+  Accounts und Last unter vielen Spielern nicht.
 - **Snapshot-Signatur.** In §9 vorgesehen, hier nicht implementiert — der Server
   hält ohnehin seine eigene Kopie.
 
@@ -191,7 +214,5 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
 ## Nächste sinnvolle Schritte
 
-1. Den Server auf echter Hardware über ein echtes Netzwerk betreiben — echte
-   Latenz, echte Abbrüche, echtes Tunnelverhalten statt Testattrappen.
-2. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
+1. Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte offene Punkt,
    an dem ehrliche Spieler noch Arbeit verlieren können.

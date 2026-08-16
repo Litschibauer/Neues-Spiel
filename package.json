@@ -11,6 +11,7 @@
     "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
     "golden": "node --experimental-strip-types scripts/generate-golden.ts",
     "bench": "node --experimental-strip-types scripts/bench-sync.ts",
-    "conformance": "node --experimental-strip-types scripts/build-conformance.ts"
+    "conformance": "node --experimental-strip-types scripts/build-conformance.ts",
+    "start": "node --experimental-strip-types src/server/http.ts"
   }
 }

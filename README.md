@@ -22,19 +22,25 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 62 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 68 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
-Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die drei echten Bugs, die dabei
+Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
 ans Licht kamen: **[docs/prototype.md](docs/prototype.md)**.
+
+## Feldtest auf eigener Hardware
+
+Ein abhängigkeitsfreier Server (nur `node:http`) mit Handy-Client, um das
+Verbindungsmodell über ein echtes Netzwerk zu prüfen statt über Testattrappen —
+Anleitung in **[docs/deploy.md](docs/deploy.md)**.
 
 ## Status
 
-Konzept steht, Kern-Mechanik ist am lauffähigen Prototyp validiert. Noch kein Spiel —
-kein Markt, kein Zufall, keine UI, keine Persistenz.
+Konzept steht, Kern-Mechanik ist am lauffähigen Prototyp validiert — Determinismus über zwei
+Engine-Familien belegt, Handel und Postfach implementiert, Verbindungsmodell über echtes HTTP
+geprüft. Noch kein Spiel: kein Orderbuch, kein Zufall, keine Spiel-UI, keine Accounts.
 
 ## Nächster Schritt
 
-Den Sync-Server auf echter Hardware über ein echtes Netzwerk betreiben — echte Latenz, echte
-Abbrüche statt Testattrappen. Der Plattform-Determinismus ist inzwischen belegt: V8 und
-JavaScriptCore rechnen für alle Golden Vectors bit-für-bit gleich.
+Aktiv-Gerät-Token gegen den Multi-Device-Fork (R3) — der letzte Punkt, an dem ehrliche
+Spieler noch Arbeit verlieren können.

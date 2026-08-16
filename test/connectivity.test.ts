@@ -135,6 +135,69 @@ test('verlorene Antwort: Server hat den Batch, der Client weiß es nicht', async
   assert.equal(client.queue.length, 0);
 });
 
+test('Regression: Wiederaufsetzen ohne Zeitsprung dazwischen', async () => {
+  // Der Bug, den erst ein echter Lauf über HTTP zeigte: Der Server schrieb
+  // seinen Zustand beim Sync bis „jetzt" fort und war damit der Zeitachse des
+  // Clients voraus. Nach einer verlorenen Antwort datierte der ahnungslose
+  // Client seine nächsten Commands auf Ticks, die der Server längst hinter
+  // sich hatte — und lehnte sie als TIME_WENT_BACKWARDS ab.
+  //
+  // Die alten Tests trafen das nicht, weil sie zwischen den Aktionen großzügig
+  // die Uhr vorstellten. Hier passiert bewusst fast nichts dazwischen.
+  const { server, client } = setup();
+  const clock = { now: T0 };
+  const { transport, state } = makeTransport(server, clock);
+  const engine = new SyncEngine(client, transport, { rnd: mulberry32(11) });
+
+  client.plant(0);
+  clock.now = T0 + 2_000; // Server ist jetzt real 2 s weiter als Tick 0.
+
+  state.dropResponses = true;
+  await engine.attempt(clock.now);
+  assert.equal(server.snapshot.seq, 1, 'Server hat den Batch angewandt');
+
+  // Kein advanceClock: Der Spieler tippt einfach weiter, im selben Tick.
+  assert.equal(client.plant(1).ok, true);
+
+  state.dropResponses = false;
+  clock.now += 5_000;
+  const res = await engine.attempt(clock.now);
+
+  assert.equal(res.kind, 'synced');
+  if (res.kind !== 'synced') return;
+  assert.equal(res.result.ok, true, 'Wiederaufsetzen darf nicht abgelehnt werden');
+  assert.equal(server.snapshot.seq, 2);
+  assert.equal(server.snapshot.state.fields[1]!.crop, 'wheat');
+  assert.equal(client.queue.length, 0);
+});
+
+test('Snapshot-Zeit bleibt an den verbrauchten Ticks ausgerichtet', async () => {
+  // Der Server darf `serverTs` nicht auf die Wanduhr setzen, sondern nur um die
+  // tatsächlich verbrauchten Ticks weiterstellen. Sonst verfiele dem Spieler
+  // die Zeit zwischen seinem letzten Command und dem Sync.
+  const { server, client } = setup();
+  const clock = { now: T0 };
+  const { transport } = makeTransport(server, clock);
+  const engine = new SyncEngine(client, transport, { rnd: mulberry32(12) });
+
+  client.advanceClock(100);
+  client.plant(0);
+
+  // Sync erst deutlich später — 900 s liegen ungenutzt dazwischen.
+  clock.now = T0 + 1000 * 1000;
+  await engine.attempt(clock.now);
+
+  assert.equal(server.snapshot.state.tick, 100);
+  assert.equal(server.snapshot.serverTs, T0 + 100 * 1000, 'serverTs folgt dem Tick, nicht der Uhr');
+
+  // Die ungenutzten 900 s stehen dem Spieler weiterhin zur Verfügung.
+  client.advanceClock(900);
+  assert.equal(client.plant(1).ok, true);
+  const res = await engine.attempt(clock.now);
+  assert.equal(res.kind, 'synced');
+  assert.equal(server.snapshot.state.tick, 1000);
+});
+
 test('verlorene Antwort ohne Weiterspielen bleibt ein sauberes No-op', async () => {
   const { server, client } = setup();
   const clock = { now: T0 };

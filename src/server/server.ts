@@ -11,7 +11,7 @@ import { SimError } from '../sim/commands.ts';
 import type { MailItem, State } from '../sim/state.ts';
 import { cloneState } from '../sim/state.ts';
 import { getRuleset } from '../sim/rules.ts';
-import { advanceTo, simulate } from '../sim/sim.ts';
+import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
 
@@ -249,10 +249,24 @@ export class Server {
       this.pendingDeliveries = stillPending;
     }
 
-    // Passive Produktion bis zur echten Serverzeit fortschreiben — noch unter
-    // den ALTEN Regeln. Die gesamte Offline-Spanne gehört zu der Version, unter
-    // der der Spieler sie erlebt hat; ein Patch wirkt erst ab hier (R2).
-    state = advanceTo(state, maxTick, rules);
+    // ── Der Zustand bleibt beim letzten Command stehen ───────────────────
+    //
+    // Früher wurde hier bis `maxTick` fortgeschrieben („Produktion bis jetzt").
+    // Das war ein Modellfehler: Passive Produktion ist eine ABGELEITETE Größe,
+    // die sich jederzeit aus (tick, verstrichene Zeit) neu ergibt. Sie eifrig
+    // festzuschreiben bringt den Server der Zeitachse des Clients voraus.
+    //
+    // Und genau daran zerbricht das Wiederaufsetzen: Nach einer verlorenen
+    // Antwort spielt der Client ahnungslos weiter und datiert seine nächsten
+    // Commands auf Ticks, die der Server längst hinter sich hat — er würde sie
+    // als Zeitreise ablehnen und einem ehrlichen Spieler die Sitzung kosten.
+    //
+    // `serverTs` wird deshalb exakt um die VERBRAUCHTEN Ticks weitergestellt,
+    // nicht auf die Wanduhr. Die noch nicht verbrauchte Realzeit bleibt dem
+    // Spieler erhalten und wird beim nächsten Sync gewährt — kein Verlust,
+    // kein Geschenk.
+    const consumedTicks = state.tick - snap.state.tick;
+    const alignedServerTs = snap.serverTs + consumedTicks * TICK_MS;
 
     // ── Ruleset-Migration (R2) ───────────────────────────────────────────
     // Erst jetzt, nachdem alles unter der alten Version nachgerechnet ist,
@@ -281,7 +295,7 @@ export class Server {
     this.snapshot = {
       state,
       seq: accepted[accepted.length - 1]!.seq,
-      serverTs: nowMs,
+      serverTs: alignedServerTs,
       rulesetVersion: newVersion,
     };
 

@@ -1,0 +1,391 @@
+<title>Feldtest-Hof</title>
+<style>
+  :root {
+    --ground: #f2f5f6; --surface: #ffffff; --surface-2: #e9eef0; --line: #d2dbde;
+    --ink: #0f1a1d; --muted: #5a6f75; --accent: #0f7f81;
+    --live: #2c6e49; --live-bg: #e0efe7;
+    --wait: #8a6510; --wait-bg: #f6ecd8;
+    --off: #a83246; --off-bg: #f7e3e6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1417; --surface: #131e22; --surface-2: #1a272c; --line: #27383e;
+      --ink: #e6eef0; --muted: #8ca4ab; --accent: #35b3b0;
+      --live: #79cfa2; --live-bg: #13291d;
+      --wait: #d8b063; --wait-bg: #2c2413;
+      --off: #e88a99; --off-bg: #33161d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1417; --surface: #131e22; --surface-2: #1a272c; --line: #27383e;
+    --ink: #e6eef0; --muted: #8ca4ab; --accent: #35b3b0;
+    --live: #79cfa2; --live-bg: #13291d;
+    --wait: #d8b063; --wait-bg: #2c2413;
+    --off: #e88a99; --off-bg: #33161d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 42rem; margin: 0 auto; padding: 1.25rem 1rem 3rem;
+          display: flex; flex-direction: column; gap: 1.15rem; }
+  [hidden] { display: none !important; }
+
+  header { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+  h1 { font-family: var(--mono); font-size: 1.15rem; font-weight: 600; margin: 0; }
+
+  .pill {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
+    padding: .25rem .55rem; border-radius: 999px; border: 1px solid transparent; margin-left: auto;
+    display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+  }
+  .pill i { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; flex: none; }
+  .pill.live { color: var(--live); background: var(--live-bg); border-color: var(--live); }
+  .pill.wait { color: var(--wait); background: var(--wait-bg); border-color: var(--wait); }
+  .pill.off  { color: var(--off);  background: var(--off-bg);  border-color: var(--off); }
+
+  h2 { font-family: var(--mono); font-size: .68rem; letter-spacing: .13em; text-transform: uppercase;
+       color: var(--muted); font-weight: 600; margin: 0 0 .5rem; }
+
+  .card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: .85rem .9rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .7rem; }
+  .stat { display: flex; flex-direction: column; }
+  .stat dt { font-family: var(--mono); font-size: .62rem; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--muted); }
+  .stat dd { margin: 0; font-family: var(--mono); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.2rem, 1fr)); gap: .4rem; }
+  .field {
+    border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2);
+    padding: .55rem .4rem; font-family: var(--mono); font-size: .7rem; text-align: center;
+    cursor: pointer; color: var(--ink); display: flex; flex-direction: column; gap: .15rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .field .label { font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .field.ripe { border-color: var(--live); background: var(--live-bg); color: var(--live); }
+  .field.growing { border-style: dashed; }
+  .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: .45rem; }
+  button {
+    font-family: var(--mono); font-size: .76rem; padding: .5rem .75rem;
+    border: 1px solid var(--accent); border-radius: 3px; background: transparent;
+    color: var(--accent); cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: var(--surface); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  input {
+    font-family: var(--mono); font-size: .85rem; padding: .55rem .65rem; width: 100%;
+    border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); color: var(--ink);
+  }
+  input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .log { font-family: var(--mono); font-size: .68rem; display: flex; flex-direction: column;
+         gap: .2rem; max-height: 14rem; overflow-y: auto; }
+  .log div { display: flex; gap: .5rem; }
+  .log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+  .log .bad { color: var(--off); }
+  .log .good { color: var(--live); }
+
+  .hint { color: var(--muted); font-size: .82rem; margin: .5rem 0 0; }
+  .setup { display: flex; flex-direction: column; gap: .6rem; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Feldtest-Hof</h1>
+    <span class="pill off" id="pill"><i></i><span id="pill-text">getrennt</span></span>
+  </header>
+
+  <div class="card setup" id="setup">
+    <h2>Zugang</h2>
+    <input id="token" type="password" placeholder="Server-Token" autocomplete="off" spellcheck="false">
+    <div class="row"><button class="primary" id="connect">Verbinden</button></div>
+    <p class="hint">Das Token bleibt nur auf diesem Gerät. Es geht nie an einen Dritten.</p>
+  </div>
+
+  <div id="game" hidden style="display:flex;flex-direction:column;gap:1.15rem">
+    <div class="card">
+      <h2>Hof</h2>
+      <dl class="stats">
+        <div class="stat"><dt>Weizen</dt><dd id="s-wheat">0</dd></div>
+        <div class="stat"><dt>Eier</dt><dd id="s-eggs">0</dd></div>
+        <div class="stat"><dt>Gold</dt><dd id="s-gold">0</dd></div>
+        <div class="stat"><dt>Lager</dt><dd id="s-silo">0</dd></div>
+        <div class="stat"><dt>Aufträge</dt><dd id="s-orders">0</dd></div>
+        <div class="stat"><dt>Postfach</dt><dd id="s-mail">0</dd></div>
+      </dl>
+    </div>
+
+    <div>
+      <h2>Felder — tippen zum Pflanzen und Ernten</h2>
+      <div class="fields" id="fields"></div>
+    </div>
+
+    <div>
+      <h2>Aktionen</h2>
+      <div class="row">
+        <button id="sell-wheat">Weizen verkaufen</button>
+        <button id="sell-eggs">Eier verkaufen</button>
+        <button id="list">Auftrag einstellen</button>
+        <button id="collect">Postfach leeren</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Synchronisation</h2>
+      <dl class="stats">
+        <div class="stat"><dt>Warteschlange</dt><dd id="s-queue">0</dd></div>
+        <div class="stat"><dt>Bestätigt bis</dt><dd id="s-seq">0</dd></div>
+        <div class="stat"><dt>Tick</dt><dd id="s-tick">0</dd></div>
+        <div class="stat"><dt>Aufsetzer</dt><dd id="s-resumes">0</dd></div>
+      </dl>
+      <div class="row" style="margin-top:.75rem">
+        <button id="sync">Jetzt syncen</button>
+        <button id="forget">Token vergessen</button>
+      </div>
+      <p class="hint">
+        Flugmodus an, weiterspielen, Flugmodus aus — nichts darf verloren gehen und
+        nichts doppelt ankommen.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Protokoll</h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Sim-Kern, Client und SyncEngine — erzeugt aus src/, siehe scripts/build-conformance.ts */
+<!--BUNDLE-->
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = globalThis.NeuesSpiel;
+
+  /**
+   * Sicherheitsabstand zur Serverzeit.
+   *
+   * Der Server gewährt höchstens die Zeit, die er selbst gemessen hat (§4).
+   * Läuft die Geräteuhr auch nur eine Sekunde vor, würde er die eigenen
+   * Commands des Spielers als „Uhr vorgestellt" ablehnen. Ein paar Sekunden
+   * Rückstand kosten nichts und verhindern genau das.
+   */
+  var CLOCK_SAFETY_TICKS = 3;
+
+  var token = localStorage.getItem('ns-token') || '';
+  var client = null, engine = null, rules = null;
+  /** Serveruhr minus Geräteuhr. Die Geräteuhr allein ist wertlos (§4). */
+  var clockOffsetMs = 0;
+
+  function log(message, kind) {
+    var row = document.createElement('div');
+    var t = document.createElement('time');
+    t.textContent = new Date().toTimeString().slice(0, 8);
+    var s = document.createElement('span');
+    s.className = kind || '';
+    s.textContent = message;
+    row.appendChild(t); row.appendChild(s);
+    var box = $('log');
+    box.insertBefore(row, box.firstChild);
+    while (box.childElementCount > 40) box.removeChild(box.lastChild);
+  }
+
+  function setPill(view) {
+    var pill = $('pill'), text = $('pill-text');
+    if (view === 'live') { pill.className = 'pill live'; text.textContent = 'verbunden'; }
+    else if (view === 'catching-up') { pill.className = 'pill wait'; text.textContent = 'synct'; }
+    else { pill.className = 'pill off'; text.textContent = 'offline'; }
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign({ authorization: 'Bearer ' + token }, options.headers || {});
+    return fetch(path, options).then(function (res) {
+      if (res.status === 401) throw new Error('UNAUTHORIZED');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    });
+  }
+
+  var transport = function (request) {
+    return api('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  };
+
+  /**
+   * Spielzeit aus der SERVERZEIT ableiten, nicht aus der Geräteuhr.
+   *
+   * Der Snapshot trägt `serverTs` passend zu seinem `tick` — der Server
+   * schreibt seinen Zustand bewusst nicht bis „jetzt" fort. Damit ist die
+   * Rechnung hier exakt dieselbe wie die des Servers beim nächsten Sync.
+   */
+  function tickNow() {
+    var snap = client.snapshotMeta;
+    var serverNow = Date.now() + clockOffsetMs;
+    var elapsed = Math.floor((serverNow - snap.serverTs) / 1000);
+    return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
+  }
+
+  function adopt(snapshot, serverTime) {
+    if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
+    client.adopt(snapshot);
+    client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
+  }
+
+  function render() {
+    client.localTick = tickNow();
+    var s = client.preview();
+
+    $('s-wheat').textContent = s.wheat;
+    $('s-eggs').textContent = s.eggs;
+    $('s-gold').textContent = s.gold;
+    $('s-silo').textContent = NS.stored(s) + '/' + rules.siloCapacity;
+    $('s-orders').textContent = s.orders.length + '/' + rules.orderSlots;
+    $('s-mail').textContent = s.mail.length + '/' + rules.mailCapacity;
+    $('s-queue').textContent = client.queue.length;
+    $('s-seq').textContent = client.baseSeq;
+    $('s-tick').textContent = s.tick;
+    $('s-resumes').textContent = engine.resumes;
+
+    var box = $('fields');
+    box.textContent = '';
+    s.fields.forEach(function (f, i) {
+      var btn = document.createElement('button');
+      var ripe = f.crop !== null && s.tick - f.plantedAt >= rules.wheatGrowTicks;
+      btn.className = 'field' + (ripe ? ' ripe' : f.crop ? ' growing' : '');
+
+      var label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = 'Feld ' + (i + 1);
+      var value = document.createElement('span');
+      if (f.crop === null) value.textContent = 'leer';
+      else if (ripe) value.textContent = 'reif';
+      else value.textContent = Math.ceil((rules.wheatGrowTicks - (s.tick - f.plantedAt)) / 60) + ' min';
+
+      btn.appendChild(label); btn.appendChild(value);
+      btn.addEventListener('click', function () { tapField(i); });
+      box.appendChild(btn);
+    });
+  }
+
+  function act(name, result) {
+    if (result.ok) log(name, 'good');
+    else log(name + ' abgelehnt: ' + result.code, 'bad');
+    render();
+  }
+
+  function tapField(i) {
+    client.localTick = tickNow();
+    var f = client.preview().fields[i];
+    if (f.crop === null) act('Feld ' + (i + 1) + ' bepflanzt', client.plant(i));
+    else act('Feld ' + (i + 1) + ' geerntet', client.harvest(i));
+  }
+
+  function attempt(reason) {
+    if (!engine) return;
+    client.localTick = tickNow();
+    engine.attempt(Date.now()).then(function (outcome) {
+      setPill(engine.view);
+
+      if (outcome.kind === 'synced') {
+        var r = outcome.result;
+        if (r.ok) {
+          if (r.kind === 'applied') log('Sync ok — bestätigt bis seq ' + r.snapshot.seq, 'good');
+          else if (r.kind === 'duplicate') log('Antwort war verloren — Server hatte alles schon', 'good');
+        } else {
+          log('Server hat abgelehnt: ' + r.reason, 'bad');
+        }
+        adopt(r.snapshot, r.serverTime);
+      } else if (outcome.kind === 'dropped') {
+        log('Ab seq ' + outcome.rejectedFrom + ' verworfen: ' + outcome.reason, 'bad');
+        adopt(outcome.snapshot, outcome.serverTime);
+      } else if (outcome.kind === 'failed') {
+        log('Kein Netz — neuer Versuch in ' + Math.round(outcome.retryInMs / 1000) + ' s');
+      }
+      render();
+    }).catch(function (e) {
+      log('Sync-Fehler: ' + e.message, 'bad');
+      setPill('offline');
+    });
+  }
+
+  function start(snapshot, serverTime) {
+    rules = NS.getRuleset(snapshot.rulesetVersion);
+    client = new NS.Client(snapshot);
+    engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
+    adopt(snapshot, serverTime);
+
+    $('setup').hidden = true;
+    $('game').hidden = false;
+    setPill('live');
+    log('Verbunden — Regelversion v' + snapshot.rulesetVersion + ', seq ' + snapshot.seq, 'good');
+
+    render();
+    setInterval(render, 1000);
+    setInterval(function () { attempt('timer'); }, 4000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) attempt('sichtbar');
+    });
+    window.addEventListener('online', function () { log('Netz zurück'); attempt('online'); });
+    window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); });
+  }
+
+  function connect() {
+    token = $('token').value.trim();
+    if (!token) return;
+    $('connect').disabled = true;
+    api('/api/state').then(function (data) {
+      localStorage.setItem('ns-token', token);
+      start(data.snapshot, data.serverTime);
+    }).catch(function (e) {
+      $('connect').disabled = false;
+      alert(e.message === 'UNAUTHORIZED' ? 'Token stimmt nicht.' : 'Server nicht erreichbar: ' + e.message);
+    });
+  }
+
+  $('connect').addEventListener('click', connect);
+  $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
+  $('sync').addEventListener('click', function () { attempt('manuell'); });
+  $('forget').addEventListener('click', function () {
+    localStorage.removeItem('ns-token');
+    location.reload();
+  });
+
+  $('sell-wheat').addEventListener('click', function () {
+    var s = client.preview();
+    if (s.wheat > 0) act('Weizen verkauft (' + s.wheat + ')', client.sellNpc('wheat', s.wheat));
+  });
+  $('sell-eggs').addEventListener('click', function () {
+    var s = client.preview();
+    if (s.eggs > 0) act('Eier verkauft (' + s.eggs + ')', client.sellNpc('eggs', s.eggs));
+  });
+  $('list').addEventListener('click', function () {
+    var s = client.preview();
+    var item = s.eggs > 0 ? 'eggs' : 'wheat';
+    var have = item === 'eggs' ? s.eggs : s.wheat;
+    if (have <= 0) { log('Nichts zum Einstellen da'); return; }
+    act('Auftrag: ' + have + ' ' + item, client.listOrder(item, have, rules.npcPrices[item]));
+  });
+  $('collect').addEventListener('click', function () {
+    act('Postfach geleert', client.collectMail());
+  });
+
+  if (token) { $('token').value = token; connect(); }
+})();
+</script>

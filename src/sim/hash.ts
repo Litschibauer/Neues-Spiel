@@ -8,19 +8,20 @@
  * Genau diese Trennung entscheidet, ob ehrliche Spieler bestraft werden —
  * ein Hash-Mismatch gehört ins Monitoring, nicht in eine Sanktion.
  *
- * Die eigentliche kanonische Form steht in `canonical.ts` und kommt ohne
- * Krypto aus; hier kommt nur noch SHA-256 obendrauf.
+ * Die kanonische Form steht in `canonical.ts`, SHA-256 in `sha256.ts` — beide
+ * ohne jede Plattform-API. Damit läuft auch der Kanarienvogel überall gleich:
+ * Node, Browser, Mobile.
  */
 
-import { createHash } from 'node:crypto';
 import type { State } from './state.ts';
 import type { Command } from './commands.ts';
 import { canonicalize, canonicalizeCommand } from './canonical.ts';
+import { sha256Hex } from './sha256.ts';
 
 export { canonicalize, canonicalizeCommand };
 
 export function hashState(state: State): string {
-  return createHash('sha256').update(canonicalize(state)).digest('hex').slice(0, 16);
+  return sha256Hex(canonicalize(state)).slice(0, 16);
 }
 
 /**
@@ -33,5 +34,5 @@ export function hashState(state: State): string {
  */
 export function hashCommands(cmds: readonly Command[]): string {
   const canonical = cmds.map(canonicalizeCommand).join(';');
-  return createHash('sha256').update(canonical).digest('hex').slice(0, 16);
+  return sha256Hex(canonical).slice(0, 16);
 }

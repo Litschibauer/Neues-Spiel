@@ -17,9 +17,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Nur die zustandsverändernden Dateien. `hash.ts` ist bewusst NICHT dabei:
- * Es benutzt `node:crypto`, verändert aber keinen Zustand — SHA-256 ist selbst
- * plattformübergreifend deterministisch.
+ * Der komplette Sim-Kern. Seit SHA-256 selbst implementiert ist, hängt keine
+ * dieser Dateien mehr an einer Plattform-API — auch `hash.ts` nicht.
  */
 const PURE_FILES = [
   'rules.ts',
@@ -29,6 +28,8 @@ const PURE_FILES = [
   'sim.ts',
   'migrate.ts',
   'canonical.ts',
+  'sha256.ts',
+  'hash.ts',
 ];
 
 const SIM_DIR = join(import.meta.dirname, '..', 'src', 'sim');
