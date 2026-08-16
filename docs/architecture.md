@@ -176,6 +176,21 @@ Faustregel: **Alles, was nur den eigenen Zustand betrifft und deterministisch is
 Alles, was geteilte Welt oder echten Zufall braucht → online.** In der UI werden Online-only-
 Features offline einfach ausgegraut mit „braucht Verbindung".
 
+> ### Verbindliche Produktregel
+>
+> **Alles, was offline gehen kann, geht offline. Was die geteilte Welt braucht, ist
+> online-only und wird ausgegraut.**
+>
+> Das ist keine Priorisierung, sondern eine Voreinstellung, die sich umdreht: Nicht
+> „welche Features machen wir offline-fähig", sondern **jedes Feature ist offline-fähig,
+> bis bewiesen ist, dass es das nicht sein kann.** Und bewiesen heißt: Es braucht
+> geteilten knappen Zustand oder echten Zufall — dann ist es Physik (§8), nicht Aufwand.
+>
+> Die Regel hat eine scharfe Kante, und die ist beabsichtigt: Ein soziales Feature
+> nachträglich in den Kernkreislauf zu ziehen, macht den Kern online-pflichtig und bricht
+> damit das Versprechen, mit dem das Spiel antritt. Solche Features gehören an den Rand,
+> nie in die Mitte.
+
 > **Nuance beim Handel:** Online-only ist nur der *Abschluss*. Aufträge platzieren, NPC-Handel
 > und Geschenke funktionieren sehr wohl offline — siehe §8.
 

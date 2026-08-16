@@ -28,10 +28,12 @@ Kein Code, aber die teuersten Fehler entstehen hier.
 
 1. **Was ist das Spiel genau?** Hay-Day-Klon oder eigener Dreh? Der Kernkreislauf entscheidet
    über das Command-Set, und das Command-Set ist das Regelwerk.
-2. **Was ist das Offline-Versprechen?** „Alles außer Handel" ist etwas anderes als „nur der
-   Kernkreislauf". Diese Zusage bestimmt, welche Features überhaupt gebaut werden dürfen —
-   nachträglich ein soziales Feature einzuziehen, das offline nicht geht, bricht das
-   Versprechen.
+2. ~~**Was ist das Offline-Versprechen?**~~ **Entschieden:** Alles, was offline gehen kann,
+   geht offline. Soziale Features sind online-only und werden ausgegraut — bei geteiltem
+   knappem Zustand ist das Physik, kein Aufwand (§8).
+
+   Die Voreinstellung dreht sich damit um: Jedes Feature ist offline-fähig, bis bewiesen
+   ist, dass es das nicht sein kann. Festgehalten in Architektur §6.
 3. **Wie viele Mechaniken?** Eine Liste von zwanzig ist ein Projekt. Eine von sechzig ist
    ein anderes. Ehrlich zählen, bevor geplant wird.
 
