@@ -222,3 +222,37 @@ test('die Invariantenprüfung hat Zähne', () => {
   };
   assert.throws(() => assertInvariants(future, V2), MigrationError);
 });
+
+test('Kettenmigration 1 → 3 läuft Schritt für Schritt und bleibt fair', () => {
+  const V3 = getRuleset(3);
+  const tick = 100_000;
+
+  // Ein Feld auf halbem Weg unter V1 (7200 Ticks Wachstum, 3600 übrig).
+  const state = {
+    ...initialState(2),
+    tick,
+    fields: [
+      { crop: 'wheat' as const, plantedAt: tick - 3600 },
+      { crop: null, plantedAt: 0 },
+    ],
+    coopProgress: 550,
+  };
+
+  const migrated = migrateState(state, 1, 3);
+  assertInvariants(migrated, V3);
+
+  // V3 wächst in 60 Ticks. Die alte Restzeit von 3600 ist weit mehr — der
+  // Spieler wird auf einen frischen Start gedeckelt, nicht darunter.
+  const remaining = migrated.fields[0]!.plantedAt + V3.wheatGrowTicks - migrated.tick;
+  assert.equal(remaining, V3.wheatGrowTicks);
+  assert.ok(migrated.coopProgress < V3.coopTicksPerEgg);
+
+  // Dasselbe Ergebnis wie zwei einzelne Sprünge — die Kette darf nicht abkürzen.
+  assert.deepEqual(migrated, migrateState(migrateState(state, 1, 2), 2, 3));
+});
+
+test('der Feldtest-Ruleset ist wirklich schnell genug zum Testen', () => {
+  const V3 = getRuleset(3);
+  assert.ok(V3.wheatGrowTicks <= 120, 'Weizen muss in unter zwei Minuten reif sein');
+  assert.ok(V3.coopTicksPerEgg <= 30, 'Eier müssen in Sekunden entstehen');
+});

@@ -27,6 +27,15 @@ const PORT = Number(process.env.PORT ?? 8787);
 const SAVE_PATH = process.env.NEUES_SPIEL_SAVE ?? join(ROOT, 'data', 'save.json');
 const FIELD_COUNT = 6;
 
+/**
+ * Zielversion des Regelwerks, per Umgebungsvariable umschaltbar.
+ *
+ * `NEUES_SPIEL_RULESET=3` schaltet auf Feldtest-Tempo (Weizen 60 s, Ei 20 s).
+ * Bei einem bestehenden Spielstand ist das ein echter Balance-Patch: Der Server
+ * migriert ihn beim nächsten Sync und rechnet laufende Felder fair um (R2).
+ */
+const TARGET_RULESET = Number(process.env.NEUES_SPIEL_RULESET ?? CURRENT_RULESET_VERSION);
+
 const TOKEN_PATH = process.env.NEUES_SPIEL_TOKEN_FILE ?? join(ROOT, 'data', 'token');
 
 /**
@@ -74,13 +83,18 @@ const TOKEN = resolveToken();
 
 // ── Zustand laden oder neu anlegen ─────────────────────────────────────
 const persisted = load(SAVE_PATH);
-const game = new Server(initialState(FIELD_COUNT), Date.now(), CURRENT_RULESET_VERSION);
+const game = new Server(
+  initialState(FIELD_COUNT),
+  Date.now(),
+  persisted ? persisted.snapshot.rulesetVersion : TARGET_RULESET,
+  TARGET_RULESET,
+);
 
 if (persisted) {
   game.snapshot = persisted.snapshot;
   game.appliedLog = persisted.appliedLog;
   game.pendingDeliveries = persisted.pendingDeliveries;
-  game.targetRulesetVersion = persisted.targetRulesetVersion;
+  game.targetRulesetVersion = TARGET_RULESET;
   console.log(`Spielstand geladen: seq=${game.snapshot.seq}, tick=${game.snapshot.state.tick}`);
 } else {
   console.log('Kein Spielstand gefunden — neuer Hof.');
@@ -222,6 +236,7 @@ server.listen(PORT, () => {
   console.log(`Spielstand: ${SAVE_PATH}`);
   console.log(`Seite: ${page ? 'eingebunden' : 'FEHLT (npm run conformance)'}`);
   console.log(`Token: …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
+  console.log(`Regelwerk: v${game.snapshot.rulesetVersion} → Ziel v${TARGET_RULESET}`);
 });
 
 // Sauber beenden, damit der letzte Sync sicher auf der Platte liegt.

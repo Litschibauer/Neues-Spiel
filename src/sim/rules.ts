@@ -78,6 +78,31 @@ const V2: Ruleset = {
 };
 
 /**
+ * Feldtest-Tempo: dieselben Regeln, nur schnelle Uhren.
+ *
+ * Mit zwei Stunden Wachstumszeit lässt sich ein Verbindungstest von Hand kaum
+ * durchführen — ohne erntereifes Feld und ohne Ware im Lager wird jede Aktion
+ * lokal abgelehnt, und die Warteschlange bleibt leer. Dann testet man nichts.
+ *
+ * Es ist bewusst eine eigene Ruleset-VERSION und kein Schalter: Regeln sind
+ * versionierte Daten (R2). Damit lässt sich der Wechsel obendrein als echter
+ * Balance-Patch beobachten — inklusive fairer Umrechnung laufender Felder.
+ */
+const V3: Ruleset = {
+  version: 3,
+  siloCapacity: 120,
+  wheatGrowTicks: 60,
+  wheatYield: 10,
+  coopTicksPerEgg: 20,
+  npcPrices: { wheat: 4, eggs: 6 },
+  orderSlots: 6,
+  orderTtlTicks: 600,
+  priceBandMinPct: 25,
+  priceBandMaxPct: 150,
+  mailCapacity: 20,
+};
+
+/**
  * Der Server hält bewusst mehrere Versionen vor (R2). Ein Client, dessen Version
  * hier nicht mehr steht, muss vor dem Sync updaten — sauberer, angekündigter
  * Bruch statt stiller Divergenz.
@@ -85,12 +110,16 @@ const V2: Ruleset = {
 export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
   [2, V2],
+  [3, V3],
 ]);
 
 export const CURRENT_RULESET_VERSION = 1;
 
 /** Die Version, auf die der Server neue Snapshots hebt. */
 export const LATEST_RULESET_VERSION = 2;
+
+/** Schnelle Uhren für den Feldtest — siehe V3. */
+export const FIELD_TEST_RULESET_VERSION = 3;
 
 export function getRuleset(version: number): Ruleset {
   const r = RULESETS.get(version);

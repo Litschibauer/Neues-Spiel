@@ -70,6 +70,23 @@ NEUES_SPIEL_TOKEN='dein-token' PORT=8787 npm start
 Neues Token erzwingen: `rm data/token`, dann neu starten. Am Token hängt nichts —
 der Spielstand kennt es nicht.
 
+### Feldtest-Tempo
+
+Mit den Standardregeln wächst Weizen zwei Stunden und ein Ei braucht zehn Minuten.
+Von Hand lässt sich damit kaum etwas testen: Ohne reifes Feld und ohne Ware im
+Lager wird jede Aktion **lokal abgelehnt**, die Warteschlange bleibt leer — und
+ein Verbindungstest ohne Warteschlange prüft nichts.
+
+```bash
+NEUES_SPIEL_RULESET=3 npm start     # Weizen 60 s, Ei 20 s
+```
+
+Auf einem bestehenden Spielstand ist das ein **echter Balance-Patch**: Der Server
+migriert ihn beim nächsten Sync von v1 über v2 nach v3 und rechnet laufende
+Felder fair um (R2). Man kann also live zusehen, wie ein Patch durch eine
+Offline-Phase geht. Zurück geht es nicht — Downgrades sind bewusst nicht
+vorgesehen; für den alten Stand `rm data/save.json`.
+
 ## 4. Erreichbarkeit prüfen
 
 Zuerst lokal auf dem Server:

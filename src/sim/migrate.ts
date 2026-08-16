@@ -70,11 +70,18 @@ function clampCoopProgress(state: State, _from: Ruleset, to: Ruleset): State {
   return next;
 }
 
-const V1_TO_V2: MigrationStep = (state, from, to) =>
+/**
+ * Beide bisherigen Sprünge ändern nur Zeiten, nicht die Form des Zustands —
+ * derselbe Schritt trägt sie also beide.
+ */
+const RETIME: MigrationStep = (state, from, to) =>
   clampCoopProgress(rescaleGrowth(state, from, to), from, to);
 
 /** Ein Schritt pro Versionssprung. Migrationen werden der Reihe nach angewandt. */
-export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([['1->2', V1_TO_V2]]);
+export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
+  ['1->2', RETIME],
+  ['2->3', RETIME],
+]);
 
 /**
  * Prüft, dass ein Zustand nach den gegebenen Regeln überhaupt gültig ist.
