@@ -1,0 +1,198 @@
+# Risiko- & Schwachstellen-Analyse
+
+> Ehrlicher Stresstest des Konzepts aus [architecture.md](architecture.md). Ziel: die Stellen
+> finden, an denen die Idee bricht — *bevor* Code entsteht. Kein Schönreden.
+
+## Fazit vorweg
+
+Das Konzept ist **machbar, aber teuer** — und der Preis steckt nicht in der Idee, sondern in
+**Ingenieurs-Disziplin**. Konkret: Determinismus über Zeit und Plattformen sauber zu halten,
+und die Sim-Version live-service-tauglich zu machen. Genau das ist auch der Grund, warum es so
+kaum jemand gebaut hat: nicht weil es unmöglich ist, sondern weil der Disziplin-Aufwand hoch
+und unglamourös ist.
+
+Wichtigste Umdeutung: **Determinismus ist nicht nur ein Security-Feature, sondern ein
+Spieler-Vertrauens-Feature.** Die Latte liegt nicht bei „Cheater kriegen Rollback", sondern
+bei „*ehrliche* Spieler kriegen **niemals** Rollback". Das ist deutlich höher.
+
+---
+
+## Risiko-Register (nach Schärfe sortiert)
+
+### 🔴 R1 — Determinismus-Bugs bestrafen ehrliche Spieler
+
+**Was:** Wenn die lokale Client-Sim jemals vom Server abweicht — durch einen *Bug*, nicht durch
+Cheating — bekommt der ehrliche Spieler einen Rollback und verliert legitimen Fortschritt.
+
+**Warum gefährlich:** Ein einziger solcher Vorfall zerstört Vertrauen nachhaltiger als 100
+gebannte Cheater es aufbauen. Der Sync ist nur „nahtlos", solange Client und Server *bit-für-
+bit* dasselbe rechnen. Jede Lücke trifft die Falschen.
+
+**Schärfe:** Sehr hoch. Das ist das zentrale Risiko des ganzen Ansatzes.
+
+**Gegenmaßnahmen:**
+- Der Sim-Kern ist **ein einziges Artefakt**, das identisch auf Client und Server läuft — nie
+  zwei Implementierungen.
+- **Property-based / Replay-Tests:** zufällige Command-Logs generieren, auf beiden Seiten
+  laufen lassen, Zustände müssen exakt gleich sein. In CI als Gate.
+- **Kanarienvögel:** Client schickt beim Sync einen Hash seines lokalen Zustands mit. Weicht er
+  vom Server-Hash ab, ist das ein *Alarm* (Determinismus-Bug), kein Cheat — getrennt behandeln,
+  loggen, nachforschen. Nie stillschweigend den Spieler bestrafen.
+
+---
+
+### 🔴 R2 — Sim-Versionierung vs. Live-Service-Updates
+
+**Was:** Live-Service heißt ständige Balance-Patches (Wachstumszeiten, Preise, neue Inhalte).
+Aber jede Änderung an der Sim-Logik ändert das deterministische Ergebnis. Ein Spieler, der
+offline unter *alten* Regeln gehandelt hat, synct nach einem Patch — welche Regeln nimmt der
+Server zum Nachrechnen?
+
+**Warum gefährlich:** Nimmt der Server die *neuen* Regeln, weicht er garantiert vom Client ab
+(→ R1, Rollback für Ehrliche). Nimmt er die *alten*, muss er alte Sim-Versionen vorhalten und
+wissen, welche der Client benutzt hat.
+
+**Schärfe:** Sehr hoch. Das ist der Punkt, an dem „deterministisch" und „live-service" sich
+gegenseitig ins Knie schießen.
+
+**Gegenmaßnahmen:**
+- **Regeln/Balance als versionierte Daten**, nicht als Code. Jeder Command-Log deklariert seine
+  `rulesetVersion`. Der Server validiert den Log unter *genau dieser* Version.
+- Der Server hält die **letzten N Ruleset-Versionen** vor (alte Versionen deprecaten).
+- **Erzwungenes Update vor Sync**, wenn die Client-Version zu alt ist. Offline-Arbeit unter
+  einer nicht mehr unterstützten Version → sauberer, angekündigter Verlust statt stiller
+  Divergenz.
+- Balance-Patches idealerweise **nur zukunftswirksam** (neue Pflanzung nach Patch nutzt neue
+  Zeiten; bereits laufende Pflanzung behält alte). Vermeidet die meisten Konflikte.
+
+---
+
+### 🟠 R3 — Multi-Device-Fork
+
+**Was:** Multiplattform + gleicher Account. Spieler spielt offline auf dem Handy *und* offline
+auf dem Tablet, beide vom selben letzten Snapshot aus. Beim Sync existieren **zwei divergente
+Command-Logs** — ein echter Fork.
+
+**Warum gefährlich:** Der Server kann nur einen akzeptieren. Der andere wird verworfen → das
+zweite Gerät verliert seine gesamte Offline-Arbeit. Übler UX-Bruch, und er passiert *ehrlichen*
+Spielern.
+
+**Schärfe:** Hoch. Bei „mobile-first, aber multiplattform" ein realistisches Alltagsszenario.
+
+**Gegenmaßnahmen:**
+- **Aktiv-Gerät-Token:** Nur ein Gerät hält die „Offline-Schreibrechte". Andere Geräte sind
+  offline read-only, bis sie das Token übernehmen (mit Warnung).
+- Alternativ: **Sync-Zwang beim App-Start**, sodass ein Gerät nie lange von einem veralteten
+  Snapshot aus offline weiterläuft.
+- Klare UI-Kommunikation *bevor* der Verlust passiert, nie danach.
+
+---
+
+### 🟠 R4 — Server-Kosten der Re-Simulation (DoS & Skalierung)
+
+**Was:** Der Server rechnet für *jeden* Spieler bei *jedem* Sync den kompletten Offline-Log
+nach. Ein Angreifer kann bewusst riesige Logs hochladen, um teure Server-Rechnung zu erzwingen.
+Und selbst ehrlich: bei Millionen Spielern ist Re-Sim ein echter CPU-Kostenblock.
+
+**Warum gefährlich:** Versteckte Betriebskosten und ein DoS-Vektor, den das simple „einfach
+nachrechnen" verschleiert.
+
+**Schärfe:** Mittel–hoch (Skalierungs-/Kostenrisiko, kein Korrektheitsrisiko).
+
+**Gegenmaßnahmen:**
+- **Harte Caps:** max. Log-Länge, max. Sync-Frequenz, Rate-Limiting pro Account.
+- **Zeitbudget deckelt implizit:** da `command.tick ≤ T0 + Δreal` gilt, ist die Menge sinnvoller
+  Aktionen an die real vergangene Zeit gekoppelt — begrenzt die Log-Größe natürlich.
+- Sim billig halten (Integer, keine schweren Strukturen), häufig snapshotten, Validierung
+  batchen. Kostenbudget pro Sync-Request.
+
+---
+
+### 🟠 R5 — „Nicht cheatbar" ist zu absolut formuliert
+
+**Was:** Der Ansatz macht *Zustand und Ökonomie* fälschungssicher. Er stoppt aber **nicht**:
+- **Bots/Automation:** vollautomatisches, aber *regelkonformes* Spielen. Alle Aktionen sind
+  legal — der Server kann Bot nicht von Mensch unterscheiden.
+- **Informations-Cheats:** wenn der Client RNG-Seeds kennt (Muster 2 in §5 der Architektur),
+  kann er die Zukunft sehen und selektiv handeln.
+- **Client-Speicher-Manipulation** für versteckte Infos, die der Client gar nicht halten sollte.
+
+**Warum gefährlich:** Falsche Sicherheit. „Nichts cheatbar" verspricht mehr, als die
+Architektur einlöst.
+
+**Schärfe:** Mittel (Erwartungsmanagement + konkrete Design-Konsequenz).
+
+**Gegenmaßnahmen / Präzisierung:**
+- Scope ehrlich benennen: **Zustand & Ökonomie sind fälschungssicher; Automation und Social
+  Engineering sind separate Kämpfe** (Verhaltenserkennung, Server-Telemetrie).
+- **Deferred Resolution (Muster 1) klar bevorzugen** vor Seed-Ableitung (Muster 2): Der Client
+  darf nichts wissen, was er nicht wissen soll. Kein ungeöffnetes Loot, keine verdeckten
+  Ergebnisse im Client-Speicher.
+
+---
+
+### 🟡 R6 — Ökonomie verstärkt jede Validierungs-Lücke
+
+**Was:** Offline (legal) produzierte Ressourcen fließen beim Sync in den *geteilten* Markt.
+Lässt ein Determinismus-Bug oder Edge-Case jemanden überproduzieren, inflationiert das die
+Ökonomie **für alle**.
+
+**Warum gefährlich:** Ein lokaler Fehler wird zum globalen Wirtschaftsschaden. Genau die
+Dinge, die handelbar sind, brauchen die schärfste Validierung.
+
+**Schärfe:** Mittel (steigt mit der wirtschaftlichen Tiefe des Spiels).
+
+**Gegenmaßnahmen:**
+- Alles Handelbare bekommt **strengste, doppelte Validierung** (Server-Re-Sim *und*
+  Plausibilitäts-/Ratenobergrenzen: „so viel Weizen kann in X Zeit gar nicht entstehen").
+- Ökonomie-Telemetrie mit Anomalie-Erkennung als zweites Netz unter der Sim-Validierung.
+
+---
+
+### 🟡 R7 — Anti-Cheat vs. Game-Feel bei Belohnungen
+
+**Was:** Deferred Resolution heißt: Spieler öffnet offline eine Kiste und sieht „wird beim
+nächsten Online-Sync aufgelöst". Das fühlt sich schlechter an als sofortige Belohnung.
+
+**Warum gefährlich:** Spannung zwischen Sicherheit und Dopamin/Spielgefühl — bei einem
+Live-Service-Game ist Feel umsatzrelevant.
+
+**Schärfe:** Niedrig–mittel (Design-Hebel, kein Sicherheitsrisiko).
+
+**Gegenmaßnahmen:**
+- **Die meisten Belohnungen deterministisch** gestalten → lösen offline *sofort* auf (kein
+  echter Zufall nötig, also kein Deferral).
+- Nur *seltene/wertvolle* Zufallsbelohnungen deferren. Das Deferral zur *Vorfreude* inszenieren
+  („beim nächsten Online-Besuch wartet eine Überraschung") statt als Wartestrafe.
+
+---
+
+### 🟢 R8 — Atomarer Sync bei Verbindungsabbruch
+
+**Was:** Verbindung bricht mitten im Sync ab — wird der Log teilweise angewandt?
+
+**Warum (nicht) gefährlich:** Grundsätzlich lösbar, aber muss von Anfang an richtig gebaut sein.
+
+**Schärfe:** Niedrig (Standard-Transaktionsproblem).
+
+**Gegenmaßnahmen:**
+- Sync als **atomare Transaktion**: der Server wendet exakt `seq = base+1 … N` ganz oder gar
+  nicht an. Lückenlose `seq`-Nummern machen das idempotent — ein wiederholter Sync mit
+  denselben seqs ist ein No-op.
+
+---
+
+## Was das fürs Konzept ändert
+
+Drei Präzisierungen, die in die Architektur zurückfließen sollten:
+
+1. **Sim-Versionierung ist ein First-Class-Thema** (R2), nicht ein Detail. Regeln als
+   versionierte Daten, Server hält mehrere Versionen, erzwungenes Update als Fallback.
+2. **Determinismus braucht eine Test- und Alarm-Infrastruktur** (R1): Replay-Tests in CI +
+   Zustands-Hash-Kanarienvögel beim Sync, die Bugs von Cheats trennen.
+3. **Der Sicherheits-Claim wird ehrlich scoped** (R5): „Zustand & Ökonomie fälschungssicher" —
+   Bots/Automation sind ein getrennter, zusätzlicher Kampf.
+
+Keiner dieser Punkte kippt die Idee. Aber R1 und R2 zusammen sind der Grund, warum das ein
+*ernsthaftes* Projekt ist und kein Wochenend-Prototyp — und warum der erste echte Meilenstein
+ein Determinismus-Beweis sein muss, kein Feature.

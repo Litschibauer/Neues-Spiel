@@ -10,6 +10,9 @@ ungewöhnlichen Kern-Feature:
 Wie das technisch funktioniert (deterministische Simulation, Command-Log, Sync-Flow,
 Zeit-Autorität) steht in **[docs/architecture.md](docs/architecture.md)**.
 
+Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfängt — steht in
+**[docs/risks.md](docs/risks.md)**.
+
 ## Status
 
 Frühe Konzeptphase. Aktuell nur das Architektur-Konzept — noch kein Code.

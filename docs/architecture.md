@@ -221,6 +221,10 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 - [ ] Prototyp: nur „Feld pflanzen → wachsen → ernten" end-to-end mit vollem Sync-Zyklus,
       um Determinismus und Zeit-Handling früh zu beweisen.
 
+> ⚠️ Vor dem Bauen: die Schwachstellen-Analyse in **[risks.md](risks.md)** lesen. Besonders
+> R1 (Determinismus-Bugs treffen ehrliche Spieler) und R2 (Sim-Versionierung vs. Live-Service)
+> sind der Grund, warum der erste Meilenstein ein *Determinismus-Beweis* sein muss, kein Feature.
+
 ---
 
 *Dieses Konzept kombiniert bekannte Muster (deterministische Lockstep-Simulation aus RTS-
