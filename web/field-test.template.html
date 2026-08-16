@@ -297,10 +297,10 @@
     else act('Feld ' + (i + 1) + ' geerntet', client.harvest(i));
   }
 
-  function attempt(reason) {
+  function attempt(reason, force) {
     if (!engine) return;
     client.localTick = tickNow();
-    engine.attempt(Date.now()).then(function (outcome) {
+    engine.attempt(Date.now(), force === true).then(function (outcome) {
       setPill(engine.view);
 
       if (outcome.kind === 'synced') {
@@ -342,7 +342,7 @@
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) attempt('sichtbar');
     });
-    window.addEventListener('online', function () { log('Netz zurück'); attempt('online'); });
+    window.addEventListener('online', function () { log('Netz zurück'); attempt('online', true); });
     window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); });
   }
 
@@ -361,7 +361,7 @@
 
   $('connect').addEventListener('click', connect);
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
-  $('sync').addEventListener('click', function () { attempt('manuell'); });
+  $('sync').addEventListener('click', function () { attempt('manuell', true); });
   $('forget').addEventListener('click', function () {
     localStorage.removeItem('ns-token');
     location.reload();

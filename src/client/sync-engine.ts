@@ -89,7 +89,7 @@ export class SyncEngine {
    * Blockiert NIEMALS das Gameplay: Der Aufrufer wartet nicht auf das Ergebnis,
    * bevor der Spieler weiterspielen darf.
    */
-  async attempt(nowMs: number): Promise<SyncOutcome> {
+  async attempt(nowMs: number, force = false): Promise<SyncOutcome> {
     if (this.inFlight) return { kind: 'in-flight' };
 
     if (this.client.queue.length === 0) {
@@ -98,7 +98,11 @@ export class SyncEngine {
       return { kind: 'nothing-to-do' };
     }
 
-    if (nowMs < this.nextAttemptAt) {
+    // `force` überspringt das Backoff — für Auslöser, die neue Information
+    // tragen: Der Spieler tippt auf „jetzt syncen", oder das Betriebssystem
+    // meldet, dass das Netz zurück ist. Das Backoff soll automatische
+    // Wiederholungen bremsen, nicht eine ausdrückliche Handlung ignorieren.
+    if (!force && nowMs < this.nextAttemptAt) {
       return { kind: 'backing-off', retryInMs: this.nextAttemptAt - nowMs };
     }
 

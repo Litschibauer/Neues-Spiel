@@ -338,3 +338,26 @@ test('wiederholtes Scheitern verlängert den Abstand, statt zu hämmern', async 
   // Und die Commands liegen die ganze Zeit unversehrt in der Queue.
   assert.equal(client.queue.length, 1);
 });
+
+test('eine ausdrückliche Handlung überspringt das Backoff', async () => {
+  // Nach längerer Funkstille wächst der Abstand auf bis zu eine Minute. Tippt
+  // der Spieler dann auf „jetzt syncen", darf ihn das Backoff nicht ignorieren:
+  // Er weiß etwas, das der Timer nicht weiß — nämlich dass er wieder Netz hat.
+  const { server, client } = setup();
+  const clock = { now: T0 };
+  const { transport, state } = makeTransport(server, clock);
+  const engine = new SyncEngine(client, transport, { rnd: mulberry32(21) });
+
+  state.online = false;
+  client.plant(0);
+  for (let i = 0; i < 4; i++) {
+    const res = await engine.attempt(clock.now);
+    if (res.kind === 'failed') clock.now += 10; // absichtlich NICHT abwarten
+  }
+  assert.equal((await engine.attempt(clock.now)).kind, 'backing-off');
+
+  state.online = true;
+  const forced = await engine.attempt(clock.now, true);
+  assert.equal(forced.kind, 'synced', 'erzwungener Versuch muss durchgehen');
+  assert.equal(client.queue.length, 0);
+});
