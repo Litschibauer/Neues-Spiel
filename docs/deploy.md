@@ -95,7 +95,21 @@ nichts weiß — dort ebenfalls freigeben.
 
 ## Als Dienst laufen lassen
 
-Damit er Neustarts überlebt — `/etc/systemd/system/neues-spiel.service`:
+Damit er Neustarts überlebt. Zuerst den Node-Pfad ermitteln, er landet gleich in
+der Unit:
+
+```bash
+which node          # meist /usr/bin/node
+pwd                 # das Repo-Verzeichnis, hier als /home/Neues-Spiel angenommen
+```
+
+Läuft noch eine Instanz von Hand, zuerst beenden — sonst ist der Port belegt:
+
+```bash
+pkill -f 'server/http'
+```
+
+Dann `/etc/systemd/system/neues-spiel.service` anlegen:
 
 ```ini
 [Unit]
@@ -104,29 +118,50 @@ After=network.target
 
 [Service]
 Type=simple
-User=deinuser
-WorkingDirectory=/home/deinuser/Neues-Spiel
+WorkingDirectory=/home/Neues-Spiel
 Environment=PORT=8787
-# Kein Token nötig — der Dienst nimmt das aus data/token.
+# Kein Token nötig — der Dienst nimmt es aus data/token.
 ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts
 Restart=always
 RestartSec=5
-
-# Etwas Absicherung — der Dienst braucht nur sein eigenes Verzeichnis.
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/deinuser/Neues-Spiel/data
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now neues-spiel
+systemctl daemon-reload
+systemctl enable --now neues-spiel
+systemctl status neues-spiel --no-pager
 journalctl -u neues-spiel -f
+```
+
+### Absicherung (optional, nachträglich)
+
+Läuft der Dienst, kann man ihn einschnüren. Unter `[Service]` ergänzen:
+
+```ini
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# MUSS gesetzt sein, wenn das Repo unter /home liegt — sonst kann der Dienst
+# seinen eigenen Spielstand nicht mehr schreiben.
+ReadWritePaths=/home/Neues-Spiel/data
+```
+
+Danach `systemctl daemon-reload && systemctl restart neues-spiel`. Startet er nicht
+mehr, ist fast immer `ReadWritePaths` schuld — der Pfad muss exakt auf das
+`data/`-Verzeichnis zeigen.
+
+### Als eigener Benutzer statt root
+
+Sauberer, aber mehr Schritte. Mit `User=spiel` in der Unit muss das Repo dem
+Benutzer gehören:
+
+```bash
+useradd -r -s /usr/sbin/nologin spiel
+chown -R spiel:spiel /home/Neues-Spiel
 ```
 
 ---
