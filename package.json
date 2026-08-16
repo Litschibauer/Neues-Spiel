@@ -1,0 +1,13 @@
+{
+  "name": "neues-spiel-sim",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Determinismus-Prototyp: beweist, dass Client und Server bit-für-bit dasselbe rechnen",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\""
+  }
+}

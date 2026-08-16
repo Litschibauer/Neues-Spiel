@@ -13,11 +13,24 @@ Zeit-Autorität) steht in **[docs/architecture.md](docs/architecture.md)**.
 Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfängt — steht in
 **[docs/risks.md](docs/risks.md)**.
 
+## Prototyp
+
+Der Sim-Kern existiert und die riskanteste Annahme ist geprüft: Client und Server rechnen
+bit-für-bit dasselbe.
+
+```bash
+npm test    # 21 Tests, keine Dependencies, kein Build (Node >= 22.6)
+```
+
+Was bewiesen ist, was nicht, und die zwei echten Determinismus-Bugs, die die Tests dabei
+gefunden haben: **[docs/prototype.md](docs/prototype.md)**.
+
 ## Status
 
-Frühe Konzeptphase. Aktuell nur das Architektur-Konzept — noch kein Code.
+Konzept steht, Kern-Mechanik ist am lauffähigen Prototyp validiert. Noch kein Spiel —
+kein Markt, kein Zufall, keine UI, keine Persistenz.
 
 ## Nächster Schritt
 
-Ein Minimal-Prototyp „Feld pflanzen → wachsen → ernten" end-to-end mit vollem Sync-Zyklus,
-um Determinismus und Zeit-Handling früh zu beweisen (siehe offene Punkte in der Architektur).
+Denselben Sim-Kern auf einer echten Mobile-Runtime laufen lassen und die Fuzz-Tests dort
+wiederholen — das ist der Plattform-Determinismus-Beweis, den der Node-Prototyp offenlässt.

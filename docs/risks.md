@@ -30,6 +30,14 @@ bit* dasselbe rechnen. Jede Lücke trifft die Falschen.
 
 **Schärfe:** Sehr hoch. Das ist das zentrale Risiko des ganzen Ansatzes.
 
+**Status: empirisch bestätigt.** Der Prototyp hat in ~400 Zeilen bewusst sorgfältig
+geschriebenem Code **zwei echte Divergenzen** produziert — einen Off-by-one in der
+gedeckelten Produktion und eine Idempotenz-Prüfung, die einen Multi-Device-Fork als
+„schon erledigt" durchwinkte. Beide hätten ehrliche Spieler Fortschritt gekostet, beide
+waren beim Lesen unsichtbar und wurden erst vom Fuzz gegen eine Tick-für-Tick-Grundwahrheit
+gefunden. Details in [prototype.md](prototype.md). R1 ist damit keine Sorge mehr, sondern
+eine Beobachtung.
+
 **Gegenmaßnahmen:**
 - Der Sim-Kern ist **ein einziges Artefakt**, das identisch auf Client und Server läuft — nie
   zwei Implementierungen.

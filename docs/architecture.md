@@ -438,8 +438,10 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 - [ ] Snapshot-Format + Signaturschema.
 - [ ] Offline-Deckel (§4) und Balancing-Regeln.
 - [ ] Konfliktdarstellung im UI (Sync-Animation statt hartem Rollback).
-- [ ] Prototyp: nur „Feld pflanzen → wachsen → ernten" end-to-end mit vollem Sync-Zyklus,
-      um Determinismus und Zeit-Handling früh zu beweisen.
+- [x] ~~Prototyp: „Feld pflanzen → wachsen → ernten" end-to-end mit vollem Sync-Zyklus~~ →
+      erledigt, siehe [prototype.md](prototype.md). Determinismus, Zeitautorität und
+      Lagerlimit sind am laufenden Code geprüft.
+- [ ] Denselben Sim-Kern auf einer Mobile-Runtime fuzzen (Plattform-Determinismus).
 
 > ⚠️ Vor dem Bauen: die Schwachstellen-Analyse in **[risks.md](risks.md)** lesen. Besonders
 > R1 (Determinismus-Bugs treffen ehrliche Spieler) und R2 (Sim-Versionierung vs. Live-Service)
