@@ -146,6 +146,10 @@ Dinge, die handelbar sind, brauchen die schärfste Validierung.
 - Alles Handelbare bekommt **strengste, doppelte Validierung** (Server-Re-Sim *und*
   Plausibilitäts-/Ratenobergrenzen: „so viel Weizen kann in X Zeit gar nicht entstehen").
 - Ökonomie-Telemetrie mit Anomalie-Erkennung als zweites Netz unter der Sim-Validierung.
+- **Alle Behälter deckeln.** Lagerlimits bremsen die Inflation nur, wenn *jeder* Ort begrenzt
+  ist, an dem Güter liegen können — Lager, Postfach, Handels-Escrow, ausstehende Belohnungen.
+  Ein ungedeckelter Behälter (z.B. Escrow als Dauerparkplatz) hebelt die Bremse komplett aus.
+  Siehe Architektur §7 (Invariante) und §8 (Auftrags-Slots, Preisbänder, Ablauffristen).
 
 ---
 

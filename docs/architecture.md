@@ -255,6 +255,11 @@ wie viel Offline-Produktion überhaupt in die Wirtschaft gelangen kann — egal 
 weg war. Das ist ein zweites Netz unter der Zeit-Autorität aus §4: selbst wenn die Zeitprüfung
 mal versagt, begrenzt das Lager den Schaden.
 
+> **Invariante, die dieses Netz trägt:** Die Bremse wirkt nur, wenn **jeder** Ort mit einem
+> Limit versehen ist, an dem Güter liegen können — Lager, Postfach, Handels-Escrow (§8),
+> ausstehende Belohnungen. Ein einziger ungedeckelter Behälter macht das Lagerlimit wertlos.
+> Bei jedem neuen Feature prüfen: *Entsteht hier ein neuer Ort, an dem Zeug liegen kann?*
+
 ---
 
 ## 8. Handel: was wirklich unmöglich ist — und was doch geht
@@ -291,6 +296,57 @@ sondern *Auftrag erteilen*. Und ein Auftrag ist ein ganz normales Command wie je
 - **UI-Regel:** Offline **niemals** „gekauft" anzeigen, immer „Auftrag platziert". Der
   Unterschied zwischen Zusage und Absicht muss sichtbar sein — sonst fühlt sich ein nicht
   gefüllter Auftrag wie ein Verlust an, obwohl nichts verloren ging.
+
+### ⚠️ Escrow darf kein unendliches Lager werden
+
+Das Escrow aus dem letzten Abschnitt löst zwar den Doppelverkauf — reißt aber prompt ein neues
+Loch auf, wenn man es nicht deckelt:
+
+> **Der Exploit:** Lager voll (100 Weizen). Ich stelle 100 Weizen zu einem absurden Preis ein,
+> den nie jemand zahlt. Die Ware wandert ins Escrow, das Lager ist leer, ich produziere weiter.
+> Wiederholen. Ergebnis: 1000 Weizen „gelagert" bei einem Limit von 100 — und ich storniere
+> später einfach alles.
+
+Das ist nicht nur ein Lager-Exploit. Es **hebelt die Inflationsbremse aus §7 komplett aus**:
+Wenn Escrow unbegrenzt ist, ist das Lagerlimit bedeutungslos.
+
+**Die zugrundeliegende Regel — und die gilt allgemein:**
+
+> **Jeder Ort, an dem ein Gut liegen kann, braucht ein Limit.** Lager, Escrow, Postfach,
+> „ausstehende Belohnungen" — jeder ungedeckelte Behälter ist ein Loch im Lagerlimit.
+
+Vier Maßnahmen, in der Reihenfolge ihrer Wirksamkeit:
+
+1. **Auftrags-Slots (der strukturelle Fix, nicht verhandelbar).**
+   Du hast N aktive Verkaufsaufträge, fertig. Escrow ist damit hart begrenzt auf
+   `N × maxStapelProSlot`. Genau das macht Hay Day mit den Hofladen-Plätzen. Nebeneffekt: Slots
+   sind eine schöne Progressions- und Monetarisierungsachse (mehr Plätze freischalten).
+
+2. **Preisbänder.** Der Exploit lebt davon, zu einem *unverkäuflichen* Preis einzustellen. Wenn
+   Preise auf ein sinnvolles Band um den Referenzwert begrenzt sind (z.B. 25–150 %), ist alles
+   Eingestellte plausibel verkäuflich — Escrow wird echt transient statt zum Parkplatz.
+
+3. **Ablauffrist → Postfach.** Aufträge verfallen nach z.B. 24h. Die Ware geht zurück — aber das
+   Lager ist ja voll, also landet sie im **Postfach (§7)**, das selbst Limit und Ablauffrist
+   hat. Die Kette terminiert damit sauber: Escrow → Postfach → weg. Nutzt Maschinerie, die es
+   ohnehin schon gibt.
+
+4. **Gebühren — dein Instinkt, aber richtig dosiert.** Wichtige Unterscheidung:
+   - Eine **einmalige Einstellgebühr** ist als Exploit-Schutz *schwach*: Ein reicher Spieler
+     zahlt sie aus der Portokasse und stasht weiter, ein armer wird beim ehrlichen Handel
+     bestraft. Falscher Hebel.
+   - Eine **Haltegebühr** (Gold pro Stunde im Escrow) trifft dagegen genau das richtige
+     Verhalten: Echte Verkäufe füllen schnell und zahlen fast nichts, Dauerparken wird teuer.
+   - Beides bleibt trotzdem wertvoll — aber als **Gold-Senke gegen Inflation (R6)**, nicht als
+     Exploit-Schutz. Gebühren regulieren die Ökonomie; **gedeckelt wird strukturell.**
+
+   ⚠️ Wenn eine Haltegebühr das Gold auf 0 treibt: Auftrag verfällt und geht ins Postfach — nie
+   in negatives Gold laufen lassen.
+
+**Und ganz wichtig:** All das muss **in der Sim** leben, nicht als Server-Check beim Sync. Slot-
+und Preisgrenzen als Sim-Regeln sind nach dem Prinzip aus §7 automatisch offline durchgesetzt —
+der Client lässt den Exploit gar nicht erst zu. Ein reiner Server-Check würde stattdessen beim
+Sync zuschlagen und ehrlichen Spielern Rollbacks bescheren (R1).
 
 ### Der NPC-Markt ist der eigentliche Held
 
@@ -377,6 +433,8 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 - [ ] Konkrete Sim-Sprache/Portabilität wählen (§10).
 - [ ] Verhalten am Lagerlimit festlegen (hard block / waste / soft-cap, §7).
 - [ ] Postfach: Kapazität, Ablauffrist, UI fürs Abholen (§7).
+- [ ] Auftrags-Slots: Anzahl, Freischaltung, Stapelgröße pro Slot (§8).
+- [ ] Preisbänder + Gebührenmodell (Einstell- vs. Haltegebühr) festlegen (§8).
 - [ ] Snapshot-Format + Signaturschema.
 - [ ] Offline-Deckel (§4) und Balancing-Regeln.
 - [ ] Konfliktdarstellung im UI (Sync-Animation statt hartem Rollback).
