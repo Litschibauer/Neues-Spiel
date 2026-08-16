@@ -18,16 +18,25 @@ gelangweilt: ein Sync kostet ~8 µs, der Spielstand ist ein paar Kilobyte.
 node --version    # muss v22.6 oder neuer sein
 ```
 
-Falls zu alt (Debian/Ubuntu):
+⚠️ **Debian 11 und viele VPS-Images liefern Node 12** — das ist zu alt und bringt oft
+gar kein `npm` mit. Ein untrügliches Zeichen: `Unknown encoding: base64url`.
+
+Neu installieren (als root; mit eigenem Benutzer jeweils `sudo` davor):
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
+apt-get update
+apt-get install -y curl ca-certificates
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get install -y nodejs
+
+node --version    # jetzt v22.x
+npm --version
 ```
 
 ## 2. Code holen und Seiten bauen
 
 ```bash
+cd /home
 git clone https://github.com/Litschibauer/Neues-Spiel.git
 cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
@@ -38,8 +47,10 @@ npm test              # 68 Tests, sollte grün sein
 
 ## 3. Token erzeugen
 
+Ohne Node, funktioniert auf jedem System:
+
 ```bash
-node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+head -c 24 /dev/urandom | base64 | tr '+/' '-_' | tr -d '='
 ```
 
 Das Ergebnis merken — ohne Token startet der Server nicht, und ohne Token kommt
@@ -51,7 +62,7 @@ kein Gerät rein.
 NEUES_SPIEL_TOKEN='dein-token' PORT=8787 npm start
 ```
 
-Prüfen:
+Prüfen — zuerst lokal auf dem Server:
 
 ```bash
 curl http://127.0.0.1:8787/health
@@ -59,6 +70,16 @@ curl http://127.0.0.1:8787/health
 ```
 
 Dann im Browser `http://<server-ip>:8787/` öffnen, Token eintragen, fertig.
+
+Lädt die Seite von außen nicht, blockiert eine Firewall den Port:
+
+```bash
+ss -ltn | grep 8787          # lauscht der Server überhaupt?
+ufw status                   # falls ufw läuft: ufw allow 8787/tcp
+```
+
+Viele Anbieter haben zusätzlich eine Firewall in ihrer Weboberfläche, die davon
+nichts weiß — dort ebenfalls freigeben.
 
 ---
 
