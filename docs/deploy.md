@@ -691,6 +691,56 @@ Log-Länge sonst frei (R4).
 
 ---
 
+## „Ich sehe immer noch die alte Version"
+
+Der häufigste Fall, und er hat fast nie mit dem Server zu tun: **Die alte Seite
+liegt im Browser, nicht im Repo.** Neu klonen hilft deshalb nicht.
+
+Die App ist eine PWA. Ihre Hülle kommt aus dem Cache des Service Workers, damit
+sie im Funkloch startet — dieselbe Eigenschaft, die sie hartnäckig macht.
+
+Erst nachsehen, was der Server überhaupt ausliefert:
+
+```bash
+curl -s localhost:8787/health     # "shell" ist der Fingerabdruck der Seite
+```
+
+Dann im Browser vergleichen (DevTools → Konsole):
+
+```js
+caches.keys()                     // "neues-spiel-<version>-<fingerabdruck>"
+```
+
+| Befund | Bedeutung |
+| --- | --- |
+| beide Fingerabdrücke gleich | Du siehst die aktuelle Seite. Was fehlt, fehlt wirklich. |
+| Browser hat einen älteren | Einmal neu laden — die Seite lädt sich danach selbst nach |
+| `"Seite fehlt"` statt Spiel | `npm run build` vergessen. `dist/` ist nicht eingecheckt, ein frischer Clone hat sie nicht. |
+| Server zeigt alten Fingerabdruck | `npm run build` lief nicht oder der Dienst wurde nicht neu gestartet |
+
+Ab Werk erneuert sich die Hülle von allein: Der Cachename trägt einen Hash über
+die ausgelieferte Seite, ändert sich also mit jedem Bau, und die Seite lädt sich
+einmal neu, sobald der neue Worker übernimmt (nur wenn nichts in der
+Warteschlange steht — mitten in eine ungesicherte Aktion hinein wird nicht neu
+geladen).
+
+Bis das eingebaut war, konnte man in dieser Falle ewig festsitzen: Der Cachename
+hing an `NEUES_SPIEL_VERSION`, die auf `unbekannt` steht, wenn niemand sie setzt.
+`sw.js` war nach jedem Deploy byteweise identisch, der Browser sah keinen Grund
+für eine Erneuerung — und lieferte für immer die alte Seite. `npm run offlinetest`
+prüft das jetzt als Abschnitt 10.
+
+**Mit Gewalt zurücksetzen**, falls doch mal nötig — hilft nur dem einen Gerät:
+
+```
+DevTools → Application → Service Workers → Unregister
+DevTools → Application → Storage → Clear site data
+```
+
+Achtung: „Clear site data" löscht auch `localStorage` — und damit den
+**Hof-Schlüssel** auf diesem Gerät. Ohne notierten Schlüssel ist der Hof weg.
+Vorher `localStorage.getItem('ns-token')` in der Konsole abfragen und aufheben.
+
 ## Grenzen dieses Servers
 
 Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:

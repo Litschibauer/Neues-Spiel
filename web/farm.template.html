@@ -1522,6 +1522,41 @@
       // Ohne sicheren Kontext (HTTPS oder localhost) registriert er sich nicht.
       // Das Spiel läuft trotzdem — nur ein Neuladen im Funkloch scheitert.
     });
+
+    /**
+     * Neue Version übernommen → einmal neu laden.
+     *
+     * Die Hülle kommt aus dem Cache, damit die App ohne Netz startet. Der Preis
+     * dafür: Beim ersten Aufruf nach einem Deploy sieht man noch die alte
+     * Seite, während im Hintergrund die neue geholt wird. Ohne diese Zeilen
+     * bräuchte es ein zweites, manuelles Neuladen — und wer nicht weiß, dass
+     * ein Service Worker existiert, hält das Spiel schlicht für kaputt.
+     *
+     * Zwei Vorsichtsmaßnahmen:
+     *
+     *  - **Nur einmal.** Ein Neuladen, das ein weiteres auslöst, wäre eine
+     *    Schleife, aus der niemand mehr herauskommt.
+     *  - **Nicht mit offener Warteschlange.** Der Stand überlebt ein Neuladen
+     *    zwar (er liegt im Gerät, und der Feldtest prüft genau das), aber
+     *    mitten in eine ungesicherte Aktion hineinzuladen ist unnötiges Risiko
+     *    für nichts. Ist noch etwas offen, wartet der Wechsel — spätestens beim
+     *    nächsten Start greift er ohnehin.
+     */
+    var reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloading) return;
+      reloading = true;
+
+      var tryReload = function () {
+        if (client && client.queue.length > 0) {
+          setTimeout(tryReload, 1000);
+          return;
+        }
+        save();
+        location.reload();
+      };
+      tryReload();
+    });
   }
 })();
 </script>

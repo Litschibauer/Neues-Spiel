@@ -18,7 +18,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -956,6 +956,78 @@ try {
     }).streams;
   }
   check('Die Live-Leitung kommt von allein zurück', streamsBack >= 1, `${streamsBack} offen`);
+
+  // ── 10. Eine neue Version kommt beim Spieler an ───────────────────────
+  //
+  // Der gemeldete Fehler, der diesen Abschnitt erzwungen hat: „neu gecloned,
+  // trotzdem die alte Seite." Ursache war der Cachename des Service Workers —
+  // er trug `NEUES_SPIEL_VERSION`, und das steht auf `unbekannt`, wenn niemand
+  // es setzt. Damit war `sw.js` nach jedem Deploy byteweise identisch, der
+  // Browser sah keinen Grund für eine Erneuerung, und weil die Hülle aus dem
+  // Cache zuerst kommt, blieb die alte Seite **für immer** stehen.
+  //
+  // Serverseitig sah dabei alles richtig aus. Genau deshalb steht das hier:
+  // Ein Fehler, den man nur im Browser sieht, braucht eine Prüfung im Browser.
+  console.log('\n10. Eine neue Version erreicht den Browser');
+
+  const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
+  check(
+    'Der Cachename trägt einen Fingerabdruck der Seite',
+    /neues-spiel-.*-[0-9a-f]{12}$/.test(shellBefore),
+    shellBefore,
+  );
+
+  // Oberfläche ändern, neu bauen, neu starten — wie ein echtes Ausrollen.
+  const template = join(ROOT, 'web', 'farm.template.html');
+  const originalTemplate = readFileSync(template, 'utf8');
+  const MARKER = 'NEUE-VERSION-PRUEFUNG';
+  try {
+    writeFileSync(template, originalTemplate.replace('<h2>Vorräte</h2>', `<h2>Vorräte ${MARKER}</h2>`));
+    const built = spawn(
+      process.execPath,
+      ['--experimental-strip-types', join(ROOT, 'scripts', 'build-conformance.ts')],
+      { stdio: 'ignore' },
+    );
+    await new Promise<void>((resolve) => built.once('exit', () => resolve()));
+
+    server.kill('SIGTERM');
+    await new Promise<void>((resolve) => server.once('exit', () => resolve()));
+    server = startServer();
+    if (!(await serverUp())) throw new Error('Server kam mit der neuen Version nicht hoch');
+
+    // EIN Neuladen. Kein Cache-Löschen, kein Hard-Reload — genau das, was ein
+    // Spieler tut, der die App wieder aufmacht.
+    await cdp.send('Page.reload', {});
+    let sawNew = false;
+    for (let i = 0; i < 60 && !sawNew; i++) {
+      await sleep(500);
+      sawNew = await evaluate<boolean>(
+        cdp,
+        `document.body.innerHTML.indexOf(${JSON.stringify(MARKER)}) >= 0`,
+      ).catch(() => false);
+    }
+    check('Nach einem Neuladen ist die neue Oberfläche da — ohne Cache-Löschen', sawNew);
+
+    const shellAfter = await evaluate<string>(
+      cdp,
+      `caches.keys().then(function (k) { return k.join(','); })`,
+    );
+    check(
+      'Der alte Hüllen-Cache ist weggeräumt, nicht angesammelt',
+      shellAfter !== shellBefore && !shellAfter.includes(','),
+      `${shellBefore} → ${shellAfter}`,
+    );
+  } finally {
+    // Die Vorlage IMMER zurückschreiben — sonst hinterlässt ein abgebrochener
+    // Lauf eine veränderte Datei im Arbeitsverzeichnis.
+    writeFileSync(template, originalTemplate);
+    const rebuilt = spawn(
+      process.execPath,
+      ['--experimental-strip-types', join(ROOT, 'scripts', 'build-conformance.ts')],
+      { stdio: 'ignore' },
+    );
+    await new Promise<void>((resolve) => rebuilt.once('exit', () => resolve()));
+  }
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

@@ -18,7 +18,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
@@ -351,14 +351,36 @@ const adminPage = loadPage('admin.html');
 /**
  * Service Worker und Manifest — die App-Hülle, die ohne Netz startet.
  *
- * Der Cachename trägt den Stand, den der Server ausliefert. Ein Deploy
- * erneuert damit die Hülle bei allen; ohne das spielte jemand ewig auf einer
- * alten Version weiter, während der Server längst neue Regeln kennt.
+ * Der Cachename trägt einen **Fingerabdruck der ausgelieferten Seite**, und das
+ * ist keine Feinheit, sondern die Stelle, an der diese Datei einmal richtig
+ * falsch war.
+ *
+ * Vorher stand hier `CONFIG.version` — eine Umgebungsvariable, die auf
+ * `unbekannt` steht, wenn niemand sie setzt. Der Cachename war damit bei jedem
+ * Deploy derselbe, `sw.js` war byteweise identisch, der Browser sah keinen
+ * Grund für eine Erneuerung, und weil die Hülle aus dem Cache zuerst kommt,
+ * bekam der Spieler **für immer** die alte Seite. Auch nach einem frischen
+ * Clone: Die veraltete Kopie liegt im Browser, nicht im Repo. Der Fehler war
+ * genau deshalb so unangenehm, weil serverseitig alles richtig aussah.
+ *
+ * Ein Hash über die Seite kann man nicht vergessen zu setzen. Ändert sich die
+ * Oberfläche, ändert sich der Name; ändert sie sich nicht, bleibt der Cache
+ * stehen und ein Neustart kostet niemanden seine Offline-Hülle.
  */
+const SHELL_VERSION = (() => {
+  const fingerprint = createHash('sha256')
+    .update(farmPage ?? 'kein-build')
+    .digest('hex')
+    .slice(0, 12);
+  // Die lesbare Version bleibt vorn — im Cache-Namen des Browsers will man
+  // erkennen können, welcher Stand da liegt.
+  return `${CONFIG.version}-${fingerprint}`;
+})();
+
 const swSource = (() => {
   const path = join(ROOT, 'web', 'sw.template.js');
   if (!existsSync(path)) return null;
-  return readFileSync(path, 'utf8').replace('__VERSION__', CONFIG.version);
+  return readFileSync(path, 'utf8').replace('__VERSION__', SHELL_VERSION);
 })();
 
 const MANIFEST = JSON.stringify({
@@ -514,6 +536,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       env: CONFIG.env,
       version: CONFIG.version,
       rulesetVersion: TARGET_RULESET,
+      // Fingerabdruck der ausgelieferten Oberfläche. Steht hier, weil genau
+      // diese Frage von außen sonst nicht zu beantworten ist: „Sehe ich die
+      // neue Seite oder eine alte aus meinem Browser-Cache?" Stimmt der Wert
+      // hier nicht mit dem Cachenamen im Browser überein, liegt es am Browser.
+      shell: SHELL_VERSION,
       accounts: accounts.count,
       offers: market.size,
       // Wie viele Spielstände gerade auf das Schreiben warten. Steigt die Zahl
