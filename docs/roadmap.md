@@ -37,9 +37,10 @@ Kein Code, aber die teuersten Fehler entstehen hier.
 3. ~~**Wie viele Mechaniken?**~~ **Gezählt: neun.** Rund hundert Ideen verdichtet zu neun
    Mechaniken, alles andere sind Tabellenzeilen — siehe
    [konzept-map.md](konzept-map.md). Fünf davon stehen bereits.
-4. ~~**Monetarisierung?**~~ **Entschieden:** kein Pay2Win. Kosmetik (außerhalb der Sim) und
-   globale Boosts (ein Ruleset-Wechsel), keine persönlichen Zeitraffer. Warum das die
-   Architektur berührt, steht in Architektur §12.
+4. ~~**Monetarisierung?**~~ **Entschieden: erstmal keine.** Kein Shop, keine Premium-Währung,
+   kein vorbereiteter Kaufpfad. Wirkt trotzdem sofort — als Balancing-Leitplanke: *Warten
+   darf nie so wehtun, dass man es wegkaufen wollen würde.* Falls später doch, dann kein
+   Pay2Win (Architektur §12); beide erlaubten Wege brauchen heute keine Vorarbeit.
 5. ~~**Reicht „offline erlaubt"?**~~ **Nein — entschieden:** Es darf keinen Zustand geben, in
    dem offline nichts zu tun ist. Der Leerlauf-Test gehört in jeden Feldtest (Architektur §6).
 

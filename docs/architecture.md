@@ -670,6 +670,11 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
 ## 12. Monetarisierung ist eine Architekturfrage
 
+> **Status: wird nicht gebaut.** Wir entwickeln ohne Monetarisierung. Kein Shop, keine
+> Währung fürs Echtgeld, kein Kaufpfad — auch keiner, der „schon mal vorbereitet" ist.
+> Dieser Abschnitt steht trotzdem hier, weil er zwei Dinge festhält, die *jetzt* gelten:
+> eine Leitplanke fürs Balancing und die Erkenntnis, welche Wege später verbaut wären.
+
 Normalerweise steht Monetarisierung nicht im Architekturdokument. Hier schon, weil die
 Produktentscheidung direkt an den Determinismus stößt.
 
@@ -677,6 +682,33 @@ Produktentscheidung direkt an den Determinismus stößt.
 >
 > **Kein Pay2Win. Echtgeld kauft nie einen Vorteil für einen selbst — wenn Vorteil, dann
 > für alle.**
+
+### Was „ohne Monetarisierung" für die tägliche Arbeit heißt
+
+Die Regel wirkt auch, solange nichts verkauft wird — sie wirkt sogar hauptsächlich dann,
+weil sie das Balancing steuert:
+
+> **Warten darf nie so wehtun, dass man es wegkaufen wollen würde.**
+
+Das ist der eigentliche Grund, jetzt ohne Monetarisierung zu bauen. Im Genre entstehen
+Wartezeiten, Lagerengpässe und Energiesysteme nicht aus Spielgefühl, sondern aus der
+Absicht, sie freikaufbar zu machen. Wer ohne Kaufpfad balanciert, merkt sofort, wenn eine
+Zahl nur deshalb frustriert, weil sie frustrieren *soll* — mit Shop merkt man es nie, weil
+der Frust dort eine Funktion hat.
+
+Praktisch heißt das drei Verbote für die nächsten Phasen:
+
+- Keine Premium-Währung im Zustand, auch nicht ungenutzt. Eine zweite Währung ändert das
+  Zustandsformat und damit die kanonische Form — das wäre ein echter Umbau für ein Feature,
+  das es nicht gibt.
+- Keine „Boost"-Hooks im Regelwerk auf Vorrat. Ein globaler Boost ist ohnehin nur eine
+  Regelversion (unten), und die Maschinerie dafür steht bereits. Es gibt nichts
+  vorzubereiten.
+- Keine Timer, die ohne Kaufpfad unsinnig lang wären. Wenn eine Wartezeit sich nur mit
+  „später kann man sie abkürzen" rechtfertigen lässt, ist sie falsch gewählt.
+
+Der Rest dieses Abschnitts ist Vorausschau: was ginge, was es kostete, und was wir uns
+verbauen würden, wenn wir es später doch wollten.
 
 ### Was daraus folgt — drei Ebenen, drei Kosten
 

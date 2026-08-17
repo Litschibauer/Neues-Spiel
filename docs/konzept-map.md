@@ -208,15 +208,37 @@ Werbeunterbrechung, kein Ressourcen-Nagging. Genau der Unterschied zu den Alten.
 Und „einfach" meint die Oberfläche, nicht die Simulation: Neun Mechaniken tragen beliebig
 viel Inhalt — Tiefe kommt aus Tabellen, nicht aus Bedienkomplexität.
 
-### 3. Kein Pay2Win — Vorteile nur global → Architektur §12
+### 3. Erstmal ganz ohne Monetarisierung → Architektur §12
 
-**Echtgeld kauft nie einen Vorteil für einen selbst. Wenn Vorteil, dann für alle.**
+**Wir bauen ohne Shop, ohne Premium-Währung, ohne Kaufpfad — auch ohne vorbereiteten.**
 
-| Was verkauft wird | Technische Kosten |
+Das ist keine Verschiebung auf später, sondern eine Balancing-Entscheidung mit sofortiger
+Wirkung:
+
+> **Warten darf nie so wehtun, dass man es wegkaufen wollen würde.**
+
+Im Genre entstehen lange Timer, Lagerengpässe und Energiesysteme nicht aus Spielgefühl,
+sondern weil sie freikaufbar sein sollen. Ohne Kaufpfad fällt sofort auf, wenn eine Zahl
+nur frustriert, *weil* sie frustrieren soll. Mit Shop fällt es nie auf.
+
+Drei konkrete Verbote für die nächsten Phasen: keine zweite Währung im Zustand (ändert die
+kanonische Form für ein Feature, das es nicht gibt), keine Boost-Hooks auf Vorrat (die
+Ruleset-Maschinerie steht ohnehin), keine Timer, die sich nur mit „kann man später
+abkürzen" rechtfertigen lassen.
+
+**Falls es irgendwann doch kommt, dann so** — festgehalten, damit wir uns den Weg nicht
+versehentlich verbauen: *Echtgeld kauft nie einen Vorteil für einen selbst. Wenn Vorteil,
+dann für alle.*
+
+| Was man dann verkaufen könnte | Technische Kosten |
 | --- | --- |
 | **Kosmetik** (Deko, Skins, Saison-Optik) | **null** — liegt ohnehin außerhalb der Sim |
 | **Globaler Boost** („alle Farmen 24 h schneller") | ein Ruleset-Wechsel — die R2-Maschinerie steht |
 | **Persönlicher Zeitraffer** | fällt weg |
+
+Die gute Nachricht daran: **Beide erlaubten Wege brauchen heute keine Vorarbeit.** Kosmetik
+liegt außerhalb der Sim, globale Boosts sind Regelversionen — beides existiert schon oder
+kostet nichts. Es gibt also nichts zu „bauen für später".
 
 Drei Dinge, die dabei zusammenpassen und einer, der wehtut:
 
@@ -240,4 +262,5 @@ Drei Dinge, die dabei zusammenpassen und einer, der wehtut:
 2. **Der Haken.** Was macht *dieses* Farmspiel anders als die zwanzig anderen — außer der
    Offline-Fähigkeit? (Kandidat aus dem Obigen: die *Geschwindigkeit*. Ein Farmgame ohne
    einen einzigen Ladebalken ist spürbar, bevor jemand das Wort „offline" gehört hat.)
-3. ~~**Monetarisierung.**~~ **Entschieden:** kein Pay2Win, Vorteile nur global — siehe oben.
+3. ~~**Monetarisierung.**~~ **Entschieden:** erstmal gar keine. Falls später, dann kein
+   Pay2Win und Vorteile nur global — siehe oben.
