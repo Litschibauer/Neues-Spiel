@@ -34,8 +34,14 @@ Kein Code, aber die teuersten Fehler entstehen hier.
 
    Die Voreinstellung dreht sich damit um: Jedes Feature ist offline-fähig, bis bewiesen
    ist, dass es das nicht sein kann. Festgehalten in Architektur §6.
-3. **Wie viele Mechaniken?** Eine Liste von zwanzig ist ein Projekt. Eine von sechzig ist
-   ein anderes. Ehrlich zählen, bevor geplant wird.
+3. ~~**Wie viele Mechaniken?**~~ **Gezählt: neun.** Rund hundert Ideen verdichtet zu neun
+   Mechaniken, alles andere sind Tabellenzeilen — siehe
+   [konzept-map.md](konzept-map.md). Fünf davon stehen bereits.
+4. ~~**Monetarisierung?**~~ **Entschieden:** kein Pay2Win. Kosmetik (außerhalb der Sim) und
+   globale Boosts (ein Ruleset-Wechsel), keine persönlichen Zeitraffer. Warum das die
+   Architektur berührt, steht in Architektur §12.
+5. ~~**Reicht „offline erlaubt"?**~~ **Nein — entschieden:** Es darf keinen Zustand geben, in
+   dem offline nichts zu tun ist. Der Leerlauf-Test gehört in jeden Feldtest (Architektur §6).
 
 Ergebnis: eine Liste der Mechaniken und ein Satz, der das Offline-Versprechen festhält.
 

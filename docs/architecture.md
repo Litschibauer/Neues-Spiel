@@ -194,6 +194,39 @@ Features offline einfach ausgegraut mit „braucht Verbindung".
 > **Nuance beim Handel:** Online-only ist nur der *Abschluss*. Aufträge platzieren, NPC-Handel
 > und Geschenke funktionieren sehr wohl offline — siehe §8.
 
+### Offline darf sich nicht tot anfühlen
+
+Die Regel oben sagt, was offline *erlaubt* ist. Sie sagt nicht, dass offline auch etwas
+*los* ist — und das ist ein eigener Fehlerfall. Im Feldtest war er in einer Minute
+erreicht: alle Felder bepflanzt, Inventar leer, Silo unter dem Limit. Jeder Tap wurde
+lokal korrekt abgelehnt. Das Spiel war nicht kaputt, es war leer.
+
+> ### Verbindliche Produktregel
+>
+> **Es gibt keinen Zustand, in dem der Spieler offline nichts tun kann.**
+> Ein Leerlauf ohne Netz ist ein Bug, keine Stimmung.
+
+Drei Dinge sichern das, und alle drei sind Design, nicht Technik:
+
+1. **Vorrat statt Verbindung.** Alles, was der Server ohnehin würfelt (Aufträge, Kunden,
+   Wetterplan, Event-Aufgaben), wird als *Vorrat* mit dem Snapshot ausgeliefert — versiegelt
+   vorgewürfelt (§5, Muster „Vorwissen ist kein Vorteil"). Offline geht der Nachschub
+   dann nie aus; beim Sync füllt der Server auf. Faustregel: Der Vorrat muss den
+   Offline-Deckel aus §4 überdauern, sonst ist er nur eine längere Leere.
+2. **Kein Sackgassen-Zustand.** Der Kreislauf muss immer mindestens ein Ventil haben, das
+   ohne Eingaben und ohne Netz funktioniert. Bei uns ist das der NPC-Verkauf (§8): Wer
+   feststeckt, verkauft und hat wieder Münzen. Ohne so ein Ventil kann sich ein Spieler
+   offline selbst blockieren — keine Münzen, kein Saatgut, kein Ausweg — und das trifft nur
+   den, der gerade *kein* Netz hat.
+3. **Kurze Timer neben langen.** Wenn alles Stunden dauert, ist offline ein Wartezimmer.
+   Mindestens eine Produktionsstufe muss im Sekunden- bis Minutenbereich liegen, damit eine
+   Zugfahrt eine Schleife hat und nicht nur einen Blick.
+
+Der Prüfstein dafür ist billig und gehört in jeden Feldtest:
+
+> **Leerlauf-Test:** Netz aus, beliebiger Spielstand. Gibt es innerhalb von 60 Sekunden
+> etwas Sinnvolles zu tun? Wenn nein, fehlt Inhalt oder ein Ventil.
+
 ---
 
 ## 7. Kapazitätsgrenzen & Overflow (Lagerlimits)
@@ -635,7 +668,83 @@ Die Architektur ist bewusst tech-agnostisch, aber ein pragmatischer Startpunkt:
 
 ---
 
-## 12. Offene Fragen / nächste Schritte
+## 12. Monetarisierung ist eine Architekturfrage
+
+Normalerweise steht Monetarisierung nicht im Architekturdokument. Hier schon, weil die
+Produktentscheidung direkt an den Determinismus stößt.
+
+> ### Verbindliche Produktregel
+>
+> **Kein Pay2Win. Echtgeld kauft nie einen Vorteil für einen selbst — wenn Vorteil, dann
+> für alle.**
+
+### Was daraus folgt — drei Ebenen, drei Kosten
+
+| Was verkauft wird | Wo es liegt | Technische Kosten |
+| --- | --- | --- |
+| **Kosmetik** | außerhalb der Sim, undurchsichtiger Datenblock | **null** — kein Determinismus, keine Migration, keine Vektoren |
+| **Globaler Boost** | Regelwerk (Ruleset) | R2-Maschinerie, steht bereits |
+| **Persönlicher Zeitraffer** | — | verboten (siehe unten) |
+
+Der Glücksfall: Die einzige Fläche, auf der Geld fließt, die keine Sim-Wirkung hat, ist
+genau die, die wir ohnehin aus dem deterministischen Zustand heraushalten wollen
+(siehe Konzept-Map, „Was NICHT in die Sim gehört"). Der Kosmetik-Shop kostet technisch
+nichts.
+
+### Ein globaler Boost ist ein Ruleset-Wechsel
+
+„Weltweit doppelte Wachstumsgeschwindigkeit für 24 Stunden" ist bei uns kein Sonderfall,
+sondern exakt das, was wir mit V1→V2 schon durch ein Offline-Fenster migriert haben (R2):
+eine neue Regelversion, die jeder Client beim Sync übernimmt.
+
+Damit erbt der Boost aber auch die scharfe Kante der Regelversionierung:
+
+> **Ein Boost wirkt ab dem Sync, nie rückwirkend.**
+
+Anders geht es nicht. Die Offline-Phase wurde vom Client unter der alten Regelversion
+gerechnet; sie unter einer neuen nachzurechnen, ist per Definition Divergenz — der Server
+würde etwas anderes herausbekommen als das, was der Spieler gesehen hat. Genau der Fall,
+gegen den die ganze Architektur gebaut ist.
+
+Das erzeugt eine echte Unfairness: Wer während des 24-Stunden-Fensters im Funkloch sitzt,
+bekommt weniger davon ab. Zwei Auswege, und der zweite ist der bessere:
+
+- **Fenster lang genug machen** (≥ 24 h), dann fällt es kaum ins Gewicht. Billig, aber
+  ungenau.
+- **Boost als Guthaben statt als Zeitfenster.** Der Server schreibt beim Sync ein Kontingent
+  gut („20.000 Boost-Ticks"), das im Zustand liegt und sich beim Spielen verbraucht —
+  deterministisch, offline nutzbar, und niemand verliert etwas, weil er offline war. Passt
+  sauber zum Zeitbudget-Modell aus §4.
+
+  Ehrlich dazu: Das ist eine **neue Mechanik**, keine Datenzeile. Verbrauchendes Guthaben,
+  das Timer beeinflusst, muss auf Client und Server bit-für-bit gleich abgerechnet werden —
+  also Referenzimplementierung, Fuzz und Golden Vectors wie bei jeder anderen Mechanik.
+
+### Warum der Zeitraffer sowieso nicht zu uns passt
+
+Wartezeit-Abkürzer sind im Genre der Hauptumsatz. Sie fallen hier aus zwei unabhängigen
+Gründen weg, und der zweite gilt auch ohne die Produktregel:
+
+1. Sie sind per Definition ein Vorteil für einen selbst.
+2. **Ein Kauf ist online-only.** Zahlungsprüfung braucht den Server. Der Zeitraffer wäre
+   also ausgerechnet das Feature, das im Funkloch nicht funktioniert — entweder man lässt
+   ihn offline zu (unverifizierter Kauf, direkte Cheat-Fläche) oder man graut ihn aus (ein
+   bezahltes Feature, das genau dann fehlt, wenn Wartezeit am meisten stört).
+
+Die Produktregel löst hier einen Konflikt auf, den wir sonst hätten designen müssen. Sie
+ist trotzdem nicht gratis: Sie streicht den größten Umsatzhebel des Genres. Das ist eine
+bewusste Wette auf Reichweite statt auf Wale — kein technisches Detail.
+
+### Folgen fürs Balancing
+
+Ohne Zeitraffer fehlt der übliche Druckablass am Lagerlimit (§7). Die Senke selbst ist
+intakt — Münzen fließen über Ausbauten ab —, aber der Dringlichkeitsaufschlag fällt weg.
+Heißt: Lagerausbau muss über den Spielfluss begehrenswert sein, nicht über Frust.
+Balancing-Arbeit, kein Blocker.
+
+---
+
+## 13. Offene Fragen / nächste Schritte
 
 - [ ] Tick-Auflösung festlegen (1s? 1min?) — Trade-off Präzision vs. Log-Größe.
 - [ ] Command-Set definieren (die vollständige Liste erlaubter Aktionen ist die eigentliche

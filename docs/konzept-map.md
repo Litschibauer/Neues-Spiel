@@ -166,10 +166,78 @@ hundert Features bekommt man trotzdem, weil sie aus diesen neun als Daten heraus
 
 ---
 
+## Produktversprechen
+
+Drei Sätze, die ab jetzt Entscheidungen gewinnen. Alle drei sind in der Architektur
+verankert, damit sie nicht nur Stimmung bleiben.
+
+### 1. Offline lebendig, nicht tot 🚨 → Architektur §6
+
+Nicht „offline ist erlaubt", sondern **offline ist bespielbar**. Der Feldtest zeigte den
+Fehlerfall in einer Minute: alles bepflanzt, Inventar leer — jeder Tap korrekt abgelehnt,
+nichts zu tun. Nicht kaputt, nur leer.
+
+Dagegen wirken drei Dinge, die alle schon in dieser Map angelegt sind:
+
+| Mittel | Woher es kommt |
+| --- | --- |
+| **Vorrat statt Verbindung** — Aufträge und Kunden werden vorgewürfelt mitgeliefert und gehen offline nie aus | Falle 3, „Zufall vorwürfeln" |
+| **Kein Sackgassen-Zustand** — NPC-Verkauf ist das Ventil, das immer offen ist | M4 ✅ gebaut |
+| **Kurze Timer neben langen** — eine Produktionsstufe im Sekundenbereich, sonst ist offline ein Wartezimmer | M1, Parameterfrage |
+
+> **Leerlauf-Test:** Netz aus, beliebiger Spielstand. Gibt es in 60 Sekunden etwas Sinnvolles
+> zu tun? Wenn nein, fehlt Inhalt oder ein Ventil.
+
+### 2. Schnell, einfach, modern, clean
+
+Der interessante Teil: „schnell" ist hier keine Optimierungsaufgabe, sondern fällt aus der
+Architektur heraus. Weil der Client die Sim selbst rechnet, ist **jeder** Tap sofort
+wirksam — es gibt keine Aktion, die auf eine Antwort wartet. Die Konkurrenz kann das nicht,
+weil sie für jede Aktion zum Server muss.
+
+> **Kein Ladebalken zwischen Tap und Wirkung. Nie.** Ein Spinner in der Oberfläche heißt,
+> dass jemand am Sim-Kern vorbeigebaut hat.
+
+Was dafür noch fehlt: **Die App muss ohne Netz *starten*.** Heute wird die Feldtest-Seite
+über das Netz geladen — ein Neuladen im Funkloch scheitert. Eine installierte App bringt
+das mit (Roadmap Phase 5); das ist die letzte Lücke im Versprechen.
+
+„Clean" heißt auch, was *nicht* da ist: kein Popup-Spießrutenlauf beim Start, keine
+Werbeunterbrechung, kein Ressourcen-Nagging. Genau der Unterschied zu den Alten.
+
+Und „einfach" meint die Oberfläche, nicht die Simulation: Neun Mechaniken tragen beliebig
+viel Inhalt — Tiefe kommt aus Tabellen, nicht aus Bedienkomplexität.
+
+### 3. Kein Pay2Win — Vorteile nur global → Architektur §12
+
+**Echtgeld kauft nie einen Vorteil für einen selbst. Wenn Vorteil, dann für alle.**
+
+| Was verkauft wird | Technische Kosten |
+| --- | --- |
+| **Kosmetik** (Deko, Skins, Saison-Optik) | **null** — liegt ohnehin außerhalb der Sim |
+| **Globaler Boost** („alle Farmen 24 h schneller") | ein Ruleset-Wechsel — die R2-Maschinerie steht |
+| **Persönlicher Zeitraffer** | fällt weg |
+
+Drei Dinge, die dabei zusammenpassen und einer, der wehtut:
+
+- Der Kosmetik-Shop ist genau die Fläche, die wir sowieso aus dem deterministischen Zustand
+  heraushalten — die Einnahmequelle mit **null** Determinismus-Risiko.
+- Ein globaler Boost ist technisch dasselbe wie ein Balance-Patch, und den haben wir schon
+  live durch ein Offline-Fenster migriert. Aber: **wirkt ab dem Sync, nie rückwirkend** —
+  sonst ist es per Definition Divergenz. Sauberer als ein Zeitfenster ist deshalb ein
+  **Boost-Guthaben**, das beim Sync gutgeschrieben und offline verbraucht wird (neue
+  Mechanik, kein Freebie).
+- Der Zeitraffer passte ohnehin nicht: Ein Kauf braucht den Server, also wäre er
+  ausgerechnet im Funkloch nicht verfügbar — dort, wo Wartezeit am meisten stört.
+- **Der Preis:** Zeitraffer sind der größte Umsatzhebel des Genres. Ihn zu streichen ist
+  eine Wette auf Reichweite statt auf Wale. Bewusst getroffen, nicht übersehen.
+
+---
+
 ## Noch offen
 
 1. **Setting.** Klassischer Bauernhof, oder etwas, wo „ohne Netz" thematisch mitspielt?
 2. **Der Haken.** Was macht *dieses* Farmspiel anders als die zwanzig anderen — außer der
-   Offline-Fähigkeit?
-3. **Monetarisierung.** Beeinflusst das Design mehr, als einem lieb ist: Wartezeit-Abkürzer
-   sind der Standard und stehen in direkter Spannung zum Offline-Versprechen.
+   Offline-Fähigkeit? (Kandidat aus dem Obigen: die *Geschwindigkeit*. Ein Farmgame ohne
+   einen einzigen Ladebalken ist spürbar, bevor jemand das Wort „offline" gehört hat.)
+3. ~~**Monetarisierung.**~~ **Entschieden:** kein Pay2Win, Vorteile nur global — siehe oben.
