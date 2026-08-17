@@ -13,6 +13,44 @@ Zeit-Autorität) steht in **[docs/architecture.md](docs/architecture.md)**.
 Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfängt — steht in
 **[docs/risks.md](docs/risks.md)**.
 
+## In fünf Minuten selbst ausprobieren
+
+Keine Abhängigkeiten, kein `npm install`, kein Build-Werkzeug — nur Node ≥ 22.6.
+
+```bash
+git clone https://github.com/Litschibauer/Neues-Spiel.git
+cd Neues-Spiel
+git checkout claude/live-service-game-concept-m4ymol
+
+npm test        # 207 Tests, sollte grün sein
+npm run dev     # Spiel auf http://localhost:8788
+```
+
+Im Browser öffnen, **Neuen Hof anlegen**, Schlüssel notieren, losspielen.
+In der Entwicklungsumgebung laufen die Uhren zehnmal schneller: Weizen 12 s,
+Futter 30 s, Eier 90 s — ein kompletter Durchlauf dauert Minuten statt einen
+Nachmittag.
+
+| Adresse | Was |
+| --- | --- |
+| `/` | Das Spiel |
+| `/feldtest` | Dasselbe mit Messinstrumenten: `seq`, Tick, Warteschlange, Protokoll |
+| `/admin` | Werkbank: Zeit vorspulen, Ware schenken, zurücksetzen |
+| `/health` | Lebenszeichen |
+
+**Den Offline-Fall wirklich sehen:** Zwei Browser-Tabs auf `/` und `/feldtest`,
+im Entwicklerwerkzeug das Netz auf „offline" stellen, weiterspielen, Seite neu
+laden — der Hof ist da, samt unbestätigter Aktionen. Netz wieder an, alles
+läuft nach.
+
+**Handel zu zweit:** Zweiten Hof in einem privaten Fenster anlegen, dort unter
+*Lager* etwas anbieten, im ersten Hof unter *Markt* kaufen.
+
+Automatisiert prüft beides `npm run offlinetest` (echter Chromium, 31 Prüfungen).
+Ob die Maschine die Spielerzahl trägt: `npm run bench:scale -- 4000 30`.
+
+Auf einem Server statt lokal — TLS, Dienst, Umgebungen: **[docs/deploy.md](docs/deploy.md)**.
+
 ## Prototyp
 
 Der Sim-Kern existiert und die riskanteste Annahme ist geprüft: Client und Server rechnen
@@ -22,7 +60,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 150 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 207 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei

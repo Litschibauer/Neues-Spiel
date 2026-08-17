@@ -98,8 +98,7 @@ const TOKEN = resolveToken();
 //
 // Eine SQLite-Datei für Höfe UND Markt (siehe db.ts). Ein altes
 // `accounts/`-Verzeichnis wird beim ersten Start übernommen.
-const DB_PATH = process.env.NEUES_SPIEL_DB ?? join(dirname(SAVE_PATH), 'spiel.db');
-const accounts = new AccountStore(DB_PATH, join(dirname(SAVE_PATH), 'accounts'));
+const accounts = new AccountStore(CONFIG.dbPath, join(dirname(SAVE_PATH), 'accounts'));
 const limiter = new CreateLimiter(
   Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
   Number(process.env.NEUES_SPIEL_MAX_ACCOUNTS ?? 5000),
@@ -728,11 +727,11 @@ const server = createServer();
 server.listen(PORT, CONFIG.host, () => {
   console.log('');
   for (const line of describeConfig(CONFIG)) console.log(line);
-  console.log(`Regelwerk:  Ziel v${TARGET_RULESET}`);
-  console.log(`Höfe:       ${accounts.count}`);
-  console.log(`Spiel:      ${farmPage ? '/' : 'FEHLT (npm run build)'}`);
-  console.log(`Feldtest:   ${page ? '/feldtest' : 'FEHLT (npm run build)'}`);
-  console.log(`Admin:      …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
+  console.log(`Regelwerk:   Ziel v${TARGET_RULESET}`);
+  console.log(`Höfe:        ${accounts.count}`);
+  console.log(`Spiel:       ${farmPage ? '/' : 'FEHLT (npm run build)'}`);
+  console.log(`Feldtest:    ${page ? '/feldtest' : 'FEHLT (npm run build)'}`);
+  console.log(`Admin:       …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
   console.log('');
 });
 

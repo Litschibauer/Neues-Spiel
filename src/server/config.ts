@@ -44,6 +44,16 @@ export type Config = {
   env: Env;
   host: string;
   port: number;
+  /** Wo die Spielstände wirklich liegen (SQLite, siehe `db.ts`). */
+  dbPath: string;
+  /**
+   * Der alte Ein-Datei-Spielstand.
+   *
+   * Nur noch für den einmaligen Umzug da: Danach liegt alles in `dbPath`. Er
+   * steht bewusst nicht mehr im Startprotokoll — dort zu lesen, wo nichts mehr
+   * hingeschrieben wird, hat schon einmal jemanden an der falschen Stelle
+   * suchen lassen.
+   */
   savePath: string;
   tokenPath: string;
   /** Zielversion des Regelwerks — worauf der Server Snapshots hebt (R2). */
@@ -189,6 +199,7 @@ export function resolveConfig(vars: Vars, argv: readonly string[], root: string)
     env,
     host,
     port,
+    dbPath: vars.NEUES_SPIEL_DB ?? join(dataDir, 'spiel.db'),
     savePath: vars.NEUES_SPIEL_SAVE ?? join(dataDir, 'save.json'),
     tokenPath: vars.NEUES_SPIEL_TOKEN_FILE ?? join(dataDir, 'token'),
     rulesetVersion,
@@ -208,12 +219,12 @@ export function describeConfig(cfg: Config): string[] {
       : `http://${cfg.host}:${cfg.port}`;
 
   const lines = [
-    `Umgebung:   ${cfg.env.toUpperCase()}`,
-    `Stand:      ${cfg.version}`,
-    `Adresse:    ${transport}`,
-    `Spielstand: ${cfg.savePath}`,
-    `Regelwerk:  v${cfg.rulesetVersion}`,
-    `Werkbank:   ${cfg.adminEnabled ? '/admin' : 'aus'}`,
+    `Umgebung:    ${cfg.env.toUpperCase()}`,
+    `Stand:       ${cfg.version}`,
+    `Adresse:     ${transport}`,
+    `Spielstände: ${cfg.dbPath}`,
+    `Regelwerk:   v${cfg.rulesetVersion}`,
+    `Werkbank:    ${cfg.adminEnabled ? '/admin' : 'aus'}`,
   ];
   if (cfg.env === 'prod' && cfg.adminEnabled) {
     lines.push('');

@@ -42,7 +42,8 @@ test('die beiden Umgebungen teilen sich nichts', () => {
   const prod = resolveConfig({}, ['--env=prod'], ROOT);
 
   assert.notEqual(dev.port, prod.port, 'gleicher Port — sie könnten nicht gleichzeitig laufen');
-  assert.notEqual(dev.savePath, prod.savePath, 'gleicher Spielstand');
+  assert.notEqual(dev.dbPath, prod.dbPath, 'gleiche Spielstände');
+  assert.notEqual(dev.savePath, prod.savePath, 'gleicher Alt-Spielstand');
   assert.notEqual(dev.tokenPath, prod.tokenPath, 'gleiches Token');
   assert.notEqual(dev.rulesetVersion, prod.rulesetVersion, 'gleiches Regelwerk');
 
@@ -173,6 +174,10 @@ test('alles Wichtige lässt sich überschreiben — ohne die Riegel aufzuweichen
 
   assert.equal(cfg.port, 9000);
   assert.equal(cfg.savePath, '/var/lib/spiel/save.json');
+  assert.equal(
+    resolveConfig({ NEUES_SPIEL_DB: '/var/lib/spiel/hoefe.db' }, ['--env=prod'], ROOT).dbPath,
+    '/var/lib/spiel/hoefe.db',
+  );
   assert.equal(cfg.tokenPath, '/etc/spiel/token');
   assert.equal(cfg.version, 'a1b2c3d');
 });
@@ -185,4 +190,7 @@ test('das Startprotokoll verrät, was läuft — sonst rät man beim Deployen', 
   assert.match(text, /abc1234/);
   assert.match(text, /8788/);
   assert.match(text, /v1001/);
+  // Der Pfad, unter dem die Spielstände WIRKLICH liegen — nicht der alte.
+  assert.match(text, /spiel\.db/);
+  assert.doesNotMatch(text, /save\.json/);
 });
