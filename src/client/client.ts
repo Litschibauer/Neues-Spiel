@@ -117,6 +117,18 @@ export class Client {
     return this.apply({ type: 'CANCEL_ORDER', orderId } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /**
+   * Ein fremdes Angebot kaufen (M5) — **braucht Verbindung.**
+   *
+   * Der Client rechnet es lokal nach wie jede andere Aktion, aber ob das
+   * Angebot noch existiert, weiß nur der Server. Die Oberfläche graut den Knopf
+   * ohne Netz aus (§6) und synct direkt danach, damit das Zeitfenster, in dem
+   * jemand schneller sein kann, eine Rundreise bleibt und keine Sitzung.
+   */
+  buyOffer(offerId: number): ActionResult {
+    return this.apply({ type: 'BUY_OFFER', offerId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   collectMail(): ActionResult {
     return this.apply({ type: 'COLLECT_MAIL' } as Omit<Command, 'seq' | 'tick'>);
   }

@@ -429,6 +429,170 @@ try {
     'Der Admin sieht beide',
     ((await api('/api/admin/accounts')) as { count: number }).count === 2,
   );
+
+  // ── 6. Handel: zwei Höfe im selben Browser-Test ───────────────────────
+  //
+  // Bis hierhin war jeder Hof eine Insel. Jetzt stellt der zweite etwas ein,
+  // der erste sieht es im Regal und kauft es mit einem echten Klick — über
+  // echtes HTTP, nicht über eine Attrappe.
+  console.log('\n6. Markt — der zweite Hof verkauft, der erste kauft');
+
+  /** Einen Batch für einen bestimmten Hof abschicken, ohne Browser. */
+  const syncAs = async (key: string, baseSeq: number, commands: unknown[]) =>
+    (await (
+      await fetch(`http://127.0.0.1:${PORT}/api/sync`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ baseSeq, rulesetVersion: 1001, commands }),
+      })
+    ).json()) as { ok: boolean; kind?: string; reason?: string; snapshot: { seq: number } };
+
+  const stateAs = async (key: string) =>
+    (await (
+      await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+        headers: { authorization: `Bearer ${key}` },
+      })
+    ).json()) as { snapshot: { seq: number; state: { items: number[]; orders: unknown[] } } };
+
+  // Der Verkäufer bekommt Weizen ins Postfach, holt ihn ab und stellt ihn ein.
+  await api(`/api/admin/grant?account=${second.accountId}&item=wheat&amount=30`, 'POST');
+
+  // Der Zustandsabruf allein muss das Postfach füllen — ohne dass der Spieler
+  // irgendetwas getan hätte. Genau daran hakte es vorher.
+  const beforeAnyAction = await stateAs(second.key);
+  check(
+    'Ein Geschenk erreicht das Postfach ohne Zutun des Spielers',
+    beforeAnyAction.snapshot.seq === 0,
+  );
+  await syncAs(second.key, 0, [{ seq: 1, tick: 0, type: 'COLLECT_MAIL' }]);
+  const listed = await syncAs(second.key, 1, [
+    { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
+  ]);
+  check('Der zweite Hof stellt einen Auftrag ein', listed.ok, listed.reason ?? listed.kind);
+  check(
+    'Der Auftrag steht im Buch',
+    ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number })
+      .offers === 1,
+  );
+
+  // Der Käufer braucht Münzen — sie kommen wie jedes Geschenk ins Postfach.
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=500`, 'POST');
+  await evaluate(cdp, `document.getElementById('sync').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#market .offer').length === 1`, 'Angebot sichtbar');
+  await evaluate(cdp, `document.getElementById('collect').click()`);
+  await waitFor(
+    cdp,
+    `Number(document.querySelectorAll('#inventory .stat')[0].querySelector('dd').textContent) >= 360`,
+    'Münzen im Lager',
+  );
+
+  const shelfText = await evaluate<string>(
+    cdp,
+    `document.querySelector('#market .offer').textContent`,
+  );
+  check('Der Käufer sieht das fremde Angebot', /20 Weizen/.test(shelfText), shelfText);
+
+  // Ausgegraut ohne Netz — die Regel aus §6, direkt im DOM nachgesehen.
+  // Echtes Funkloch, nicht nur ein abgefeuertes Ereignis: `navigator.onLine`
+  // ändert sich sonst gar nicht, und genau die Fahne liest die Seite.
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: true,
+    latency: 0,
+    downloadThroughput: 0,
+    uploadThroughput: 0,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
+  const greyed = await evaluate<boolean>(
+    cdp,
+    `document.getElementById('market').className === 'no-net'
+       && document.querySelector('#market .offer').disabled
+       && document.querySelectorAll('#market .offer').length === 1`,
+  );
+  check('Ohne Netz ist der Markt ausgegraut, nicht verschwunden', greyed);
+
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+
+  // Auf den Sync warten, den das Netz-zurück auslöst — nicht nur darauf, dass
+  // der Knopf wieder klickbar aussieht. Sonst klickt man in eine Auslage, die
+  // im nächsten Wimpernschlag neu gezeichnet wird, und der Klick fällt ins
+  // Leere. Genau daran war dieser Test einmal flatterhaft.
+  await waitFor(
+    cdp,
+    `document.getElementById('pill').className.indexOf('live') >= 0
+       && Number(document.getElementById('s-queue').textContent) === 0
+       && document.querySelector('#market .offer')
+       && !document.querySelector('#market .offer').disabled`,
+    'Verbindung steht und Kaufknopf ist aktiv',
+  );
+
+  const wheatBefore = await evaluate<number>(
+    cdp,
+    `Number(document.querySelectorAll('#inventory .stat')[1].querySelector('dd').textContent)`,
+  );
+  await evaluate(cdp, `document.querySelector('#market .offer').click()`);
+  await waitFor(
+    cdp,
+    `Number(document.getElementById('s-queue').textContent) === 0`,
+    'Kauf bestätigt',
+  );
+
+  const wheatAfter = await evaluate<number>(
+    cdp,
+    `Number(document.querySelectorAll('#inventory .stat')[1].querySelector('dd').textContent)`,
+  );
+  if (wheatAfter === wheatBefore) {
+    console.error(
+      '  Seitenprotokoll:',
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify([...document.querySelectorAll('#log div')].map(d => d.textContent).slice(0, 8))`,
+      ),
+    );
+    console.error(
+      '  Knopf:',
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify({
+           n: document.querySelectorAll('#market .offer').length,
+           disabled: document.querySelector('#market .offer') ? document.querySelector('#market .offer').disabled : null,
+           gold: document.querySelectorAll('#inventory .stat')[0].querySelector('dd').textContent,
+         })`,
+      ),
+    );
+  }
+  check('Die gekaufte Ware ist da', wheatAfter === wheatBefore + 20, `${wheatBefore} → ${wheatAfter}`);
+  check(
+    'Und aus dem Buch verschwunden',
+    ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number })
+      .offers === 0,
+  );
+
+  // Der Verkäufer war offline. Sein Erlös muss ihn trotzdem erreichen — durchs
+  // Postfach, wie jedes Ereignis, von dem er nichts wissen konnte (§7).
+  const sellerState = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    })
+  ).json()) as { snapshot: { state: { orders: unknown[] } } };
+  check('Der verkaufte Auftrag ist beim Verkäufer weg', sellerState.snapshot.state.orders.length === 0);
+
+  const paid = await syncAs(second.key, 2, [{ seq: 3, tick: 0, type: 'COLLECT_MAIL' }]);
+  const sellerAfter = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    })
+  ).json()) as { snapshot: { state: { items: number[] } } };
+  check(
+    'Der Verkäufer hat sein Geld — 20 × 3 = 60',
+    paid.ok && sellerAfter.snapshot.state.items[0] === 60,
+    `${sellerAfter.snapshot.state.items[0]} Münzen`,
+  );
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

@@ -28,6 +28,7 @@ export function canonicalize(state: State): string {
   const orders = state.orders
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
     .join(',');
+  const offers = state.offers.map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}`).join(',');
   const mail = state.mail.map((m) => `${m.item}:${m.amount}:${m.arrivedAt}`).join(',');
   const stacks = (list: readonly { item: number; amount: number }[]) =>
     list.map((x) => `${x.item}x${x.amount}`).join('+');
@@ -41,6 +42,7 @@ export function canonicalize(state: State): string {
     `plots=[${plots}]`,
     `passives=[${passives}]`,
     `orders=[${orders}]`,
+    `offers=[${offers}]`,
     `mail=[${mail}]`,
     `nextOrderId=${state.nextOrderId}`,
     `requests=[${requests}]`,
@@ -61,6 +63,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|LIST_ORDER|${c.item}|${c.amount}|${c.price}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
+    case 'BUY_OFFER':
+      return `${c.seq}|${c.tick}|BUY_OFFER|${c.offerId}`;
     case 'COLLECT_MAIL':
       return `${c.seq}|${c.tick}|COLLECT_MAIL`;
     case 'FILL_REQUEST':

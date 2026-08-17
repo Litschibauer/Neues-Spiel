@@ -54,6 +54,30 @@ export type Order = {
 };
 
 /**
+ * Ein fremdes Angebot, wie es im Snapshot mitreist (M5, Orderbuch).
+ *
+ * Kein Verkäufer, kein Zeitstempel: Der Sim-Kern soll von der geteilten Welt so
+ * wenig wissen wie irgend möglich. Er braucht genau das, was zum Nachrechnen
+ * eines Kaufs nötig ist — Ware, Menge, Stückpreis.
+ *
+ * Dass hier nie ein eigenes Angebot steht, sorgt der Server: Er reicht jedem
+ * Hof nur die Angebote der anderen. Damit braucht der Kern keine Prüfung
+ * „kaufe ich gerade von mir selbst" und kennt weiterhin keine Spieler.
+ *
+ * Warum es überhaupt im Zustand liegt und nicht im Kaufbefehl: Ein Preis, den
+ * der Client mitschickt, ist ein Preis, den der Client wählt. Was gilt, muss
+ * schon dagestanden haben, bevor der Kauf kam.
+ */
+export type Offer = {
+  id: number;
+  /** Katalogindex. */
+  item: number;
+  amount: number;
+  /** **Pro Stück** — wie im Preisband beim Einstellen. */
+  price: number;
+};
+
+/**
  * Ein Eintrag im Postfach.
  *
  * Auch Münzen sind ein Katalog-Gegenstand — sie sind nur nicht lagerpflichtig.
@@ -104,6 +128,16 @@ export type State = {
   passives: readonly number[];
   /** Offene Verkaufsaufträge (Escrow). Durch `orderSlots` hart begrenzt (§8). */
   orders: readonly Order[];
+  /**
+   * Fremde Angebote, die der Server mitgegeben hat — die Auslage des Marktes.
+   *
+   * Anders als die Kundenaufträge ist das **kein Vorrat für unterwegs.** Ein
+   * Kauf greift in die geteilte Welt, und die gibt es ohne Netz nicht (§6). Was
+   * hier liegt, ist die Auslage vom letzten Sync: zum Anschauen offline, zum
+   * Kaufen nur mit Verbindung. Der Client graut die Knöpfe aus, der Server
+   * lehnt einen Kauf auf ein vergriffenes Angebot ab.
+   */
+  offers: readonly Offer[];
   /** Postfach: was von außen kam oder aus verfallenen Aufträgen zurückfiel (§7). */
   mail: readonly MailItem[];
   nextOrderId: number;
@@ -180,6 +214,7 @@ export function initialState(rules: Ruleset): State {
     plots,
     passives,
     orders: [],
+    offers: [],
     mail: [],
     nextOrderId: 1,
     requests: [],
@@ -208,6 +243,7 @@ export function cloneState(s: State): State {
     plots: s.plots,
     passives: s.passives,
     orders: s.orders,
+    offers: s.offers,
     mail: s.mail,
     nextOrderId: s.nextOrderId,
     requests: s.requests,

@@ -206,6 +206,21 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!rules.items[m.item]) problems.push(`Postfach: Gegenstand ${m.item} unbekannt`);
   }
 
+  // Die Auslage des Marktes ist ebenfalls ein Behälter (§7) — und obendrein das
+  // einzige Stück Zustand, das von außen kommt. Ein Angebot mit Menge 0 oder
+  // negativem Preis wäre hier der Beweis, dass etwas es falsch hineingelegt hat.
+  if (state.offers.length > rules.offerSlots) {
+    problems.push(`Auslage über Limit: ${state.offers.length} > ${rules.offerSlots}`);
+  }
+  const offerIds = new Set<number>();
+  for (const o of state.offers) {
+    if (offerIds.has(o.id)) problems.push(`Angebot ${o.id} doppelt in der Auslage`);
+    offerIds.add(o.id);
+    if (o.amount <= 0) problems.push(`Angebot ${o.id} ohne Ware`);
+    if (o.price <= 0) problems.push(`Angebot ${o.id} ohne Preis`);
+    if (!rules.items[o.item]) problems.push(`Angebot ${o.id}: Gegenstand ${o.item} unbekannt`);
+  }
+
   // Auch die Auftragsschlange ist ein Behälter und braucht ihr Limit (§7).
   if (state.requests.length > rules.requestQueueMax) {
     problems.push(`Auftragsvorrat über Limit: ${state.requests.length} > ${rules.requestQueueMax}`);

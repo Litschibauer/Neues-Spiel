@@ -92,9 +92,16 @@ export class SyncEngine {
   async attempt(nowMs: number, force = false): Promise<SyncOutcome> {
     if (this.inFlight) return { kind: 'in-flight' };
 
-    if (this.client.queue.length === 0) {
+    if (this.client.queue.length === 0 && !force) {
       // Nichts zu senden. Wir gelten trotzdem als verbunden, sobald es
       // beim letzten Versuch geklappt hat.
+      //
+      // Bei `force` wird trotzdem gesendet, und das ist kein Detail: Ein Sync
+      // holt genauso viel, wie er bringt — Postfach, Kundenaufträge, die
+      // Auslage des Marktes. Wer auf „jetzt syncen" tippt oder gerade wieder
+      // Netz bekommen hat, will genau das sehen. Ohne diese Ausnahme bliebe
+      // ein Spieler, der nichts tut, ewig auf einem alten Markt sitzen —
+      // und sein Verkaufserlös käme nie an.
       return { kind: 'nothing-to-do' };
     }
 

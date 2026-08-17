@@ -480,6 +480,11 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | `GET /api/state` | Hof-Schlüssel | Snapshot + Serverzeit |
 | `POST /api/sync` | Hof-Schlüssel | Command-Log einreichen |
 | `POST /api/deliver?item=…&amount=N` | Hof-Schlüssel | Ware in den eigenen Briefkasten |
+
+Der Markt braucht **keine eigene Route**: Fremde Angebote reisen im Snapshot mit
+(`state.offers`), gekauft wird mit einem normalen Command über `/api/sync`. Das
+Buch liegt in `data/<umgebung>/market.json` — Dev und Produktion haben also
+getrennte Märkte, ein Testverkauf taucht nie in einer echten Auslage auf.
 | `GET /api/admin/status` | Bearer | Vollständiger Serverzustand |
 | `POST /api/admin/time?seconds=N` | Bearer | Zeit gutschreiben |
 | `POST /api/admin/grant?item=…&amount=N` | Bearer | Ware ins Postfach |
@@ -520,3 +525,19 @@ Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 | `NEUES_SPIEL_TOKEN` | Datei | Admin-Token vorgeben (landet in der Shell-History) |
 | `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Anlege-Bremse je Herkunft |
 | `NEUES_SPIEL_MAX_ACCOUNTS` | 5000 | Obergrenze für Höfe |
+
+## Was der Markt braucht — und was nicht
+
+Nichts einzustellen. Das Buch entsteht von allein: Wer einen Verkaufsauftrag
+einstellt, landet beim nächsten Sync darin, und wer zurückzieht, fliegt heraus.
+Zum Ausprobieren zwei Höfe anlegen, mit dem einen etwas einstellen, mit dem
+anderen kaufen.
+
+Wie viele Angebote gerade offen sind, sagt `/health` (`offers`). Die Auslage ist
+auf `offerSlots` (12) begrenzt und nach Stückpreis sortiert — den ganzen Markt in
+jeden Snapshot zu legen wäre bei tausend Höfen ein Megabyte pro Anfrage.
+
+Ehrlich zur Grenze: Der Markt läuft **in einem Prozess**. Genau das serialisiert
+die Käufe — zwischen „ist das Angebot noch da" und „es ist jetzt meins" liegt
+keine Lücke, weil Node einfädig ist. Bei mehreren Serverprozessen müsste diese
+Reihenfolge woanders erzwungen werden.

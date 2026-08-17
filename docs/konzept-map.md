@@ -52,8 +52,43 @@ Servergemessen, damit fälschungssicher (§4).
 ### M4 · Verkauf zu Festpreis 🟢 ✅ gebaut
 Münzen, NPC-Preise, Produktionskosten, Verkaufspreise — eine Regel, viele Zahlen.
 
-### M5 · Verkaufsauftrag mit Escrow 🟢 einstellen / 🔴 füllen ✅ gebaut
-Steht bereits inklusive Preisband, Ablauffrist und Postfach (§8).
+### M5 · Verkaufsauftrag mit Escrow 🟢 einstellen / 🔴 kaufen ✅ gebaut
+Preisband, Ablauffrist, Postfach — und seit dem Orderbuch auch die andere Seite:
+**zwei Höfe handeln wirklich miteinander.**
+
+Die Grenze zwischen offline und online läuft hier mitten durch eine Mechanik
+hindurch, und sie liegt nicht dort, wo man sie zuerst vermutet:
+
+| | geht offline | warum |
+| --- | --- | --- |
+| **Einstellen** | ✅ | Einseitig. Der Spieler committet Ware, die er nachweislich hat; sie verlässt sofort sein Lager. |
+| **Zurückziehen** | ✅ | Ebenfalls einseitig — solange niemand gekauft hat. |
+| **Kaufen** | ❌ | Zwei Leute können dieselbe Kiste wollen. Wer sie bekommt, entscheidet sich nicht auf einem Gerät. |
+
+Drei Entscheidungen, die dabei nicht offensichtlich waren:
+
+1. **Die Auslage liegt im Zustand, nicht im Kaufbefehl.** Ein Preis, den der
+   Client mitschickt, ist ein Preis, den der Client wählt. Also legt der Server
+   eine Handvoll fremder Angebote in den Snapshot (`state.offers`), und der
+   Sim-Kern rechnet den Kauf ganz normal nach. Was er nicht wissen kann, ist, ob
+   das Angebot noch da ist — das entscheidet der Markt beim Sync.
+2. **Ein verlorenes Rennen ist kein Regelverstoß.** Der Server schneidet den
+   Batch an dieser Stelle ab (`OFFER_GONE`); alles davor bleibt bestehen.
+   Dieselbe Präfix-Mechanik wie überall — nur diesmal für Pech statt für Cheats.
+3. **Der Kauf gewinnt gegen ein späteres Zurückziehen.** Der unangenehmste Fall:
+   Der Verkäufer zieht im Funkloch zurück, während längst jemand gekauft hat. Nur
+   eine Seite kann gewinnen, und es muss die sein, auf der jemand bezahlt hat.
+   Deshalb wirkt ein Verkauf **sofort** auf den Snapshot des Verkäufers; sein
+   `CANCEL_ORDER` läuft danach ins Leere.
+
+Der Erlös kommt durchs Postfach, wie jedes Ereignis, von dem der Spieler nichts
+wissen konnte (§7). Und weil ein Verkauf den Zustand ändert, ohne dass der
+Spieler etwas getan hat, schweigt der Kanarienvogel in genau diesem Sync — sonst
+meldete er einen Determinismus-Bug, den es nicht gibt.
+
+Offen geblieben, bewusst: **keine Marktgebühr.** Ein Prozentsatz, der beim Verkauf
+verschwindet, wäre die naheliegendste Inflationsbremse — aber eine Balancing-Zahl,
+die man an echten Spielern ablesen muss und nicht am Schreibtisch erfindet.
 
 ### M6 · Auftrag erfüllen 🟢 ✅ gebaut
 „Liefere N×A und M×B, bekomme Münzen." LKW, Kunden, Boote, Sonderaufträge,
@@ -181,7 +216,7 @@ Nachbarschafts-Aufgaben zu koppeln. Nicht tun.
 
 | | |
 | --- | --- |
-| **Gebaut** | M1, M2, M3, M4, M5, M6, M7, M8 |
+| **Gebaut** | M1, M2, M3, M4, M5 (beide Seiten), M6, M7, M8 |
 | **Fehlt** | M9 Zufall (nur noch der Fall, wo Vorwissen ein Cheat wäre) — plus Warteschlangenplätze als Parameter von M1 |
 | **Gesamt** | **9 Mechaniken** |
 
@@ -196,6 +231,8 @@ Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier
                   Kundenauftrag → Gold + Erfahrung
                           ↓
                   Stufe erreicht → neuer Platz kaufbar
+
+                  Markt: einstellen ← → kaufen (mit Netz)
 ```
 
 Bewusst genau so viel. Der Kreislauf schließt sich, hat mit den Kundenaufträgen

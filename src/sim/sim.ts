@@ -272,6 +272,43 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    /**
+     * Ein fremdes Angebot kaufen (M5).
+     *
+     * Der Kern rechnet das wie jede andere Aktion nach — die Bedingungen liegen
+     * ja im Zustand. Was er NICHT prüfen kann, ist, ob das Angebot in der
+     * geteilten Welt noch existiert; zwei Käufer sehen dasselbe Angebot, und wer
+     * es bekommt, entscheidet der Server (§8). Der lehnt einen Kauf auf ein
+     * vergriffenes Angebot beim Sync ab, und der Batch wird dort abgeschnitten.
+     *
+     * Der Preis steht **pro Stück**, wie beim Einstellen. Multipliziert wird
+     * hier und nur hier.
+     */
+    case 'BUY_OFFER': {
+      const offer = s.offers.find((o) => o.id === cmd.offerId);
+      if (!offer) throw new SimError('NO_SUCH_OFFER');
+
+      const total = offer.amount * offer.price;
+      if (count(s, rules.currency) < total) throw new SimError('CANT_AFFORD');
+      // Gekaufte Ware geht direkt ins Lager, nicht ins Postfach: Der Käufer
+      // steht davor und hat es gerade selbst ausgelöst. Passt sie nicht, ist
+      // das eine Ablehnung und kein stiller Verlust (§7).
+      if (rules.items[offer.item]?.storable && spaceLeft(s, rules) < offer.amount) {
+        throw new SimError('SILO_FULL');
+      }
+
+      const next = cloneState(s);
+      next.items = addItems(s.items, [
+        [rules.currency, -total],
+        [offer.item, offer.amount],
+      ]);
+      // Aus der eigenen Auslage nehmen. Beim nächsten Sync schickt der Server
+      // ohnehin eine frische — das hier hält nur den Zustand ehrlich, solange
+      // der Client noch nicht gesynct hat.
+      next.offers = s.offers.filter((o) => o.id !== cmd.offerId);
+      return next;
+    }
+
     case 'COLLECT_MAIL': {
       if (s.mail.length === 0) throw new SimError('NOTHING_TO_COLLECT');
 

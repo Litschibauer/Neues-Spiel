@@ -14,6 +14,7 @@ import { Client } from '../../src/client/client.ts';
 import { getRuleset, levelOf, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
+import type { Offer } from '../../src/sim/state.ts';
 import { simulate } from '../../src/sim/sim.ts';
 import { advancePassivesReference } from '../../src/sim/produce.ts';
 import type { State } from '../../src/sim/state.ts';
@@ -119,7 +120,33 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
   // entstehen über denselben Server-Code wie im Betrieb — nur mit einem
   // reproduzierbaren Würfel.
   const requests = rnd ? topUpRequests({ ...base, items }, rules, 1, rnd).requests : [];
-  return { ...base, items, requests };
+
+  // Eine Auslage gehört dazu, sonst bliebe der Kaufpfad (M5) ungeprüft — und
+  // mit ihm die einzige Aktion, die von außen ins Lager greift. Wie im Betrieb
+  // legt sie der Server hinein; hier nur mit festen Zahlen statt fremden Höfen.
+  const offers = rnd ? fuzzOffers(rules, rnd) : [];
+  return { ...base, items, requests, offers };
+}
+
+/** Ein paar plausible Fremdangebote — Preise im Band, Mengen lagerverträglich. */
+function fuzzOffers(rules: Ruleset, rnd: () => number): Offer[] {
+  const sellable = rules.items
+    .map((_, i) => i)
+    .filter((i) => rules.items[i]!.storable && rules.items[i]!.npcPrice > 0);
+  const offers: Offer[] = [];
+  for (let i = 0; i < Math.min(rules.offerSlots, sellable.length * 2); i++) {
+    const item = sellable[Math.floor(rnd() * sellable.length)]!;
+    const ref = rules.items[item]!.npcPrice;
+    const min = Math.max(1, Math.floor((ref * rules.priceBandMinPct) / 100));
+    const max = Math.max(min, Math.floor((ref * rules.priceBandMaxPct) / 100));
+    offers.push({
+      id: i + 1,
+      item,
+      amount: 1 + Math.floor(rnd() * 12),
+      price: min + Math.floor(rnd() * (max - min + 1)),
+    });
+  }
+  return offers;
 }
 
 export type SessionOptions = {
@@ -190,7 +217,7 @@ export function playRandomSession(
     }
 
     if (rnd() < opts.chaosChance) {
-      switch (pick(5)) {
+      switch (pick(6)) {
         case 0:
           client.start(pick(rules.plots.length + 1), pick(rules.recipes.length + 1));
           break;
@@ -203,6 +230,10 @@ export function playRandomSession(
         case 4:
           // Auch ungültige Auftragsnummern müssen sauber abprallen.
           client.fillRequest(pick(40));
+          break;
+        case 2:
+          // Dasselbe für Angebote, die es nie gab oder nicht mehr gibt.
+          client.buyOffer(pick(40));
           break;
         default:
           client.sellNpc(pick(rules.items.length + 1), 1 + pick(200));
@@ -249,6 +280,19 @@ export function playRandomSession(
 
       if (s.orders.length > 0) {
         moves.push(() => client.cancelOrder(s.orders[pick(s.orders.length)]!.id));
+      }
+
+      // Kaufen (M5). Der Fuzz spielt hier den Online-Fall: Der Server
+      // bestätigt jedes Angebot, weil in dieser Sitzung niemand sonst
+      // zugreift. Geprüft wird die Sim-Seite — dass Gold korrekt abgeht, Ware
+      // ankommt und das Lagerlimit hält.
+      //
+      // Bewusst nur EIN Zug, nicht einer je Angebot. Mit zwölf Kaufoptionen
+      // gegen ein Dutzend anderer Züge kaufte der Fuzz sein Gold weg, statt
+      // Plätze auszubauen — und die hinteren Mechaniken blieben ungesehen.
+      if (s.offers.length > 0) {
+        const offer = s.offers[pick(s.offers.length)]!;
+        moves.push(() => client.buyOffer(offer.id));
       }
     }
     if (s.mail.length > 0) moves.push(() => client.collectMail());

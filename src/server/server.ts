@@ -8,9 +8,10 @@
 
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
-import type { MailItem, State } from '../sim/state.ts';
+import type { MailItem, Offer, State } from '../sim/state.ts';
 import { cloneState } from '../sim/state.ts';
 import { getRuleset } from '../sim/rules.ts';
+import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
@@ -115,6 +116,32 @@ export class Server {
   /** Würfel für die Auftragsauswahl — in Tests ersetzbar. */
   rollRequest: () => number = Math.random;
 
+  /**
+   * Die Auslage des Marktes für DIESEN Hof (M5). Setzt die HTTP-Schicht, die
+   * als einzige weiß, welcher Account hier spielt.
+   *
+   * Ohne Markt bleibt sie leer — dann kommt nie ein Angebot in den Zustand, und
+   * ein Kauf scheitert schon im Sim-Kern an `NO_SUCH_OFFER`.
+   */
+  offerSource: (limit: number) => Offer[] = () => [];
+  /**
+   * Ein Angebot beim Markt beanspruchen. `false` heißt: jemand war schneller.
+   *
+   * Standard `true`, weil ohne Markt auch keine Angebote im Zustand landen —
+   * die Frage stellt sich dann gar nicht.
+   */
+  claimOffer: (offerId: number) => boolean = () => true;
+  /**
+   * Hat seit dem letzten Sync jemand von diesem Hof gekauft?
+   *
+   * Ein Verkauf ändert den Zustand, ohne dass der Spieler etwas getan hat — der
+   * Kanarienvogel muss in diesem Sync also schweigen, sonst meldet er einen
+   * Determinismus-Bug, den es nicht gibt. Genau derselbe Grund wie bei den
+   * Zustellungen; nur lässt sich ein Verkauf nicht ans Ende schieben, weil der
+   * Spieler auf dem verkauften Auftrag noch offline herumgespielt haben kann.
+   */
+  private soldSinceLastSync = false;
+
   /** Darf dieses Gerät gerade schreiben? */
   isActiveDevice(deviceId: string | undefined): boolean {
     if (deviceId === undefined) return true; // nimmt nicht teil
@@ -124,6 +151,29 @@ export class Server {
   /** Externes Ereignis: Geschenk, Auftrag gefüllt, Event-Belohnung. */
   deliver(item: MailItem): void {
     this.pendingDeliveries.push(item);
+  }
+
+  /**
+   * Jemand hat einen Auftrag dieses Hofes gekauft (M5).
+   *
+   * Wirkt **sofort** auf den Snapshot und nicht erst beim nächsten Sync — und
+   * das ist der Punkt, an dem die ganze Mechanik hängt. Würde der Verkauf
+   * warten, könnte der Verkäufer denselben Auftrag offline zurückziehen, und
+   * beim Sync stünde man vor zwei Wahrheiten: Der Käufer hat die Ware, und der
+   * Verkäufer auch. Der Kauf war zuerst da, in echter Zeit, mit einem
+   * bezahlenden Gegenüber — also gewinnt er, und ein späteres `CANCEL_ORDER`
+   * läuft ins Leere (`NO_SUCH_ORDER`, Präfix-Commit).
+   *
+   * Der Erlös geht durchs Postfach wie jede andere Zustellung: Der Verkäufer
+   * war nicht dabei, konnte davon nichts wissen, und nichts darf ihm
+   * unbemerkt im Lager erscheinen (§7).
+   */
+  applySale(orderId: number, gold: number, nowMs: number, currency: number): void {
+    const state = cloneState(this.snapshot.state);
+    state.orders = state.orders.filter((o) => o.id !== orderId);
+    this.snapshot = { ...this.snapshot, state };
+    if (gold > 0) this.pendingDeliveries.push({ item: currency, amount: gold, arrivedAt: nowMs });
+    this.soldSinceLastSync = true;
   }
 
   /**
@@ -152,6 +202,7 @@ export class Server {
     this.divergenceAlerts = [];
     this.migrationFailures = [];
     this.nextRequestId = 1;
+    this.soldSinceLastSync = false;
   }
 
   /**
@@ -172,9 +223,95 @@ export class Server {
     this.nextRequestId = topped.nextId;
   }
 
+  /**
+   * Auslage einlegen, ohne dass ein Sync nötig wäre (M5).
+   *
+   * Gleicher Grund wie bei `stockRequests`: Wer die App öffnet, soll den Markt
+   * sehen, statt ihn erst durch eine Aktion herbeirufen zu müssen.
+   */
+  stockOffers(): void {
+    const rules = getRuleset(this.snapshot.rulesetVersion);
+    const shelf = this.offerSource(rules.offerSlots);
+    if (shelf.length === 0 && this.snapshot.state.offers.length === 0) return;
+
+    const state = cloneState(this.snapshot.state);
+    state.offers = shelf;
+    this.snapshot = { ...this.snapshot, state };
+  }
+
   constructor(initial: State, startTs: number, rulesetVersion: number, targetVersion?: number) {
     this.snapshot = { state: initial, seq: 0, serverTs: startTs, rulesetVersion };
     this.targetRulesetVersion = targetVersion ?? rulesetVersion;
+  }
+
+  /**
+   * Alles, was von außen kam, in den Zustand einarbeiten — ohne Sync.
+   *
+   * `receiveExternal` ist die öffentliche Tür dafür: Wer nur den Zustand
+   * abruft, soll sein Postfach und die Auslage aktuell sehen und nicht erst
+   * durch eine Aktion aufwecken müssen.
+   *
+   * Alles Weitere steht bei der privaten Fassung darunter.
+   */
+  /**
+   * Alles, was von außen kam, in den Zustand einarbeiten.
+   *
+   * IMMER NACH dem Kanarienvogel-Vergleich. Der Client konnte von diesen
+   * Ereignissen unmöglich wissen — flössen sie vorher ein, meldete der Hash bei
+   * jedem Geschenk einen Determinismus-Bug, den es gar nicht gibt. Der
+   * Kanarienvogel prüft die Kausalkette des SPIELERS, nicht die der Welt.
+   *
+   * Drei Dinge, die alle drei nicht dem Spieler gehören:
+   *
+   *  - **Kundenaufträge** werden hinten angehängt, nie vorn eingeschoben: Ein
+   *    Sync soll niemandem die Auswahl unter den Fingern wegziehen (M6).
+   *  - **Die Auslage des Marktes** wird dagegen ersetzt. Sie ist ein Blick auf
+   *    eine fremde Welt und kein Vorrat, der einem gehört — was verkauft wurde,
+   *    soll verschwinden (M5).
+   *  - **Zustellungen** landen im Postfach, nie direkt im Lager. Nichts
+   *    vernichten, wovon der Spieler nichts wissen konnte (§7).
+   */
+  receiveExternal(): void {
+    const rules = getRuleset(this.snapshot.rulesetVersion);
+    const state = this.applyExternal(this.snapshot.state, rules);
+    if (state !== this.snapshot.state) this.snapshot = { ...this.snapshot, state };
+  }
+
+  private applyExternal(input: State, rules: Ruleset): State {
+    let state = input;
+
+    const topped = topUpRequests(state, rules, this.nextRequestId, this.rollRequest);
+    if (topped.requests.length !== state.requests.length) {
+      const withRequests = cloneState(state);
+      withRequests.requests = topped.requests;
+      state = withRequests;
+      this.nextRequestId = topped.nextId;
+    }
+
+    const shelf = this.offerSource(rules.offerSlots);
+    if (shelf.length > 0 || state.offers.length > 0) {
+      const withOffers = cloneState(state);
+      withOffers.offers = shelf;
+      state = withOffers;
+    }
+
+    if (this.pendingDeliveries.length > 0) {
+      const withMail = cloneState(state);
+      const stillPending: MailItem[] = [];
+      for (const item of this.pendingDeliveries) {
+        if (withMail.mail.length < rules.mailCapacity) {
+          withMail.mail = withMail.mail.concat(item);
+        } else {
+          // Postfach voll — liegen lassen, nicht verwerfen. Der Spieler räumt
+          // auf, dann kommt es beim nächsten Sync an.
+          stillPending.push(item);
+        }
+      }
+      state = withMail;
+      this.pendingDeliveries = stillPending;
+    }
+
+    return state;
   }
 
   /**
@@ -250,8 +387,16 @@ export class Server {
 
     const tail = req.commands.filter((c) => c.seq > snap.seq);
     if (tail.length === 0) {
-      // Alles schon drin. Idempotent, also ein ruhiges No-op (§9).
-      return { ok: true, kind: 'duplicate', snapshot: snap, divergence: null };
+      // Alles schon drin. Für den Command-Log ist das ein ruhiges No-op (§9) —
+      // aber NICHT für alles, was von außen kam.
+      //
+      // Hier saß ein echter Fehler: Wer die App öffnet, ohne etwas zu tun,
+      // schickt genau so einen leeren Sync. Sein Verkaufserlös und jedes
+      // Geschenk blieben dann liegen, bis er zufällig irgendwo hintippte. Ein
+      // Postfach, das erst durch Arbeit aufgeht, ist kein Postfach.
+      const delivered = this.applyExternal(snap.state, rules);
+      if (delivered !== snap.state) this.snapshot = { ...snap, state: delivered };
+      return { ok: true, kind: 'duplicate', snapshot: this.snapshot, divergence: null };
     }
 
     // ── Zeitautorität (§4) ───────────────────────────────────────────────
@@ -284,7 +429,24 @@ export class Server {
 
     for (const cmd of tail) {
       try {
-        state = simulate(state, cmd, rules);
+        const after = simulate(state, cmd, rules);
+
+        // ── Der Markt entscheidet, nicht die Sim (M5) ────────────────────
+        //
+        // Der Kern hat den Kauf nachgerechnet und für regelkonform befunden —
+        // er konnte aber nicht wissen, ob das Angebot noch da ist. Das weiß
+        // nur der Markt, und er sagt es genau jetzt: zwischen „gerechnet" und
+        // „übernommen", damit zwei Käufer nicht beide gewinnen.
+        //
+        // Verloren ist kein Regelverstoß, sondern Pech. Der Batch wird hier
+        // abgeschnitten, alles davor bleibt bestehen.
+        if (cmd.type === 'BUY_OFFER' && !this.claimOffer(cmd.offerId)) {
+          rejectedFrom = cmd.seq;
+          rejectReason = 'ILLEGAL_COMMAND:OFFER_GONE';
+          break;
+        }
+
+        state = after;
         accepted.push(cmd);
       } catch (err) {
         rejectedFrom = cmd.seq;
@@ -305,7 +467,10 @@ export class Server {
     // sagt nichts über Determinismus aus.
     const fullyApplied = rejectedFrom === undefined;
     let divergence: boolean | null = null;
-    if (fullyApplied && req.clientHash !== undefined) {
+    // Hat inzwischen jemand hier gekauft, ist der Zustand unter dem Client
+    // weggezogen worden — ohne dass er etwas falsch gemacht hätte. Ein
+    // Unterschied ist dann erwartbar und sagt nichts über Determinismus aus.
+    if (fullyApplied && !this.soldSinceLastSync && req.clientHash !== undefined) {
       const serverHash = hashState(state);
       divergence = serverHash !== req.clientHash;
       if (divergence) {
@@ -317,48 +482,8 @@ export class Server {
       }
     }
 
-    // ── Externe Zustellungen (§7) ────────────────────────────────────────
-    //
-    // ERST NACH dem Kanarienvogel-Vergleich. Der Client konnte von diesen
-    // Ereignissen unmöglich wissen — würden sie vor dem Vergleich einfließen,
-    // meldete der Hash bei jedem Geschenk einen Determinismus-Bug, den es
-    // gar nicht gibt. Der Kanarienvogel prüft die Kausalkette des SPIELERS.
-    //
-    // Und sie landen im Postfach, nie direkt im Lager: Nichts vernichten,
-    // wovon der Spieler nichts wissen konnte.
-    // ── Kundenaufträge nachfüllen (M6) ───────────────────────────────────
-    //
-    // Ebenfalls NACH dem Kanarienvogel, und aus demselben Grund wie die
-    // Zustellungen: Der Client konnte von diesen Aufträgen nichts wissen.
-    // Flössen sie vorher ein, meldete der Hash bei jedem Nachschub einen
-    // Determinismus-Bug, den es nicht gibt.
-    //
-    // Angehängt wird hinten. Vorne bleiben die Aufträge stehen, die der
-    // Spieler schon gesehen hat — ein Sync soll ihm die Auswahl nicht unter
-    // den Fingern wegziehen.
-    const topped = topUpRequests(state, rules, this.nextRequestId, this.rollRequest);
-    if (topped.requests.length !== state.requests.length) {
-      const withRequests = cloneState(state);
-      withRequests.requests = topped.requests;
-      state = withRequests;
-      this.nextRequestId = topped.nextId;
-    }
-
-    if (this.pendingDeliveries.length > 0) {
-      const withMail = cloneState(state);
-      const stillPending: MailItem[] = [];
-      for (const item of this.pendingDeliveries) {
-        if (withMail.mail.length < rules.mailCapacity) {
-          withMail.mail = withMail.mail.concat(item);
-        } else {
-          // Postfach voll — liegen lassen, nicht verwerfen. Der Spieler räumt
-          // auf, dann kommt es beim nächsten Sync an.
-          stillPending.push(item);
-        }
-      }
-      state = withMail;
-      this.pendingDeliveries = stillPending;
-    }
+    // Alles, was von außen kam, kommt jetzt dazu — siehe `applyExternal`.
+    state = this.applyExternal(state, rules);
 
     // ── Der Zustand bleibt beim letzten Command stehen ───────────────────
     //
@@ -413,6 +538,9 @@ export class Server {
       serverTs: alignedServerTs,
       rulesetVersion: newVersion,
     };
+    // Ab hier rechnet der Client wieder von diesem Snapshot aus — der
+    // Kanarienvogel darf beim nächsten Mal also wieder scharf sein.
+    this.soldSinceLastSync = false;
 
     if (!fullyApplied) {
       return {

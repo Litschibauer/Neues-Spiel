@@ -171,6 +171,16 @@ export type Ruleset = {
   mailCapacity: number;
 
   /**
+   * Wie viele fremde Angebote der Server in den Snapshot legt (M5).
+   *
+   * Eine Auslage, kein Katalog. Der ganze Markt in jedem Sync wäre bei tausend
+   * Höfen ein Megabyte pro Anfrage — und beim Spielen sieht man ohnehin ein
+   * Regal an, keine Datenbank. Gleichzeitig ist es der Deckel, der auch diesen
+   * Behälter begrenzt (§7).
+   */
+  offerSlots: number;
+
+  /**
    * Erfahrungsschwellen. `levelThresholds[i]` ist die XP-Grenze für Stufe i+2 —
    * Stufe 1 beginnt bei null.
    *
@@ -343,6 +353,7 @@ const V1: Ruleset = {
   priceBandMinPct: 25,
   priceBandMaxPct: 150,
   mailCapacity: 20,
+  offerSlots: 12,
 
   levelThresholds: LEVELS,
   requestTemplates: REQUESTS,
@@ -694,6 +705,7 @@ export function validateRuleset(rules: Ruleset): string[] {
   if (rules.siloCapacity < 1) problems.push('Lagerkapazität < 1');
   if (rules.mailCapacity < 1) problems.push('Postfachkapazität < 1');
   if (rules.priceBandMinPct > rules.priceBandMaxPct) problems.push('Preisband verkehrt herum');
+  if (rules.offerSlots < 0) problems.push('Angebots-Slots negativ');
 
   return problems;
 }

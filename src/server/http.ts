@@ -27,6 +27,7 @@ import { RULESETS, getRuleset } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
+import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
@@ -101,6 +102,14 @@ const limiter = new CreateLimiter(
 );
 
 /**
+ * Das Orderbuch (M5) — geteilt von allen Höfen dieser Umgebung.
+ *
+ * Eine Datei neben den Accounts, damit Dev und Produktion getrennte Märkte
+ * haben: Ein Testverkauf darf nie in einer echten Auslage auftauchen.
+ */
+const market = new Market(join(dirname(SAVE_PATH), 'market.json'));
+
+/**
  * Geladene Höfe im Speicher.
  *
  * Geschrieben wird sofort, gehalten wird danach — ein Sync soll nicht bei
@@ -150,8 +159,36 @@ function gameFor(account: AccountRecord): Server {
     game.nextRequestId = file.nextRequestId ?? 1;
     game.stockRequests();
   }
+  wireMarket(account.id, game);
   live.set(account.id, game);
   return game;
+}
+
+/**
+ * Den Markt an einen Hof anschließen (M5).
+ *
+ * Die eigentliche Naht steht in `market.ts` — hier wird nur nachgereicht, was
+ * allein diese Schicht weiß: welche Höfe gerade geladen sind, und dass ein
+ * Verkauf im Protokoll auftauchen soll.
+ */
+function wireMarket(accountId: string, game: Server): void {
+  connectMarket(market, accountId, game, (id) => live.get(id) ?? null);
+  const claim = game.claimOffer;
+  game.claimOffer = (offerId) => {
+    const ok = claim(offerId);
+    if (ok) console.log(`[markt] ${accountId} kauft Angebot ${offerId}`);
+    return ok;
+  };
+}
+
+function settle(account: AccountRecord, game: Server): boolean {
+  const done = settleSales(market, account.id, game);
+  if (done) console.log(`[markt] ${account.id}: Verkauf abgerechnet`);
+  return done;
+}
+
+function publish(accountId: string, game: Server): void {
+  publishOrders(market, accountId, game);
 }
 
 function persist(account: AccountRecord, game: Server): void {
@@ -391,7 +428,12 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
 
   if (url.pathname === '/api/admin/reset') {
     game.reset(initialState(getRuleset(TARGET_RULESET)), Date.now(), TARGET_RULESET);
+    // Sonst stünden im Buch Angebote zu Aufträgen, die es nicht mehr gibt —
+    // und jemand könnte Ware kaufen, die niemand mehr besitzt.
+    market.forget(target.id);
+    market.save();
     game.stockRequests();
+    game.stockOffers();
     persist(target, game);
     console.log(`[admin] ${target.id}: Spielstand zurückgesetzt`);
     return json(res, 200, { ok: true });
@@ -429,6 +471,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       version: CONFIG.version,
       rulesetVersion: TARGET_RULESET,
       accounts: accounts.count,
+      offers: market.size,
       // Damit sich von außen prüfen lässt, ob wirklich verschlüsselt ankommt,
       // was man sich beim Aufsetzen vorgenommen hat.
       secure: isSecureTransport(CONFIG),
@@ -481,6 +524,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
       const game = freshGame();
       const { account, key } = accounts.create(Date.now(), snapshotOf(game));
+      wireMarket(account.id, game);
+      game.stockOffers();
       live.set(account.id, game);
       console.log(`[account] neuer Hof ${account.id} (${accounts.count} gesamt)`);
 
@@ -510,6 +555,15 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const deviceId = url.searchParams.get('deviceId') ?? undefined;
+      // Verkäufe abrechnen und die Auslage frisch machen, BEVOR geantwortet
+      // wird: Wer die App öffnet, soll den aktuellen Stand sehen und nicht
+      // einen, der erst durch eine Aktion nachzieht.
+      // Abrechnen und alles Zugestellte einarbeiten, BEVOR geantwortet wird:
+      // Wer die App öffnet, soll seinen Erlös und die Auslage sofort sehen und
+      // nicht erst, nachdem er zufällig irgendwo hingetippt hat.
+      settle(account, game);
+      game.receiveExternal();
+      persist(account, game);
       return json(res, 200, {
         accountId: account.id,
         snapshot: game.snapshot,
@@ -541,8 +595,17 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         return json(res, 413, { error: 'TOO_MANY_COMMANDS' });
       }
 
+      // Erst abrechnen, dann rechnen: Ein Verkauf, der während der Abwesenheit
+      // stattfand, muss VOR der Re-Simulation im Zustand stehen. Sonst könnte
+      // ein offline zurückgezogener Auftrag denselben Warenposten ein zweites
+      // Mal ins Lager holen (M5, siehe `applySale`).
+      settle(account, game);
+
       // Zeitautorität: der Server misst selbst (§4).
       const result = game.sync(parsed, Date.now());
+      // Was jetzt im Escrow liegt, ist die Wahrheit — das Buch zieht nach.
+      publish(account.id, game);
+      market.save();
       persist(account, game);
 
       // `serverTime` mitgeben, damit der Client seine Uhr gegen die des Servers
@@ -654,6 +717,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       const account = accounts.get(id);
       if (account) persist(account, g);
     }
+    market.save();
     server.close(() => process.exit(0));
   });
 }

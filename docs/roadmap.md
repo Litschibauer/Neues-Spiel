@@ -135,10 +135,11 @@ danebenschreiben kannst, hast du sie noch nicht verstanden.
 
 ## Phase 3 — Die geteilte Welt
 
-Bisher nur auf Papier (§5, §8):
-
-- **Orderbuch** für den Spielermarkt. Aufträge *einstellen* geht offline (Escrow steht
-  bereits), das *Füllen* ist online-only und braucht einen echten Abgleich zwischen Spielern.
+- **Orderbuch** für den Spielermarkt — ✅ **gebaut.** Zwei Höfe handeln wirklich
+  miteinander: einstellen offline, kaufen online-only, Erlös durchs Postfach. Der
+  Browser-Test führt einen kompletten Handel zwischen zwei Höfen durch. Details
+  und die drei nicht offensichtlichen Entscheidungen stehen in der Konzept-Map
+  unter M5.
 - **Zufall.** Muster 1 aus §5: Ergebnis erst beim Sync serverseitig würfeln. Der Client darf
   nichts wissen, was er nicht wissen soll.
 - **Nachbarn, Events, Ranglisten.** Alle online-only — hier entscheidet sich, wie groß der
@@ -227,11 +228,21 @@ Es gibt jetzt mehrere Höfe auf einem Server. Damit ist zum ersten Mal
 *technisch* möglich, was die halbe Konzept-Map ausmacht: Aufträge zwischen
 Spielern, Nachbarn, Geschenke, Ranglisten.
 
-Davor steht allerdings TLS, und zwar aus zwei unabhängigen Gründen: Der
-Hof-Schlüssel reist in jedem Aufruf mit (über einfaches HTTP liest ihn jeder
-im selben WLAN), und ohne HTTPS registriert sich der Service Worker nicht —
-die App startet dann doch nicht ohne Netz. Der Weg über Tailscale Serve steht
-in deploy.md und kostet zwei Zeilen.
+**TLS** steht (siehe deploy.md): eigenes Zertifikat oder ein Endpunkt davor, und
+Produktion lauscht standardmäßig nur auf `127.0.0.1`. Ein Klartext-Produktionsserver
+bricht den Start ab — der Hof-Schlüssel reist in jedem Aufruf mit.
 
-Danach ist das **Orderbuch** (Phase 3) das erste, was zwei Spieler wirklich
-verbindet. Escrow und Preisband stehen bereits; was fehlt, ist der Abgleich.
+**Das Orderbuch** steht ebenfalls. Damit ist zum ersten Mal etwas gebaut, das
+zwei Spieler wirklich verbindet — und die Offline-Regel aus §6 hat ihren ersten
+echten Anwendungsfall: Der Markt ist ohne Netz sichtbar, aber ausgegraut.
+
+**Als Nächstes**, in dieser Reihenfolge:
+
+1. **Nachbarn.** Der Markt ist anonym; ein Hof, den man kennt, ist der Unterschied
+   zwischen „Datenbank" und „Dorf". Braucht aber eine Antwort auf die Frage, wie
+   man jemanden findet, ohne Benutzernamen zu haben.
+2. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
+   echten Spielerschaft muss das gelöst sein — bewusst, mit einem zweiten Faktor,
+   nicht nebenbei.
+3. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
+   wäre: Überraschungskisten.

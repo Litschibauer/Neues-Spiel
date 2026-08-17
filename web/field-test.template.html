@@ -107,7 +107,9 @@
   .lease p { margin: 0; font-size: .86rem; }
   .lease button { border-color: var(--wait); color: var(--wait); }
   .lease button.primary { background: var(--wait); color: var(--surface); }
-  .locked .fields, .locked #actions, .locked #requests { opacity: .45; pointer-events: none; }
+  .locked .fields, .locked #actions, .locked #requests, .locked #market {
+    opacity: .45; pointer-events: none;
+  }
   .request {
     display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
     margin-bottom: .35rem; font-family: var(--mono); font-size: .74rem;
@@ -115,6 +117,15 @@
   .request .want { flex: 1; }
   .request .pay { color: var(--live); white-space: nowrap; }
   .request.next { opacity: .45; border-style: dashed; cursor: default; }
+
+  /* Der Markt. Ohne Netz ausgegraut — die Regel aus §6, sichtbar gemacht. */
+  .offer {
+    display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
+    margin-bottom: .35rem; font-family: var(--mono); font-size: .74rem;
+  }
+  .offer .what { flex: 1; }
+  .offer .cost { color: var(--wait); white-space: nowrap; }
+  #market.no-net { opacity: .45; pointer-events: none; }
   .field.locked-plot { opacity: .6; border-style: dashed; }
   .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
@@ -209,6 +220,15 @@
     <div>
       <h2>Kundenaufträge — liefern bringt mehr als verkaufen</h2>
       <div id="requests"></div>
+    </div>
+
+    <div>
+      <h2>Markt — was andere Höfe anbieten</h2>
+      <div id="market"></div>
+      <p class="hint" id="market-hint" hidden>
+        Kaufen braucht Verbindung: Wer ein Angebot bekommt, entscheidet sich
+        nicht auf diesem Gerät.
+      </p>
     </div>
 
     <div>
@@ -551,6 +571,7 @@
 
     renderSellButtons(s);
     renderRequests(s);
+    renderMarket(s);
     renderLevel(s);
   }
 
@@ -623,6 +644,68 @@
       empty.textContent = 'Keine Aufträge — der Server füllt beim nächsten Sync auf.';
       box.appendChild(empty);
     }
+  }
+
+  /**
+   * Die Auslage des Marktes (M5).
+   *
+   * Der einzige Ort in dieser Oberfläche, der ohne Netz nicht bedienbar ist —
+   * und deshalb der einzige, der ausgegraut wird statt zu verschwinden. Die
+   * Regel aus §6 lautet: Was die geteilte Welt braucht, ist online-only und
+   * wird ausgegraut; alles andere geht offline. Wer die Angebote im Funkloch
+   * ansieht, soll sehen, dass es sie gibt — nur eben nicht zugreifen können.
+   */
+  function renderMarket(s) {
+    var box = $('market');
+    var hint = $('market-hint');
+    box.textContent = '';
+
+    var online = navigator.onLine;
+    box.className = online ? '' : 'no-net';
+    hint.hidden = online;
+
+    if (!s.offers || s.offers.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'hint';
+      empty.textContent = online
+        ? 'Gerade bietet niemand etwas an. Stell selbst etwas ein.'
+        : 'Keine Angebote im Zwischenspeicher — der Markt kommt mit dem nächsten Sync.';
+      box.appendChild(empty);
+      return;
+    }
+
+    s.offers.forEach(function (o) {
+      var total = o.amount * o.price;
+      var btn = document.createElement('button');
+      btn.className = 'offer';
+
+      var what = document.createElement('span');
+      what.className = 'what';
+      what.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
+      var cost = document.createElement('span');
+      cost.className = 'cost';
+      cost.textContent = total + ' ' + itemName(rules.currency);
+      btn.appendChild(what); btn.appendChild(cost);
+
+      var canPay = (s.items[rules.currency] || 0) >= total;
+      var fits = !rules.items[o.item].storable
+        || rules.siloCapacity - NS.stored(s, rules) >= o.amount;
+      btn.disabled = !online || !canPay || !fits;
+      if (!canPay) btn.title = 'Zu wenig ' + itemName(rules.currency);
+      else if (!fits) btn.title = 'Kein Platz im Lager';
+
+      btn.addEventListener('click', function () {
+        if (!isActive || !navigator.onLine) return;
+        client.localTick = tickNow();
+        var res = client.buyOffer(o.id);
+        act('Gekauft: ' + o.amount + ' ' + itemName(o.item), res);
+        // Sofort syncen. Das Zeitfenster, in dem jemand schneller sein kann,
+        // soll eine Rundreise sein und keine Sitzung — verliert man es, kostet
+        // der Präfix-Commit alles, was danach kam.
+        if (res.ok) attempt('kauf', true);
+      });
+      box.appendChild(btn);
+    });
   }
 
   function renderSellButtons(s) {
@@ -740,8 +823,8 @@
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) { attempt('sichtbar'); refreshLease(); }
     });
-    window.addEventListener('online', function () { log('Netz zurück'); attempt('online', true); });
-    window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); });
+    window.addEventListener('online', function () { log('Netz zurück'); render(); attempt('online', true); });
+    window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); render(); });
     // Letzte Gelegenheit zu sichern, bevor die Seite weg ist.
     window.addEventListener('pagehide', save);
   }

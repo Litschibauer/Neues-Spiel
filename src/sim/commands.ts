@@ -56,6 +56,26 @@ export type ListOrderCommand = CommandBase & {
 /** Auftrag zurückziehen. Die Ware geht zurück ins Lager, sofern Platz ist. */
 export type CancelOrderCommand = CommandBase & { type: 'CANCEL_ORDER'; orderId: number };
 
+/**
+ * Ein fremdes Angebot kaufen (M5) — **das einzige Command, das Netz braucht.**
+ *
+ * Alles andere in dieser Liste ist einseitig: Der Spieler greift nur auf seinen
+ * eigenen Hof zu, und der Server kann es hinterher nachrechnen. Ein Kauf nicht.
+ * Zwei Leute können dasselbe Angebot wollen, und wer es bekommt, entscheidet
+ * sich nicht auf einem Gerät (§8).
+ *
+ * Deshalb steht es hier trotzdem und nicht in einer eigenen Schnittstelle: Die
+ * Bedingungen — Ware, Menge, Preis — liegen als Angebot im Zustand, also kann
+ * der Kern den Kauf ganz normal nachrechnen. Was er nicht wissen kann, ist, ob
+ * das Angebot noch da ist. Das prüft der Server beim Sync und schneidet den
+ * Batch ab, wenn es weg ist (`OFFER_GONE`) — dieselbe Präfix-Mechanik wie bei
+ * jedem anderen abgelehnten Command.
+ *
+ * Für den Spieler heißt das: Der Kaufknopf ist ohne Verbindung ausgegraut, und
+ * der Client synct sofort danach, damit das Zeitfenster eine Rundreise bleibt.
+ */
+export type BuyOfferCommand = CommandBase & { type: 'BUY_OFFER'; offerId: number };
+
 /** Postfach leeren, soweit das Lager es hergibt (§7). */
 export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
 
@@ -75,6 +95,7 @@ export type Command =
   | SellNpcCommand
   | ListOrderCommand
   | CancelOrderCommand
+  | BuyOfferCommand
   | CollectMailCommand
   | FillRequestCommand;
 
@@ -100,6 +121,12 @@ export type SimErrorCode =
   | 'NO_ORDER_SLOTS'
   | 'PRICE_OUT_OF_BAND'
   | 'NO_SUCH_ORDER'
+  | 'NO_SUCH_OFFER'
+  /**
+   * Jemand anders war schneller (M5). Kein Regelverstoß, sondern die geteilte
+   * Welt — der Server vergibt diesen Code, nie der Kern.
+   */
+  | 'OFFER_GONE'
   | 'NOTHING_TO_COLLECT'
   | 'NO_SUCH_REQUEST'
   | 'REQUEST_NOT_ACTIVE';
