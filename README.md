@@ -22,7 +22,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 108 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 121 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -37,14 +37,21 @@ Anleitung in **[docs/deploy.md](docs/deploy.md)**.
 ## Der Kernkreislauf
 
 ```
-Feld -> Weizen -> Mühle -> Hühnerfutter -> Gehege -> Eier -> Gold -> mehr Plätze
+Feld -> Weizen -> Mühle -> Hühnerfutter -> Gehege -> Eier
+                             |
+                     Kundenauftrag -> Gold -> mehr Plätze
 ```
 
-Bewusst nicht mehr. Das ganze Spiel läuft auf **drei Commands**:
+Bewusst nicht mehr. Das ganze Spiel läuft auf **vier Commands**:
 
 - `START` / `COLLECT` — Feld bestellen, Mühle beschicken, Hühner füttern sind derselbe
   Platz mit demselben Timer. Der Unterschied steckt im Rezept, und Rezepte sind Daten.
 - `BUY` — „Gehege kaufen" und „Hühner kaufen" sind zwei Ausbaustufen desselben Platzes.
+- `FILL_REQUEST` — „liefere 5 Weizen, bekomm 25 Gold". Gibt dem Kreislauf sein Ziel.
+
+Der letzte ist der interessante: Aufträge sind **zufällig und trotzdem offline
+erfüllbar**. Der Server würfelt sie im Voraus und schickt einen Vorrat mit dem
+Snapshot; der Sim-Kern verbraucht ihn und würfelt nie selbst.
 
 Der Sim-Kern kennt keinen Weizen und keine Hühner, nur Katalogindizes. Eine neue
 Feldfrucht ist deshalb eine Tabellenzeile, kein Code. Wohin das führen soll, steht in
@@ -65,16 +72,16 @@ Riegel: **[docs/deploy.md](docs/deploy.md)**.
 
 ## Status
 
-Der Kernkreislauf ist spielbar und über echtes HTTP geprüft: vom leeren Hof bis zum
-ersten verkauften Ei, mit dem Server, der jeden Schritt unabhängig nachrechnet.
-Determinismus über zwei Engine-Familien belegt, Handel und Postfach implementiert,
-Inhalt vollständig datengetrieben, Dev und Produktion getrennt.
+Der Kernkreislauf ist spielbar und über echtes HTTP geprüft: vom leeren Hof über zwölf
+offline gelieferte Aufträge bis zur gekauften Mühle, mit dem Server, der jeden Schritt
+unabhängig nachrechnet. Determinismus über zwei Engine-Familien belegt, Handel und
+Postfach implementiert, Inhalt vollständig datengetrieben, Dev und Produktion getrennt.
 
-Noch kein fertiges Spiel: kein Orderbuch, kein Zufall, keine Aufträge, keine Level,
-keine Accounts, keine richtige Oberfläche.
+Noch kein fertiges Spiel: kein Orderbuch, keine Level, keine Nachbarn, keine Accounts,
+keine richtige Oberfläche.
 
 ## Nächster Schritt
 
 Der Weg zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** — in Phasen, mit dem,
-was jede absichert und kostet. Als Nächstes: Aufträge erfüllen (M6), die Mechanik, aus
-der die meisten Inhalte als Daten herausfallen.
+was jede absichert und kostet. Als Nächstes: Level (M8), damit sich Fortschritt nicht
+nur nach „mehr davon" anfühlt, sondern nach etwas Neuem.

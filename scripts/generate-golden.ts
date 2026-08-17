@@ -74,7 +74,8 @@ for (const profile of PROFILES) {
       for (const gold of [0, 4000]) {
         const rnd = mulberry32(seed * 7919 + version + gold);
         const rules = getRuleset(version);
-        const server = new Server(fuzzStart(rules, gold), T0, version);
+        const start = fuzzStart(rules, gold, mulberry32(seed * 31 + version));
+        const server = new Server(start, T0, version);
         const client = playRandomSession(server.snapshot, rnd, profile.opts);
 
         if (client.queue.length === 0) continue;
@@ -82,7 +83,7 @@ for (const profile of PROFILES) {
         vectors.push({
           name: `${profile.name}-v${version}-${gold > 0 ? 'rich' : 'poor'}-${String(seed).padStart(3, '0')}`,
           rulesetVersion: version,
-          startGold: gold,
+          startState: start,
           commands: client.queue,
           expectedStateHash: hashState(client.state),
           expectedState: client.state,
@@ -113,7 +114,8 @@ function coreLoopVector(version: number) {
   const EGGS = rules.items.findIndex((i) => i.id === 'eggs');
 
   const cmds: Command[] = [];
-  let state = fuzzStart(rules, 0);
+  const start = fuzzStart(rules, 0, mulberry32(4242 + version));
+  let state = start;
   let tick = 0;
   const push = (c: Omit<Command, 'seq' | 'tick'>) => {
     const cmd = { ...c, seq: cmds.length + 1, tick } as Command;
@@ -150,12 +152,19 @@ function coreLoopVector(version: number) {
   push({ type: 'START', plot: COOP, recipe: R_EGGS }); // füttern
   wait(R_EGGS);
   push({ type: 'COLLECT', plot: COOP }); // Eier sammeln
-  push({ type: 'SELL_NPC', item: EGGS, amount: state.items[EGGS]! });
+
+  // Und zum Schluss der Punkt des Ganzen: einen Kundenauftrag beliefern,
+  // sofern die Ware dafür reicht. Sonst an den NPC verkaufen.
+  const fillable = state.requests
+    .slice(0, rules.requestSlots)
+    .find((r) => r.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount));
+  if (fillable) push({ type: 'FILL_REQUEST', requestId: fillable.id });
+  else push({ type: 'SELL_NPC', item: EGGS, amount: state.items[EGGS]! });
 
   return {
     name: `core-loop-v${version}`,
     rulesetVersion: version,
-    startGold: 0,
+    startState: start,
     commands: cmds,
     expectedStateHash: hashState(state),
     expectedState: state,

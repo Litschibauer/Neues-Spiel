@@ -11,6 +11,7 @@ import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
 import { EMPTY_PLOT, initialState, count } from '../src/sim/state.ts';
+import { mulberry32 } from './helpers/session.ts';
 
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
@@ -64,6 +65,10 @@ test('Idle-Progression ist gratis offline-fähig: 2h weg == 2h offline gespielt'
   // aktiv, einer einfach weg. Der Server kann und muss sie gleich behandeln.
   const a = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const b = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  // Kundenaufträge würfelt der Server (§5). Für einen Vergleich zweier Server
+  // muss der Würfel derselbe sein — sonst vergleicht man den Zufall.
+  a.rollRequest = mulberry32(1);
+  b.rollRequest = mulberry32(1);
 
   const active = new Client(a.snapshot);
   active.start(0, R_WHEAT);

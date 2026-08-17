@@ -92,6 +92,25 @@ export type PlotDef = {
 };
 
 /**
+ * Eine Auftragsvorlage: „Liefere das, bekomm das."
+ *
+ * Der Kern von M6 — und die Mechanik, aus der die meisten Inhalte als reine
+ * Daten herausfallen. LKW, Kunden, Boote, Sonderaufträge und Eventaufgaben sind
+ * alle dieselbe Regel mit anderen Zahlen und einem anderen Bild daneben.
+ *
+ * Gewürfelt wird auf dem SERVER (§5). Der Sim-Kern liest fertige Aufträge aus
+ * dem Zustand und verbraucht sie — er erzeugt nie welche. Deshalb bleibt das
+ * Ganze offline berechenbar, obwohl Zufall im Spiel ist.
+ */
+export type RequestTemplate = {
+  id: string;
+  /** Was geliefert werden muss. */
+  wants: readonly ItemStack[];
+  /** Was es dafür gibt. */
+  reward: readonly ItemStack[];
+};
+
+/**
  * Ein Platz, der von allein produziert: Bienenstock, Brunnen, Kompost.
  *
  * Taktung ist die Dauer des Rezepts. Einschränkung (bewusst): Passive Rezepte
@@ -138,6 +157,26 @@ export type Ruleset = {
   priceBandMaxPct: number;
   /** Auch das Postfach ist ein Behälter und braucht daher ein Limit (§7). */
   mailCapacity: number;
+
+  /** Auftragsvorlagen, aus denen der Server auswählt. */
+  requestTemplates: readonly RequestTemplate[];
+  /** Wie viele Kundenaufträge gleichzeitig annehmbar sind. */
+  requestSlots: number;
+  /**
+   * Wie viele Aufträge der Server auf Vorrat mitgibt.
+   *
+   * DAS ist die Umsetzung von „Vorrat statt Verbindung" (Architektur §6):
+   * Offline gehen die Aufträge nicht aus, weil sie schon im Snapshot liegen.
+   * Ist ein Auftrag erledigt, rückt der nächste aus der Schlange nach — ohne
+   * Netz, ohne Würfel, rein deterministisch.
+   *
+   * Ehrlich zur Grenze: Ein endlicher Vorrat kann leerlaufen, und im ersten
+   * Feldtest tat er das nach zwölf Lieferungen. Zwei Dinge halten dagegen —
+   * eine großzügige Zahl hier, und die Tatsache, dass der NPC-Verkauf immer
+   * offen bleibt (§6, „kein Sackgassen-Zustand"). Wer den Vorrat aufbraucht,
+   * verliert den Bonus, nicht das Spiel.
+   */
+  requestQueueMax: number;
 };
 
 // ── Katalog-Indizes ────────────────────────────────────────────────────────
@@ -154,6 +193,25 @@ const R_FEED = 1;
 const R_EGGS = 2;
 
 const gold = (amount: number): ItemStack[] => [{ item: GOLD, amount }];
+const want = (item: number, amount: number): ItemStack => ({ item, amount });
+
+/**
+ * Aufträge lohnen sich mehr als der NPC-Verkauf — sonst wären sie Zierde.
+ *
+ * Zum Vergleich die Ankaufpreise: Weizen 3, Futter 8, Eier 25. Ein Auftrag
+ * bringt grob das Anderthalbfache. Genau das gibt dem Kreislauf ein Ziel:
+ * Man produziert nicht mehr ins Leere, sondern auf etwas hin.
+ */
+const REQUESTS: readonly RequestTemplate[] = [
+  { id: 'wheat-small', wants: [want(WHEAT, 5)], reward: gold(25) },
+  { id: 'wheat-big', wants: [want(WHEAT, 15)], reward: gold(80) },
+  { id: 'feed-small', wants: [want(FEED, 2)], reward: gold(25) },
+  { id: 'feed-big', wants: [want(FEED, 6)], reward: gold(85) },
+  { id: 'eggs-small', wants: [want(EGGS, 3)], reward: gold(110) },
+  { id: 'eggs-big', wants: [want(EGGS, 9)], reward: gold(350) },
+  { id: 'mixed-farm', wants: [want(WHEAT, 8), want(FEED, 2)], reward: gold(60) },
+  { id: 'mixed-market', wants: [want(EGGS, 3), want(WHEAT, 10)], reward: gold(160) },
+];
 
 /**
  * Der Basis-Kreislauf, Stand jetzt:
@@ -233,6 +291,12 @@ const V1: Ruleset = {
   priceBandMinPct: 25,
   priceBandMaxPct: 150,
   mailCapacity: 20,
+
+  requestTemplates: REQUESTS,
+  requestSlots: 3,
+  // Zwanzig auf Vorrat. Bei Produktionszeiten sind das mehrere Stunden
+  // Offline-Spiel — im ersten Feldtest waren zwölf nach einer Sitzung leer.
+  requestQueueMax: 20,
 };
 
 /**
@@ -488,6 +552,28 @@ export function validateRuleset(rules: Ruleset): string[] {
     if (!rules.items[recipe.output.item]?.storable) {
       problems.push(`Passive ${i} (${p.id}): Ausgabe ist nicht lagerpflichtig`);
     }
+  }
+
+  for (const [i, t] of rules.requestTemplates.entries()) {
+    if (t.wants.length === 0) problems.push(`Auftrag ${i} (${t.id}): verlangt nichts`);
+    if (t.reward.length === 0) problems.push(`Auftrag ${i} (${t.id}): gibt nichts`);
+    for (const stack of [...t.wants, ...t.reward]) {
+      if (!itemOk(stack.item)) problems.push(`Auftrag ${i} (${t.id}): Gegenstand unbekannt`);
+      if (!Number.isInteger(stack.amount) || stack.amount < 1) {
+        problems.push(`Auftrag ${i} (${t.id}): Menge ${stack.amount} < 1`);
+      }
+    }
+    // Doppelte Posten: Der Sim-Kern prüft Posten für Posten und zählt sonst
+    // denselben Vorrat zweimal — derselbe Fallstrick wie bei Rezept-Zutaten.
+    const seen = new Set<number>();
+    for (const stack of t.wants) {
+      if (seen.has(stack.item)) problems.push(`Auftrag ${i} (${t.id}): Posten doppelt`);
+      seen.add(stack.item);
+    }
+  }
+  if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
+  if (rules.requestQueueMax < rules.requestSlots) {
+    problems.push('Auftragsvorrat kleiner als die Zahl der Slots');
   }
 
   if (rules.siloCapacity < 1) problems.push('Lagerkapazität < 1');

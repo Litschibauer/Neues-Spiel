@@ -99,7 +99,11 @@ function runProfile(profile: SessionOptions, sessions: number): Stats {
 
     // Jede zweite Sitzung startet mit Kapital — sonst bleibt alles hinter der
     // ersten Kaufentscheidung ungeprüft (siehe fuzzStart).
-    const server = new Server(fuzzStart(rules, seed % 2 === 0 ? 4000 : 0), T0, version);
+    const server = new Server(
+      fuzzStart(rules, seed % 2 === 0 ? 4000 : 0, mulberry32(seed * 31)),
+      T0,
+      version,
+    );
     const start = cloneState(server.snapshot.state);
     const client = playRandomSession(server.snapshot, rnd, profile);
 

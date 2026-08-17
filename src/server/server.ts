@@ -14,6 +14,7 @@ import { getRuleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
+import { topUpRequests } from './requests.ts';
 
 /** 1 Tick = 1 Sekunde Echtzeit. */
 export const TICK_MS = 1000;
@@ -104,6 +105,15 @@ export class Server {
    * *bevor* es losspielt, dass es nicht dran ist, und kann bewusst übernehmen.
    */
   activeDevice: { id: string; lastSyncMs: number } | null = null;
+  /**
+   * Nächste Kundenauftrags-Nummer (M6).
+   *
+   * Sie gehört dem Server, weil die Aufträge dem Server gehören: Er würfelt
+   * sie, der Sim-Kern verbraucht sie nur (§5).
+   */
+  nextRequestId = 1;
+  /** Würfel für die Auftragsauswahl — in Tests ersetzbar. */
+  rollRequest: () => number = Math.random;
 
   /** Darf dieses Gerät gerade schreiben? */
   isActiveDevice(deviceId: string | undefined): boolean {
@@ -141,6 +151,25 @@ export class Server {
     this.activeDevice = null;
     this.divergenceAlerts = [];
     this.migrationFailures = [];
+    this.nextRequestId = 1;
+  }
+
+  /**
+   * Auftragsschlange auffüllen, ohne dass ein Sync nötig wäre.
+   *
+   * Ein frischer Hof soll nicht erst syncen müssen, um überhaupt etwas zu tun
+   * zu haben — das wäre genau der Leerlauf aus §6. Der Server ruft das beim
+   * Start auf, und danach erledigt es der Sync.
+   */
+  stockRequests(): void {
+    const rules = getRuleset(this.snapshot.rulesetVersion);
+    const topped = topUpRequests(this.snapshot.state, rules, this.nextRequestId, this.rollRequest);
+    if (topped.requests.length === this.snapshot.state.requests.length) return;
+
+    const state = cloneState(this.snapshot.state);
+    state.requests = topped.requests;
+    this.snapshot = { ...this.snapshot, state };
+    this.nextRequestId = topped.nextId;
   }
 
   constructor(initial: State, startTs: number, rulesetVersion: number, targetVersion?: number) {
@@ -297,6 +326,24 @@ export class Server {
     //
     // Und sie landen im Postfach, nie direkt im Lager: Nichts vernichten,
     // wovon der Spieler nichts wissen konnte.
+    // ── Kundenaufträge nachfüllen (M6) ───────────────────────────────────
+    //
+    // Ebenfalls NACH dem Kanarienvogel, und aus demselben Grund wie die
+    // Zustellungen: Der Client konnte von diesen Aufträgen nichts wissen.
+    // Flössen sie vorher ein, meldete der Hash bei jedem Nachschub einen
+    // Determinismus-Bug, den es nicht gibt.
+    //
+    // Angehängt wird hinten. Vorne bleiben die Aufträge stehen, die der
+    // Spieler schon gesehen hat — ein Sync soll ihm die Auswahl nicht unter
+    // den Fingern wegziehen.
+    const topped = topUpRequests(state, rules, this.nextRequestId, this.rollRequest);
+    if (topped.requests.length !== state.requests.length) {
+      const withRequests = cloneState(state);
+      withRequests.requests = topped.requests;
+      state = withRequests;
+      this.nextRequestId = topped.nextId;
+    }
+
     if (this.pendingDeliveries.length > 0) {
       const withMail = cloneState(state);
       const stillPending: MailItem[] = [];

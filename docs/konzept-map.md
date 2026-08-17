@@ -55,9 +55,13 @@ Münzen, NPC-Preise, Produktionskosten, Verkaufspreise — eine Regel, viele Zah
 ### M5 · Verkaufsauftrag mit Escrow 🟢 einstellen / 🔴 füllen ✅ gebaut
 Steht bereits inklusive Preisband, Ablauffrist und Postfach (§8).
 
-### M6 · Auftrag erfüllen 🟢 **M**
-„Liefere N×A und M×B, bekomme Münzen und Erfahrung." LKW, Kunden, Boote, Sonderaufträge,
+### M6 · Auftrag erfüllen 🟢 ✅ gebaut
+„Liefere N×A und M×B, bekomme Münzen." LKW, Kunden, Boote, Sonderaufträge,
 Eventaufgaben — **eine** Mechanik, der Rest sind Auftragsvorlagen als Daten.
+
+Und sie ist der erste Ort, an dem **Zufall und Offline zusammenkommen**: Der Server
+würfelt die Aufträge im Voraus und gibt einen Stapel mit dem Snapshot mit. Der
+Client verbraucht ihn, ohne je selbst zu würfeln — Falle 3 unten, in Code gegossen.
 
 ### M7 · Ausbauen und Freischalten 🟢 ✅ gebaut
 „Zahle Kosten, ändere dauerhaft einen Parameter." Steht als `BUY` samt Ausbaustufen
@@ -134,6 +138,14 @@ Damit werden aus deinen 🟡 die meisten grün: *zufällige Kunden*, *Sonderauft
 zugeteilt werden. Der Server kann einen Vorrat mitgeben, und offline gehen die Aufträge nie
 aus.
 
+**Steht inzwischen als Code** (M6): Zwanzig Aufträge liegen im Snapshot, drei davon
+sind annehmbar, der Rest rückt nach. Nachgefüllt wird beim Sync — hinten, damit ein
+Sync dem Spieler nicht die Auswahl unter den Fingern wegzieht.
+
+Ehrlich zur Grenze: Ein endlicher Vorrat *kann* leerlaufen, und im ersten Lauf tat er
+das nach zwölf Lieferungen (daher jetzt zwanzig). Das ist keine Sackgasse — der
+NPC-Verkauf bleibt offen. Wer den Vorrat aufbraucht, verliert den Bonus, nicht das Spiel.
+
 Echt 🟡 bleiben nur: **Mystery-Kisten** und alles, wo man aus mehreren wählt. Da wäre
 Vorwissen ein Cheat (R5).
 
@@ -159,8 +171,8 @@ Nachbarschafts-Aufgaben zu koppeln. Nicht tun.
 
 | | |
 | --- | --- |
-| **Gebaut** | M1, M2, M3, M4, M5, M7 |
-| **Fehlt** | M6 Aufträge, M8 Level, M9 Zufall — plus Warteschlangenplätze als Parameter von M1 |
+| **Gebaut** | M1, M2, M3, M4, M5, M6, M7 |
+| **Fehlt** | M8 Level, M9 Zufall — plus Warteschlangenplätze als Parameter von M1 |
 | **Gesamt** | **9 Mechaniken** |
 
 Neun ist ein Projekt, das man bauen kann. Hundert Features wären es nicht — und die
@@ -169,11 +181,16 @@ hundert Features bekommt man trotzdem, weil sie aus diesen neun als Daten heraus
 ### Was davon heute spielbar ist
 
 ```
-Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier
+                          ↓
+                  Kundenauftrag → Gold → mehr Plätze
 ```
 
-Bewusst genau so viel. Der Kreislauf schließt sich, läuft offline und ist über
-echtes HTTP geprüft — aber er hat noch kein *Ziel*. Das ist M6.
+Bewusst genau so viel. Der Kreislauf schließt sich, hat mit den Kundenaufträgen
+ein Ziel, läuft vollständig offline und ist über echtes HTTP geprüft.
+
+Was noch fehlt, damit es sich nach Fortschritt anfühlt: **Level** (M8) — eine
+Schwelle, hinter der etwas Neues auftaucht.
 
 ---
 

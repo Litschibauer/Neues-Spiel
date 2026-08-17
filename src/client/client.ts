@@ -112,6 +112,11 @@ export class Client {
     return this.apply({ type: 'COLLECT_MAIL' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /** Kundenauftrag beliefern — offline gültig, weil vorgewürfelt (§5). */
+  fillRequest(requestId: number): ActionResult {
+    return this.apply({ type: 'FILL_REQUEST', requestId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   /** Beim Reconnect: nur der Log geht hoch, nie der Zustand. Winzige Payload. */
   buildSyncRequest(): SyncRequest {
     return {

@@ -107,12 +107,20 @@ Werkstatt und Tier gemeinsam (M1); `BUY` trägt „Gehege kaufen", „Hühner ka
 und später jede Freischaltung und jedes Upgrade (M7). Tiere füttern brauchte
 dabei gar keine eigene Mechanik: Ein Tier ist ein Platz mit Eingaben.
 
+Dazu kam **M6, Kundenaufträge**: „liefere N×A und M×B, bekomm Münzen". Sie gibt
+dem Kreislauf sein Ziel — vorher produzierte man ins Leere. LKW, Kunden, Boote,
+Sonderaufträge und Eventaufgaben fallen daraus als reine Daten heraus.
+
+Der interessante Teil daran war nicht die Regel, sondern **wie Zufall und Offline
+zusammengehen**: Der Server würfelt im Voraus und schickt einen Stapel mit; der
+Sim-Kern verbraucht ihn und würfelt nie selbst. Damit ist ein zufälliges Feature
+vollständig offline-fähig — das erste Mal, dass §5 und §6 sich in Code begegnen.
+
 Was noch fehlt:
 
-- **M6 Aufträge erfüllen** — „liefere N×A und M×B". LKW, Kunden, Boote,
-  Sonderaufträge und Eventaufgaben fallen daraus als Daten heraus.
 - **M8 Level und Freischaltungen** — Erfahrung, Schwelle, Tabelle.
-- **M9 Aufgeschobener Zufall** — eine Regel für alle Würfel (§5).
+- **M9 Aufgeschobener Zufall** — für die Fälle, in denen Vorwissen ein Cheat wäre
+  (Mystery-Kisten). Der Vorwürfel-Fall ist mit M6 erledigt.
 
 **Faustregel pro Mechanik:** Wenn du keine langsame, offensichtlich korrekte Variante
 danebenschreiben kannst, hast du sie noch nicht verstanden.
@@ -195,14 +203,14 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**M6: Aufträge erfüllen.**
+**M8: Level und Freischaltungen.**
 
-Zwei Gründe. Erstens ist es die Mechanik, aus der die meisten Inhalte als Daten
-herausfallen: LKW, Kunden, Boote, Sonderaufträge und Eventaufgaben sind alle
-„liefere N×A und M×B" mit anderen Zahlen. Zweitens ist sie der Träger für die
-Leerlauf-Regel aus Architektur §6 — ein vorgewürfelter Auftragsvorrat ist genau
-das, was offline nie ausgeht.
+Der Kreislauf trägt jetzt: anbauen, verarbeiten, liefern, ausbauen. Was fehlt,
+ist das Gefühl, *vorwärts* zu kommen — im Moment wird alles nur mehr, nichts
+wird neu. Ein Level ist eine Schwelle, hinter der etwas auftaucht, das es vorher
+nicht gab, und die Mechanik dafür ist winzig: Erfahrung sammeln, Schwelle
+überschreiten, Tabelle sagt was.
 
-Und sie gibt dem Kreislauf ein Ziel. Im Moment endet er beim NPC-Verkauf: Eier
-werden zu Gold, Gold zu Plätzen, Plätze zu mehr Eiern. Das trägt eine Testrunde,
-aber keine Woche.
+Sie kostet außerdem fast nichts an neuer Determinismus-Fläche — Erfahrung ist
+eine Zahl im Zustand, Schwellen sind Daten, und Freischaltungen sind die
+Startstufen, die es bei Plätzen schon gibt.

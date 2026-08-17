@@ -23,6 +23,14 @@ export type Persisted = {
   appliedLog: Command[];
   pendingDeliveries: MailItem[];
   targetRulesetVersion: number;
+  /**
+   * Nächste Kundenauftrags-Nummer.
+   *
+   * Muss mitgespeichert werden: Fiele der Zähler beim Neustart auf 1 zurück,
+   * bekäme ein neuer Auftrag dieselbe Nummer wie einer, der noch in der
+   * Schlange steht — und `FILL_REQUEST` wüsste nicht mehr, welcher gemeint ist.
+   */
+  nextRequestId?: number;
 };
 
 export function load(path: string): Persisted | null {

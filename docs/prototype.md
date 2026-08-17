@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 108 Tests, keine Dependencies, kein Build-Step
+npm test        # 121 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run build   # Prüfstand-, Spiel- und Werkbank-Seite bauen
@@ -34,6 +34,7 @@ src/client/
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
 src/server/
   server.ts       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
+  requests.ts     Kundenaufträge vorwürfeln — Zufall gehört dem Server (§5)
   http.ts         Spielserver: HTTP-API + Handy-Client, ohne Abhängigkeiten
   config.ts       Dev/Prod-Trennung samt Riegel gegen die teuren Betriebsfehler
   store.ts        Persistenz — atomar geschriebene JSON-Datei
@@ -52,7 +53,9 @@ externe Zustellungen.
 ### Der Kernkreislauf
 
 ```
-Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier
+                          ↓
+                  Kundenauftrag → Gold → mehr Plätze
 ```
 
 Bewusst nicht mehr. Jede weitere Mechanik ist neue Fläche, auf der Client und
@@ -73,6 +76,9 @@ Zwei Verdichtungen tragen den ganzen Kreislauf:
 - **`BUY` für alles.** „Gehege kaufen" und „Hühner kaufen" sind zwei
   Ausbaustufen desselben Platzes. Dieselbe Mechanik schaltet später Felder
   frei und beschleunigt Maschinen (M7).
+- **`FILL_REQUEST` für jedes Auftragssystem.** LKW, Kunden, Boote,
+  Sonderaufträge und Eventaufgaben sind „liefere N×A und M×B" mit anderen
+  Zahlen (M6).
 
 Der Preis dafür steht in `rules.ts` und wird von `rules.test.ts` erzwungen:
 **Kataloge sind append-only.** Zustände speichern Indizes; wer einen Eintrag
@@ -99,6 +105,7 @@ Schicht 5 ist im Server angelegt:
 | — | `migration.test.ts` | Zwei Sorten Patch quer durch eine Offline-Phase: ein Zahlen-Patch (v1→v2) und ein **Inhalts-Patch (v2→v3), bei dem der Zustand wächst** — Log unter alter Version validiert, Zustand danach gehoben, laufende Produktion fair umgerechnet, Version nicht frei wählbar. |
 | — | `rules.test.ts` | Jeder Katalog ist widerspruchsfrei, und **Kataloge wachsen nur hinten** — die Invariante, ohne die gespeicherte Indizes ihre Bedeutung verlieren. |
 | — | `config.test.ts` | Die Betriebsregeln: Dev und Produktion teilen sich nichts, das Dev-Regelwerk kommt nicht in Produktion, die Werkbank ist dort aus. |
+| — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
@@ -303,13 +310,47 @@ Farbe wechselt.
 
 ---
 
+## Zufall, der offline funktioniert
+
+Der eigentliche Gewinn von M6 ist nicht das Auftragssystem, sondern dass hier
+§5 („Zufall gehört dem Server") und §6 („alles, was offline gehen kann, geht
+offline") zum ersten Mal aufeinandertreffen — und sich nicht widersprechen.
+
+Die Auflösung ist **Vorwürfeln**:
+
+1. Der Server würfelt zwanzig Aufträge und legt sie in den Snapshot.
+2. Der Client verbraucht sie offline. Drei sind annehmbar, der Rest rückt nach.
+3. Beim nächsten Sync füllt der Server auf — **hinten**, damit ein Sync dem
+   Spieler nicht die Auswahl unter den Fingern wegzieht, und **nach** dem
+   Kanarienvogel-Vergleich, damit Nachschub keinen Determinismus-Alarm auslöst.
+
+Der Sim-Kern würfelt dabei nie. Er liest fertige Aufträge und verbraucht sie —
+deshalb bleibt alles bit-für-bit reproduzierbar.
+
+Zwei Dinge, die dabei nicht offensichtlich waren:
+
+- **Der Server darf nur verteilen, was der Hof herstellen kann.** Ein frischer
+  Hof ohne Gehege, der drei Auftrage über Eier bekommt, hätte drei blockierte
+  Slots und offline nichts zu tun — genau der Leerlauf aus §6. Der Server
+  rechnet deshalb die erreichbaren Waren aus (Hülle über die freigeschalteten
+  Rezepte) und filtert danach.
+- **Ein endlicher Vorrat kann leerlaufen.** Im ersten Feldtest war er nach zwölf
+  Lieferungen leer. Jetzt sind es zwanzig, und wichtiger: Der NPC-Verkauf bleibt
+  immer offen. Wer den Vorrat aufbraucht, verliert den Bonus, nicht das Spiel.
+
+---
+
 ## Was der Prototyp NICHT beweist
 
 Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 
-- **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
-  das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
-  Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
+- **Der geteilte Markt selbst.** Verkaufsangebote, Escrow und Postfach
+  existieren, aber das *Füllen* eines Angebots durch einen anderen Spieler ist
+  online-only und hier nur als serverseitige Zustellung modelliert. Kein
+  Orderbuch, keine Nachbarn.
+- **Zufall, bei dem Vorwissen ein Cheat wäre.** Kundenaufträge lösen den Fall,
+  in dem Vorwissen harmlos ist (M6). Mystery-Kisten und alles, wo man aus
+  mehreren wählt, brauchen weiterhin Muster 1 aus §5 — würfeln beim Sync.
 - **Dass Inhalt jetzt wirklich billig ist**, gilt für die *Mechaniken, die es
   gibt*. Eine neue Feldfrucht, ein neues Rezept, eine neue Werkstatt, ein
   weiteres Feld: Tabellenzeile. Aufträge erfüllen, Ausbauten, Level und Zufall

@@ -59,6 +59,15 @@ export type CancelOrderCommand = CommandBase & { type: 'CANCEL_ORDER'; orderId: 
 /** Postfach leeren, soweit das Lager es hergibt (§7). */
 export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
 
+/**
+ * Einen Kundenauftrag beliefern: Ware abgeben, Belohnung kassieren.
+ *
+ * Voll offline-fähig, obwohl Zufall dahintersteckt — der Server hat die
+ * Aufträge vorgewürfelt und mit dem Snapshot mitgeschickt (§5). Der Client
+ * verbraucht nur, was schon dasteht.
+ */
+export type FillRequestCommand = CommandBase & { type: 'FILL_REQUEST'; requestId: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -66,7 +75,8 @@ export type Command =
   | SellNpcCommand
   | ListOrderCommand
   | CancelOrderCommand
-  | CollectMailCommand;
+  | CollectMailCommand
+  | FillRequestCommand;
 
 /** Gründe, aus denen die Sim eine Aktion ablehnt. Client und Server nutzen dieselben. */
 export type SimErrorCode =
@@ -89,7 +99,9 @@ export type SimErrorCode =
   | 'NO_ORDER_SLOTS'
   | 'PRICE_OUT_OF_BAND'
   | 'NO_SUCH_ORDER'
-  | 'NOTHING_TO_COLLECT';
+  | 'NOTHING_TO_COLLECT'
+  | 'NO_SUCH_REQUEST'
+  | 'REQUEST_NOT_ACTIVE';
 
 export class SimError extends Error {
   code: SimErrorCode;

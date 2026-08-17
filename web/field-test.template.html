@@ -105,7 +105,14 @@
   .lease p { margin: 0; font-size: .86rem; }
   .lease button { border-color: var(--wait); color: var(--wait); }
   .lease button.primary { background: var(--wait); color: var(--surface); }
-  .locked .fields, .locked #actions { opacity: .45; pointer-events: none; }
+  .locked .fields, .locked #actions, .locked #requests { opacity: .45; pointer-events: none; }
+  .request {
+    display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
+    margin-bottom: .35rem; font-family: var(--mono); font-size: .74rem;
+  }
+  .request .want { flex: 1; }
+  .request .pay { color: var(--live); white-space: nowrap; }
+  .request.next { opacity: .45; border-style: dashed; cursor: default; }
   .field.locked-plot { opacity: .6; border-style: dashed; }
   .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
@@ -144,6 +151,11 @@
     <div>
       <h2>Plätze — tippen zum Kaufen, Starten und Abholen</h2>
       <div class="fields" id="fields"></div>
+    </div>
+
+    <div>
+      <h2>Kundenaufträge — liefern bringt mehr als verkaufen</h2>
+      <div id="requests"></div>
     </div>
 
     <div>
@@ -428,6 +440,56 @@
     });
 
     renderSellButtons(s);
+    renderRequests(s);
+  }
+
+  /**
+   * Kundenaufträge: die vorderen Plätze sind annehmbar, danach kommt der
+   * Vorrat. Genau dieser Vorrat ist der Grund, warum offline nicht die Luft
+   * ausgeht — er liegt schon auf dem Gerät.
+   */
+  function renderRequests(s) {
+    var box = $('requests');
+    box.textContent = '';
+
+    var stacks = function (list) {
+      return list.map(function (x) { return x.amount + ' ' + itemName(x.item); }).join(' + ');
+    };
+
+    s.requests.slice(0, rules.requestSlots + 1).forEach(function (r, i) {
+      var isNext = i >= rules.requestSlots;
+      var btn = document.createElement('button');
+      btn.className = 'request' + (isNext ? ' next' : '');
+
+      var want = document.createElement('span');
+      want.className = 'want';
+      want.textContent = (isNext ? 'als Nächstes: ' : '') + stacks(r.wants);
+      var pay = document.createElement('span');
+      pay.className = 'pay';
+      pay.textContent = stacks(r.reward);
+
+      btn.appendChild(want); btn.appendChild(pay);
+
+      if (isNext) {
+        btn.disabled = true;
+      } else {
+        var ready = r.wants.every(function (w) { return (s.items[w.item] || 0) >= w.amount; });
+        btn.disabled = !ready;
+        btn.addEventListener('click', function () {
+          if (!isActive) return;
+          client.localTick = tickNow();
+          act('Auftrag geliefert (' + stacks(r.wants) + ')', client.fillRequest(r.id));
+        });
+      }
+      box.appendChild(btn);
+    });
+
+    if (s.requests.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'hint';
+      empty.textContent = 'Keine Aufträge — der Server füllt beim nächsten Sync auf.';
+      box.appendChild(empty);
+    }
   }
 
   function renderSellButtons(s) {

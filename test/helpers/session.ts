@@ -19,6 +19,7 @@ import { advancePassivesReference } from '../../src/sim/produce.ts';
 import type { State } from '../../src/sim/state.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import type { Snapshot } from '../../src/server/server.ts';
+import { topUpRequests } from '../../src/server/requests.ts';
 
 /** Deterministischer PRNG — jeder Fehlschlag ist exakt reproduzierbar. */
 export function mulberry32(seed: number): () => number {
@@ -109,12 +110,16 @@ export function referenceStepMatchesUnit(): boolean {
  * verletzen also keine Invariante, und der Server prüft ohnehin nur Commands
  * gegen einen Ausgangszustand — nicht, wie dieser entstanden ist.
  */
-export function fuzzStart(rules: Ruleset, gold: number): State {
+export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): State {
   const base = initialState(rules);
-  if (gold <= 0) return base;
   const items = base.items.slice();
-  items[rules.currency] = gold;
-  return { ...base, items };
+  if (gold > 0) items[rules.currency] = gold;
+
+  // Kundenaufträge gehören zum Startzustand, sonst bliebe M6 ungeprüft. Sie
+  // entstehen über denselben Server-Code wie im Betrieb — nur mit einem
+  // reproduzierbaren Würfel.
+  const requests = rnd ? topUpRequests({ ...base, items }, rules, 1, rnd).requests : [];
+  return { ...base, items, requests };
 }
 
 export type SessionOptions = {
@@ -125,7 +130,7 @@ export type SessionOptions = {
   /** Anteil rein zufälliger (meist illegaler) Aktionen — testet den Ablehnpfad. */
   chaosChance: number;
   /**
-   * Nie verkaufen, nie einstellen — nur produzieren und einlagern.
+   * Nie verkaufen, nie einstellen, nie liefern — nur produzieren und einlagern.
    *
    * Klingt nach einem seltsamen Spieler, ist aber der einzige verlässliche Weg
    * ans **volle Lager**. Und das ist die kritische Ecke aus §7: Dort greift der
@@ -184,7 +189,7 @@ export function playRandomSession(
     }
 
     if (rnd() < opts.chaosChance) {
-      switch (pick(4)) {
+      switch (pick(5)) {
         case 0:
           client.start(pick(rules.plots.length + 1), pick(rules.recipes.length + 1));
           break;
@@ -193,6 +198,10 @@ export function playRandomSession(
           break;
         case 3:
           client.buy(pick(rules.plots.length + 1));
+          break;
+        case 4:
+          // Auch ungültige Auftragsnummern müssen sauber abprallen.
+          client.fillRequest(pick(40));
           break;
         default:
           client.sellNpc(pick(rules.items.length + 1), 1 + pick(200));
@@ -242,6 +251,17 @@ export function playRandomSession(
       }
     }
     if (s.mail.length > 0) moves.push(() => client.collectMail());
+
+    // Kundenaufträge beliefern, sobald die Ware da ist (M6). Nur die vorderen
+    // Plätze sind annehmbar — genau wie im Spiel. Der Hamster liefert nicht:
+    // Auch das gäbe Ware aus der Hand, und er will das Lager volllaufen sehen.
+    if (!opts.hoard) {
+      s.requests.slice(0, rules.requestSlots).forEach((request) => {
+        if (request.wants.every((w) => count(s, w.item) >= w.amount)) {
+          moves.push(() => client.fillRequest(request.id));
+        }
+      });
+    }
 
     if (moves.length > 0) moves[pick(moves.length)]!();
   }

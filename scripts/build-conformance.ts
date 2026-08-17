@@ -94,10 +94,7 @@ ${modules}
 
       try {
         var rules = getRuleset(v.rulesetVersion);
-        var start = initialState(rules);
-        start.items = start.items.slice();
-        start.items[rules.currency] = v.startGold;
-        actual = canonicalize(simulateAll(start, v.commands, rules));
+        actual = canonicalize(simulateAll(v.startState, v.commands, rules));
       } catch (e) {
         error = String((e && e.message) || e);
       }
@@ -168,6 +165,7 @@ ${modules}
     totalGoods: totalGoods,
     count: count,
     EMPTY_PLOT: EMPTY_PLOT,
+    spaceLeft: spaceLeft,
     hashState: hashState,
   };
 })();

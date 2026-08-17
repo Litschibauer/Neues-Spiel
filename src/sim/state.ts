@@ -66,6 +66,18 @@ export type MailItem = {
   arrivedAt: number;
 };
 
+/**
+ * Ein angenommener Kundenauftrag: liefere `wants`, bekomme `reward`.
+ *
+ * Steht fertig im Zustand — gewürfelt hat ihn der Server (§5). Damit ist er
+ * offline erfüllbar, ohne dass der Client je etwas würfeln müsste.
+ */
+export type Request = {
+  id: number;
+  wants: readonly { item: number; amount: number }[];
+  reward: readonly { item: number; amount: number }[];
+};
+
 export type State = {
   /** Spielzeit in Ticks. NIE die Geräteuhr (§4). */
   tick: number;
@@ -85,6 +97,15 @@ export type State = {
   /** Postfach: was von außen kam oder aus verfallenen Aufträgen zurückfiel (§7). */
   mail: readonly MailItem[];
   nextOrderId: number;
+
+  /**
+   * Kundenaufträge — eine Warteschlange, kein Beutel.
+   *
+   * Die ersten `rules.requestSlots` sind annehmbar, der Rest ist Vorrat. Ist
+   * einer erledigt, rückt der nächste nach: offline, ohne Netz, ohne Würfel.
+   * Aufgefüllt wird beim Sync vom Server.
+   */
+  requests: readonly Request[];
 };
 
 /** Bestand eines Gegenstands. Unbekannter Index → 0, nie `undefined`. */
@@ -142,7 +163,7 @@ export function initialState(rules: Ruleset): State {
   const passives: number[] = [];
   for (let i = 0; i < rules.passives.length; i++) passives.push(0);
 
-  return { tick: 0, items, plots, passives, orders: [], mail: [], nextOrderId: 1 };
+  return { tick: 0, items, plots, passives, orders: [], mail: [], nextOrderId: 1, requests: [] };
 }
 
 /**
@@ -168,6 +189,7 @@ export function cloneState(s: State): State {
     orders: s.orders,
     mail: s.mail,
     nextOrderId: s.nextOrderId,
+    requests: s.requests,
   };
 }
 

@@ -19,7 +19,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { RULESETS, getRuleset } from '../src/sim/rules.ts';
-import { initialState } from '../src/sim/state.ts';
 import { simulateAll } from '../src/sim/sim.ts';
 import { hashState } from '../src/sim/hash.ts';
 import type { State } from '../src/sim/state.ts';
@@ -28,8 +27,15 @@ import type { Command } from '../src/sim/commands.ts';
 type Vector = {
   name: string;
   rulesetVersion: number;
-  /** Münzen im Ausgangszustand. Nicht lagerpflichtig, also invariantenneutral. */
-  startGold: number;
+  /**
+   * Der vollständige Ausgangszustand.
+   *
+   * Steht bewusst ausgeschrieben in der Datei, statt aus Parametern
+   * rekonstruiert zu werden: Ein Vektor muss seine Eingabe komplett
+   * mitbringen, sonst prüft eine fremde Plattform am Ende die
+   * Rekonstruktionslogik mit statt nur den Sim-Kern.
+   */
+  startState: State;
   commands: Command[];
   expectedStateHash: string;
   expectedState: State;
@@ -57,7 +63,16 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   const types = new Set(golden.vectors.flatMap((v) => v.commands.map((c) => c.type)));
   assert.deepEqual(
     [...types].sort(),
-    ['BUY', 'CANCEL_ORDER', 'COLLECT', 'COLLECT_MAIL', 'LIST_ORDER', 'SELL_NPC', 'START'],
+    [
+      'BUY',
+      'CANCEL_ORDER',
+      'COLLECT',
+      'COLLECT_MAIL',
+      'FILL_REQUEST',
+      'LIST_ORDER',
+      'SELL_NPC',
+      'START',
+    ],
     'Korpus deckt nicht alle Command-Typen ab',
   );
 
@@ -92,10 +107,7 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
 test('jeder Golden Vector reproduziert exakt seinen erwarteten Endzustand', () => {
   for (const v of golden.vectors) {
     const rules = getRuleset(v.rulesetVersion);
-    const start = initialState(rules);
-    const items = start.items.slice();
-    items[rules.currency] = v.startGold;
-    const final = simulateAll({ ...start, items }, v.commands, rules);
+    const final = simulateAll(v.startState, v.commands, rules);
 
     // Erst der volle Zustand — der zeigt bei einem Fehlschlag, WAS abweicht.
     assert.deepEqual(final, v.expectedState, `Vektor ${v.name}: Zustand weicht ab`);

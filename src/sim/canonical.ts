@@ -29,6 +29,11 @@ export function canonicalize(state: State): string {
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
     .join(',');
   const mail = state.mail.map((m) => `${m.item}:${m.amount}:${m.arrivedAt}`).join(',');
+  const stacks = (list: readonly { item: number; amount: number }[]) =>
+    list.map((x) => `${x.item}x${x.amount}`).join('+');
+  const requests = state.requests
+    .map((r) => `${r.id}:${stacks(r.wants)}>${stacks(r.reward)}`)
+    .join(',');
   return [
     `tick=${state.tick}`,
     `items=[${items}]`,
@@ -37,6 +42,7 @@ export function canonicalize(state: State): string {
     `orders=[${orders}]`,
     `mail=[${mail}]`,
     `nextOrderId=${state.nextOrderId}`,
+    `requests=[${requests}]`,
   ].join('|');
 }
 
@@ -56,6 +62,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'COLLECT_MAIL':
       return `${c.seq}|${c.tick}|COLLECT_MAIL`;
+    case 'FILL_REQUEST':
+      return `${c.seq}|${c.tick}|FILL_REQUEST|${c.requestId}`;
     default:
       throw new Error('unknown command type');
   }

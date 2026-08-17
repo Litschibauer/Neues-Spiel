@@ -206,6 +206,22 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!rules.items[m.item]) problems.push(`Postfach: Gegenstand ${m.item} unbekannt`);
   }
 
+  // Auch die Auftragsschlange ist ein Behälter und braucht ihr Limit (§7).
+  if (state.requests.length > rules.requestQueueMax) {
+    problems.push(`Auftragsvorrat über Limit: ${state.requests.length} > ${rules.requestQueueMax}`);
+  }
+  const requestIds = new Set<number>();
+  for (const r of state.requests) {
+    if (requestIds.has(r.id)) problems.push(`Auftrags-Nummer ${r.id} doppelt vergeben`);
+    requestIds.add(r.id);
+    if (r.wants.length === 0) problems.push(`Auftrag ${r.id} verlangt nichts`);
+    if (r.reward.length === 0) problems.push(`Auftrag ${r.id} gibt nichts`);
+    for (const stack of [...r.wants, ...r.reward]) {
+      if (!rules.items[stack.item]) problems.push(`Auftrag ${r.id}: Gegenstand unbekannt`);
+      if (stack.amount <= 0) problems.push(`Auftrag ${r.id}: Menge <= 0`);
+    }
+  }
+
   for (const [i, progress] of state.passives.entries()) {
     const passive = rules.passives[i];
     if (!passive) continue;

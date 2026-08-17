@@ -104,10 +104,15 @@ if (persisted) {
   game.appliedLog = persisted.appliedLog;
   game.pendingDeliveries = persisted.pendingDeliveries;
   game.targetRulesetVersion = TARGET_RULESET;
+  game.nextRequestId = persisted.nextRequestId ?? 1;
   console.log(`Spielstand geladen: seq=${game.snapshot.seq}, tick=${game.snapshot.state.tick}`);
 } else {
   console.log('Kein Spielstand gefunden — neuer Hof.');
 }
+
+// Kundenaufträge sofort auffüllen: Wer die App startet, soll nicht erst eine
+// Verbindung brauchen, um ein Ziel zu haben (Architektur §6).
+game.stockRequests();
 
 function persist(): void {
   save(SAVE_PATH, {
@@ -116,6 +121,7 @@ function persist(): void {
     appliedLog: game.appliedLog,
     pendingDeliveries: game.pendingDeliveries,
     targetRulesetVersion: game.targetRulesetVersion,
+    nextRequestId: game.nextRequestId,
   });
 }
 
@@ -339,6 +345,7 @@ const server = createServer(async (req, res) => {
 
       if (url.pathname === '/api/admin/reset') {
         game.reset(initialState(getRuleset(TARGET_RULESET)), Date.now(), TARGET_RULESET);
+        game.stockRequests();
         persist();
         console.log('[admin] Spielstand zurückgesetzt');
         return json(res, 200, { ok: true });

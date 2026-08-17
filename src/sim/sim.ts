@@ -292,6 +292,43 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    /**
+     * Kundenauftrag beliefern (M6).
+     *
+     * Die Mechanik, aus der die meisten Inhalte als Daten herausfallen: LKW,
+     * Kunden, Boote, Sonderaufträge, Eventaufgaben sind alle „liefere N×A und
+     * M×B" mit anderen Zahlen.
+     *
+     * Und sie ist voll offline-fähig, obwohl Zufall dahintersteckt: Gewürfelt
+     * hat der Server, die Aufträge liegen fertig im Zustand (§5). Ist einer
+     * erledigt, rückt der nächste aus dem Vorrat nach — ohne Netz.
+     */
+    case 'FILL_REQUEST': {
+      const index = s.requests.findIndex((r) => r.id === cmd.requestId);
+      if (index < 0) throw new SimError('NO_SUCH_REQUEST');
+      // Nur die vorderen Plätze sind annehmbar. Der Rest ist Vorrat und darf
+      // nicht übersprungen werden — sonst wäre die Schlange ein Regal, aus dem
+      // man sich den besten Auftrag heraussucht.
+      if (index >= rules.requestSlots) throw new SimError('REQUEST_NOT_ACTIVE');
+
+      const request = s.requests[index]!;
+      for (const stack of request.wants) {
+        if (count(s, stack.item) < stack.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      }
+
+      // Lagerpflichtige Belohnungen brauchen Platz — wie überall (§7). Was der
+      // Auftrag abnimmt, zählt dabei schon nicht mehr mit.
+      const changes: [number, number][] = request.wants.map((w) => [w.item, -w.amount]);
+      for (const r of request.reward) changes.push([r.item, r.amount]);
+      const items = addItems(s.items, changes);
+      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+
+      const next = cloneState(s);
+      next.items = items;
+      next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
+      return next;
+    }
+
     default:
       throw new SimError('UNKNOWN_COMMAND');
   }
