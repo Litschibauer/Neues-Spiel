@@ -63,7 +63,11 @@ export type ItemDef = {
  */
 export type RecipeDef = {
   id: string;
-  /** Leer = wächst aus dem Nichts (Saatgut ist gratis). */
+  /**
+   * Leer = wächst aus dem Nichts. Bei Feldfrüchten steht hier die Frucht
+   * SELBST: Saatgut ist kein eigener Gegenstand, sondern ein Teil der Ernte,
+   * den man nicht verkauft.
+   */
   inputs: readonly ItemStack[];
   output: ItemStack;
   durationTicks: number;
@@ -293,10 +297,14 @@ const V1: Ruleset = {
 
   items: [
     { id: 'gold', storable: false, npcPrice: 0, npcBuyPrice: 0 },
-    // Weizen ist Saatgut UND Ware. Deshalb als einziges Gut beim Händler
-    // erhältlich — zum doppelten Verkaufspreis, damit daraus kein Kreisgeschäft
-    // wird.
-    { id: 'wheat', storable: true, npcPrice: 3, npcBuyPrice: 6 },
+    // Weizen ist Saatgut UND Ware — ein Gegenstand, kein zweiter Katalogeintrag
+    // fürs Korn. Deshalb als einziges Gut beim Händler erhältlich, und teurer,
+    // als er zahlt: sonst wäre er ein Kreisgeschäft.
+    //
+    // Die Spanne muss unter dem Ernteertrag bleiben (2 × 3 = 6), sonst wäre
+    // Nachkaufen ein Verlustgeschäft und die Rettung aus dem leeren Lager keine.
+    // `validateRuleset` prüft genau das.
+    { id: 'wheat', storable: true, npcPrice: 3, npcBuyPrice: 5 },
     { id: 'feed', storable: true, npcPrice: 8, npcBuyPrice: 0 },
     { id: 'eggs', storable: true, npcPrice: 25, npcBuyPrice: 0 },
   ],
@@ -304,17 +312,22 @@ const V1: Ruleset = {
 
   recipes: [
     /**
-     * Säen kostet ein Korn, Ernten bringt drei.
+     * Aus einem Weizen werden zwei. Das Saatgut IST die Ware — kein eigener
+     * Gegenstand, kein zweiter Katalogeintrag, keine Sondermechanik.
      *
      * Vorher kam Weizen aus dem Nichts, und damit war die ganze Wirtschaft eine
-     * Einbahnstraße: Zeit rein, Ware raus, ohne Einsatz. Mit Saatgut ist jedes
-     * Feld eine Entscheidung — und Weizen bekommt einen echten Preis, weil man
-     * ihn auch verbrauchen kann, statt ihn nur zu verkaufen.
+     * Einbahnstraße: Zeit rein, Ware raus, ohne Einsatz. Jetzt ist jedes Feld
+     * eine Entscheidung — und Weizen bekommt einen echten Preis, weil man ihn
+     * auch verbrauchen kann, statt ihn nur zu verkaufen.
+     *
+     * Verdopplung statt Verdreifachung ist keine Feinheit: Sie halbiert das
+     * Wachstum je Runde und macht jedes einzelne Korn wichtig. Wer alles
+     * verkauft, kommt langsamer zurück, als er weg war.
      */
     {
       id: 'wheat',
       inputs: [{ item: WHEAT, amount: 1 }],
-      output: { item: WHEAT, amount: 3 },
+      output: { item: WHEAT, amount: 2 },
       durationTicks: 120,
       xp: 2,
     },
@@ -444,7 +457,7 @@ const V2: Ruleset = {
   version: 2,
   items: [
     { id: 'gold', storable: false, npcPrice: 0, npcBuyPrice: 0 },
-    { id: 'wheat', storable: true, npcPrice: 4, npcBuyPrice: 8 },
+    { id: 'wheat', storable: true, npcPrice: 4, npcBuyPrice: 6 },
     { id: 'feed', storable: true, npcPrice: 9, npcBuyPrice: 0 },
     { id: 'eggs', storable: true, npcPrice: 28, npcBuyPrice: 0 },
   ],
@@ -452,7 +465,7 @@ const V2: Ruleset = {
     {
       id: 'wheat',
       inputs: [{ item: WHEAT, amount: 1 }],
-      output: { item: WHEAT, amount: 3 },
+      output: { item: WHEAT, amount: 2 },
       durationTicks: 100,
       xp: 2,
     },
@@ -492,7 +505,7 @@ const DEV: Ruleset = {
     {
       id: 'wheat',
       inputs: [{ item: WHEAT, amount: 1 }],
-      output: { item: WHEAT, amount: 3 },
+      output: { item: WHEAT, amount: 2 },
       durationTicks: 12,
       xp: 2,
     },

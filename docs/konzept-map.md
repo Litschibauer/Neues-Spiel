@@ -43,8 +43,10 @@ des einen die Eingabe des anderen ist.
 
 Parameter statt neuer Mechaniken: Warteschlangenplätze, Kapazität, Geschwindigkeit.
 
-**Saatgut ist endlich.** Ein Feld frisst ein Korn und gibt drei zurück — der
-Gewinn sind die zwei, nicht die drei. Das klingt nach einer Kleinigkeit und ist
+**Saatgut ist endlich, und es ist kein eigener Gegenstand.** Gesät wird die
+Frucht selbst: Ein Feld frisst einen Weizen und gibt zwei zurück — der Gewinn
+ist der eine, nicht die zwei. Ein zweiter Katalogeintrag „Weizensamen" wäre
+doppelte Buchführung für dieselbe Sache. Das klingt nach einer Kleinigkeit und ist
 die Stelle, an der die Wirtschaft überhaupt erst eine wird: Vorher entstand
 Weizen aus dem Nichts, und jede Zahl weiter oben in der Kette hing an einer
 Quelle ohne Boden.

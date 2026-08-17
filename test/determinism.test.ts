@@ -246,9 +246,11 @@ test('geteilte Arrays: ein neuer Zustand verändert den alten nie', () => {
     { seq: 2, tick: 1, type: 'START', plot: 1, recipe: R_WHEAT },
     { seq: 3, tick: 2, type: 'BUY', plot: MILL },
     { seq: 4, tick: GROW, type: 'COLLECT', plot: 0 },
-    { seq: 5, tick: GROW, type: 'LIST_ORDER', item: WHEAT, amount: 5, price: 3 },
+    // Mengen so klein, dass sie in den Vorrat passen: Zwei Felder bringen
+    // netto zwei Weizen, nicht zwanzig.
+    { seq: 5, tick: GROW, type: 'LIST_ORDER', item: WHEAT, amount: 3, price: 3 },
     { seq: 6, tick: GROW + 1, type: 'COLLECT', plot: 1 },
-    { seq: 7, tick: GROW + 2, type: 'SELL_NPC', item: WHEAT, amount: 5 },
+    { seq: 7, tick: GROW + 2, type: 'SELL_NPC', item: WHEAT, amount: 3 },
   ];
 
   let s = start;

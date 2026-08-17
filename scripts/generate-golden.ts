@@ -51,7 +51,7 @@ const PROFILES: Array<{ name: string; opts: SessionOptions; seeds: number[] }> =
   },
   {
     // Nie verkaufen: der einzige verlaessliche Weg ans volle Lager. Seit ein
-    // Feld netto zwei Weizen bringt statt zehn, braucht der Weg dorthin
+    // Feld netto einen Weizen bringt statt zehn, braucht der Weg dorthin
     // deutlich mehr Schritte.
     name: 'hoard',
     opts: { steps: 120, maxAdvance: 1500, advanceChance: 0.45, chaosChance: 0.05, hoard: true },
