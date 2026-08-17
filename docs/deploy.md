@@ -9,6 +9,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 | --- | --- | --- |
 | Start | `npm run dev` | `npm run prod` |
 | Port | 8788 | 8787 |
+| Lauscht auf | `0.0.0.0` — im LAN erreichbar | `127.0.0.1` — **nur lokal** |
 | Spielstand | `data/dev/save.json` | `data/prod/save.json` |
 | Token | `data/dev/token` | `data/prod/token` |
 | Regelwerk | v1001 — Sekundenuhren | v2 — echte Zeiten |
@@ -17,7 +18,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version
 herumprobieren, während die echten Spielstände nebenan unangetastet weiterlaufen.
 
-Drei Riegel sind eingebaut, und alle drei brechen den Start ab statt zu warnen
+Vier Riegel sind eingebaut, und alle vier brechen den Start ab statt zu warnen
 (siehe `src/server/config.ts`):
 
 1. **Die Umgebung muss man nennen.** `npm start` ohne `--env` startet nicht.
@@ -26,6 +27,11 @@ Drei Riegel sind eingebaut, und alle drei brechen den Start ab statt zu warnen
    umgerechnet.
 3. **Keine Werkbank in Produktion**, außer mit `NEUES_SPIEL_ADMIN=1`. Sie kann
    Gegenstände verschenken und Zeit gutschreiben.
+4. **Produktion nicht im Klartext ins Netz.** Der Hof-Schlüssel reist in jedem
+   Aufruf mit, und daneben steht kein Passwort: Wer ihn unterwegs mitliest, hat
+   den Hof. Deshalb lauscht Produktion standardmäßig nur auf `127.0.0.1` —
+   nach außen kommt sie über einen TLS-Endpunkt davor. Siehe den Abschnitt
+   **HTTPS** weiter unten.
 
 Der Server braucht **keine Abhängigkeiten** — nur Node ≥ 22.6. Auf 1 GB RAM ist er
 gelangweilt: ein Sync kostet ~8 µs, der Spielstand ist ein paar Kilobyte.
@@ -66,7 +72,7 @@ cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
 npm run build   # baut dist/field-test.html, dist/conformance.html, dist/admin.html
-npm test        # 140 Tests, sollte grün sein
+npm test        # muss grün sein — sonst nicht ausrollen
 ```
 
 ## 3. Starten
@@ -143,8 +149,12 @@ gemütlich, für Zehntausende gehört dort eine Datenbank hin (Roadmap, Phase 4)
 
 ```bash
 curl -s localhost:8787/health
-# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"seq":0,"tick":0}
+# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"accounts":3,"secure":true}
 ```
+
+Nichts über einzelne Höfe — die Route braucht bewusst keine Zugangsdaten, also
+darf sie auch nichts verraten, was einem Hof gehört. `secure` sagt, ob bei den
+Spielern verschlüsselt ankommt (siehe HTTPS unten).
 
 `version` kommt aus `NEUES_SPIEL_VERSION`. Beim Start mitgeben, dann steht der
 Commit drin, statt raten zu müssen:
@@ -180,27 +190,74 @@ NEUES_SPIEL_RULESET=2 npm run prod    # dasselbe Spiel, gepatcht
 Zurück geht es nicht — Downgrades sind bewusst nicht vorgesehen; für den alten
 Stand `rm data/prod/save.json`.
 
-### HTTPS — sonst startet die App nicht ohne Netz
+### HTTPS
 
-Der Service Worker, der die App-Hülle im Funkloch bereitstellt, läuft nur in
-einem **sicheren Kontext**: `https://` oder `localhost`. Über `http://` im LAN
-registriert er sich schlicht nicht. Das Spiel funktioniert dann trotzdem — nur
-ein Neuladen ohne Netz scheitert weiterhin.
+Zwei unabhängige Gründe, und der zweite wird meist übersehen:
 
-Der einfachste Weg zu echtem HTTPS ohne Domain und ohne Portfreigabe ist
-**Tailscale Serve**: Es besorgt ein gültiges Zertifikat für den
-`*.ts.net`-Namen der Maschine.
+1. **Der Hof-Schlüssel reist in jedem Aufruf mit.** Daneben steht kein Passwort
+   und keine zweite Hürde — wer ihn unterwegs mitliest, hat den Hof. Im selben
+   WLAN genügt dafür ein Laptop.
+2. **Ohne sicheren Kontext kein Service Worker.** Der, der die App-Hülle im
+   Funkloch bereitstellt, registriert sich nur unter `https://` oder auf
+   `localhost`. Über `http://` im LAN startet die App also doch nicht ohne
+   Netz — im Protokoll der Seite steht dann „App-Hülle nicht offline-fähig".
+
+Zwei Wege dorthin.
+
+**a) Ein TLS-Endpunkt davor** — der bequeme Weg, und der einzige, der ohne
+eigene Domain auskommt. **Tailscale Serve** besorgt ein gültiges Zertifikat für
+den `*.ts.net`-Namen der Maschine:
 
 ```bash
 tailscale serve --bg --https 443 http://127.0.0.1:8787
 tailscale serve status          # zeigt die https://…ts.net-Adresse
 ```
 
-Danach die Seite über diese Adresse öffnen, nicht über die IP. Im Protokoll
-der Seite steht sonst „App-Hülle nicht offline-fähig".
+Der Spielserver bleibt dabei auf `127.0.0.1` — sein Standard in Produktion,
+also nichts zu tun. Danach die Seite über die `ts.net`-Adresse öffnen, nicht
+über die IP.
+
+Steht der Endpunkt auf einer **anderen** Maschine, muss der Spielserver nach
+außen lauschen. Dann beides setzen:
+
+```bash
+NEUES_SPIEL_HOST=0.0.0.0 NEUES_SPIEL_BEHIND_PROXY=1 npm run prod
+```
+
+`NEUES_SPIEL_BEHIND_PROXY=1` sagt zweierlei: Riegel 4 ist erfüllt, *und*
+`x-forwarded-for` darf geglaubt werden. Ohne Proxy davor wird dieser Kopf
+bewusst ignoriert — sonst umginge man die Anlege-Bremse mit einer Zeile.
+
+**b) Eigenes Zertifikat** — dann verschlüsselt der Spielserver selbst:
+
+```bash
+NEUES_SPIEL_TLS_CERT=/etc/letsencrypt/live/hof.example/fullchain.pem \
+NEUES_SPIEL_TLS_KEY=/etc/letsencrypt/live/hof.example/privkey.pem \
+NEUES_SPIEL_HOST=0.0.0.0 \
+npm run prod
+```
+
+Beide Pfade gehören zusammen: Nur einer von beiden bricht den Start ab. Halb
+konfiguriertes TLS ist der schlimmste Fall — man glaubt, es läuft
+verschlüsselt, und es läuft im Klartext. Zwischenzertifikate über
+`NEUES_SPIEL_TLS_CA`. Der Dienst muss den Schlüssel lesen dürfen; liegt er
+unter `/etc/letsencrypt`, heißt das meist `User=root` oder eine Kopie mit
+passenden Rechten. Ein erneuertes Zertifikat greift erst nach
+`systemctl restart` — Node liest die Datei beim Start.
+
+Ob es angekommen ist, sagt `/health`:
+
+```bash
+curl -s https://…/health      # "secure":true
+```
+
+`secure` ist `true`, wenn der Server selbst TLS beendet, wenn
+`NEUES_SPIEL_BEHIND_PROXY=1` gesetzt ist oder wenn er nur auf `localhost`
+lauscht. Steht dort `false`, reist der Schlüssel im Klartext.
 
 Zum Ausprobieren ohne all das genügt `http://localhost:8788` direkt auf dem
-Rechner — localhost gilt als sicherer Kontext.
+Rechner — localhost gilt als sicherer Kontext. **Dev** darf deshalb weiter
+unverschlüsselt ins LAN; das Startprotokoll sagt dann deutlich, was fehlt.
 
 ## 4. Erreichbarkeit prüfen
 
@@ -208,15 +265,30 @@ Zuerst lokal auf dem Server:
 
 ```bash
 curl http://127.0.0.1:8787/health
-# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"seq":0,"tick":0}
+# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"accounts":3,"secure":true}
 ```
 
-Dann im Browser `http://<server-ip>:8787/` öffnen, Token eintragen, fertig.
+Dann von außen über die HTTPS-Adresse des Endpunkts davor (bei Tailscale Serve
+die `…ts.net`-Adresse), und dort einen Hof anlegen.
 
-Lädt die Seite von außen nicht, blockiert eine Firewall den Port:
+Lädt die Seite von außen nicht, liegt es an einer von zwei Stellen. Erst prüfen,
+**wo** der Server lauscht:
 
 ```bash
-ss -ltn | grep 8787          # lauscht der Server überhaupt?
+ss -ltn | grep 8787          # 127.0.0.1:8787 → nur lokal, das ist der Standard
+```
+
+Steht dort `127.0.0.1`, ist das kein Fehler: Produktion lauscht absichtlich nur
+lokal (Riegel 4), und nach außen kommt der Endpunkt davor. Dann dort suchen:
+
+```bash
+tailscale serve status       # zeigt er die Weiterleitung auf 127.0.0.1:8787?
+```
+
+Soll der Server wirklich selbst nach außen lauschen, siehe HTTPS oben — und dann
+kann eine Firewall den Port blockieren:
+
+```bash
 ufw status                   # falls ufw läuft: ufw allow 8787/tcp
 ```
 
@@ -255,6 +327,9 @@ After=network.target
 Type=simple
 WorkingDirectory=/home/Neues-Spiel
 # Kein Token nötig — der Dienst nimmt es aus data/prod/token.
+# Lauscht auf 127.0.0.1:8787. Nach außen kommt er über den TLS-Endpunkt davor
+# (tailscale serve). Soll er selbst nach außen lauschen, gehört hierhin
+# entweder NEUES_SPIEL_BEHIND_PROXY=1 oder ein Zertifikat — siehe HTTPS oben.
 ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts --env=prod
 Restart=always
 RestartSec=5
@@ -333,11 +408,13 @@ sonst testest du nichts. Drei Wege, vom bequemsten zum saubersten:
 | --- | --- | --- |
 | **Tailscale** | gering | Server und Handy im selben privaten Netz, nichts öffentlich. Für einen Feldtest die beste Wahl. |
 | **Cloudflare Tunnel** | gering | Öffentliche HTTPS-Adresse ohne offenen Port am Router. |
-| **Portweiterleitung + Reverse Proxy** | höher | Nur mit TLS davor — sonst geht das Token im Klartext durchs Netz. |
+| **Portweiterleitung + Reverse Proxy** | höher | Nur mit TLS davor — Riegel 4 lässt es sonst gar nicht erst starten. |
 
-⚠️ **Nie ohne TLS über das offene Internet.** Das Token wandert in jedem Request
-mit; über einfaches HTTP liest es jedes Netz zwischen Handy und Server mit.
-Tailscale löst das, weil gar nichts öffentlich wird.
+⚠️ **Nie ohne TLS über das offene Internet.** Der Hof-Schlüssel wandert in jedem
+Request mit; über einfaches HTTP liest ihn jedes Netz zwischen Handy und Server
+mit. Tailscale löst das, weil gar nichts öffentlich wird. In Produktion setzt
+Riegel 4 das durch — dort ist es keine Empfehlung mehr, sondern eine
+Startbedingung.
 
 ---
 
@@ -396,10 +473,13 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | Route | Auth | Zweck |
 | --- | --- | --- |
 | `GET /` | — | Feldtest-Seite |
-| `GET /admin` | — | Werkbank (Aktionen brauchen das Token) |
-| `GET /health` | — | Lebenszeichen, aktuelle `seq` |
-| `GET /api/state` | Bearer | Snapshot + Serverzeit |
-| `POST /api/sync` | Bearer | Command-Log einreichen |
+| `GET /admin` | — | Werkbank (Aktionen brauchen das Admin-Token) |
+| `GET /health` | — | Umgebung, Stand, Regelwerk, `secure` |
+| `GET /sw.js`, `GET /manifest.webmanifest` | — | App-Hülle für den Funkloch-Start |
+| `POST /api/account` | — | Neuen Hof anlegen (mit Bremse, R4) |
+| `GET /api/state` | Hof-Schlüssel | Snapshot + Serverzeit |
+| `POST /api/sync` | Hof-Schlüssel | Command-Log einreichen |
+| `POST /api/deliver?item=…&amount=N` | Hof-Schlüssel | Ware in den eigenen Briefkasten |
 | `GET /api/admin/status` | Bearer | Vollständiger Serverzustand |
 | `POST /api/admin/time?seconds=N` | Bearer | Zeit gutschreiben |
 | `POST /api/admin/grant?item=…&amount=N` | Bearer | Ware ins Postfach |
@@ -415,7 +495,28 @@ Log-Länge sonst frei (R4).
 
 Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 
-- Ein Spielstand je Umgebung, ein Token in `data/<umgebung>/token`. Keine Accounts, keine Registrierung.
-- JSON-Datei statt Datenbank. Atomar geschrieben, aber ohne Backups.
-- Kein TLS, kein Rate-Limit pro IP, keine Metriken.
+- **Keine Wiederherstellung.** Schlüssel weg heißt Hof weg — es gibt kein
+  Passwort und keine E-Mail, über die etwas zurückzuholen wäre.
+- Eine JSON-Datei je Hof statt Datenbank. Atomar geschrieben, aber ohne Backups;
+  ab einigen Tausend Höfen gehört dort etwas anderes hin.
+- TLS gibt es (siehe oben), aber **kein Rate-Limit außer beim Anlegen** und keine
+  Metriken. Ein entschlossener Angreifer kann `/api/sync` fluten.
 - Snapshot-Signatur (§9) fehlt — der Server hält ohnehin seine eigene Kopie.
+
+## Umgebungsvariablen
+
+| Variable | Standard | Wofür |
+| --- | --- | --- |
+| `NEUES_SPIEL_ENV` / `--env` | — | `dev` oder `prod`. **Pflicht** (Riegel 1). |
+| `NEUES_SPIEL_HOST` | dev `0.0.0.0`, prod `127.0.0.1` | Woran der Server lauscht |
+| `PORT` | dev 8788, prod 8787 | |
+| `NEUES_SPIEL_TLS_CERT` / `_KEY` | — | Eigenes Zertifikat; beide oder keins |
+| `NEUES_SPIEL_TLS_CA` | — | Zwischenzertifikate, falls nötig |
+| `NEUES_SPIEL_BEHIND_PROXY` | `0` | Ein TLS-Endpunkt steht davor; erlaubt `x-forwarded-for` |
+| `NEUES_SPIEL_RULESET` | dev 1001, prod 2 | Zielversion des Regelwerks |
+| `NEUES_SPIEL_ADMIN` | dev `1`, prod `0` | Werkbank an/aus (Riegel 3) |
+| `NEUES_SPIEL_VERSION` | `unbekannt` | Steht in `/health` |
+| `NEUES_SPIEL_SAVE` / `_TOKEN_FILE` | `data/<umgebung>/…` | Andere Pfade |
+| `NEUES_SPIEL_TOKEN` | Datei | Admin-Token vorgeben (landet in der Shell-History) |
+| `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Anlege-Bremse je Herkunft |
+| `NEUES_SPIEL_MAX_ACCOUNTS` | 5000 | Obergrenze für Höfe |

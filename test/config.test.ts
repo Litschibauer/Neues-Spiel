@@ -12,7 +12,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ConfigError, describeConfig, resolveConfig } from '../src/server/config.ts';
+import {
+  ConfigError,
+  describeConfig,
+  isSecureTransport,
+  resolveConfig,
+} from '../src/server/config.ts';
 import { DEV_RULESET_VERSION, LATEST_RULESET_VERSION } from '../src/sim/rules.ts';
 
 const ROOT = '/srv/spiel';
@@ -74,6 +79,77 @@ test('RIEGEL: die Werkbank ist in Produktion aus, in Dev an', () => {
 
   // Und in Dev abschalten geht ebenso.
   assert.equal(resolveConfig({ NEUES_SPIEL_ADMIN: '0' }, ['--env=dev'], ROOT).adminEnabled, false);
+});
+
+test('RIEGEL: Produktion geht nicht im Klartext ins Netz', () => {
+  // Der Hof-Schlüssel reist in JEDEM Aufruf mit, und daneben steht kein
+  // Passwort: Wer ihn unterwegs mitliest, hat den Hof. Deshalb Startabbruch.
+  assert.throws(
+    () => resolveConfig({ NEUES_SPIEL_HOST: '0.0.0.0' }, ['--env=prod'], ROOT),
+    ConfigError,
+  );
+
+  // Die Fehlermeldung muss die Auswege nennen — sonst rät man am Server herum.
+  try {
+    resolveConfig({ NEUES_SPIEL_HOST: '0.0.0.0' }, ['--env=prod'], ROOT);
+    assert.fail('kein Abbruch');
+  } catch (err) {
+    const text = (err as Error).message;
+    assert.match(text, /NEUES_SPIEL_TLS_CERT/);
+    assert.match(text, /NEUES_SPIEL_BEHIND_PROXY/);
+    assert.match(text, /127\.0\.0\.1/);
+  }
+
+  // Drei Auswege, alle drei müssen durchgehen.
+  const proxied = resolveConfig(
+    { NEUES_SPIEL_HOST: '0.0.0.0', NEUES_SPIEL_BEHIND_PROXY: '1' },
+    ['--env=prod'],
+    ROOT,
+  );
+  const withCert = resolveConfig(
+    {
+      NEUES_SPIEL_HOST: '0.0.0.0',
+      NEUES_SPIEL_TLS_CERT: '/etc/tls/cert.pem',
+      NEUES_SPIEL_TLS_KEY: '/etc/tls/key.pem',
+    },
+    ['--env=prod'],
+    ROOT,
+  );
+  const local = resolveConfig({}, ['--env=prod'], ROOT);
+
+  for (const cfg of [proxied, withCert, local]) assert.equal(isSecureTransport(cfg), true);
+  assert.equal(local.host, '127.0.0.1', 'Produktion lauscht standardmäßig nicht nach außen');
+  assert.equal(withCert.tls?.certPath, '/etc/tls/cert.pem');
+});
+
+test('halb angegebenes TLS ist schlimmer als gar keins', () => {
+  // Man glaubt, es läuft verschlüsselt, und es läuft im Klartext. Also lieber
+  // gar nicht starten — in beiden Umgebungen.
+  for (const env of ['dev', 'prod']) {
+    assert.throws(
+      () => resolveConfig({ NEUES_SPIEL_TLS_CERT: '/etc/tls/cert.pem' }, [`--env=${env}`], ROOT),
+      ConfigError,
+      `${env}: Zertifikat ohne Schlüssel durchgelassen`,
+    );
+    assert.throws(
+      () => resolveConfig({ NEUES_SPIEL_TLS_KEY: '/etc/tls/key.pem' }, [`--env=${env}`], ROOT),
+      ConfigError,
+      `${env}: Schlüssel ohne Zertifikat durchgelassen`,
+    );
+  }
+});
+
+test('Dev darf unverschlüsselt ins LAN — sagt es aber deutlich', () => {
+  // Vom Handy aus testen soll gehen, ohne erst ein Zertifikat zu besorgen.
+  const dev = resolveConfig({}, ['--env=dev'], ROOT);
+  assert.equal(dev.host, '0.0.0.0');
+  assert.equal(isSecureTransport(dev), false);
+
+  const text = describeConfig(dev).join('\n');
+  assert.match(text, /Unverschlüsselt/);
+  // Der zweite, leicht zu übersehende Grund: ohne sicheren Kontext kein
+  // Service Worker — und damit kein Start ohne Netz.
+  assert.match(text, /Service Worker/);
 });
 
 test('unbrauchbare Werte brechen den Start ab, statt sie zu raten', () => {

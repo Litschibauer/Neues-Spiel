@@ -13,7 +13,8 @@
  * ohne npm-Installation läuft.
  */
 
-import { createServer } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -23,7 +24,7 @@ import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState } from '../sim/state.ts';
 import { RULESETS, getRuleset } from '../sim/rules.ts';
-import { ConfigError, describeConfig, resolveConfig } from './config.ts';
+import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 
@@ -198,10 +199,21 @@ function isAdmin(req: IncomingMessage): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Grobe Herkunft für die Anlege-Bremse. Reicht für Versehen, nicht gegen Botnetze. */
+/**
+ * Grobe Herkunft für die Anlege-Bremse. Reicht für Versehen, nicht gegen Botnetze.
+ *
+ * `x-forwarded-for` wird **nur hinter einem Proxy** geglaubt. Steht keiner
+ * davor, kann jeder Aufrufer diesen Kopf selbst setzen — und die Bremse wäre
+ * mit einer Zeile umgangen, indem man bei jedem Versuch eine andere Zahl
+ * hineinschreibt.
+ */
 function originOf(req: IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) return forwarded.split(',')[0]!.trim();
+  if (CONFIG.behindProxy) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.length > 0) {
+      return forwarded.split(',')[0]!.trim();
+    }
+  }
   return req.socket.remoteAddress ?? 'unbekannt';
 }
 
@@ -389,8 +401,15 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
 }
 
 // ── Routen ─────────────────────────────────────────────────────────────
-const server = createServer(async (req, res) => {
+async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+  // HSTS nur, wenn wir selbst verschlüsseln. Steht ein Endpunkt davor, setzt
+  // der ihn — und ihn hier über eine Klartextverbindung mitzuschicken, wäre
+  // ein Versprechen, das dieser Server nicht halten kann.
+  if (CONFIG.tls) {
+    res.setHeader('strict-transport-security', 'max-age=31536000');
+  }
 
   // Browser fragen das ungefragt an; ein 404 im Log wäre nur Rauschen.
   if (url.pathname === '/favicon.ico') {
@@ -410,6 +429,9 @@ const server = createServer(async (req, res) => {
       version: CONFIG.version,
       rulesetVersion: TARGET_RULESET,
       accounts: accounts.count,
+      // Damit sich von außen prüfen lässt, ob wirklich verschlüsselt ankommt,
+      // was man sich beim Aufsetzen vorgenommen hat.
+      secure: isSecureTransport(CONFIG),
     });
   }
 
@@ -552,9 +574,69 @@ const server = createServer(async (req, res) => {
   }
 
   return json(res, 404, { error: 'NOT_FOUND' });
-});
+}
 
-server.listen(PORT, () => {
+/**
+ * Zertifikat und Schlüssel einlesen — beim Start, nicht bei der ersten Anfrage.
+ *
+ * Ein unlesbarer Schlüssel soll beim Deployen auffallen, nicht später beim
+ * ersten Spieler. Und er soll den Start abbrechen statt still auf Klartext
+ * zurückzufallen: Genau dieser Rückfall ist der Fehler, den man nicht bemerkt.
+ */
+function createServer() {
+  if (!CONFIG.tls) return createHttpServer(handle);
+
+  const { certPath, keyPath, caPath } = CONFIG.tls;
+  let cert: Buffer;
+  let key: Buffer;
+  try {
+    cert = readFileSync(certPath);
+    key = readFileSync(keyPath);
+  } catch (err) {
+    console.error(`\nStart abgebrochen: Zertifikat oder Schlüssel nicht lesbar.`);
+    console.error(`  Zertifikat: ${certPath}`);
+    console.error(`  Schlüssel:  ${keyPath}`);
+    console.error(`  ${(err as Error).message}\n`);
+    return process.exit(1);
+  }
+
+  const https = createHttpsServer(
+    { cert, key, ca: caPath ? readFileSync(caPath) : undefined },
+    handle,
+  );
+
+  /**
+   * `http://` auf den TLS-Port ergibt beim Aufrufer „Empty reply from server" —
+   * eine Fehlermeldung, die in jede Richtung zeigt außer in die richtige.
+   *
+   * Antworten kann der Server hier nicht: Der Handschlag ist gescheitert, und
+   * was man auf diesen Socket schreibt, geht durch die tote TLS-Schicht und
+   * kommt nie an. (Der rohe Socket läge darunter, aber nur über ein
+   * Node-Internum — das ist es nicht wert.) Also wenigstens im Protokoll
+   * sagen, was los ist; dort sucht man beim Aufsetzen ohnehin.
+   */
+  let lastPlaintextHint = 0;
+  https.on('clientError', (err, socket) => {
+    if ((err as NodeJS.ErrnoException).code === 'ERR_SSL_HTTP_REQUEST') {
+      const now = Date.now();
+      // Ein Scanner soll das Protokoll nicht zumüllen: höchstens einmal pro Minute.
+      if (now - lastPlaintextHint > 60_000) {
+        lastPlaintextHint = now;
+        console.log(
+          `[tls] unverschlüsselte Anfrage auf Port ${PORT} abgewiesen — ` +
+            'dieser Port spricht https://, nicht http://.',
+        );
+      }
+    }
+    socket.destroy();
+  });
+
+  return https;
+}
+
+const server = createServer();
+
+server.listen(PORT, CONFIG.host, () => {
   console.log('');
   for (const line of describeConfig(CONFIG)) console.log(line);
   console.log(`Regelwerk:  Ziel v${TARGET_RULESET}`);
