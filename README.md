@@ -22,7 +22,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 96 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 108 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -34,30 +34,47 @@ Ein abhängigkeitsfreier Server (nur `node:http`) mit Handy-Client, um das
 Verbindungsmodell über ein echtes Netzwerk zu prüfen statt über Testattrappen —
 Anleitung in **[docs/deploy.md](docs/deploy.md)**.
 
-## Inhalt ist eine Tabelle
-
-Der Sim-Kern kennt keinen Weizen und keine Eier — nur Katalogindizes, Rezepte und
-Produktionsplätze aus dem Regelwerk. Feld, Werkstatt und Tier sind **derselbe** Platz mit
-demselben Timer:
+## Der Kernkreislauf
 
 ```
-Eingaben verbrauchen  ->  Zeit vergeht  ->  Ausgabe liegt bereit  ->  abholen
+Feld -> Weizen -> Mühle -> Hühnerfutter -> Gehege -> Eier -> Gold -> mehr Plätze
 ```
 
-Deshalb kostete die Kette Weizen -> Mehl -> Brot null Zeilen Sim-Code: Mühle und Bäckerei
-sind Tabellenzeilen. Was das Spiel ausmacht, steht in
+Bewusst nicht mehr. Das ganze Spiel läuft auf **drei Commands**:
+
+- `START` / `COLLECT` — Feld bestellen, Mühle beschicken, Hühner füttern sind derselbe
+  Platz mit demselben Timer. Der Unterschied steckt im Rezept, und Rezepte sind Daten.
+- `BUY` — „Gehege kaufen" und „Hühner kaufen" sind zwei Ausbaustufen desselben Platzes.
+
+Der Sim-Kern kennt keinen Weizen und keine Hühner, nur Katalogindizes. Eine neue
+Feldfrucht ist deshalb eine Tabellenzeile, kein Code. Wohin das führen soll, steht in
 **[docs/konzept-map.md](docs/konzept-map.md)** — rund hundert Ideen, verdichtet auf neun
 Mechaniken.
 
+## Entwicklung und Produktion
+
+```bash
+npm run dev     # schnelle Uhren, Werkbank an, Port 8788
+npm run prod    # echte Zeiten,   Werkbank aus, Port 8787
+```
+
+Beide laufen gleichzeitig und teilen sich nichts — eigener Port, eigener Spielstand,
+eigenes Token, eigenes Regelwerk. Damit lässt sich an einer Version herumprobieren,
+während die echten Spielstände nebenan weiterlaufen. Details und die eingebauten
+Riegel: **[docs/deploy.md](docs/deploy.md)**.
+
 ## Status
 
-Konzept steht, Kern-Mechanik ist am lauffähigen Prototyp validiert — Determinismus über zwei
-Engine-Familien belegt, Handel und Postfach implementiert, Verbindungsmodell über echtes HTTP
-geprüft, Inhalt vollständig datengetrieben. Noch kein Spiel: kein Orderbuch, kein Zufall,
-keine Spiel-UI, keine Accounts.
+Der Kernkreislauf ist spielbar und über echtes HTTP geprüft: vom leeren Hof bis zum
+ersten verkauften Ei, mit dem Server, der jeden Schritt unabhängig nachrechnet.
+Determinismus über zwei Engine-Familien belegt, Handel und Postfach implementiert,
+Inhalt vollständig datengetrieben, Dev und Produktion getrennt.
+
+Noch kein fertiges Spiel: kein Orderbuch, kein Zufall, keine Aufträge, keine Level,
+keine Accounts, keine richtige Oberfläche.
 
 ## Nächster Schritt
 
-Der Weg vom belegten Mechanismus zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** —
-in Phasen, mit dem, was jede absichert und kostet. Phase 1 (Inhalt als Daten) ist erledigt;
-als Nächstes das echte Command-Set, beginnend mit dem Erfüllen von Aufträgen.
+Der Weg zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** — in Phasen, mit dem,
+was jede absichert und kostet. Als Nächstes: Aufträge erfüllen (M6), die Mechanik, aus
+der die meisten Inhalte als Daten herausfallen.

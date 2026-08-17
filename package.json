@@ -3,15 +3,17 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Determinismus-Prototyp: beweist, dass Client und Server bit-für-bit dasselbe rechnen",
+  "description": "Determinismus-Prototyp: beweist, dass Client und Server bit-f\u00fcr-bit dasselbe rechnen",
   "engines": {
     "node": ">=22.6"
   },
   "scripts": {
     "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
+    "dev": "npm run build && node --experimental-strip-types src/server/http.ts --env=dev",
+    "prod": "node --experimental-strip-types src/server/http.ts --env=prod",
+    "build": "node --experimental-strip-types scripts/build-conformance.ts",
     "golden": "node --experimental-strip-types scripts/generate-golden.ts",
     "bench": "node --experimental-strip-types scripts/bench-sync.ts",
-    "conformance": "node --experimental-strip-types scripts/build-conformance.ts",
-    "start": "node --experimental-strip-types src/server/http.ts"
+    "start": "node -e \"console.error('\\\\nBitte die Umgebung nennen: npm run dev oder npm run prod.\\\\n'); process.exit(1)\""
   }
 }

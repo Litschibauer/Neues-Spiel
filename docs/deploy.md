@@ -1,7 +1,31 @@
-# Feldtest-Server deployen
+# Server deployen — Entwicklung und Produktion
 
 Ziel: das Verbindungsmodell aus §10 über ein **echtes Netzwerk** prüfen statt über
 Testattrappen. Echte Latenz, echte Abbrüche, echtes Verhalten im Aufzug.
+
+Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
+
+| | Entwicklung | Produktion |
+| --- | --- | --- |
+| Start | `npm run dev` | `npm run prod` |
+| Port | 8788 | 8787 |
+| Spielstand | `data/dev/save.json` | `data/prod/save.json` |
+| Token | `data/dev/token` | `data/prod/token` |
+| Regelwerk | v1001 — Sekundenuhren | v2 — echte Zeiten |
+| Werkbank `/admin` | an | **aus** |
+
+Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version
+herumprobieren, während die echten Spielstände nebenan unangetastet weiterlaufen.
+
+Drei Riegel sind eingebaut, und alle drei brechen den Start ab statt zu warnen
+(siehe `src/server/config.ts`):
+
+1. **Die Umgebung muss man nennen.** `npm start` ohne `--env` startet nicht.
+2. **Kein Dev-Regelwerk in Produktion.** Sekundenuhren auf echten Spielständen
+   wären nicht rückgängig zu machen — die Migration hätte die Zeiten schon
+   umgerechnet.
+3. **Keine Werkbank in Produktion**, außer mit `NEUES_SPIEL_ADMIN=1`. Sie kann
+   Gegenstände verschenken und Zeit gutschreiben.
 
 Der Server braucht **keine Abhängigkeiten** — nur Node ≥ 22.6. Auf 1 GB RAM ist er
 gelangweilt: ein Sync kostet ~8 µs, der Spielstand ist ein paar Kilobyte.
@@ -41,53 +65,79 @@ git clone https://github.com/Litschibauer/Neues-Spiel.git
 cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
-npm run conformance   # baut dist/field-test.html und dist/conformance.html
-npm test              # 72 Tests, sollte grün sein
+npm run build   # baut dist/field-test.html, dist/conformance.html, dist/admin.html
+npm test        # 108 Tests, sollte grün sein
 ```
 
 ## 3. Starten
 
 ```bash
-npm start
+npm run dev     # Entwicklung, Port 8788
+npm run prod    # Produktion,  Port 8787
 ```
 
 Beim ersten Start erzeugt der Server selbst ein Token, legt es unter
-`data/token` ab (nur für den Besitzer lesbar) und gibt es einmal aus. Danach
-findet er es dort von allein wieder.
+`data/<umgebung>/token` ab (nur für den Besitzer lesbar) und gibt es einmal aus.
+Danach findet er es dort von allein wieder. **Jede Umgebung hat ihr eigenes.**
 
 **Token jederzeit nachschlagen:**
 
 ```bash
-cat data/token
+cat data/prod/token
+cat data/dev/token
 ```
 
 Ein eigenes vorgeben (überschreibt die Datei nicht, hat aber Vorrang):
 
 ```bash
-NEUES_SPIEL_TOKEN='dein-token' PORT=8787 npm start
+NEUES_SPIEL_TOKEN='dein-token' npm run prod
 ```
 
-Neues Token erzwingen: `rm data/token`, dann neu starten. Am Token hängt nichts —
-der Spielstand kennt es nicht.
+Neues Token erzwingen: `rm data/prod/token`, dann neu starten. Am Token hängt
+nichts — der Spielstand kennt es nicht.
 
-### Feldtest-Tempo
+### Welcher Stand läuft gerade?
 
-Mit den Standardregeln wächst Weizen zwei Stunden und ein Ei braucht zehn Minuten.
-Von Hand lässt sich damit kaum etwas testen: Ohne reifes Feld und ohne Ware im
-Lager wird jede Aktion **lokal abgelehnt**, die Warteschlange bleibt leer — und
-ein Verbindungstest ohne Warteschlange prüft nichts.
+`/health` braucht kein Token und sagt es:
 
 ```bash
-NEUES_SPIEL_RULESET=4 npm start     # Weizen 60 s, Ei 20 s, Mehl 30 s, Brot 90 s
+curl -s localhost:8787/health
+# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"seq":0,"tick":0}
 ```
 
-Auf einem bestehenden Spielstand ist das ein **echter Patch in vier Schritten**:
-Der Server migriert beim nächsten Sync von v1 über v2 und v3 nach v4, rechnet
-laufende Plätze fair um (R2) — und v2 -> v3 lässt dabei den Zustand *wachsen*:
-Milch, Mehl und Brot kommen in den Katalog, Mühle, Bäckerei und Weide auf den
-Hof. Man kann also live zusehen, wie ein Inhalts-Patch durch eine Offline-Phase
-geht. Zurück geht es nicht — Downgrades sind bewusst nicht
-vorgesehen; für den alten Stand `rm data/save.json`.
+`version` kommt aus `NEUES_SPIEL_VERSION`. Beim Start mitgeben, dann steht der
+Commit drin, statt raten zu müssen:
+
+```bash
+NEUES_SPIEL_VERSION=$(git rev-parse --short HEAD) npm run prod
+```
+
+### Warum Dev schnelle Uhren hat
+
+In Produktion wächst Weizen zwei Minuten, Futter braucht fünf, Eier fünfzehn.
+Von Hand lässt sich damit kaum etwas testen: Ohne fertigen Platz und ohne Ware
+im Lager wird jede Aktion **lokal abgelehnt**, die Warteschlange bleibt leer —
+und ein Verbindungstest ohne Warteschlange prüft nichts.
+
+Das Dev-Regelwerk (v1001) hat denselben Inhalt bei zehnfachem Tempo: Weizen
+12 s, Futter 30 s, Eier 90 s. Ein kompletter Durchlauf vom leeren Hof bis zum
+ersten Ei dauert damit ein paar Minuten statt einen Nachmittag.
+
+Es steht **außerhalb der Produktionsreihe** und ist bewusst kein Migrationsziel
+— es gäbe keinen Weg zurück. Ein Dev-Spielstand ist Wegwerfware: `rm -rf data/dev`.
+
+### Balance-Patch live beobachten
+
+In Produktion migriert der Server einen Spielstand beim nächsten Sync auf die
+Zielversion und rechnet laufende Plätze fair um (R2):
+
+```bash
+NEUES_SPIEL_RULESET=1 npm run prod    # ein Stand auf v1
+NEUES_SPIEL_RULESET=2 npm run prod    # dasselbe Spiel, gepatcht
+```
+
+Zurück geht es nicht — Downgrades sind bewusst nicht vorgesehen; für den alten
+Stand `rm data/prod/save.json`.
 
 ## 4. Erreichbarkeit prüfen
 
@@ -95,7 +145,7 @@ Zuerst lokal auf dem Server:
 
 ```bash
 curl http://127.0.0.1:8787/health
-# {"ok":true,"seq":0,"tick":0}
+# {"ok":true,"env":"prod","version":"a1b2c3d","rulesetVersion":2,"seq":0,"tick":0}
 ```
 
 Dann im Browser `http://<server-ip>:8787/` öffnen, Token eintragen, fertig.
@@ -128,19 +178,21 @@ Läuft noch eine Instanz von Hand, zuerst beenden — sonst ist der Port belegt:
 pkill -f 'server/http'
 ```
 
-Dann `/etc/systemd/system/neues-spiel.service` anlegen:
+**Eine Unit je Umgebung.** Sie stören sich nicht: eigener Port, eigener
+Spielstand, eigenes Token.
+
+`/etc/systemd/system/neues-spiel-prod.service`:
 
 ```ini
 [Unit]
-Description=Neues Spiel — Feldtest-Server
+Description=Neues Spiel — Produktion
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/Neues-Spiel
-Environment=PORT=8787
-# Kein Token nötig — der Dienst nimmt es aus data/token.
-ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts
+# Kein Token nötig — der Dienst nimmt es aus data/prod/token.
+ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts --env=prod
 Restart=always
 RestartSec=5
 
@@ -148,11 +200,35 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
+`/etc/systemd/system/neues-spiel-dev.service` — dieselbe Datei mit
+`--env=dev` und `Description=Neues Spiel — Entwicklung`.
+
 ```bash
 systemctl daemon-reload
-systemctl enable --now neues-spiel
-systemctl status neues-spiel --no-pager
-journalctl -u neues-spiel -f
+systemctl enable --now neues-spiel-prod
+systemctl enable --now neues-spiel-dev     # optional
+systemctl status neues-spiel-prod --no-pager
+journalctl -u neues-spiel-prod -f
+```
+
+### Eine neue Version ausrollen
+
+```bash
+cd /home/Neues-Spiel
+git pull
+npm test                                    # erst prüfen, dann ausrollen
+npm run build                               # Seiten neu bauen
+systemctl restart neues-spiel-dev           # zuerst Dev
+curl -s localhost:8788/health               # Stand kontrollieren, kurz spielen
+systemctl restart neues-spiel-prod          # dann Produktion
+curl -s localhost:8787/health
+```
+
+Damit `version` in `/health` etwas Nützliches sagt, den Commit in die Unit
+schreiben — oder beim Deployen setzen:
+
+```ini
+Environment=NEUES_SPIEL_VERSION=a1b2c3d
 ```
 
 ### Absicherung (optional, nachträglich)
@@ -249,7 +325,7 @@ Monitoring meldete einen Determinismus-Bug, den es gar nicht gibt.
 Abschalten:
 
 ```bash
-NEUES_SPIEL_ADMIN=0 npm start
+NEUES_SPIEL_ADMIN=0 npm run dev
 ```
 
 ## Endpunkte
@@ -276,7 +352,7 @@ Log-Länge sonst frei (R4).
 
 Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 
-- Ein Spielstand, ein Token in `data/token`. Keine Accounts, keine Registrierung.
+- Ein Spielstand je Umgebung, ein Token in `data/<umgebung>/token`. Keine Accounts, keine Registrierung.
 - JSON-Datei statt Datenbank. Atomar geschrieben, aber ohne Backups.
 - Kein TLS, kein Rate-Limit pro IP, keine Metriken.
 - Snapshot-Signatur (§9) fehlt — der Server hält ohnehin seine eigene Kopie.

@@ -10,25 +10,28 @@
  * Grenze, Zustand zwischen zwei Commands nicht fortgeschrieben — entstehen erst
  * auf Sitzungsebene und wären hier hängen geblieben.
  *
- * Zwei Profile, weil ein einzelnes nicht beides trifft:
- *   „busy" = viele Aktionen, kurze Sprünge  → belastet die Segmentierung
- *   „idle" = wenige Aktionen, lange Sprünge → belastet Lagerlimit und Stall
+ * Drei Profile, weil ein einzelnes nicht alles trifft:
+ *   „busy"  = viele Aktionen, kurze Sprünge  → belastet die Segmentierung
+ *   „idle"  = wenige Aktionen, lange Sprünge → belastet lange Offline-Phasen
+ *   „hoard" = produzieren, nie verkaufen     → belastet das Lagerlimit (§7)
  *
- * Und über ALLE Regelwerke, weil Inhalt jetzt Daten ist: v1 (sechs Felder, ein
- * Stall) bis v4 (dazu Mühle, Bäckerei, Weide — zwei Produzenten am selben
- * Lagerdeckel, schnelle Uhren). Ein Fuzz auf nur einem Katalog würde die
- * Datengetriebenheit gar nicht prüfen.
+ * Und über ALLE Regelwerke, weil Inhalt jetzt Daten ist: die Produktionsreihe
+ * (v1, v2) und das Dev-Tempo mit seinen Sekundenuhren. Ein Fuzz auf nur einem
+ * Katalog würde die Datengetriebenheit gar nicht prüfen — und die schnellen
+ * Uhren erreichen Zustände (Lager voll, alles fertig), die bei Produktionszeiten
+ * kaum vorkommen.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Server } from '../src/server/server.ts';
-import { getRuleset } from '../src/sim/rules.ts';
-import { initialState, cloneState, stored } from '../src/sim/state.ts';
+import { RULESETS, getRuleset } from '../src/sim/rules.ts';
+import { cloneState, stored } from '../src/sim/state.ts';
 import { hashState } from '../src/sim/hash.ts';
 import type { SessionOptions } from './helpers/session.ts';
 import {
   assertAllIntegers,
+  fuzzStart,
   mulberry32,
   playRandomSession,
   referenceRun,
@@ -37,8 +40,8 @@ import {
 
 const T0 = 1_700_000_000_000;
 
-/** Alle ausgelieferten Regelwerke — jedes ist ein anderer Inhaltsstand. */
-const VERSIONS = [1, 2, 3, 4];
+/** Alle ausgelieferten Regelwerke: Produktionsreihe plus Dev-Tempo. */
+const VERSIONS = [...RULESETS.keys()].sort((a, b) => a - b);
 
 const BUSY: SessionOptions = {
   steps: 40,
@@ -52,6 +55,21 @@ const IDLE: SessionOptions = {
   maxAdvance: 20_000,
   advanceChance: 0.6,
   chaosChance: 0.1,
+};
+
+/**
+ * Der Hamster: baut aus, produziert, holt ab — und verkauft nie.
+ *
+ * Ohne dieses Profil erreicht der Fuzz das volle Lager praktisch nie, seit der
+ * Basis-Kreislauf keinen passiven Produzenten mehr hat. Und ein Fuzz, der die
+ * kritische Ecke aus §7 nicht erreicht, beweist über sie genau nichts.
+ */
+const HOARD: SessionOptions = {
+  steps: 60,
+  maxAdvance: 1500,
+  advanceChance: 0.45,
+  chaosChance: 0.05,
+  hoard: true,
 };
 
 type Stats = {
@@ -79,7 +97,9 @@ function runProfile(profile: SessionOptions, sessions: number): Stats {
     const version = VERSIONS[seed % VERSIONS.length]!;
     const rules = getRuleset(version);
 
-    const server = new Server(initialState(rules), T0, version);
+    // Jede zweite Sitzung startet mit Kapital — sonst bleibt alles hinter der
+    // ersten Kaufentscheidung ungeprüft (siehe fuzzStart).
+    const server = new Server(fuzzStart(rules, seed % 2 === 0 ? 4000 : 0), T0, version);
     const start = cloneState(server.snapshot.state);
     const client = playRandomSession(server.snapshot, rnd, profile);
 
@@ -141,11 +161,16 @@ test('Profil „busy": 200 Sitzungen — Client == Referenz == Server', () => {
   }
 });
 
-test('Profil „idle": 150 Sitzungen — läuft bis ans Lagerlimit', () => {
+test('Profil „idle": 150 Sitzungen mit langen Offline-Sprüngen', () => {
   const s = runProfile(IDLE, 150);
+  assert.ok(s.sessions > 120, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
+});
+
+test('Profil „hoard": 150 Sitzungen — läuft bis ans Lagerlimit', () => {
+  const s = runProfile(HOARD, 150);
 
   assert.ok(s.sessions > 120, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
-  // Entscheidend: Der Fuzz muss den vollen Stall wirklich erreichen, sonst
+  // Entscheidend: Der Fuzz muss das volle Lager wirklich erreichen, sonst
   // beweist er über die kritische Ecke aus §7 genau nichts.
   assert.ok(s.siloFull > 10, `Lager zu selten voll: ${s.siloFull} (max ${s.maxStored})`);
 });

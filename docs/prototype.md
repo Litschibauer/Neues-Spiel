@@ -4,11 +4,12 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 96 Tests, keine Dependencies, kein Build-Step
+npm test        # 108 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
-npm run conformance  # Prüfstand- und Feldtest-Seite bauen
-npm start       # Feldtest-Server (siehe docs/deploy.md)
+npm run build   # Prüfstand-, Spiel- und Werkbank-Seite bauen
+npm run dev     # Server, Entwicklung  (schnelle Uhren, Port 8788)
+npm run prod    # Server, Produktion   (echte Zeiten,   Port 8787)
 ```
 
 Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
@@ -33,7 +34,8 @@ src/client/
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
 src/server/
   server.ts       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
-  http.ts         Feldtest-Server: HTTP-API + Handy-Client, ohne Abhängigkeiten
+  http.ts         Spielserver: HTTP-API + Handy-Client, ohne Abhängigkeiten
+  config.ts       Dev/Prod-Trennung samt Riegel gegen die teuren Betriebsfehler
   store.ts        Persistenz — atomar geschriebene JSON-Datei
 
 scripts/          Golden-Vector-Generator, Lastmessung, Seiten-Build
@@ -47,21 +49,34 @@ Lagerlimit über alle Waren, NPC-Verkauf sowie Verkaufsaufträge mit Escrow,
 Preisband und Ablauffrist — plus ein Postfach für verfallene Aufträge und
 externe Zustellungen.
 
+### Der Kernkreislauf
+
+```
+Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+```
+
+Bewusst nicht mehr. Jede weitere Mechanik ist neue Fläche, auf der Client und
+Server auseinanderlaufen können — Inhalt dagegen ist billig geworden.
+
 ### Inhalt ist eine Tabelle
 
-Der Sim-Kern kennt **keinen Weizen und keine Eier**. Er kennt Katalogindizes,
+Der Sim-Kern kennt **keinen Weizen und keine Hühner**. Er kennt Katalogindizes,
 Rezepte und Plätze — alles aus dem Regelwerk. Der Zustand hält ein Inventar als
-Zahlenarray in Katalogreihenfolge, ein Platz merkt sich eine Rezeptnummer.
+Zahlenarray in Katalogreihenfolge, ein Platz merkt sich Stufe und Rezeptnummer.
 
-Der Gewinn zeigt sich an Mühle und Bäckerei: Die Kette Weizen → Mehl → Brot
-hat **keine Zeile Sim-Code gekostet**. Eine Werkstatt ist ein Platz mit
-Eingaben; die Kette entsteht daraus, dass die Ausgabe des einen die Eingabe
-des anderen ist. Dieselbe Mechanik trägt Feld, Tier und Maschine
-(Konzept-Map, M1).
+Zwei Verdichtungen tragen den ganzen Kreislauf:
+
+- **`START` / `COLLECT` für alles.** Feld bestellen, Mühle beschicken, Hühner
+  füttern — derselbe Platz mit demselben Timer. Der Unterschied steckt im
+  Rezept, und Rezepte sind Daten. Die Kette entsteht daraus, dass die Ausgabe
+  des einen die Eingabe des anderen ist (Konzept-Map, M1).
+- **`BUY` für alles.** „Gehege kaufen" und „Hühner kaufen" sind zwei
+  Ausbaustufen desselben Platzes. Dieselbe Mechanik schaltet später Felder
+  frei und beschleunigt Maschinen (M7).
 
 Der Preis dafür steht in `rules.ts` und wird von `rules.test.ts` erzwungen:
 **Kataloge sind append-only.** Zustände speichern Indizes; wer einen Eintrag
-einschiebt, macht aus gespeichertem Weizen stillschweigend Mehl.
+einschiebt, macht aus gespeichertem Weizen stillschweigend Futter.
 
 ---
 
@@ -74,8 +89,8 @@ Schicht 5 ist im Server angelegt:
 | --- | --- | --- |
 | **1 Verhindern** | `sim-purity.test.ts` | Ein CI-Wächter liest den Sim-Quelltext und blockiert Floats, Systemzeit, Locale, `for…in` und ungeschützte Division. Ein zweiter Test prüft, dass der Wächter selbst noch beißt. |
 | **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **40.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein — die Hälfte davon mit *mehreren* Produzenten am selben Lagerdeckel. |
-| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge) über **alle vier Kataloge**, jede über drei unabhängige Rechenwege — inklusive Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
-| **4 Beweisen (Plattform)** | `golden.test.ts` | **119 Golden Vectors, 1436 Commands** über **alle vier Regelversionen** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
+| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **500 zufällige Offline-Sitzungen** in drei Profilen (viele Aktionen / lange Sprünge / nie verkaufen) über alle Kataloge, jede über drei unabhängige Rechenwege — inklusive Kaufen, Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
+| **4 Beweisen (Plattform)** | `golden.test.ts` | **243 Golden Vectors, 5078 Commands** über alle Regelversionen — darunter ein *handgeschriebener* Vektor, der den Kernkreislauf in genau der Reihenfolge durchläuft, um die es im Spiel geht. Der Korpus, den der Mobile-Port an Tag eins abspielt. |
 | **5 Erkennen** | `sync.test.ts` | Der Kanarienvogel-Hash schlägt bei Divergenz an — und blockiert den Sync **nicht**. |
 | — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
@@ -83,6 +98,7 @@ Schicht 5 ist im Server angelegt:
 | — | `sync.test.ts` | Präfix-Commit, Idempotenz, Fork-Erkennung, veraltete Regelversion. |
 | — | `migration.test.ts` | Zwei Sorten Patch quer durch eine Offline-Phase: ein Zahlen-Patch (v1→v2) und ein **Inhalts-Patch (v2→v3), bei dem der Zustand wächst** — Log unter alter Version validiert, Zustand danach gehoben, laufende Produktion fair umgerechnet, Version nicht frei wählbar. |
 | — | `rules.test.ts` | Jeder Katalog ist widerspruchsfrei, und **Kataloge wachsen nur hinten** — die Invariante, ohne die gespeicherte Indizes ihre Bedeutung verlieren. |
+| — | `config.test.ts` | Die Betriebsregeln: Dev und Produktion teilen sich nichts, das Dev-Regelwerk kommt nicht in Produktion, die Werkbank ist dort aus. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
@@ -92,7 +108,7 @@ beweist sonst nichts — und genau das war beim ersten Lauf der Fall.
 
 ### Der Prüfstand für fremde Engines
 
-`npm run conformance` erzeugt `dist/conformance.html`: eine vollständig eigenständige Seite
+`npm run build` erzeugt `dist/conformance.html`: eine vollständig eigenständige Seite
 (kein einziger Netzwerkzugriff), die den Korpus in der JS-Engine des jeweiligen Geräts
 abspielt. Öffnet man sie in Safari auf iPhone oder iPad, läuft der Sim-Kern in
 **JavaScriptCore** statt V8 — anderer Compiler, andere Optimierungen. Genau dieser
@@ -141,23 +157,29 @@ echte Regeländerung gehört in eine neue Ruleset-Version (R2) — nicht in übe
 
 | Messung | Ergebnis |
 | --- | --- |
-| Kosten vs. Offline-**Dauer**, Log konstant | **flach** — 1 Stunde ≈ 1 Jahr ≈ ~15 µs |
-| Kosten vs. Command-**Anzahl** | linear, ~0,1 µs pro Command |
-| Kosten vs. **Spielgröße** | 600 Objekte ≈ 42 µs, 3000 ≈ 182 µs |
-| Gegenüber Tick-für-Tick bei 30 Tagen offline | ~22.000× schneller |
-| Typischer Sync (60 Commands) | ~6 µs, also ~160.000 Syncs/s pro Kern |
+| Kosten vs. Offline-**Dauer**, Log konstant | **flach** — 1 Stunde ≈ 1 Jahr |
+| Kosten vs. Command-**Anzahl** | linear, ~0,2 µs pro Command |
+| Kosten vs. **Spielgröße** | 600 Objekte ≈ 88 µs, 3000 ≈ 760 µs |
+| Gegenüber Tick-für-Tick bei 30 Tagen offline | ~600× schneller |
+| Typischer Sync (60 Commands) | ~11 µs, also ~90.000 Syncs/s pro Kern |
 
-> **Ehrlich zur Vorher-Messung:** Vor dem Umbau auf datengetriebenen Inhalt lag
-> der typische Sync bei ~4 µs (~220.000/s). Der Katalog kostet also rund die
-> Hälfte obendrauf: Ein Inventar-Array muss durchlaufen werden, wo vorher zwei
-> Zahlen addiert wurden, und jedes Command legt kleine Arrays an. Ein
-> Zwischenspeicher für die abgeleiteten Katalogtabellen holte einen Teil zurück
-> (7,1 → 6,1 µs). Die *Form* der Kurven ist unverändert — flach in der Dauer,
-> linear in den Commands —, und 160.000 Syncs pro Sekunde und Kern sind für
-> jede realistische Spielerzahl weit jenseits des Bedarfs.
+> **Zu den absoluten Zahlen:** Sie stammen von einem geteilten Mini-VPS und
+> schwanken zwischen Läufen um den Faktor zwei — frühere Messungen lagen bei
+> 4 bis 6 µs für dieselbe Operation. Verlässlich sind deshalb nur die *Form*
+> der Kurven und direkte A/B-Vergleiche auf derselben Maschine.
+>
+> Ein solcher Vergleich wurde für den Umbau auf den Basis-Kreislauf gemacht:
+> alter Stand 11,5 µs, neuer Stand 10,8 µs, unmittelbar nacheinander gemessen.
+> Der Umbau hat den Sync also **nicht** verteuert. Der Katalog selbst kostete
+> davor durchaus etwas (ein Inventar-Array durchlaufen statt zwei Zahlen
+> addieren); ein Zwischenspeicher für die abgeleiteten Katalogtabellen holte
+> davon einen Teil zurück.
 
 Damit ist die Behauptung aus §7 belegt: **O(Commands), nicht O(Offline-Dauer).** Die
 Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Größenordnungen.
+
+Selbst am unteren Ende der Schwankung sind das Zehntausende Syncs pro Sekunde und
+Kern — weit jenseits dessen, was eine realistische Spielerzahl braucht.
 
 ### Skaliert das auch für ein großes Spiel?
 

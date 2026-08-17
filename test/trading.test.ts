@@ -25,7 +25,7 @@ const rules = getRuleset(CURRENT_RULESET_VERSION);
 
 const GOLD = 0;
 const WHEAT = 1;
-const EGGS = 2;
+const EGGS = 3;
 const R_WHEAT = 0;
 const EGG_PRICE = rules.items[EGGS]!.npcPrice;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
@@ -33,14 +33,24 @@ const YIELD = rules.recipes[R_WHEAT]!.output.amount;
 
 /** Spielstand mit vollem Lager, um am Limit zu testen. */
 function fullSilo() {
-  return advanceTo(initialState(rules), 60_000, rules);
+  const base = initialState(rules);
+  const items = base.items.slice();
+  items[EGGS] = rules.siloCapacity;
+  return { ...base, items };
+}
+
+/** Spielstand mit Eiern im Lager und ein paar Feldern — der Handelsalltag. */
+function withEggs(amount: number) {
+  const base = initialState(rules);
+  const items = base.items.slice();
+  items[EGGS] = amount;
+  return { ...base, items };
 }
 
 test('Verkaufen ist einseitig und funktioniert offline', () => {
-  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(withEggs(10), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.advanceClock(6000); // 10 Eier
   const res = client.sellNpc(EGGS, 1);
   assert.equal(res.ok, true);
 
@@ -77,10 +87,16 @@ test('Münzen sind ein Gegenstand, aber kein Lagerplatz', () => {
   assert.equal(sellGold.code, 'NOT_SELLABLE');
 });
 
-/** Der Angriff: einstellen, Lager leert sich, nachproduzieren, wiederholen. */
+/**
+ * Der Angriff: einstellen, Lager leert sich, nachproduzieren, wiederholen.
+ *
+ * Nachschub kommt aus den drei Startfeldern — mehr hat ein frischer Hof nicht,
+ * und genau das macht den Angriff realistisch. Geparkt wird Weizen, weil er
+ * nachwächst; Eier wären nach ein paar Runden alle.
+ */
 function runStashAttack(rounds: number) {
   const client = new Client({
-    state: fullSilo(),
+    state: initialState(rules),
     seq: 0,
     serverTs: T0,
     rulesetVersion: CURRENT_RULESET_VERSION,
@@ -88,9 +104,11 @@ function runStashAttack(rounds: number) {
 
   for (let round = 0; round < rounds; round++) {
     const s = client.preview();
-    const have = count(s, EGGS);
-    if (have > 0) client.listOrder(EGGS, Math.min(have, 20), EGG_PRICE);
-    client.advanceClock(60_000);
+    const have = count(s, WHEAT);
+    if (have > 0) client.listOrder(WHEAT, Math.min(have, 20), rules.items[WHEAT]!.npcPrice);
+    for (let plot = 0; plot < 3; plot++) client.start(plot, R_WHEAT);
+    client.advanceClock(GROW);
+    for (let plot = 0; plot < 3; plot++) client.collect(plot);
   }
   return client.preview();
 }
@@ -103,8 +121,8 @@ test('DER EXPLOIT: Escrow lässt sich nicht als unendliches Lager missbrauchen',
   // Die zu prüfende Eigenschaft ist deshalb Sättigung, nicht Blockade:
   // Ab irgendwann bringt Weiterspielen des Angriffs nichts mehr.
   const short = runStashAttack(20);
-  const long = runStashAttack(200);
-  const absurd = runStashAttack(2000);
+  const long = runStashAttack(8000);
+  const absurd = runStashAttack(12000);
 
   assert.ok(
     totalGoods(long, rules) > totalGoods(short, rules),
@@ -131,7 +149,7 @@ test('DER EXPLOIT: Escrow lässt sich nicht als unendliches Lager missbrauchen',
 });
 
 test('bei vollen Behältern ist auch kein neuer Auftrag mehr möglich', () => {
-  const saturated = runStashAttack(2000);
+  const saturated = runStashAttack(12000);
   const client = new Client({
     state: saturated,
     seq: 0,
@@ -164,11 +182,10 @@ test('Preisband verhindert das Parken zu Fantasiepreisen', () => {
 });
 
 test('Auftrag zurückziehen gibt die Ware zurück — aber nicht über das Limit', () => {
-  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(withEggs(10), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.advanceClock(6000);
-  assert.equal(client.listOrder(EGGS, 8, 5).ok, true);
+  assert.equal(client.listOrder(EGGS, 8, EGG_PRICE).ok, true);
   const id = client.state.orders[0]!.id;
 
   assert.equal(client.cancelOrder(id).ok, true);
@@ -193,9 +210,13 @@ test('Auftrag zurückziehen gibt die Ware zurück — aber nicht über das Limit
 });
 
 test('verfallene Aufträge landen im Postfach statt im Nichts', () => {
-  let s = initialState(rules);
+  let s = withEggs(10);
   s = advanceTo(s, 6000, rules);
-  s = simulate(s, { seq: 1, tick: 6000, type: 'LIST_ORDER', item: EGGS, amount: 6, price: 5 }, rules);
+  s = simulate(
+    s,
+    { seq: 1, tick: 6000, type: 'LIST_ORDER', item: EGGS, amount: 6, price: EGG_PRICE },
+    rules,
+  );
   assert.equal(s.orders.length, 1);
 
   // Über die Ablauffrist hinaus warten.
@@ -213,8 +234,12 @@ test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () =
     amount: 1,
     arrivedAt: 0,
   }));
-  let s = { ...initialState(rules), tick: 1000, mail, items: [0, 0, 10] };
-  s = simulate(s, { seq: 1, tick: 1000, type: 'LIST_ORDER', item: EGGS, amount: 5, price: 5 }, rules);
+  let s = { ...withEggs(10), tick: 1000, mail };
+  s = simulate(
+    s,
+    { seq: 1, tick: 1000, type: 'LIST_ORDER', item: EGGS, amount: 5, price: EGG_PRICE },
+    rules,
+  );
 
   s = advanceTo(s, 1000 + rules.orderTtlTicks + 100, rules);
 
@@ -225,7 +250,7 @@ test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () =
 });
 
 test('Postfach abholen nimmt mit, was ins Lager passt — der Rest bleibt liegen', () => {
-  let s = advanceTo(initialState(rules), 59_000, rules); // fast voll
+  let s = withEggs(rules.siloCapacity - 4); // fast voll
   const space = rules.siloCapacity - stored(s, rules);
 
   s = {
@@ -237,7 +262,7 @@ test('Postfach abholen nimmt mit, was ins Lager passt — der Rest bleibt liegen
     ],
   };
 
-  s = simulate(s, { seq: 1, tick: 59_000, type: 'COLLECT_MAIL' }, rules);
+  s = simulate(s, { seq: 1, tick: 0, type: 'COLLECT_MAIL' }, rules);
 
   assert.equal(count(s, GOLD), 50, 'Gold passt immer');
   assert.equal(stored(s, rules), rules.siloCapacity);
@@ -267,8 +292,10 @@ test('externe Zustellung landet im Postfach — und löst keinen Fehlalarm aus',
 
   assert.equal(res.snapshot.state.mail.length, 1);
   assert.equal(res.snapshot.state.mail[0]!.amount, 5);
-  // Und es liegt im Postfach, nicht im Lager.
-  assert.equal(count(res.snapshot.state, EGGS), 12);
+  // Und es liegt im Postfach, nicht im Lager: Der Spieler hat nur seinen
+  // eigenen Weizen, von den Eiern weiß er noch nichts.
+  assert.equal(count(res.snapshot.state, EGGS), 0);
+  assert.equal(count(res.snapshot.state, WHEAT), YIELD);
 });
 
 test('Zustellungen bei vollem Postfach gehen nicht verloren', () => {
@@ -294,7 +321,7 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
   for (let seed = 1; seed <= 150; seed++) {
     const rnd = mulberry32(seed);
     const pick = (n: number) => Math.floor(rnd() * n);
-    const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+    const server = new Server(withEggs(20), T0, CURRENT_RULESET_VERSION);
     const client = new Client(server.snapshot);
 
     for (let step = 0; step < 40; step++) {
@@ -304,10 +331,10 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
           client.advanceClock(1 + pick(30_000));
           break;
         case 1:
-          client.start(pick(4), R_WHEAT);
+          client.start(pick(3), R_WHEAT);
           break;
         case 2:
-          client.collect(pick(4));
+          client.collect(pick(3));
           break;
         case 3: {
           const eggs = count(s, EGGS);
@@ -375,6 +402,7 @@ test('Zurücksetzen hinterlässt einen sauberen, leeren Hof', () => {
   client.start(0, R_WHEAT);
   server.sync(client.buildSyncRequest(), T0 + 1000);
   server.deliver({ item: EGGS, amount: 5, arrivedAt: T0 });
+  assert.equal(server.snapshot.state.plots[0]!.recipe, R_WHEAT);
 
   server.reset(initialState(rules), T0 + 5000, CURRENT_RULESET_VERSION);
 

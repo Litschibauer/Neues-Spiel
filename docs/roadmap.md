@@ -64,18 +64,15 @@ Umgebaut:
 - **Ein Commandpaar für alles:** `START` / `COLLECT` statt `PLANT` / `HARVEST`.
   Feld, Werkstatt und Tier sind derselbe Platz mit demselben Timer.
 
-Was das gebracht hat, in einer Zahl: Die Produktionskette **Weizen → Mehl → Brot**
-kostete **null Zeilen Sim-Code**. Mühle und Bäckerei sind Tabellenzeilen; die Kette
-entsteht daraus, dass die Ausgabe des einen die Eingabe des anderen ist.
+Was das gebracht hat, zeigte sich direkt danach: Beim Bau des Basis-Kreislaufs
+kosteten **Mühle und Gehege null Zeilen Sim-Code**. Eine Werkstatt ist ein Platz
+mit Eingaben, ein Tier ist ein Platz mit Futter als Eingabe; die Kette entsteht
+daraus, dass die Ausgabe des einen die Eingabe des anderen ist.
 
-Der versprochene Nebeneffekt ist eingetreten: v2 → v3 ist eine **strukturelle**
-Migration (Inventar wächst, Plätze kommen dazu, eine zweite Weide entsteht). Bisher
-änderten Migrationen nur Zeiten. Das ist der ehrlichere Test für R2 — und er läuft.
+Zwei Dinge waren dabei teurer als geplant:
 
-Zwei Dinge, die dabei teurer waren als geplant:
-
-- **Zwei passive Produzenten teilen sich einen Lagerdeckel.** Wer den letzten Platz
-  bekommt, entscheidet die Zeitachse, nicht die Reihenfolge in der Liste. Die
+- **Mehrere passive Produzenten teilen sich einen Lagerdeckel.** Wer den letzten
+  Platz bekommt, entscheidet die Zeitachse, nicht die Reihenfolge in der Liste. Die
   geschlossene Form dafür braucht eine Binärsuche auf den Zeitpunkt des Volllaufens
   — und traf dabei denselben Off-by-one wie beim ersten Mal.
 - **Der Sync wurde langsamer**, von ~4 µs auf ~6 µs (Katalogschleifen statt zweier
@@ -83,6 +80,11 @@ Zwei Dinge, die dabei teurer waren als geplant:
 
 Der Preis, den man dauerhaft zahlt: **Kataloge sind append-only.** Zustände speichern
 Indizes. `test/rules.test.ts` erzwingt das über alle Versionen hinweg.
+
+> **Die eine Freiheit, die es nur einmal gab:** Solange kein echter Spielstand
+> existiert, darf man den Katalog noch umbauen. Genau das ist beim Zuschnitt auf
+> den Basis-Kreislauf passiert — die Prototyp-Inhalte sind ersatzlos gewichen.
+> Ab dem ersten echten Spieler bindet die Append-only-Regel für immer.
 
 ---
 
@@ -94,8 +96,23 @@ Die Mechaniken aus Phase 0, jede mit:
 - Referenzimplementierung für den Fuzz („offensichtlich korrekt, aber langsam")
 - Abdeckung im Golden-Vector-Korpus
 
-Realistischer Kern eines Farmgames: Produktion starten/abholen, bauen, ausbauen,
-Auftrags-Systeme (LKW, Boot), Tiere füttern, Bäume ernten, Flächen freischalten.
+**Der Basis-Kreislauf steht** — und er brauchte weniger, als die Liste vermuten ließ:
+
+```
+Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+```
+
+Dafür kamen genau **zwei** Mechaniken zusammen. `START`/`COLLECT` trägt Feld,
+Werkstatt und Tier gemeinsam (M1); `BUY` trägt „Gehege kaufen", „Hühner kaufen"
+und später jede Freischaltung und jedes Upgrade (M7). Tiere füttern brauchte
+dabei gar keine eigene Mechanik: Ein Tier ist ein Platz mit Eingaben.
+
+Was noch fehlt:
+
+- **M6 Aufträge erfüllen** — „liefere N×A und M×B". LKW, Kunden, Boote,
+  Sonderaufträge und Eventaufgaben fallen daraus als Daten heraus.
+- **M8 Level und Freischaltungen** — Erfahrung, Schwelle, Tabelle.
+- **M9 Aufgeschobener Zufall** — eine Regel für alle Würfel (§5).
 
 **Faustregel pro Mechanik:** Wenn du keine langsame, offensichtlich korrekte Variante
 danebenschreiben kannst, hast du sie noch nicht verstanden.
@@ -119,7 +136,13 @@ Sichert ab: dass das Offline-Versprechen aus Phase 0 auch mit sozialen Features 
 
 ## Phase 4 — Aus dem Feldtest wird Betrieb
 
-Der jetzige Server ist ein Werkzeug, kein Produkt:
+- [x] ~~**Dev und Produktion trennen.**~~ Erledigt: zwei Umgebungen, die sich nichts
+      teilen (Port, Spielstand, Token, Regelwerk), plus drei Riegel gegen die teuren
+      Betriebsfehler — kein Start ohne genannte Umgebung, kein Dev-Regelwerk in
+      Produktion, keine Werkbank in Produktion. Siehe `src/server/config.ts`.
+      Vorgezogen, weil sich sonst jede weitere Änderung am echten Spielstand testet.
+
+Der Rest des jetzigen Servers ist ein Werkzeug, kein Produkt:
 
 - **Accounts** statt ein Spielstand, ein Token.
 - **Datenbank** statt JSON-Datei; Command-Log hinter alten Snapshots abschneiden.
@@ -161,8 +184,8 @@ und skalieren mit, aber sie wollen bedient werden:
 ## Was man jetzt NICHT tun sollte
 
 - **Oberfläche vor Mechanik.** Man baut sie zweimal.
-- **Skalierung vor Spielern.** Ein Kern schafft ~160.000 Syncs pro Sekunde. Das reicht
-  erstmal.
+- **Skalierung vor Spielern.** Ein Kern schafft Zehntausende Syncs pro Sekunde. Das
+  reicht erstmal.
 - **Features, die offline nicht gehen, ohne bewusste Entscheidung.** Jedes davon verkleinert
   das Versprechen, mit dem das Spiel antritt.
 - **Determinismus für „nur dieses eine Feature" aufweichen.** Es gibt kein bisschen
@@ -172,10 +195,14 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**Phase 2, und darin zuerst M6 (Aufträge erfüllen).**
+**M6: Aufträge erfüllen.**
 
 Zwei Gründe. Erstens ist es die Mechanik, aus der die meisten Inhalte als Daten
 herausfallen: LKW, Kunden, Boote, Sonderaufträge und Eventaufgaben sind alle
 „liefere N×A und M×B" mit anderen Zahlen. Zweitens ist sie der Träger für die
 Leerlauf-Regel aus Architektur §6 — ein vorgewürfelter Auftragsvorrat ist genau
 das, was offline nie ausgeht.
+
+Und sie gibt dem Kreislauf ein Ziel. Im Moment endet er beim NPC-Verkauf: Eier
+werden zu Gold, Gold zu Plätzen, Plätze zu mehr Eiern. Das trägt eine Testrunde,
+aber keine Woche.

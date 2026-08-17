@@ -90,6 +90,11 @@ export class Client {
     return this.apply({ type: 'COLLECT', plot } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /** Platz eine Stufe ausbauen: Gehege kaufen, Hühner kaufen, Feld freischalten. */
+  buy(plot: number): ActionResult {
+    return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   sellNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

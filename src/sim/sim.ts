@@ -15,7 +15,7 @@
  */
 
 import type { Ruleset } from './rules.ts';
-import { derivedTables, isTradable } from './rules.ts';
+import { derivedTables, isTradable, levelRecipes, nextLevel } from './rules.ts';
 import type { State } from './state.ts';
 import {
   EMPTY_PLOT,
@@ -110,13 +110,18 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
   const s = advanceTo(state, cmd.tick, rules);
 
   switch (cmd.type) {
-    // Feld bestellen, Mühle beschicken, Teig ansetzen — eine Regel.
+    // Feld bestellen, Mühle beschicken, Hühner füttern — eine Regel.
     case 'START': {
       const def = rules.plots[cmd.plot];
       const plot = s.plots[cmd.plot];
       if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
       if (plot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
-      if (!def.recipes.includes(cmd.recipe)) throw new SimError('RECIPE_NOT_ALLOWED');
+      // Was hier laufen darf, hängt an der Ausbaustufe: Ein leeres Gehege
+      // (Stufe 1) kennt noch kein Ei-Rezept, eines mit Hühnern (Stufe 2) schon.
+      if (!levelRecipes(rules, cmd.plot, plot.level).includes(cmd.recipe)) {
+        throw new SimError('RECIPE_NOT_ALLOWED');
+      }
 
       const recipe = rules.recipes[cmd.recipe];
       if (!recipe) throw new SimError('RECIPE_NOT_ALLOWED');
@@ -129,7 +134,46 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         const spend: [number, number][] = recipe.inputs.map((i) => [i.item, -i.amount]);
         next.items = addItems(s.items, spend);
       }
-      next.plots = replaceAt(s.plots, cmd.plot, { recipe: cmd.recipe, startedAt: s.tick });
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        level: plot.level,
+        recipe: cmd.recipe,
+        startedAt: s.tick,
+      });
+      return next;
+    }
+
+    /**
+     * Gehege kaufen, Hühner kaufen, ein weiteres Feld freischalten — eine Regel.
+     *
+     * Bewusst nur bei leerem Platz: Ein Ausbau kann die erlaubten Rezepte
+     * ändern, und eine laufende Produktion, die danach nicht mehr erlaubt wäre,
+     * müsste irgendwie aufgelöst werden. „Erst abholen, dann ausbauen" spart
+     * diesen Sonderfall komplett — und ist obendrein verständlicher.
+     */
+    case 'BUY': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
+
+      const level = nextLevel(rules, cmd.plot, plot.level);
+      if (!level) throw new SimError('MAX_LEVEL');
+      for (const price of level.cost) {
+        if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
+      }
+
+      const next = cloneState(s);
+      if (level.cost.length > 0) {
+        next.items = addItems(
+          s.items,
+          level.cost.map((c): [number, number] => [c.item, -c.amount]),
+        );
+      }
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        level: plot.level + 1,
+        recipe: EMPTY_PLOT,
+        startedAt: 0,
+      });
       return next;
     }
 
@@ -149,7 +193,11 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       }
 
       const next = cloneState(s);
-      next.plots = replaceAt(s.plots, cmd.plot, { recipe: EMPTY_PLOT, startedAt: 0 });
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        level: plot.level,
+        recipe: EMPTY_PLOT,
+        startedAt: 0,
+      });
       next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
       return next;
     }

@@ -16,7 +16,7 @@ import { performance } from 'node:perf_hooks';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
 import type { Ruleset } from '../src/sim/rules.ts';
-import { initialState, count, stored } from '../src/sim/state.ts';
+import { initialState, count } from '../src/sim/state.ts';
 import { advanceTo, simulate, simulateAll } from '../src/sim/sim.ts';
 import { referenceRun } from '../test/helpers/session.ts';
 import type { Command } from '../src/sim/commands.ts';
@@ -24,8 +24,10 @@ import type { Command } from '../src/sim/commands.ts';
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 const WHEAT = 1;
-const EGGS = 2;
+const FEED = 2;
+const EGGS = 3;
 const R_WHEAT = 0;
+const R_FEED = 1;
 
 /**
  * Ein Regelwerk mit beliebig vielen Feldern.
@@ -36,7 +38,13 @@ const R_WHEAT = 0;
  */
 function withFields(count: number): Ruleset {
   const plots = [];
-  for (let i = 0; i < count; i++) plots.push({ id: `field-${i + 1}`, recipes: [R_WHEAT] });
+  for (let i = 0; i < count; i++) {
+    plots.push({
+      id: `field-${i + 1}`,
+      startLevel: 1,
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
+    });
+  }
   return { ...rules, plots };
 }
 
@@ -69,7 +77,7 @@ function makeLog(target: number, r: Ruleset): Command[] {
     }
 
     // Lager leeren, damit die Ernte nicht am Limit hängen bleibt.
-    for (const item of [WHEAT, EGGS]) {
+    for (const item of [WHEAT, FEED, EGGS]) {
       const peek = advanceTo(state, tick, r);
       const have = count(peek, item);
       if (have > 0 && cmds.length < target) {
@@ -146,15 +154,15 @@ const naiveSpan = performance.now() - refStart;
 
 // Und das, was ein O(Zeit)-Server für 30 Tage Abwesenheit zusätzlich täte.
 const naiveAdvanceStart = performance.now();
-const items = initialState(rules).items.slice();
+let held = 0;
 let progress = 0;
-const interval = rules.recipes[1]!.durationTicks;
+const interval = rules.recipes[R_FEED]!.durationTicks;
 const ticks30d = Math.floor((30 * DAY_MS) / 1000);
 for (let i = 0; i < ticks30d; i++) {
-  if (stored({ ...initialState(rules), items }, rules) < rules.siloCapacity) {
+  if (held < rules.siloCapacity) {
     progress++;
     if (progress >= interval) {
-      items[EGGS]!++;
+      held++;
       progress = 0;
     }
   }

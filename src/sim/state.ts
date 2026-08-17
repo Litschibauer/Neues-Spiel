@@ -24,10 +24,16 @@ import { derivedTables } from './rules.ts';
 /**
  * Ein Produktionsplatz im Zustand.
  *
- * `recipe === EMPTY_PLOT` heißt leer; dann ist `startedAt` bedeutungslos und
- * per Konvention 0, damit der kanonische String eindeutig bleibt.
+ * `level === 0` heißt: gehört dem Spieler noch nicht — hier lässt sich nichts
+ * starten, bis er ihn kauft. Höhere Stufen schalten Rezepte frei (ein leeres
+ * Gehege ist Stufe 1, mit Hühnern Stufe 2).
+ *
+ * `recipe === EMPTY_PLOT` heißt: nichts läuft gerade; dann ist `startedAt`
+ * bedeutungslos und per Konvention 0, damit der kanonische String eindeutig
+ * bleibt.
  */
 export type Plot = {
+  level: number;
   recipe: number;
   startedAt: number;
 };
@@ -129,7 +135,9 @@ export function initialState(rules: Ruleset): State {
   for (let i = 0; i < rules.items.length; i++) items.push(0);
 
   const plots: Plot[] = [];
-  for (let i = 0; i < rules.plots.length; i++) plots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+  for (const def of rules.plots) {
+    plots.push({ level: def.startLevel, recipe: EMPTY_PLOT, startedAt: 0 });
+  }
 
   const passives: number[] = [];
   for (let i = 0; i < rules.passives.length; i++) passives.push(0);

@@ -11,9 +11,9 @@
  */
 
 import { Client } from '../../src/client/client.ts';
-import { getRuleset } from '../../src/sim/rules.ts';
+import { getRuleset, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
-import { EMPTY_PLOT, cloneState, count, stored } from '../../src/sim/state.ts';
+import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
 import { simulate } from '../../src/sim/sim.ts';
 import { advancePassivesReference } from '../../src/sim/produce.ts';
 import type { State } from '../../src/sim/state.ts';
@@ -94,6 +94,29 @@ export function referenceStepMatchesUnit(): boolean {
   return true;
 }
 
+/**
+ * Startzustand für den Fuzz — wahlweise frischer Hof oder schon etwas Geld.
+ *
+ * Beides wird gebraucht, und aus verschiedenen Gründen:
+ *
+ *  - **Frischer Hof** ist der echte Einstieg: drei Felder, kein Gold, kein
+ *    Gehege. Er belastet vor allem den Ablehnpfad.
+ *  - **Mit Startkapital** ist der einzige Weg in die hinteren Mechaniken.
+ *    Ohne Gold kauft niemand eine Mühle, ohne Mühle gibt es kein Futter, ohne
+ *    Futter keine Eier — und der halbe Kreislauf bliebe ungeprüft.
+ *
+ * Münzen einfach hineinzuschreiben ist zulässig: Sie sind nicht lagerpflichtig,
+ * verletzen also keine Invariante, und der Server prüft ohnehin nur Commands
+ * gegen einen Ausgangszustand — nicht, wie dieser entstanden ist.
+ */
+export function fuzzStart(rules: Ruleset, gold: number): State {
+  const base = initialState(rules);
+  if (gold <= 0) return base;
+  const items = base.items.slice();
+  items[rules.currency] = gold;
+  return { ...base, items };
+}
+
 export type SessionOptions = {
   steps: number;
   maxAdvance: number;
@@ -101,15 +124,34 @@ export type SessionOptions = {
   advanceChance: number;
   /** Anteil rein zufälliger (meist illegaler) Aktionen — testet den Ablehnpfad. */
   chaosChance: number;
+  /**
+   * Nie verkaufen, nie einstellen — nur produzieren und einlagern.
+   *
+   * Klingt nach einem seltsamen Spieler, ist aber der einzige verlässliche Weg
+   * ans **volle Lager**. Und das ist die kritische Ecke aus §7: Dort greift der
+   * Hard Block, dort friert Produktion ein, dort saß der erste echte Bug.
+   */
+  hoard?: boolean;
 };
 
-/** Rezepte, die auf diesem Platz laufen dürfen UND deren Zutaten da sind. */
+/** Rezepte, die auf diesem Platz JETZT laufen dürfen — Stufe und Zutaten geprüft. */
 function affordableRecipes(s: State, rules: Ruleset, plot: number): number[] {
-  const def = rules.plots[plot];
-  if (!def) return [];
-  return def.recipes.filter((r) =>
+  const level = s.plots[plot]?.level ?? 0;
+  return levelRecipes(rules, plot, level).filter((r) =>
     rules.recipes[r]!.inputs.every((input) => count(s, input.item) >= input.amount),
   );
+}
+
+/** Plätze, deren nächste Ausbaustufe gerade bezahlbar ist. */
+function affordableUpgrades(s: State, rules: Ruleset): number[] {
+  const out: number[] = [];
+  s.plots.forEach((plot, i) => {
+    if (plot.recipe !== EMPTY_PLOT) return;
+    const level = nextLevel(rules, i, plot.level);
+    if (!level) return;
+    if (level.cost.every((c) => count(s, c.item) >= c.amount)) out.push(i);
+  });
+  return out;
 }
 
 /**
@@ -142,12 +184,15 @@ export function playRandomSession(
     }
 
     if (rnd() < opts.chaosChance) {
-      switch (pick(3)) {
+      switch (pick(4)) {
         case 0:
           client.start(pick(rules.plots.length + 1), pick(rules.recipes.length + 1));
           break;
         case 1:
           client.collect(pick(rules.plots.length + 1));
+          break;
+        case 3:
+          client.buy(pick(rules.plots.length + 1));
           break;
         default:
           client.sellNpc(pick(rules.items.length + 1), 1 + pick(200));
@@ -156,57 +201,49 @@ export function playRandomSession(
       continue;
     }
 
+    // Aus dem wählen, was JETZT möglich ist — statt aus einem festen Rad.
+    //
+    // Ein Rad mit festen Fächern verhungert an einem frischen Hof: Dort gibt es
+    // drei Felder und sonst nichts, also landen sechs von sieben Würfen auf
+    // Aktionen, die es gar nicht geben kann. Der Fuzz käme nie über die erste
+    // Ernte hinaus — und genau dahinter liegt der ganze Rest des Spiels.
     const s = client.preview();
-    const idle: number[] = [];
-    const done: number[] = [];
-    s.plots.forEach((p, idx) => {
-      if (p.recipe === EMPTY_PLOT) idle.push(idx);
-      else if (s.tick - p.startedAt >= rules.recipes[p.recipe]!.durationTicks) done.push(idx);
+    const moves: Array<() => void> = [];
+
+    s.plots.forEach((plot, idx) => {
+      if (plot.recipe === EMPTY_PLOT) {
+        const options = affordableRecipes(s, rules, idx);
+        for (const recipe of options) moves.push(() => client.start(idx, recipe));
+      } else if (s.tick - plot.startedAt >= rules.recipes[plot.recipe]!.durationTicks) {
+        moves.push(() => client.collect(idx));
+      }
     });
 
-    switch (pick(6)) {
-      case 0: {
-        if (idle.length === 0) break;
-        const plot = idle[pick(idle.length)]!;
-        const options = affordableRecipes(s, rules, plot);
-        if (options.length > 0) client.start(plot, options[pick(options.length)]!);
-        break;
-      }
-      case 1:
-        if (done.length) client.collect(done[pick(done.length)]!);
-        break;
-      case 2:
-      case 3: {
-        // Aus dem WIRKLICH vorhandenen Bestand wählen. Bei fünf handelbaren
-        // Waren und zwei im Lager würde blindes Ziehen sonst überwiegend
-        // Ablehnungen erzeugen — und der Fuzz käme nie in tiefe Zustände.
-        const owned = tradable.filter((it) => count(s, it) > 0);
-        if (owned.length === 0) break;
-        const item = owned[pick(owned.length)]!;
-        client.sellNpc(item, 1 + pick(count(s, item)));
-        break;
-      }
-      case 4: {
+    for (const plot of affordableUpgrades(s, rules)) {
+      moves.push(() => client.buy(plot));
+    }
+
+    if (!opts.hoard) {
+      for (const item of tradable) {
+        const have = count(s, item);
+        if (have <= 0) continue;
+        moves.push(() => client.sellNpc(item, 1 + pick(have)));
+
         // Preis innerhalb des Bandes wählen, sonst wäre die Aktion fast immer
         // ungültig und der Auftragspfad bliebe ungetestet.
-        const owned = tradable.filter((it) => count(s, it) > 0);
-        if (owned.length === 0) break;
-        const item = owned[pick(owned.length)]!;
-        const have = count(s, item);
         const ref = rules.items[item]!.npcPrice;
         const min = Math.max(1, Math.floor((ref * rules.priceBandMinPct) / 100));
         const max = Math.floor((ref * rules.priceBandMaxPct) / 100);
-        if (have > 0) client.listOrder(item, 1 + pick(have), min + pick(max - min + 1));
-        break;
+        moves.push(() => client.listOrder(item, 1 + pick(have), min + pick(max - min + 1)));
       }
-      default:
-        if (s.orders.length > 0 && rnd() < 0.5) {
-          client.cancelOrder(s.orders[pick(s.orders.length)]!.id);
-        } else if (s.mail.length > 0) {
-          client.collectMail();
-        }
-        break;
+
+      if (s.orders.length > 0) {
+        moves.push(() => client.cancelOrder(s.orders[pick(s.orders.length)]!.id));
+      }
     }
+    if (s.mail.length > 0) moves.push(() => client.collectMail());
+
+    if (moves.length > 0) moves[pick(moves.length)]!();
   }
 
   return client;
@@ -225,6 +262,7 @@ export function assertAllIntegers(s: State): void {
     ...s.passives.map((v, i): [string, number] => [`passives[${i}]`, v]),
     ...s.plots.map((p, i): [string, number] => [`plots[${i}].startedAt`, p.startedAt]),
     ...s.plots.map((p, i): [string, number] => [`plots[${i}].recipe`, p.recipe]),
+    ...s.plots.map((p, i): [string, number] => [`plots[${i}].level`, p.level]),
   ];
 
   for (const [name, value] of nums) {

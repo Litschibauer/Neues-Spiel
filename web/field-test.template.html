@@ -106,6 +106,8 @@
   .lease button { border-color: var(--wait); color: var(--wait); }
   .lease button.primary { background: var(--wait); color: var(--surface); }
   .locked .fields, .locked #actions { opacity: .45; pointer-events: none; }
+  .field.locked-plot { opacity: .6; border-style: dashed; }
+  .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
 </style>
 
@@ -140,7 +142,7 @@
     </div>
 
     <div>
-      <h2>Plätze — tippen zum Starten und Abholen</h2>
+      <h2>Plätze — tippen zum Kaufen, Starten und Abholen</h2>
       <div class="fields" id="fields"></div>
     </div>
 
@@ -314,20 +316,36 @@
    * ein neuer Gegenstand macht die Seite also nicht kaputt.
    */
   var NAMES = {
-    gold: 'Gold', wheat: 'Weizen', eggs: 'Eier',
-    milk: 'Milch', flour: 'Mehl', bread: 'Brot',
-    coop: 'Stall', pasture: 'Weide', mill: 'Mühle', bakery: 'Bäckerei'
+    gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
+    mill: 'Mühle'
   };
   function nameOf(id) { return NAMES[id] || id; }
   function itemName(i) { return nameOf(rules.items[i].id); }
   function plotName(i) {
     var id = rules.plots[i].id;
-    return id.indexOf('field-') === 0 ? 'Feld ' + id.slice(6) : nameOf(id);
+    if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
+    if (id.indexOf('coop-') === 0) return 'Gehege ' + id.slice(5);
+    return nameOf(id);
+  }
+
+  /** Kosten als Text, z.B. „300 Gold". */
+  function costText(cost) {
+    return cost.map(function (c) { return c.amount + ' ' + itemName(c.item); }).join(' + ');
+  }
+
+  /** Nächste Ausbaustufe eines Platzes — oder null, wenn voll ausgebaut. */
+  function nextLevelOf(i, level) {
+    return rules.plots[i].levels[level] || null;
+  }
+
+  /** Welche Rezepte auf diesem Platz und dieser Stufe laufen dürfen. */
+  function recipesAt(i, level) {
+    return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
   }
 
   /** Erstes auf diesem Platz erlaubtes Rezept, dessen Zutaten vorhanden sind. */
   function startableRecipe(s, plot) {
-    var allowed = rules.plots[plot].recipes;
+    var allowed = recipesAt(plot, s.plots[plot].level);
     for (var k = 0; k < allowed.length; k++) {
       var recipe = rules.recipes[allowed[k]];
       var ok = true;
@@ -371,20 +389,40 @@
       var busy = p.recipe !== NS.EMPTY_PLOT;
       var duration = busy ? rules.recipes[p.recipe].durationTicks : 0;
       var done = busy && s.tick - p.startedAt >= duration;
-      btn.className = 'field' + (done ? ' ripe' : busy ? ' growing' : '');
+      var upgrade = nextLevelOf(i, p.level);
+      btn.className = 'field' + (done ? ' ripe' : busy ? ' growing' : p.level <= 0 ? ' locked-plot' : '');
 
       var label = document.createElement('span');
       label.className = 'label';
       label.textContent = plotName(i);
       var value = document.createElement('span');
-      if (!busy) value.textContent = 'leer';
-      else if (done) value.textContent = nameOf(rules.recipes[p.recipe].id) + ' fertig';
-      else {
-        var left = duration - (s.tick - p.startedAt);
-        value.textContent = left < 90 ? left + ' s' : Math.ceil(left / 60) + ' min';
+
+      if (busy) {
+        if (done) value.textContent = nameOf(rules.recipes[p.recipe].id) + ' fertig';
+        else {
+          var left = duration - (s.tick - p.startedAt);
+          value.textContent = left < 90 ? left + ' s' : Math.ceil(left / 60) + ' min';
+        }
+      } else if (recipesAt(i, p.level).length === 0 && upgrade) {
+        // Noch nicht gekauft, oder gekauft aber leer (Gehege ohne Hühner).
+        var affordable = upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; });
+        value.textContent = upgrade.label + ': ' + costText(upgrade.cost);
+        if (!affordable) btn.disabled = true;
+      } else {
+        value.textContent = 'leer';
       }
 
       btn.appendChild(label); btn.appendChild(value);
+
+      // Ein zweiter, kleiner Knopf für den Ausbau, wenn der Platz schon läuft.
+      if (upgrade && recipesAt(i, p.level).length > 0 && !busy) {
+        var up = document.createElement('span');
+        up.className = 'upgrade';
+        up.textContent = '+ ' + upgrade.label + ' (' + costText(upgrade.cost) + ')';
+        up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(i); });
+        btn.appendChild(up);
+      }
+
       btn.addEventListener('click', function () { tapPlot(i); });
       box.appendChild(btn);
     });
@@ -423,16 +461,32 @@
     client.localTick = tickNow();
     var s = client.preview();
     var p = s.plots[i];
+
     if (p.recipe !== NS.EMPTY_PLOT) {
       act(plotName(i) + ' abgeholt', client.collect(i));
       return;
     }
+
+    // Kann dieser Platz auf seiner Stufe noch gar nichts, ist der Tap ein Kauf.
+    if (recipesAt(i, p.level).length === 0) {
+      tapBuy(i);
+      return;
+    }
+
     var recipe = startableRecipe(s, i);
     if (recipe < 0) {
       log(plotName(i) + ': Zutaten fehlen');
       return;
     }
     act(plotName(i) + ': ' + nameOf(rules.recipes[recipe].id) + ' gestartet', client.start(i, recipe));
+  }
+
+  function tapBuy(i) {
+    if (!isActive) return;
+    client.localTick = tickNow();
+    var level = nextLevelOf(i, client.preview().plots[i].level);
+    if (!level) { log(plotName(i) + ' ist voll ausgebaut'); return; }
+    act(plotName(i) + ': ' + level.label + ' gekauft', client.buy(i));
   }
 
   function attempt(reason, force) {

@@ -10,19 +10,15 @@
  *
  * Hier steht der gesamte Spielinhalt: Gegenstände, Rezepte, Produktionsplätze.
  * Eine neue Feldfrucht ist eine Zeile in `items` plus eine in `recipes` — der
- * Sim-Kern kennt keinen Weizen und keine Eier, nur Katalogindizes.
- *
- * Der Hebel dahinter (Roadmap): **Inhalt skaliert als Daten, Risiko skaliert mit
- * Mechaniken.** Eine Tabellenzeile bringt kein neues Determinismus-Risiko mit,
- * eine neue Mechanik schon.
+ * Sim-Kern kennt keinen Weizen und keine Hühner, nur Katalogindizes.
  *
  * ── Die eine Regel, die man nicht brechen darf ──────────────────────────────
  *
  * **Kataloge sind APPEND-ONLY.** Zustände speichern Indizes, keine Namen: Ein
- * Inventar ist ein Zahlenarray in Katalogreihenfolge, ein Feld merkt sich eine
+ * Inventar ist ein Zahlenarray in Katalogreihenfolge, ein Platz merkt sich eine
  * Rezeptnummer. Wer einen Eintrag einschiebt oder entfernt, verschiebt die
  * Bedeutung *aller* gespeicherten Spielstände — aus Weizen wird stillschweigend
- * Mehl. Anhängen ist gratis (die Migration füllt mit Nullen auf); Umsortieren
+ * Futter. Anhängen ist gratis (die Migration füllt mit Nullen auf); Umsortieren
  * braucht eine echte Umschlüsselungs-Migration.
  *
  * `test/rules.test.ts` prüft das über alle Versionen hinweg.
@@ -49,6 +45,9 @@ export type ItemDef = {
  * Dieselbe Struktur trägt Feldfrucht, Tierprodukt und Werkstatt-Rezept — das ist
  * die Verdichtung aus der Konzept-Map (M1). Produktionsketten muss niemand extra
  * bauen: Sie entstehen, sobald die Ausgabe des einen die Eingabe des anderen ist.
+ *
+ * Der Kernkreislauf des Spiels ist genau das, dreimal hintereinander:
+ * Feld → Weizen, Mühle → Futter, Gehege → Eier.
  */
 export type RecipeDef = {
   id: string;
@@ -59,28 +58,51 @@ export type RecipeDef = {
 };
 
 /**
- * Ein Produktionsplatz, den der Spieler selbst bestückt: Feld, Mühle, Bäckerei.
+ * Eine Ausbaustufe eines Platzes.
  *
- * Die Liste hier ist die WELT, nicht der Typ — jeder Eintrag ist ein Platz, den
- * es gibt. Ein Feld dazuzubauen ist damit ebenfalls eine Tabellenzeile (und eine
- * strukturelle Migration, siehe migrate.ts).
+ * Damit sind „Gehege kaufen" und „Hühner kaufen" **dieselbe** Mechanik: einmal
+ * Kosten zahlen, dauerhaft eine Stufe höher. Ein leeres Gehege ist Stufe 1
+ * (kann noch nichts), mit Hühnern Stufe 2 (kann Eier).
+ *
+ * Dieselbe Mechanik trägt später Felder freischalten, Ställe vergrößern und
+ * Maschinen beschleunigen (Konzept-Map, M7) — alles Tabellenzeilen.
  */
-export type PlotDef = {
-  id: string;
-  /** Welche Rezepte hier laufen dürfen. Nie leer. */
+export type LevelDef = {
+  /** Anzeigename dieser Stufe. */
+  label: string;
+  /** Was der Aufstieg auf diese Stufe kostet. */
+  cost: readonly ItemStack[];
+  /** Welche Rezepte auf dieser Stufe laufen dürfen. Darf leer sein. */
   recipes: readonly number[];
 };
 
 /**
- * Ein Platz, der von allein produziert: Hühnerstall, Weide, Bienenstock.
+ * Ein Produktionsplatz: Feld, Mühle, Gehege.
  *
- * Taktung ist die Dauer des Rezepts. Ein Balance-Patch, der die Dauer ändert,
- * ändert damit automatisch auch die Taktung — eine Zahl, eine Wahrheit.
+ * Die Liste im Regelwerk ist die WELT, nicht der Typ — jeder Eintrag ist ein
+ * Platz, den es geben kann. Ob er dem Spieler schon gehört, sagt seine Stufe im
+ * Zustand.
+ */
+export type PlotDef = {
+  id: string;
+  /** Stufe, mit der ein frischer Hof startet. 0 = muss erst gekauft werden. */
+  startLevel: number;
+  /** Stufen 1..n — `levels[i]` beschreibt Stufe i+1. Append-only. */
+  levels: readonly LevelDef[];
+};
+
+/**
+ * Ein Platz, der von allein produziert: Bienenstock, Brunnen, Kompost.
  *
- * Einschränkung (bewusst): Passive Rezepte haben keine Eingaben und geben genau
- * eine Einheit aus. Der Grund steht in `produce.ts` — nur so bleibt die
- * geschlossene Form bei geteiltem Lagerplatz beweisbar. Tiere, die Futter
- * brauchen, sind ein Plot mit Eingaben, keine Passive.
+ * Taktung ist die Dauer des Rezepts. Einschränkung (bewusst): Passive Rezepte
+ * haben keine Eingaben und geben genau eine Einheit aus. Der Grund steht in
+ * `produce.ts` — nur so bleibt die geschlossene Form bei geteiltem Lagerplatz
+ * beweisbar. Tiere, die Futter brauchen, sind ein Platz mit Eingaben.
+ *
+ * **Der Basis-Kreislauf nutzt das nicht.** Die Mechanik bleibt trotzdem im Kern:
+ * Sie ist der Beweis, dass gedeckelte Akkumulation über beliebig lange
+ * Offline-Phasen in geschlossener Form geht (§7) — und der einzige Kandidat für
+ * „es passiert etwas, während man weg ist, ohne dass man es angestoßen hat".
  */
 export type PassiveDef = {
   id: string;
@@ -107,8 +129,6 @@ export type Ruleset = {
    * Wie viele Verkaufsaufträge gleichzeitig offen sein dürfen.
    *
    * DAS ist der strukturelle Riegel gegen „Escrow als unendliches Lager" (§8).
-   * Ohne ihn könnte man Ware zu einem unverkäuflichen Preis einstellen, das
-   * Lager leeren und beliebig weiterproduzieren.
    */
   orderSlots: number;
   /** Nach dieser Zeit verfällt ein Auftrag und die Ware geht ins Postfach. */
@@ -122,44 +142,91 @@ export type Ruleset = {
 
 // ── Katalog-Indizes ────────────────────────────────────────────────────────
 //
-// Nur zur Lesbarkeit dieser Datei. Der Sim-Kern benutzt sie NICHT — er kennt
-// ausschließlich `rules.items[i]` und `rules.currency`.
+// Nur zur Lesbarkeit dieser Datei. Der Sim-Kern benutzt sie NICHT.
 
 const GOLD = 0;
 const WHEAT = 1;
-const EGGS = 2;
-const MILK = 3;
-const FLOUR = 4;
-const BREAD = 5;
+const FEED = 2;
+const EGGS = 3;
 
 const R_WHEAT = 0;
-const R_EGGS = 1;
-const R_MILK = 2;
-const R_FLOUR = 3;
-const R_BREAD = 4;
+const R_FEED = 1;
+const R_EGGS = 2;
 
-const BASE_ITEMS: readonly ItemDef[] = [
-  { id: 'gold', storable: false, npcPrice: 0 },
-  { id: 'wheat', storable: true, npcPrice: 3 },
-  { id: 'eggs', storable: true, npcPrice: 5 },
-];
+const gold = (amount: number): ItemStack[] => [{ item: GOLD, amount }];
 
-function fields(count: number, recipes: readonly number[]): PlotDef[] {
-  const out: PlotDef[] = [];
-  for (let i = 0; i < count; i++) out.push({ id: `field-${i + 1}`, recipes });
-  return out;
-}
-
+/**
+ * Der Basis-Kreislauf, Stand jetzt:
+ *
+ *   Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+ *
+ * Bewusst nicht mehr. Jede weitere Mechanik ist neue Fläche, auf der Client und
+ * Server auseinanderlaufen können (Roadmap). Inhalt darf später beliebig wachsen
+ * — er ist ja nur noch Tabelle.
+ */
 const V1: Ruleset = {
   version: 1,
-  items: BASE_ITEMS,
-  currency: GOLD,
-  recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 7200 },
-    { id: 'eggs', inputs: [], output: { item: EGGS, amount: 1 }, durationTicks: 600 },
+
+  items: [
+    { id: 'gold', storable: false, npcPrice: 0 },
+    { id: 'wheat', storable: true, npcPrice: 3 },
+    { id: 'feed', storable: true, npcPrice: 8 },
+    { id: 'eggs', storable: true, npcPrice: 25 },
   ],
-  plots: fields(6, [R_WHEAT]),
-  passives: [{ id: 'coop', recipe: R_EGGS }],
+  currency: GOLD,
+
+  recipes: [
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 120 },
+    {
+      id: 'feed',
+      inputs: [{ item: WHEAT, amount: 3 }],
+      output: { item: FEED, amount: 2 },
+      durationTicks: 300,
+    },
+    {
+      id: 'eggs',
+      inputs: [{ item: FEED, amount: 1 }],
+      output: { item: EGGS, amount: 3 },
+      durationTicks: 900,
+    },
+  ],
+
+  plots: [
+    // Drei Felder gehören dem Spieler von Anfang an — ohne sie gäbe es keinen
+    // Einstieg in den Kreislauf.
+    { id: 'field-1', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+    { id: 'field-2', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+    { id: 'field-3', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+
+    // Drei weitere sind das erste, was man sich leisten kann.
+    { id: 'field-4', startLevel: 0, levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT] }] },
+    { id: 'field-5', startLevel: 0, levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT] }] },
+    { id: 'field-6', startLevel: 0, levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT] }] },
+
+    { id: 'mill', startLevel: 0, levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED] }] },
+
+    // Zwei Stufen, und genau das sind deine zwei Kaufschritte: erst steht das
+    // Gehege leer, dann sind Hühner drin. Ohne Hühner läuft kein Rezept.
+    {
+      id: 'coop-1',
+      startLevel: 0,
+      levels: [
+        { label: 'Gehege', cost: gold(300), recipes: [] },
+        { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
+      ],
+    },
+    {
+      id: 'coop-2',
+      startLevel: 0,
+      levels: [
+        { label: 'Gehege', cost: gold(800), recipes: [] },
+        { label: 'Hühner', cost: gold(400), recipes: [R_EGGS] },
+      ],
+    },
+  ],
+
+  passives: [],
+
   siloCapacity: 100,
   orderSlots: 4,
   orderTtlTicks: 86_400,
@@ -169,13 +236,13 @@ const V1: Ruleset = {
 };
 
 /**
- * Ein typischer Balance-Patch: Weizen wächst schneller, der Stall legt öfter,
- * das Lager wird größer, Preise ziehen an.
+ * Ein Balance-Patch, wie er im Live-Betrieb wöchentlich vorkommt: andere Zeiten,
+ * andere Preise, größeres Lager. Die Form des Zustands bleibt gleich.
  *
- * Genau so ein Patch ist der Grund für R2 — er ändert das deterministische
- * Ergebnis. Ein Spieler, der offline unter V1 gehandelt hat, muss weiterhin
- * unter V1 nachgerechnet werden, sonst weicht der Server garantiert von seinem
- * Client ab (R1). Die Form des Zustands bleibt unverändert.
+ * Er steht hier nicht als Inhalt, sondern als **arbeitendes Beispiel**: Ohne
+ * mindestens zwei Versionen wäre die ganze Migrationsmaschinerie aus R2 nur
+ * Theorie — und sie ist genau das, was ein Live-Service-Spiel am Laufen hält.
+ * Der erste echte Patch ersetzt diese Zahlen.
  */
 const V2: Ruleset = {
   ...V1,
@@ -183,100 +250,53 @@ const V2: Ruleset = {
   items: [
     { id: 'gold', storable: false, npcPrice: 0 },
     { id: 'wheat', storable: true, npcPrice: 4 },
-    { id: 'eggs', storable: true, npcPrice: 6 },
+    { id: 'feed', storable: true, npcPrice: 9 },
+    { id: 'eggs', storable: true, npcPrice: 28 },
   ],
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 5400 },
-    { id: 'eggs', inputs: [], output: { item: EGGS, amount: 1 }, durationTicks: 480 },
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 100 },
+    {
+      id: 'feed',
+      inputs: [{ item: WHEAT, amount: 3 }],
+      output: { item: FEED, amount: 2 },
+      durationTicks: 240,
+    },
+    {
+      id: 'eggs',
+      inputs: [{ item: FEED, amount: 1 }],
+      output: { item: EGGS, amount: 3 },
+      durationTicks: 720,
+    },
   ],
   siloCapacity: 120,
   // Mehr Slots als Progressions-Buff. Achtung: WENIGER Slots wären ein
-  // Migrationsproblem — bestehende Aufträge würden die Invariante verletzen
-  // und müssten in einem Migrationsschritt ins Postfach aufgelöst werden.
+  // Migrationsproblem — bestehende Aufträge würden die Invariante verletzen.
   orderSlots: 6,
 };
 
 /**
- * Ein INHALTS-Patch — und damit der ehrlichere Test für R2.
+ * Entwicklungs-Tempo: derselbe Inhalt wie V1, Uhren zehnmal schneller.
  *
- * V1→V2 änderte nur Zahlen. Hier wächst der Zustand: zwei neue Rohstoffe, zwei
- * Verarbeitungsprodukte, zwei Werkstätten und eine zweite Weide. Das Inventar
- * bekommt Einträge, die Plätze werden mehr — eine *strukturelle* Migration.
- *
- * Bemerkenswert ist, was hier NICHT passiert: Für Mühle und Bäckerei gibt es
- * keine neue Mechanik. Eine Werkstatt ist ein Platz mit Eingaben; die Kette
- * Weizen → Mehl → Brot entsteht daraus von allein.
+ * Die Versionsnummer liegt bewusst WEIT außerhalb der Produktionsreihe. Ein
+ * Dev-Regelwerk darf nie versehentlich Ziel einer Migration werden — sonst
+ * bekäme irgendwann ein echter Spielstand Sekundenzeiten. Es gibt keinen Pfad
+ * hinein und keinen hinaus; ein Dev-Spielstand ist Wegwerfware.
  */
-const V3: Ruleset = {
-  ...V2,
-  version: 3,
-  items: [
-    ...V2.items,
-    { id: 'milk', storable: true, npcPrice: 7 },
-    { id: 'flour', storable: true, npcPrice: 9 },
-    { id: 'bread', storable: true, npcPrice: 20 },
-  ],
+const DEV: Ruleset = {
+  ...V1,
+  version: 1001,
   recipes: [
-    ...V2.recipes,
-    { id: 'milk', inputs: [], output: { item: MILK, amount: 1 }, durationTicks: 900 },
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 12 },
     {
-      id: 'flour',
+      id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
-      output: { item: FLOUR, amount: 1 },
-      durationTicks: 1800,
-    },
-    {
-      id: 'bread',
-      inputs: [
-        { item: FLOUR, amount: 2 },
-        { item: EGGS, amount: 1 },
-      ],
-      output: { item: BREAD, amount: 1 },
-      durationTicks: 3600,
-    },
-  ],
-  plots: [
-    ...fields(6, [R_WHEAT]),
-    { id: 'mill', recipes: [R_FLOUR] },
-    { id: 'bakery', recipes: [R_BREAD] },
-  ],
-  passives: [
-    { id: 'coop', recipe: R_EGGS },
-    { id: 'pasture', recipe: R_MILK },
-  ],
-};
-
-/**
- * Feldtest-Tempo: dieselben Regeln und derselbe Inhalt, nur schnelle Uhren.
- *
- * Mit zwei Stunden Wachstumszeit lässt sich ein Verbindungstest von Hand kaum
- * durchführen — ohne erntereifes Feld und ohne Ware im Lager wird jede Aktion
- * lokal abgelehnt, und die Warteschlange bleibt leer. Dann testet man nichts.
- *
- * Es ist bewusst eine eigene Ruleset-VERSION und kein Schalter: Regeln sind
- * versionierte Daten (R2). Damit lässt sich der Wechsel obendrein als echter
- * Balance-Patch beobachten — inklusive fairer Umrechnung laufender Plätze.
- */
-const V4: Ruleset = {
-  ...V3,
-  version: 4,
-  recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 60 },
-    { id: 'eggs', inputs: [], output: { item: EGGS, amount: 1 }, durationTicks: 20 },
-    { id: 'milk', inputs: [], output: { item: MILK, amount: 1 }, durationTicks: 35 },
-    {
-      id: 'flour',
-      inputs: [{ item: WHEAT, amount: 3 }],
-      output: { item: FLOUR, amount: 1 },
+      output: { item: FEED, amount: 2 },
       durationTicks: 30,
     },
     {
-      id: 'bread',
-      inputs: [
-        { item: FLOUR, amount: 2 },
-        { item: EGGS, amount: 1 },
-      ],
-      output: { item: BREAD, amount: 1 },
+      id: 'eggs',
+      inputs: [{ item: FEED, amount: 1 }],
+      output: { item: EGGS, amount: 3 },
       durationTicks: 90,
     },
   ],
@@ -291,17 +311,25 @@ const V4: Ruleset = {
 export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
   [2, V2],
-  [3, V3],
-  [4, V4],
+  [1001, DEV],
 ]);
 
+/**
+ * Die Produktionsreihe, in Migrationsreihenfolge.
+ *
+ * Nur entlang dieser Kette wird migriert. Das Dev-Regelwerk steht bewusst nicht
+ * drin — siehe `DEV`.
+ */
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2];
+
+/** Womit ein frischer Hof in Produktion startet. */
 export const CURRENT_RULESET_VERSION = 1;
 
 /** Die Version, auf die der Server neue Snapshots hebt. */
-export const LATEST_RULESET_VERSION = 3;
+export const LATEST_RULESET_VERSION = 2;
 
-/** Schnelle Uhren für den Feldtest — siehe V4. */
-export const FIELD_TEST_RULESET_VERSION = 4;
+/** Schnelle Uhren fürs Entwickeln und für Feldtests von Hand. */
+export const DEV_RULESET_VERSION = 1001;
 
 export function getRuleset(version: number): Ruleset {
   const r = RULESETS.get(version);
@@ -311,6 +339,17 @@ export function getRuleset(version: number): Ruleset {
 
 // ── Abfragen auf dem Katalog ───────────────────────────────────────────────
 
+/** Welche Rezepte auf diesem Platz laufen, wenn er auf `level` ausgebaut ist. */
+export function levelRecipes(rules: Ruleset, plot: number, level: number): readonly number[] {
+  if (level <= 0) return [];
+  return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
+}
+
+/** Kosten für die nächste Stufe — `null`, wenn schon voll ausgebaut. */
+export function nextLevel(rules: Ruleset, plot: number, level: number): LevelDef | null {
+  return rules.plots[plot]?.levels[level] ?? null;
+}
+
 /**
  * Tabellen, die sich aus dem Katalog ergeben — einmal je Regelwerk berechnet.
  *
@@ -318,8 +357,6 @@ export function getRuleset(version: number): Ruleset {
  * ist für den Determinismus also unsichtbar. Er ist trotzdem nötig. Seit der
  * Zustand ein Inventar-Array ist, muss „wie voll ist das Lager" über den
  * Katalog laufen — und diese Frage stellt der Sim-Kern mehrfach *pro Command*.
- * Ohne die Tabelle kostet der Sync spürbar mehr, und R4 sagt, dass genau diese
- * Konstanten zählen.
  */
 export type DerivedTables = {
   /** Indizes der lagerpflichtigen Gegenstände. */
@@ -383,7 +420,9 @@ export function validateRuleset(rules: Ruleset): string[] {
   const itemOk = (i: number) => Number.isInteger(i) && i >= 0 && i < rules.items.length;
 
   if (!itemOk(rules.currency)) problems.push(`Währung ${rules.currency} steht nicht im Katalog`);
-  else if (rules.items[rules.currency]!.storable) problems.push('Währung darf nicht lagerpflichtig sein');
+  else if (rules.items[rules.currency]!.storable) {
+    problems.push('Währung darf nicht lagerpflichtig sein');
+  }
 
   for (const [i, item] of rules.items.entries()) {
     if (item.npcPrice < 0 || !Number.isInteger(item.npcPrice)) {
@@ -399,19 +438,40 @@ export function validateRuleset(rules: Ruleset): string[] {
     if (!Number.isInteger(r.output.amount) || r.output.amount < 1) {
       problems.push(`Rezept ${i} (${r.id}): Ausgabemenge ${r.output.amount} < 1`);
     }
+    const seen = new Set<number>();
     for (const input of r.inputs) {
       if (!itemOk(input.item)) problems.push(`Rezept ${i} (${r.id}): Eingabe unbekannt`);
       if (!Number.isInteger(input.amount) || input.amount < 1) {
         problems.push(`Rezept ${i} (${r.id}): Eingabemenge ${input.amount} < 1`);
       }
+      // Doppelte Zutat: Die Bestandsprüfung im Sim-Kern geht Zutat für Zutat
+      // vor und würde denselben Vorrat zweimal zählen.
+      if (seen.has(input.item)) problems.push(`Rezept ${i} (${r.id}): Zutat doppelt`);
+      seen.add(input.item);
     }
   }
 
   for (const [i, p] of rules.plots.entries()) {
-    if (p.recipes.length === 0) problems.push(`Platz ${i} (${p.id}): keine Rezepte`);
-    for (const r of p.recipes) {
-      if (!Number.isInteger(r) || r < 0 || r >= rules.recipes.length) {
-        problems.push(`Platz ${i} (${p.id}): Rezept ${r} gibt es nicht`);
+    if (p.levels.length === 0) problems.push(`Platz ${i} (${p.id}): keine Stufen`);
+    if (!Number.isInteger(p.startLevel) || p.startLevel < 0 || p.startLevel > p.levels.length) {
+      problems.push(`Platz ${i} (${p.id}): Startstufe ${p.startLevel} außerhalb der Stufen`);
+    }
+    for (const [l, level] of p.levels.entries()) {
+      for (const r of level.recipes) {
+        if (!Number.isInteger(r) || r < 0 || r >= rules.recipes.length) {
+          problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Rezept ${r} gibt es nicht`);
+        }
+      }
+      for (const c of level.cost) {
+        if (!itemOk(c.item)) problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Preis unbekannt`);
+        if (!Number.isInteger(c.amount) || c.amount < 1) {
+          problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Preis ${c.amount} < 1`);
+        }
+      }
+      // Eine Startstufe, die etwas kostet, wäre ein Widerspruch: Sie ist ja
+      // schon da, bezahlt hat sie nie jemand.
+      if (l < p.startLevel && level.cost.length > 0) {
+        problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Startstufe mit Preis`);
       }
     }
   }

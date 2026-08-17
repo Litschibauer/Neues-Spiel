@@ -232,7 +232,7 @@ test('Fork wird auch über die Engine sauber aufgelöst — Server gewinnt', asy
 
   // Zweites Gerät synct zuerst.
   const other = new Client(server.snapshot);
-  other.start(3, R_WHEAT);
+  other.start(2, R_WHEAT);
   other.advanceClock(50);
   server.sync(other.buildSyncRequest(), T0 + 50_000);
 
@@ -248,7 +248,7 @@ test('Fork wird auch über die Engine sauber aufgelöst — Server gewinnt', asy
   // Der Client steht danach sauber auf dem Server-Stand, nicht in einem
   // Zwischenzustand — und die Queue ist leer, nicht endlos wiederholend.
   assert.equal(client.queue.length, 0);
-  assert.equal(client.state.plots[3]!.recipe, R_WHEAT);
+  assert.equal(client.state.plots[2]!.recipe, R_WHEAT);
   assert.equal(engine.view, 'live');
 });
 

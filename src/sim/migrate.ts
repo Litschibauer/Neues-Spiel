@@ -20,7 +20,7 @@
  */
 
 import type { Ruleset } from './rules.ts';
-import { getRuleset } from './rules.ts';
+import { getRuleset, levelRecipes } from './rules.ts';
 import type { State } from './state.ts';
 import { EMPTY_PLOT, cloneState, stored } from './state.ts';
 
@@ -61,7 +61,7 @@ function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
     const elapsed = state.tick - p.startedAt;
     const remaining = Math.max(0, before - elapsed);
     const newRemaining = Math.min(remaining, after);
-    return { recipe: p.recipe, startedAt: state.tick - (after - newRemaining) };
+    return { level: p.level, recipe: p.recipe, startedAt: state.tick - (after - newRemaining) };
   });
 
   if (!changed) return state;
@@ -130,7 +130,11 @@ export const GROW: MigrationStep = (state, from, to) => {
   next.items = items;
 
   const plots = state.plots.slice();
-  while (plots.length < to.plots.length) plots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+  // Neue Plätze kommen mit ihrer Startstufe dazu — ein Patch, der ein Feld
+  // geschenkt hinzufügt, tut das damit auch für bestehende Höfe.
+  while (plots.length < to.plots.length) {
+    plots.push({ level: to.plots[plots.length]!.startLevel, recipe: EMPTY_PLOT, startedAt: 0 });
+  }
   next.plots = plots;
 
   const passives = state.passives.slice();
@@ -141,13 +145,16 @@ export const GROW: MigrationStep = (state, from, to) => {
 };
 
 /** Inhalt dazu UND Zeiten anpassen — die beiden Bausteine hintereinander. */
-const GROW_AND_RETIME: MigrationStep = (state, from, to) => RETIME(GROW(state, from, to), from, to);
+export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
+  RETIME(GROW(state, from, to), from, to);
 
 /** Ein Schritt pro Versionssprung. Migrationen werden der Reihe nach angewandt. */
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
+  // Der Basis-Kreislauf hat bisher genau einen Patch: einen reinen Zahlen-Patch.
+  // `GROW_AND_RETIME` steht bereit, sobald der erste Inhalts-Patch kommt — und
+  // ist über synthetische Kataloge in `migration.test.ts` geprüft, damit der
+  // Pfad nicht ungetestet verrottet.
   ['1->2', RETIME],
-  ['2->3', GROW_AND_RETIME],
-  ['3->4', RETIME],
 ]);
 
 /**
@@ -215,11 +222,17 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   if (!Number.isSafeInteger(state.tick)) problems.push(`tick kein sicherer Integer: ${state.tick}`);
 
   for (const [i, p] of state.plots.entries()) {
+    const def = rules.plots[i];
+    if (!def) continue;
+    if (!Number.isInteger(p.level) || p.level < 0 || p.level > def.levels.length) {
+      problems.push(`Platz ${i}: Stufe ${p.level} außerhalb von [0, ${def.levels.length}]`);
+    }
+
     if (p.recipe === EMPTY_PLOT) continue;
     if (!rules.recipes[p.recipe]) {
       problems.push(`Platz ${i}: Rezept ${p.recipe} gibt es nicht`);
-    } else if (!rules.plots[i]?.recipes.includes(p.recipe)) {
-      problems.push(`Platz ${i}: Rezept ${p.recipe} ist hier nicht erlaubt`);
+    } else if (!levelRecipes(rules, i, p.level).includes(p.recipe)) {
+      problems.push(`Platz ${i}: Rezept ${p.recipe} ist auf Stufe ${p.level} nicht erlaubt`);
     }
     if (p.startedAt > state.tick) {
       problems.push(`Platz ${i} in der Zukunft gestartet: ${p.startedAt} > ${state.tick}`);

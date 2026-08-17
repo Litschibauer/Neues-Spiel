@@ -10,9 +10,11 @@
  * er unter den alten, muss er alte Versionen vorhalten und den Zustand danach
  * sauber hochheben.
  *
- * Zwei Sorten Patch werden geprüft, und die zweite ist die härtere:
- *   v1 → v2  Zahlen ändern sich (Zeiten, Preise, Kapazität)
- *   v2 → v3  der Zustand WÄCHST (neue Gegenstände, neue Plätze, neue Weide)
+ * Zwei Sorten Patch werden geprüft:
+ *   **Zahlen** — Zeiten und Preise ändern sich, die Form bleibt (v1 → v2).
+ *   **Inhalt** — der Zustand WÄCHST. Der Basis-Kreislauf hat davon noch keinen
+ *   ausgeliefert; der Pfad wird deshalb mit synthetischen Katalogen geprüft,
+ *   damit er nicht ungetestet verrottet, bis er gebraucht wird.
  */
 
 import test from 'node:test';
@@ -20,40 +22,40 @@ import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { getRuleset } from '../src/sim/rules.ts';
-import { EMPTY_PLOT, initialState, count, stored } from '../src/sim/state.ts';
-import { migrateState, assertInvariants, MigrationError } from '../src/sim/migrate.ts';
-import { mulberry32, playRandomSession } from './helpers/session.ts';
+import type { Ruleset } from '../src/sim/rules.ts';
+import { EMPTY_PLOT, initialState, count } from '../src/sim/state.ts';
+import {
+  GROW,
+  GROW_AND_RETIME,
+  migrateState,
+  assertInvariants,
+  MigrationError,
+} from '../src/sim/migrate.ts';
+import { fuzzStart, mulberry32, playRandomSession } from './helpers/session.ts';
 
 const T0 = 1_700_000_000_000;
 const V1 = getRuleset(1);
 const V2 = getRuleset(2);
-const V3 = getRuleset(3);
-const V4 = getRuleset(4);
 
 const WHEAT = 1;
-const EGGS = 2;
+const EGGS = 3;
 const R_WHEAT = 0;
+const MILL = 6;
 
 /** Wachstumsdauer von Weizen unter einer Version — die Zahl, die sich ändert. */
-const wheatTicks = (r: typeof V1) => r.recipes[R_WHEAT]!.durationTicks;
-const eggTicks = (r: typeof V1) => r.recipes[1]!.durationTicks;
+const wheatTicks = (r: Ruleset) => r.recipes[R_WHEAT]!.durationTicks;
 
 test('das Testszenario ist überhaupt aussagekräftig — V2 ändert das Ergebnis', () => {
   // Wären die Versionen gleichwertig, würde der Rest hier nichts beweisen.
   assert.notEqual(wheatTicks(V1), wheatTicks(V2));
-  assert.notEqual(eggTicks(V1), eggTicks(V2));
   assert.notEqual(V1.items[WHEAT]!.npcPrice, V2.items[WHEAT]!.npcPrice);
-  // Und V3 ändert die FORM, nicht nur Zahlen — das ist der eigentliche R2-Test.
-  assert.ok(V3.items.length > V2.items.length);
-  assert.ok(V3.plots.length > V2.plots.length);
-  assert.ok(V3.passives.length > V2.passives.length);
+  assert.notEqual(V1.siloCapacity, V2.siloCapacity);
 });
 
 test('offline unter V1 gespielt, Patch kommt, Sync rechnet trotzdem unter V1', () => {
   const server = new Server(initialState(V1), T0, 1);
   const client = new Client(server.snapshot);
 
-  // Spieler pflanzt und wartet die V1-Dauer ab (2h).
   client.start(0, R_WHEAT);
   client.advanceClock(wheatTicks(V1));
   assert.equal(client.collect(0).ok, true);
@@ -88,24 +90,23 @@ test('nach der Migration gelten die neuen Regeln — kürzere Wachstumszeit', ()
   client.adopt(first.snapshot);
   assert.equal(client.rulesetVersion, 2);
 
-  // Unter V1 wäre nach 5400 Ticks nichts reif. Unter V2 schon.
   client.advanceClock(wheatTicks(V2));
   assert.equal(client.collect(0).ok, true);
   assert.ok(wheatTicks(V2) < wheatTicks(V1));
 });
 
 test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Geschenk', () => {
+  const base = initialState(V1);
+  const tick = 60;
   const halfGrown = {
-    ...initialState(V1),
-    tick: 3600,
-    plots: [
-      { recipe: R_WHEAT, startedAt: 0 }, // 3600 von 7200 → 3600 übrig
-      { recipe: R_WHEAT, startedAt: 3600 }, // frisch → 7200 übrig
-      { recipe: R_WHEAT, startedAt: -7200 }, // längst fertig
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-    ],
+    ...base,
+    tick,
+    plots: base.plots.map((p, i) => {
+      if (i === 0) return { ...p, recipe: R_WHEAT, startedAt: 0 }; // 60 von 120 → 60 übrig
+      if (i === 1) return { ...p, recipe: R_WHEAT, startedAt: tick }; // frisch → 120 übrig
+      if (i === 2) return { ...p, recipe: R_WHEAT, startedAt: -500 }; // längst fertig
+      return p;
+    }),
   };
 
   const migrated = migrateState(halfGrown, 1, 2);
@@ -113,12 +114,12 @@ test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Gesche
     Math.max(0, migrated.plots[i]!.startedAt + wheatTicks(V2) - migrated.tick);
 
   // Halb gewachsen: Restzeit bleibt exakt erhalten.
-  assert.equal(remaining(0), 3600);
+  assert.equal(remaining(0), 60);
 
-  // Frisch gepflanzt: startet neu mit der KÜRZEREN neuen Dauer. Der Spieler
-  // profitiert vom Buff, statt auf der alten langen Zeit sitzen zu bleiben.
+  // Frisch gestartet: startet neu mit der KÜRZEREN neuen Dauer, profitiert also
+  // vom Buff, statt auf der alten langen Zeit sitzen zu bleiben.
   assert.equal(remaining(1), wheatTicks(V2));
-  assert.ok(remaining(1) < 7200);
+  assert.ok(remaining(1) < wheatTicks(V1));
 
   // Fertig bleibt fertig.
   assert.equal(remaining(2), 0);
@@ -128,13 +129,15 @@ test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Gesche
 
 test('kein Platz wird durch die Migration schlechter gestellt als ein Neuanfang', () => {
   // Die Leitregel als Eigenschaft über den ganzen Wertebereich geprüft.
-  for (let elapsed = 0; elapsed <= wheatTicks(V1); elapsed += 60) {
+  for (let elapsed = 0; elapsed <= wheatTicks(V1); elapsed++) {
     const tick = 100_000;
     const base = initialState(V1);
     const state = {
       ...base,
       tick,
-      plots: base.plots.map((p, i) => (i === 0 ? { recipe: R_WHEAT, startedAt: tick - elapsed } : p)),
+      plots: base.plots.map((p, i) =>
+        i === 0 ? { ...p, recipe: R_WHEAT, startedAt: tick - elapsed } : p,
+      ),
     };
 
     const before = Math.max(0, wheatTicks(V1) - elapsed);
@@ -147,92 +150,114 @@ test('kein Platz wird durch die Migration schlechter gestellt als ein Neuanfang'
   }
 });
 
-test('Fortschritt passiver Plätze bleibt nach der Migration im gültigen Bereich', () => {
-  // V2 legt öfter (480 statt 600), ein Fortschritt von 550 wäre danach ungültig.
-  const state = { ...initialState(V1), tick: 5000, passives: [550] };
-  const migrated = migrateState(state, 1, 2);
+test('Ausbaustufen überstehen den Patch unverändert', () => {
+  // Wer eine Mühle gekauft hat, hat sie auch nach dem Patch. Alles andere wäre
+  // ein stiller Diebstahl.
+  const base = fuzzStart(V1, 500);
+  const built = {
+    ...base,
+    plots: base.plots.map((p, i) => (i === MILL ? { ...p, level: 1 } : p)),
+  };
 
-  assert.ok(migrated.passives[0]! < eggTicks(V2));
+  const migrated = migrateState(built, 1, 2);
+  assert.equal(migrated.plots[MILL]!.level, 1);
+  assert.equal(count(migrated, 0), 500, 'Münzen bleiben, wie sie waren');
   assertInvariants(migrated, V2);
 });
 
-test('Inhalts-Patch v2 → v3: der Zustand wächst, nichts geht verloren', () => {
-  // DER ehrlichere R2-Test: Hier ändert sich die Form des Zustands.
-  const before = {
-    ...initialState(V2),
-    tick: 9000,
-    items: [500, 40, 12], // Gold, Weizen, Eier
-    plots: [
-      { recipe: R_WHEAT, startedAt: 8000 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
-      { recipe: EMPTY_PLOT, startedAt: 0 },
+test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
+  // Der Basis-Kreislauf hat noch keinen Inhalts-Patch ausgeliefert. Der Pfad
+  // muss trotzdem geprüft sein — sonst ist er beim ersten echten Patch
+  // ungetesteter Code an der empfindlichsten Stelle des Systems.
+  const grown: Ruleset = {
+    ...V1,
+    version: 99,
+    items: [...V1.items, { id: 'honey', storable: true, npcPrice: 30 }],
+    recipes: [
+      ...V1.recipes,
+      { id: 'honey', inputs: [], output: { item: 4, amount: 1 }, durationTicks: 1200 },
     ],
-    passives: [123],
-    orders: [{ id: 1, item: WHEAT, amount: 5, price: 4, listedAt: 8500 }],
-    mail: [{ item: EGGS, amount: 3, arrivedAt: 8700 }],
-    nextOrderId: 2,
+    plots: [
+      ...V1.plots,
+      { id: 'field-7', startLevel: 0, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+    ],
+    passives: [{ id: 'hive', recipe: 3 }],
   };
 
-  const after = migrateState(before, 2, 3);
-  assertInvariants(after, V3);
+  const before = {
+    ...fuzzStart(V1, 500),
+    tick: 900,
+    plots: initialState(V1).plots.map((p, i) =>
+      i === 0 ? { ...p, recipe: R_WHEAT, startedAt: 800 } : p,
+    ),
+    orders: [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 850 }],
+    mail: [{ item: EGGS, amount: 3, arrivedAt: 870 }],
+    nextOrderId: 2,
+  };
+  before.items = before.items.slice();
+  before.items[WHEAT] = 40;
+
+  const after = GROW_AND_RETIME(before, V1, grown);
+  assertInvariants(after, grown);
 
   // Bestehende Indizes behalten ihre Bedeutung — das ist die Append-only-Regel.
   assert.equal(count(after, 0), 500);
   assert.equal(count(after, WHEAT), 40);
-  assert.equal(count(after, EGGS), 12);
 
   // Und was neu ist, startet leer.
-  assert.equal(after.items.length, V3.items.length);
-  assert.deepEqual(after.items.slice(3), [0, 0, 0], 'Milch, Mehl, Brot beginnen bei null');
-  assert.equal(after.plots.length, V3.plots.length);
-  assert.equal(after.plots[6]!.recipe, EMPTY_PLOT, 'die Mühle steht leer bereit');
-  assert.equal(after.plots[7]!.recipe, EMPTY_PLOT, 'die Bäckerei steht leer bereit');
-  assert.equal(after.passives.length, 2);
-  assert.equal(after.passives[1], 0, 'die neue Weide fängt bei null an');
+  assert.equal(after.items.length, grown.items.length);
+  assert.equal(after.items[4], 0, 'Honig beginnt bei null');
+  assert.equal(after.plots.length, grown.plots.length);
+  assert.equal(after.plots[9]!.level, 0, 'das neue Feld muss erst gekauft werden');
+  assert.equal(after.passives.length, 1);
+  assert.equal(after.passives[0], 0);
 
   // Laufende Produktion, Aufträge und Postfach überstehen den Umbau.
   assert.equal(after.plots[0]!.recipe, R_WHEAT);
   assert.equal(after.orders.length, 1);
   assert.equal(after.mail.length, 1);
-  assert.equal(stored(after, V3), stored(before, V2), 'kein Stück Ware verschwunden');
+});
+
+test('ein Patch, der einen Platz geschenkt dazugibt, gibt ihn auch bestehenden Höfen', () => {
+  const gifted: Ruleset = {
+    ...V1,
+    version: 98,
+    plots: [
+      ...V1.plots,
+      { id: 'field-7', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+    ],
+  };
+
+  const after = GROW(initialState(V1), V1, gifted);
+  assert.equal(after.plots[9]!.level, 1, 'geschenkter Platz kommt ausgebaut an');
+  assertInvariants(after, gifted);
 });
 
 test('Migration erhält Invarianten für zufällige echte Spielstände', () => {
   // Handgebaute Fälle treffen nie alles. Also: echte Sitzungen spielen und
-  // jeden erreichten Zustand durch die Migration schicken — über beide
-  // Patch-Sorten, den Zahlen-Patch und den Inhalts-Patch.
-  for (const [from, to, rules] of [
-    [1, 2, V2],
-    [2, 3, V3],
-    [3, 4, V4],
-  ] as const) {
-    for (let seed = 1; seed <= 60; seed++) {
-      const rnd = mulberry32(seed);
-      const server = new Server(initialState(getRuleset(from)), T0, from);
-      const client = playRandomSession(server.snapshot, rnd, {
-        steps: 25,
-        maxAdvance: 8000,
-        advanceChance: 0.45,
-        chaosChance: 0.15,
-      });
+  // jeden erreichten Zustand durch die Migration schicken.
+  for (let seed = 1; seed <= 120; seed++) {
+    const rnd = mulberry32(seed);
+    const server = new Server(fuzzStart(V1, seed % 2 === 0 ? 4000 : 0), T0, 1);
+    const client = playRandomSession(server.snapshot, rnd, {
+      steps: 25,
+      maxAdvance: 800,
+      advanceChance: 0.45,
+      chaosChance: 0.15,
+    });
 
-      const migrated = migrateState(client.state, from, to);
-      assertInvariants(migrated, rules);
+    const migrated = migrateState(client.state, 1, 2);
+    assertInvariants(migrated, V2);
 
-      // Migration ist eine reine Funktion: zweimal dasselbe Ergebnis.
-      assert.deepEqual(
-        migrateState(client.state, from, to),
-        migrated,
-        `v${from}→v${to} seed=${seed} nicht reproduzierbar`,
-      );
-      // Und sie fasst Bestände nicht an.
-      for (let i = 0; i < client.state.items.length; i++) {
-        assert.equal(migrated.items[i], client.state.items[i], `v${from}→v${to}: Bestand ${i}`);
-      }
-    }
+    // Migration ist eine reine Funktion: zweimal dasselbe Ergebnis.
+    assert.deepEqual(migrateState(client.state, 1, 2), migrated, `seed=${seed} nicht reproduzierbar`);
+    // Sie fasst weder Bestände noch Ausbaustufen an.
+    assert.deepEqual(migrated.items, client.state.items, `seed=${seed}: Bestände`);
+    assert.deepEqual(
+      migrated.plots.map((p) => p.level),
+      client.state.plots.map((p) => p.level),
+      `seed=${seed}: Ausbaustufen`,
+    );
   }
 });
 
@@ -283,62 +308,44 @@ test('Downgrades werden abgelehnt statt geraten', () => {
   assert.throws(() => migrateState(initialState(V2), 2, 1), MigrationError);
 });
 
+test('das Dev-Regelwerk ist kein Migrationsziel', () => {
+  // Ein Dev-Ruleset mit Sekundenuhren darf niemals einen echten Spielstand
+  // erreichen. Es steht bewusst außerhalb der Produktionsreihe — es gibt also
+  // schlicht keinen Schritt dorthin.
+  assert.throws(() => migrateState(initialState(V1), 1, 1001), MigrationError);
+});
+
 test('die Invariantenprüfung hat Zähne', () => {
-  const overCap = { ...initialState(V2), items: [0, 0, V2.siloCapacity + 5] };
+  const base = initialState(V2);
+
+  const overCap = { ...base, items: [0, V2.siloCapacity + 5, 0, 0] };
   assert.throws(() => assertInvariants(overCap, V2), MigrationError);
 
-  const badProgress = { ...initialState(V2), passives: [eggTicks(V2)] };
-  assert.throws(() => assertInvariants(badProgress, V2), MigrationError);
-
-  const base = initialState(V2);
   const future = {
     ...base,
     tick: 10,
-    plots: base.plots.map((p, i) => (i === 0 ? { recipe: R_WHEAT, startedAt: 500 } : p)),
+    plots: base.plots.map((p, i) => (i === 0 ? { ...p, recipe: R_WHEAT, startedAt: 500 } : p)),
   };
   assert.throws(() => assertInvariants(future, V2), MigrationError);
 
-  // Die neue Bruchstelle: Zustand und Katalog passen nicht mehr zusammen.
-  // Ein zu kurzes Inventar unter einem gewachsenen Katalog verschiebt still
-  // die Bedeutung aller folgenden Indizes.
-  assert.throws(() => assertInvariants(initialState(V2), V3), MigrationError);
-  const wrongRecipe = {
-    ...initialState(V3),
-    plots: initialState(V3).plots.map((p, i) => (i === 0 ? { recipe: 4, startedAt: 0 } : p)),
-  };
-  assert.throws(() => assertInvariants(wrongRecipe, V3), MigrationError, 'Brot auf dem Acker');
-});
-
-test('Kettenmigration 1 → 4 läuft Schritt für Schritt und bleibt fair', () => {
-  const tick = 100_000;
-
-  // Ein Feld auf halbem Weg unter V1 (7200 Ticks Wachstum, 3600 übrig).
-  const base = initialState(V1);
-  const state = {
+  // Eine Stufe, die es nicht gibt.
+  const overLevel = {
     ...base,
-    tick,
-    plots: base.plots.map((p, i) => (i === 0 ? { recipe: R_WHEAT, startedAt: tick - 3600 } : p)),
-    passives: [550],
+    plots: base.plots.map((p, i) => (i === 0 ? { ...p, level: 9 } : p)),
   };
+  assert.throws(() => assertInvariants(overLevel, V2), MigrationError, 'Stufe 9');
 
-  const migrated = migrateState(state, 1, 4);
-  assertInvariants(migrated, V4);
+  // Ein Rezept, das auf dieser Stufe gar nicht erlaubt wäre — genau der
+  // Zustand, den ein schlampiger Ausbau hinterlassen würde.
+  const wrongLevel = {
+    ...base,
+    plots: base.plots.map((p, i) =>
+      i === MILL ? { level: 0, recipe: 1, startedAt: 0 } : p,
+    ),
+  };
+  assert.throws(() => assertInvariants(wrongLevel, V2), MigrationError, 'Rezept auf Stufe 0');
 
-  // V4 wächst in 60 Ticks. Die alte Restzeit von 3600 ist weit mehr — der
-  // Spieler wird auf einen frischen Start gedeckelt, nicht darunter.
-  const remaining = migrated.plots[0]!.startedAt + wheatTicks(V4) - migrated.tick;
-  assert.equal(remaining, wheatTicks(V4));
-  assert.ok(migrated.passives[0]! < eggTicks(V4));
-
-  // Dasselbe Ergebnis wie drei einzelne Sprünge — die Kette darf nicht abkürzen.
-  const stepwise = migrateState(migrateState(migrateState(state, 1, 2), 2, 3), 3, 4);
-  assert.deepEqual(migrated, stepwise);
-});
-
-test('der Feldtest-Ruleset ist wirklich schnell genug zum Testen', () => {
-  assert.ok(wheatTicks(V4) <= 120, 'Weizen muss in unter zwei Minuten reif sein');
-  assert.ok(eggTicks(V4) <= 30, 'Eier müssen in Sekunden entstehen');
-  // Und er muss den vollen Inhalt tragen, sonst testet man am Spiel vorbei.
-  assert.equal(V4.plots.length, V3.plots.length);
-  assert.equal(V4.items.length, V3.items.length);
+  // Zustand und Katalog passen nicht zusammen.
+  const shortInventory = { ...base, items: [0, 0, 0] };
+  assert.throws(() => assertInvariants(shortInventory, V2), MigrationError);
 });

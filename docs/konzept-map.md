@@ -20,7 +20,7 @@
 Rund hundert Ideen aus der Sammlung — und darunter liegen **neun Mechaniken**. Der Rest
 sind Tabellenzeilen.
 
-### M1 · Produktionsplatz mit Rezept und Wartezeit 🟢
+### M1 · Produktionsplatz mit Rezept und Wartezeit 🟢 ✅ gebaut
 
 **Das ist die große Erkenntnis: Feld, Tier und Maschine sind dieselbe Mechanik.**
 
@@ -59,10 +59,12 @@ Steht bereits inklusive Preisband, Ablauffrist und Postfach (§8).
 „Liefere N×A und M×B, bekomme Münzen und Erfahrung." LKW, Kunden, Boote, Sonderaufträge,
 Eventaufgaben — **eine** Mechanik, der Rest sind Auftragsvorlagen als Daten.
 
-### M7 · Ausbauen und Freischalten 🟢 **M**
-„Zahle Kosten, ändere dauerhaft einen Parameter." Deckt ab: Felder erweitern, Ställe
-ausbauen, Lager vergrößern, Slots und Geschwindigkeit upgraden, Farmfläche erweitern,
-Gebäude bauen, Erträge verbessern.
+### M7 · Ausbauen und Freischalten 🟢 ✅ gebaut
+„Zahle Kosten, ändere dauerhaft einen Parameter." Steht als `BUY` samt Ausbaustufen
+je Platz. Trägt heute schon „Gehege kaufen" und „Hühner kaufen" — zwei Dinge, die
+sich im Spiel völlig verschieden anfühlen und dieselbe Regel sind. Deckt später ab:
+Felder erweitern, Ställe ausbauen, Lager vergrößern, Slots und Geschwindigkeit
+upgraden, Gebäude bauen.
 
 ### M8 · Level und Freischaltungen 🟢 **M**
 Erfahrung sammeln, Schwelle überschreiten, Tabelle sagt was neu ist. Der
@@ -157,12 +159,21 @@ Nachbarschafts-Aufgaben zu koppeln. Nicht tun.
 
 | | |
 | --- | --- |
-| **Gebaut** | M1 (teilweise), M2, M3, M4, M5 |
-| **Fehlt** | M1 vollständig (Rezepte, Warteschlangen), M6 Aufträge, M7 Ausbau, M8 Level, M9 Zufall |
+| **Gebaut** | M1, M2, M3, M4, M5, M7 |
+| **Fehlt** | M6 Aufträge, M8 Level, M9 Zufall — plus Warteschlangenplätze als Parameter von M1 |
 | **Gesamt** | **9 Mechaniken** |
 
 Neun ist ein Projekt, das man bauen kann. Hundert Features wären es nicht — und die
 hundert Features bekommt man trotzdem, weil sie aus diesen neun als Daten herausfallen.
+
+### Was davon heute spielbar ist
+
+```
+Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier → Gold → mehr Plätze
+```
+
+Bewusst genau so viel. Der Kreislauf schließt sich, läuft offline und ist über
+echtes HTTP geprüft — aber er hat noch kein *Ziel*. Das ist M6.
 
 ---
 

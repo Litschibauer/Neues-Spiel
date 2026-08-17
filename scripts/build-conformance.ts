@@ -94,7 +94,10 @@ ${modules}
 
       try {
         var rules = getRuleset(v.rulesetVersion);
-        actual = canonicalize(simulateAll(initialState(rules), v.commands, rules));
+        var start = initialState(rules);
+        start.items = start.items.slice();
+        start.items[rules.currency] = v.startGold;
+        actual = canonicalize(simulateAll(start, v.commands, rules));
       } catch (e) {
         error = String((e && e.message) || e);
       }

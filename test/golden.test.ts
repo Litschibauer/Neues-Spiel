@@ -28,6 +28,8 @@ import type { Command } from '../src/sim/commands.ts';
 type Vector = {
   name: string;
   rulesetVersion: number;
+  /** Münzen im Ausgangszustand. Nicht lagerpflichtig, also invariantenneutral. */
+  startGold: number;
   commands: Command[];
   expectedStateHash: string;
   expectedState: State;
@@ -55,27 +57,45 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   const types = new Set(golden.vectors.flatMap((v) => v.commands.map((c) => c.type)));
   assert.deepEqual(
     [...types].sort(),
-    ['CANCEL_ORDER', 'COLLECT', 'COLLECT_MAIL', 'LIST_ORDER', 'SELL_NPC', 'START'],
+    ['BUY', 'CANCEL_ORDER', 'COLLECT', 'COLLECT_MAIL', 'LIST_ORDER', 'SELL_NPC', 'START'],
     'Korpus deckt nicht alle Command-Typen ab',
   );
 
   // Und jede ausgelieferte Regelversion muss vorkommen. Sonst bliebe ein
   // ganzer Katalog — samt seiner Rezepte und Plätze — ohne Plattform-Beweis.
-  const versions = new Set(golden.vectors.map((v) => v.rulesetVersion));
-  assert.deepEqual([...versions].sort(), [...RULESETS.keys()].sort());
+  const versions = [...new Set(golden.vectors.map((v) => v.rulesetVersion))];
+  assert.deepEqual(
+    versions.sort((a, b) => a - b),
+    [...RULESETS.keys()].sort((a, b) => a - b),
+  );
 
-  // Der Inhalt der späteren Kataloge muss auch wirklich benutzt werden:
-  // Rezepte mit Eingaben (Mühle, Bäckerei) sind der neue Pfad.
+  // Der Kernkreislauf muss wirklich durchlaufen sein: Rezepte MIT Eingaben
+  // (Mühle, Gehege) sind der Pfad, an dem sich datengetriebener Inhalt beweist.
   const withInputs = golden.vectors.some((v) =>
-    v.commands.some((c) => c.type === 'START' && c.recipe >= 3),
+    v.commands.some((c) => {
+      if (c.type !== 'START') return false;
+      return getRuleset(v.rulesetVersion).recipes[c.recipe]!.inputs.length > 0;
+    }),
   );
   assert.ok(withInputs, 'kein Vektor benutzt ein Rezept mit Eingaben');
+
+  // Der handgeschriebene Kernkreislauf muss dabei sein: Er ist der einzige
+  // Vektor, dem man ansieht, WAS er prüft.
+  for (const version of RULESETS.keys()) {
+    assert.ok(
+      golden.vectors.some((v) => v.name === `core-loop-v${version}`),
+      `Kernkreislauf-Vektor für v${version} fehlt`,
+    );
+  }
 });
 
 test('jeder Golden Vector reproduziert exakt seinen erwarteten Endzustand', () => {
   for (const v of golden.vectors) {
     const rules = getRuleset(v.rulesetVersion);
-    const final = simulateAll(initialState(rules), v.commands, rules);
+    const start = initialState(rules);
+    const items = start.items.slice();
+    items[rules.currency] = v.startGold;
+    const final = simulateAll({ ...start, items }, v.commands, rules);
 
     // Erst der volle Zustand — der zeigt bei einem Fehlschlag, WAS abweicht.
     assert.deepEqual(final, v.expectedState, `Vektor ${v.name}: Zustand weicht ab`);

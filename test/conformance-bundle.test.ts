@@ -46,7 +46,7 @@ test('der Bundle lässt sich bauen und besteht alle Golden Vectors', () => {
 
   assert.ok(report.total >= 100, `zu wenige Vektoren im Bundle: ${report.total}`);
   // Umkopieren: Arrays aus dem VM-Kontext haben einen fremden Prototyp.
-  assert.deepEqual([...report.rulesetVersions], [1, 2, 3, 4], 'Bundle deckt nicht alle Kataloge ab');
+  assert.deepEqual([...report.rulesetVersions], [1, 2, 1001], 'Bundle deckt nicht alle Kataloge ab');
 
   const failures = report.results.filter((r) => !r.pass);
   const detail = failures

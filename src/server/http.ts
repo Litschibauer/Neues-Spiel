@@ -1,11 +1,13 @@
 /**
- * Feldtest-Server (Architektur §10).
+ * Der Spielserver (Architektur §10).
  *
- *   NEUES_SPIEL_TOKEN=… node --experimental-strip-types src/server/http.ts
+ *   npm run dev     # Entwicklung: schnelle Uhren, Werkbank an, Port 8788
+ *   npm run prod    # Produktion:  echte Zeiten, Werkbank aus, Port 8787
  *
- * Zweck: Das Verbindungsmodell über ein ECHTES Netzwerk prüfen statt über
- * Testattrappen. Echte Latenz, echte Abbrüche, echtes Verhalten, wenn das Handy
- * in den Aufzug fährt.
+ * Beides kann gleichzeitig laufen: eigener Port, eigener Spielstand, eigenes
+ * Token, eigenes Regelwerk (siehe config.ts). Damit lässt sich an einer neuen
+ * Version herumprobieren, während die echten Spielstände unangetastet
+ * weiterlaufen — und genau dafür ist die Trennung da.
  *
  * Nur `node:http` — keine Abhängigkeiten, damit das Ding auf einem Mini-Server
  * ohne npm-Installation läuft.
@@ -20,22 +22,30 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState } from '../sim/state.ts';
-import { CURRENT_RULESET_VERSION, RULESETS, getRuleset } from '../sim/rules.ts';
+import { RULESETS, getRuleset } from '../sim/rules.ts';
+import { ConfigError, describeConfig, resolveConfig } from './config.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
-const PORT = Number(process.env.PORT ?? 8787);
-const SAVE_PATH = process.env.NEUES_SPIEL_SAVE ?? join(ROOT, 'data', 'save.json');
 
 /**
- * Zielversion des Regelwerks, per Umgebungsvariable umschaltbar.
+ * Umgebung auflösen — und bei Unklarheit lieber gar nicht starten.
  *
- * `NEUES_SPIEL_RULESET=4` schaltet auf Feldtest-Tempo (Weizen 60 s, Ei 20 s).
- * Bei einem bestehenden Spielstand ist das ein echter Balance-Patch: Der Server
- * migriert ihn beim nächsten Sync und rechnet laufende Plätze fair um (R2).
+ * Ein Server, der im Zweifel „irgendwas" tut, ist der Weg zu Dev-Regeln auf
+ * echten Spielständen. Lieber eine klare Fehlermeldung.
  */
-const TARGET_RULESET = Number(process.env.NEUES_SPIEL_RULESET ?? CURRENT_RULESET_VERSION);
+let CONFIG;
+try {
+  CONFIG = resolveConfig(process.env, process.argv.slice(2), ROOT);
+} catch (err) {
+  if (!(err instanceof ConfigError)) throw err;
+  console.error(`\nStart abgebrochen: ${err.message}\n`);
+  process.exit(1);
+}
 
-const TOKEN_PATH = process.env.NEUES_SPIEL_TOKEN_FILE ?? join(ROOT, 'data', 'token');
+const PORT = CONFIG.port;
+const SAVE_PATH = CONFIG.savePath;
+const TARGET_RULESET = CONFIG.rulesetVersion;
+const TOKEN_PATH = CONFIG.tokenPath;
 
 /**
  * Token besorgen: Umgebungsvariable, sonst Datei, sonst neu erzeugen.
@@ -168,8 +178,11 @@ function loadPage(name: string): string | null {
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
-/** Das Admin-Panel ist ein Testwerkzeug — abschaltbar, ohne den Server zu ändern. */
-const ADMIN_ENABLED = process.env.NEUES_SPIEL_ADMIN !== '0';
+/**
+ * Das Admin-Panel ist ein Testwerkzeug: In Dev an, in Produktion aus.
+ * Es kann Gegenstände verschenken und Zeit gutschreiben — siehe config.ts.
+ */
+const ADMIN_ENABLED = CONFIG.adminEnabled;
 
 // ── Routen ─────────────────────────────────────────────────────────────
 const server = createServer(async (req, res) => {
@@ -182,18 +195,27 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === '/health') {
-    return json(res, 200, { ok: true, seq: game.snapshot.seq, tick: game.snapshot.state.tick });
+    // Umgebung und Stand gehören hier hinein: Nur so sieht man von außen,
+    // WELCHE Version gerade läuft — die Frage, die man beim Deployen hat.
+    return json(res, 200, {
+      ok: true,
+      env: CONFIG.env,
+      version: CONFIG.version,
+      rulesetVersion: game.snapshot.rulesetVersion,
+      seq: game.snapshot.seq,
+      tick: game.snapshot.state.tick,
+    });
   }
 
   if (url.pathname === '/admin' && req.method === 'GET') {
     if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
-    if (!adminPage) return json(res, 500, { error: 'Seite fehlt — `npm run conformance`.' });
+    if (!adminPage) return json(res, 500, { error: 'Seite fehlt — `npm run build`.' });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(adminPage);
   }
 
   if (url.pathname === '/' && req.method === 'GET') {
-    if (!page) return json(res, 500, { error: 'Seite fehlt — bitte `npm run web` ausführen.' });
+    if (!page) return json(res, 500, { error: 'Seite fehlt — bitte `npm run build` ausführen.' });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(page);
   }
@@ -345,12 +367,12 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Feldtest-Server auf Port ${PORT}`);
-  console.log(`Spielstand: ${SAVE_PATH}`);
-  console.log(`Seite: ${page ? 'eingebunden' : 'FEHLT (npm run conformance)'}`);
-  console.log(`Token: …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
-  console.log(`Regelwerk: v${game.snapshot.rulesetVersion} → Ziel v${TARGET_RULESET}`);
-  console.log(`Admin: ${ADMIN_ENABLED ? '/admin (abschaltbar mit NEUES_SPIEL_ADMIN=0)' : 'aus'}`);
+  console.log('');
+  for (const line of describeConfig(CONFIG)) console.log(line);
+  console.log(`Snapshot:   v${game.snapshot.rulesetVersion} → Ziel v${TARGET_RULESET}`);
+  console.log(`Seite:      ${page ? 'eingebunden' : 'FEHLT (npm run build)'}`);
+  console.log(`Token:      …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
+  console.log('');
 });
 
 // Sauber beenden, damit der letzte Sync sicher auf der Platte liegt.

@@ -20,13 +20,23 @@ export type CommandBase = {
 /**
  * Produktion auf einem Platz beginnen: Eingaben verbrauchen, Uhr starten.
  *
- * `recipe` muss auf dem Platz erlaubt sein — welche das sind, sagt das
- * Regelwerk. Ein Feld nimmt Feldfrüchte, die Mühle nimmt Mahlrezepte.
+ * `recipe` muss auf der aktuellen AUSBAUSTUFE des Platzes erlaubt sein — welche
+ * das sind, sagt das Regelwerk. Ein Feld nimmt Weizen, die Mühle mahlt Futter,
+ * und ein Gehege legt erst Eier, wenn Hühner drin sind.
  */
 export type StartCommand = CommandBase & { type: 'START'; plot: number; recipe: number };
 
 /** Fertige Ausgabe abholen. Kein Platz im Lager → die Ware bleibt liegen (§7). */
 export type CollectCommand = CommandBase & { type: 'COLLECT'; plot: number };
+
+/**
+ * Einen Platz eine Stufe weiter ausbauen: Kosten zahlen, dauerhaft mehr können.
+ *
+ * Ein Command für zwei sehr verschiedene Dinge im Spielgefühl — „Gehege kaufen"
+ * und „Hühner kaufen" — und genau das ist der Punkt. Was eine Stufe kostet und
+ * freischaltet, steht im Regelwerk; hier steht nur, dass bezahlt wird.
+ */
+export type BuyCommand = CommandBase & { type: 'BUY'; plot: number };
 
 /** Verkauf an den NPC-Händler — offline gültig, da kein geteilter Zustand (§8). */
 export type SellNpcCommand = CommandBase & { type: 'SELL_NPC'; item: number; amount: number };
@@ -52,6 +62,7 @@ export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
 export type Command =
   | StartCommand
   | CollectCommand
+  | BuyCommand
   | SellNpcCommand
   | ListOrderCommand
   | CancelOrderCommand
@@ -60,8 +71,11 @@ export type Command =
 /** Gründe, aus denen die Sim eine Aktion ablehnt. Client und Server nutzen dieselben. */
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
+  | 'PLOT_LOCKED'
   | 'PLOT_BUSY'
   | 'PLOT_EMPTY'
+  | 'MAX_LEVEL'
+  | 'CANT_AFFORD'
   | 'NOT_DONE'
   | 'RECIPE_NOT_ALLOWED'
   | 'NO_SUCH_ITEM'

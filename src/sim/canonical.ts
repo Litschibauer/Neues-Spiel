@@ -23,7 +23,7 @@ import type { Command } from './commands.ts';
  */
 export function canonicalize(state: State): string {
   const items = state.items.join(',');
-  const plots = state.plots.map((p) => `${p.recipe}:${p.startedAt}`).join(',');
+  const plots = state.plots.map((p) => `${p.level}:${p.recipe}:${p.startedAt}`).join(',');
   const passives = state.passives.join(',');
   const orders = state.orders
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
@@ -46,6 +46,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|START|${c.plot}|${c.recipe}`;
     case 'COLLECT':
       return `${c.seq}|${c.tick}|COLLECT|${c.plot}`;
+    case 'BUY':
+      return `${c.seq}|${c.tick}|BUY|${c.plot}`;
     case 'SELL_NPC':
       return `${c.seq}|${c.tick}|SELL_NPC|${c.item}|${c.amount}`;
     case 'LIST_ORDER':
