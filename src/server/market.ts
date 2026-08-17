@@ -34,15 +34,23 @@
  * Server schneidet den Batch an dieser Stelle ab (`OFFER_GONE`), alles davor
  * bleibt bestehen. Dieselbe Präfix-Mechanik wie überall (§9).
  *
- * ── Warum keine Datenbank ───────────────────────────────────────────────────
+ * ── Speicherform ────────────────────────────────────────────────────────────
  *
- * Weil der ganze Markt in den Speicher passt, solange es ein paar hundert Höfe
- * sind, und weil eine Datei atomar zu schreiben ist. Ab Zehntausenden gehört
- * hier etwas anderes hin — dann aber zusammen mit den Accounts, nicht einzeln.
+ * Das Buch liegt im Speicher — es ist der heiße Pfad, und ein Kauf muss ohne
+ * jede Wartezeit entschieden werden. Geschrieben wird in dieselbe
+ * SQLite-Datei wie die Höfe (siehe `db.ts`), und zwar **gesammelt**: Vorher
+ * wurde bei jedem einzelnen Sync das gesamte Buch neu auf die Platte gelegt,
+ * was bei tausend Spielern tausendmal pro Sekunde dieselbe Datei bedeutet
+ * hätte.
+ *
+ * Was NICHT warten darf, sind Abrechnungen: Ein Verkauf, der bei einem Absturz
+ * verschwindet, bedeutet, dass der Käufer bezahlt hat und der Verkäufer nichts
+ * bekommt. Der wird deshalb sofort geschrieben.
  */
 
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { getRuleset } from '../sim/rules.ts';
+import { readMeta, transaction, writeMeta } from './db.ts';
+import type { Db } from './db.ts';
 import type { Offer, Order } from '../sim/state.ts';
 import type { Server } from './server.ts';
 
@@ -74,58 +82,90 @@ export type Settlement = {
   soldMs: number;
 };
 
-type MarketFile = {
-  version: 1;
-  nextOfferId: number;
-  book: BookEntry[];
-  settlements: Record<string, Settlement[]>;
-};
-
 export class Market {
-  private readonly path: string | null;
+  private readonly db: Db | null;
   private nextOfferId = 1;
   /** Nach Angebots-ID. Eine Map, weil `claim` der heiße Pfad ist. */
   private readonly book = new Map<number, BookEntry>();
   /** Verkäufer-ID → was ihm beim nächsten Sync zusteht. */
   private readonly settlements = new Map<string, Settlement[]>();
+  /** Angebote, die seit dem letzten Schreiben entstanden oder verschwunden sind. */
+  private readonly touched = new Set<number>();
 
   /**
-   * `path === null` heißt: nur im Speicher. Für Tests — und dafür, dass der
-   * Markt in einem Prozess ohne Schreibrechte nicht gleich beim Start umfällt.
+   * `db === null` heißt: nur im Speicher. Für Tests — und dafür, dass ein
+   * Markt ohne Schreibrechte nicht gleich beim Start umfällt.
    */
-  constructor(path: string | null) {
-    this.path = path;
-    if (path && existsSync(path)) this.load(path);
+  constructor(db: Db | null) {
+    this.db = db;
+    if (db) this.load(db);
   }
 
-  private load(path: string): void {
-    try {
-      const file = JSON.parse(readFileSync(path, 'utf8')) as MarketFile;
-      if (file.version !== 1) return;
-      this.nextOfferId = file.nextOfferId;
-      for (const entry of file.book) this.book.set(entry.id, entry);
-      for (const [id, list] of Object.entries(file.settlements ?? {})) {
-        this.settlements.set(id, list);
-      }
-    } catch {
-      // Ein unlesbares Buch darf den Server nicht am Start hindern. Es kostet
-      // die offenen Angebote — die Ware selbst liegt weiter im Escrow der
-      // Verkäufer und kommt beim nächsten Sync zurück ins Buch.
-      console.error(`Markt-Datei unlesbar, starte mit leerem Buch: ${path}`);
+  private load(db: Db): void {
+    for (const row of db
+      .prepare('select id, seller, order_id, item, amount, price, listed_ms from market_offers')
+      .all() as Array<Record<string, number | string>>) {
+      const entry: BookEntry = {
+        id: Number(row.id),
+        sellerId: String(row.seller),
+        orderId: Number(row.order_id),
+        item: Number(row.item),
+        amount: Number(row.amount),
+        price: Number(row.price),
+        listedMs: Number(row.listed_ms),
+      };
+      this.book.set(entry.id, entry);
     }
+
+    for (const row of db
+      .prepare('select seller, order_id, gold, sold_ms from market_settlements')
+      .all() as Array<Record<string, number | string>>) {
+      const seller = String(row.seller);
+      const list = this.settlements.get(seller) ?? [];
+      list.push({ orderId: Number(row.order_id), gold: Number(row.gold), soldMs: Number(row.sold_ms) });
+      this.settlements.set(seller, list);
+    }
+
+    this.nextOfferId = Number(readMeta(db, 'market.nextOfferId') ?? '1');
   }
 
-  save(): void {
-    if (!this.path) return;
-    const data: MarketFile = {
-      version: 1,
-      nextOfferId: this.nextOfferId,
-      book: [...this.book.values()],
-      settlements: Object.fromEntries(this.settlements),
-    };
-    const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, JSON.stringify(data));
-    renameSync(tmp, this.path);
+  /**
+   * Gemerkte Änderungen am Buch schreiben. Gibt zurück, wie viele.
+   *
+   * Abrechnungen sind hier NICHT dabei — die gehen sofort raus (siehe `claim`).
+   * Ein verlorenes Angebot kostet den Verkäufer eine Neueinstellung; eine
+   * verlorene Abrechnung kostet ihn sein Geld.
+   */
+  flush(): number {
+    if (!this.db || this.touched.size === 0) return 0;
+    const ids = [...this.touched];
+    const db = this.db;
+    transaction(db, () => {
+      const del = db.prepare('delete from market_offers where id = ?');
+      const put = db.prepare(
+        `insert into market_offers (id, seller, order_id, item, amount, price, listed_ms)
+         values (?, ?, ?, ?, ?, ?, ?)
+         on conflict(id) do update set amount = excluded.amount, price = excluded.price`,
+      );
+      for (const id of ids) {
+        const entry = this.book.get(id);
+        if (!entry) del.run(id);
+        else {
+          put.run(
+            entry.id,
+            entry.sellerId,
+            entry.orderId,
+            entry.item,
+            entry.amount,
+            entry.price,
+            entry.listedMs,
+          );
+        }
+      }
+      writeMeta(db, 'market.nextOfferId', String(this.nextOfferId));
+    });
+    this.touched.clear();
+    return ids.length;
   }
 
   get size(): number {
@@ -156,7 +196,10 @@ export class Market {
     const live = new Set(orders.map((o) => o.id));
 
     for (const entry of [...this.book.values()]) {
-      if (entry.sellerId === sellerId && !live.has(entry.orderId)) this.book.delete(entry.id);
+      if (entry.sellerId === sellerId && !live.has(entry.orderId)) {
+        this.book.delete(entry.id);
+        this.touched.add(entry.id);
+      }
     }
 
     const known = new Set<number>();
@@ -167,6 +210,7 @@ export class Market {
     for (const order of orders) {
       if (known.has(order.id)) continue;
       const id = this.nextOfferId++;
+      this.touched.add(id);
       this.book.set(id, {
         id,
         sellerId,
@@ -217,9 +261,30 @@ export class Market {
     if (entry.sellerId === buyerId) return null;
 
     this.book.delete(offerId);
+    this.touched.add(offerId);
+
+    const settlement: Settlement = {
+      orderId: entry.orderId,
+      gold: entry.amount * entry.price,
+      soldMs: nowMs,
+    };
     const list = this.settlements.get(entry.sellerId) ?? [];
-    list.push({ orderId: entry.orderId, gold: entry.amount * entry.price, soldMs: nowMs });
+    list.push(settlement);
     this.settlements.set(entry.sellerId, list);
+
+    // SOFORT schreiben, nicht sammeln. Ein Verkauf, der bei einem Absturz
+    // verschwindet, heißt: Der Käufer hat bezahlt, der Verkäufer bekommt
+    // nichts. Das ist der eine Fall im Markt, der keine Verzögerung verträgt.
+    if (this.db) {
+      const db = this.db;
+      transaction(db, () => {
+        db.prepare('delete from market_offers where id = ?').run(offerId);
+        db.prepare(
+          'insert into market_settlements (seller, order_id, gold, sold_ms) values (?, ?, ?, ?)',
+        ).run(entry.sellerId, settlement.orderId, settlement.gold, settlement.soldMs);
+      });
+      this.touched.delete(offerId);
+    }
     return entry;
   }
 
@@ -228,6 +293,9 @@ export class Market {
     const list = this.settlements.get(sellerId);
     if (!list || list.length === 0) return [];
     this.settlements.delete(sellerId);
+    if (this.db) {
+      this.db.prepare('delete from market_settlements where seller = ?').run(sellerId);
+    }
     return list;
   }
 
@@ -239,9 +307,15 @@ export class Market {
   /** Alles zu einem Hof löschen — beim Zurücksetzen im Feldtest. */
   forget(sellerId: string): void {
     for (const entry of [...this.book.values()]) {
-      if (entry.sellerId === sellerId) this.book.delete(entry.id);
+      if (entry.sellerId === sellerId) {
+        this.book.delete(entry.id);
+        this.touched.add(entry.id);
+      }
     }
     this.settlements.delete(sellerId);
+    if (this.db) {
+      this.db.prepare('delete from market_settlements where seller = ?').run(sellerId);
+    }
   }
 }
 

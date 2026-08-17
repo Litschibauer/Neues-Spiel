@@ -143,18 +143,84 @@ curl -s -H "Authorization: Bearer $(cat data/dev/token)" \
      http://127.0.0.1:8788/api/admin/accounts
 ```
 
-### Wie viele Höfe verträgt der Server?
+### Wo die Spielstände liegen
 
-Zwei Bremsen, beide über Umgebungsvariablen einstellbar:
+In **einer SQLite-Datei**: `data/<umgebung>/spiel.db`. Höfe und Markt teilen
+sie sich. Ein Backup ist damit weiterhin ein `cp` — aber bei laufendem Server
+bitte über `sqlite3 spiel.db ".backup sicherung.db"`, sonst erwischt man
+womöglich einen halben Schreibvorgang.
+
+Ein altes `accounts/`-Verzeichnis aus der Zeit davor wird beim ersten Start
+automatisch übernommen und danach in `accounts.uebernommen/` umbenannt. Nichts
+geht verloren; wegräumen darfst du selbst.
+
+> `node:sqlite` gehört seit Node 22 zum Lieferumfang — der Wechsel kostet
+> **keine Abhängigkeit**, und die Behauptung „läuft ohne npm install" bleibt
+> wahr.
+
+### Trägt das 1000–4000 gleichzeitige Spieler?
+
+Ja, auf einem Server, ohne Loadbalancer und ohne Regionen. Nachgemessen mit
+`npm run bench:scale -- 4000 30` — echter Sim-Kern, echter Speicher, keine
+Attrappe:
+
+| | 2000 Höfe | 4000 Höfe |
+| --- | --- | --- |
+| Durchsatz | ~9.100 Syncs/s | ~7.200 Syncs/s |
+| je Sync (inkl. Speichern) | 110 µs | 140 µs |
+| Datenbank | 16 MB | 32 MB |
+| Arbeitsspeicher | 75 MB | 98 MB |
+| Schreibvorgänge | 8.000 statt 60.000 | 16.000 statt 120.000 |
+
+Zur Einordnung: 4000 gleichzeitig **aktive** Spieler erzeugen etwa 1000 Syncs/s
+— rund ein Siebtel dessen, was die Maschine hergibt. Der Engpass ist damit die
+Bandbreite, nicht der Server.
+
+⚠️ Gemessen auf einer Entwicklungsmaschine. Ein 1-GB-Mini-VPS ist langsamer,
+und der ehrliche Weg ist, `npm run bench:scale` **dort** laufen zu lassen. Die
+Größenordnung stimmt aber: Es geht um Tausende Syncs pro Sekunde, nicht um
+Dutzende.
+
+### Drei Dinge, die das möglich machen
+
+Sie stehen hier, weil sie leicht wieder kaputtgehen:
+
+1. **Der Command-Log ist ein Fenster** (200 Einträge), keine Geschichte. Vorher
+   wuchs er unbegrenzt und wurde bei jedem Sync komplett neu geschrieben — der
+   Aufwand einer Sitzung stieg damit *quadratisch*: gemessene 344 MB
+   Schreiblast für einen einzigen Spieler über 6000 Aktionen. Mit Fenster sind
+   es 27 MB, und die Datei wächst nicht mehr mit.
+2. **Geschrieben wird gesammelt**, alle 2 s in einer Transaktion
+   (`NEUES_SPIEL_FLUSH_MS`). Zweitausend geänderte Spielstände kosten damit
+   einen Schreibvorgang statt zweitausend. Der Preis ist ein Fenster von zwei
+   Sekunden, in dem eine Änderung nur im Speicher steht.
+3. **Ruhende Höfe fliegen aus dem Speicher** (nach 15 min,
+   `NEUES_SPIEL_IDLE_MS`). Ohne das wächst der Arbeitsspeicher monoton: Wer
+   einmal gespielt hat, bliebe bis zum Neustart drin.
+
+Ausnahme von Punkt 2: **Verkaufsabrechnungen werden sofort geschrieben.** Ein
+Verkauf, der bei einem Absturz verschwindet, hieße, dass der Käufer bezahlt hat
+und der Verkäufer nichts bekommt.
+
+### Bremsen gegen Missbrauch
 
 | Variable | Standard | Wogegen |
 | --- | --- | --- |
 | `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Jemand legt im Skript tausend Höfe an |
 | `NEUES_SPIEL_MAX_ACCOUNTS` | 5000 | Die Platte läuft voll |
 
-Ehrlich zur Grenze: Der Server hält alle *benutzten* Höfe im Speicher und
-schreibt bei jedem Sync eine Datei. Für ein paar hundert Spieler ist das
-gemütlich, für Zehntausende gehört dort eine Datenbank hin (Roadmap, Phase 4).
+### Wo es dann doch nicht mehr trägt
+
+Ehrlich, damit es nicht überrascht:
+
+- **Ein Prozess schreibt.** Genau das serialisiert auch die Käufe am Markt
+  (siehe unten). Ein zweiter Serverprozess auf derselben Datei trägt das nicht
+  — dann wird aus der Datei ein Dienst.
+- **`synchronous = NORMAL`.** Bei einem *Stromausfall* können die letzten
+  Sekundenbruchteile fehlen. Bei einem Absturz oder `kill` nicht.
+- **Kein Rate-Limit auf `/api/sync`.** Ein entschlossener Angreifer kann fluten.
+- **Backups macht niemand automatisch.** Ein `cron` mit `.backup` ist zehn
+  Minuten Arbeit und fehlt.
 
 ### Welcher Stand läuft gerade?
 
@@ -516,8 +582,8 @@ Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 
 - **Keine Wiederherstellung.** Schlüssel weg heißt Hof weg — es gibt kein
   Passwort und keine E-Mail, über die etwas zurückzuholen wäre.
-- Eine JSON-Datei je Hof statt Datenbank. Atomar geschrieben, aber ohne Backups;
-  ab einigen Tausend Höfen gehört dort etwas anderes hin.
+- **Keine automatischen Backups.** Die Datenbank trägt ein paar tausend
+  Spieler, aber niemand sichert sie.
 - TLS gibt es (siehe oben), aber **kein Rate-Limit außer beim Anlegen** und keine
   Metriken. Ein entschlossener Angreifer kann `/api/sync` fluten.
 - Snapshot-Signatur (§9) fehlt — der Server hält ohnehin seine eigene Kopie.
@@ -535,6 +601,9 @@ Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 | `NEUES_SPIEL_RULESET` | dev 1001, prod 2 | Zielversion des Regelwerks |
 | `NEUES_SPIEL_ADMIN` | dev `1`, prod `0` | Werkbank an/aus (Riegel 3) |
 | `NEUES_SPIEL_VERSION` | `unbekannt` | Steht in `/health` |
+| `NEUES_SPIEL_DB` | `data/<umgebung>/spiel.db` | Pfad zur Datenbank |
+| `NEUES_SPIEL_FLUSH_MS` | 2000 | Takt des gesammelten Schreibens |
+| `NEUES_SPIEL_IDLE_MS` | 900000 | Nach dieser Ruhe fliegt ein Hof aus dem Speicher |
 | `NEUES_SPIEL_SAVE` / `_TOKEN_FILE` | `data/<umgebung>/…` | Andere Pfade |
 | `NEUES_SPIEL_TOKEN` | Datei | Admin-Token vorgeben (landet in der Shell-History) |
 | `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Anlege-Bremse je Herkunft |
@@ -555,3 +624,7 @@ Ehrlich zur Grenze: Der Markt läuft **in einem Prozess**. Genau das serialisier
 die Käufe — zwischen „ist das Angebot noch da" und „es ist jetzt meins" liegt
 keine Lücke, weil Node einfädig ist. Bei mehreren Serverprozessen müsste diese
 Reihenfolge woanders erzwungen werden.
+
+Das Buch liegt im Speicher und wird in dieselbe Datenbank geschrieben wie die
+Höfe. Abrechnungen gehen sofort raus, Angebote gesammelt — die Begründung steht
+oben bei „Drei Dinge, die das möglich machen".

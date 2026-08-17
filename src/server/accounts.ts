@@ -27,15 +27,20 @@
  *
  * ── Speicherform ────────────────────────────────────────────────────────────
  *
- * Eine Datei pro Account. Nicht eine große: Sonst schriebe jeder Sync
- * irgendeines Spielers die Datei aller anderen neu — und ein abgebrochener
- * Schreibvorgang beträfe alle statt einen. Beim Start liest der Server das
- * Verzeichnis einmal ein und baut den Index im Speicher auf.
+ * Eine SQLite-Datei (siehe `db.ts`), eine Zeile je Hof. Vorher war es eine
+ * JSON-Datei je Hof — lesbar und ohne Installation, aber nicht tragfähig:
+ * Jeder Sync schrieb eine ganze Datei, und bei ein paar tausend gleichzeitigen
+ * Spielern sind das Tausende kleiner Schreibvorgänge in Sekunden.
+ *
+ * Alte Verzeichnisse werden beim Start einmalig übernommen. Niemand soll seinen
+ * Hof verlieren, weil sich der Speicher darunter geändert hat.
  */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import { openDb, transaction } from './db.ts';
+import type { Db } from './db.ts';
 import type { Command } from '../sim/commands.ts';
 import type { MailItem } from '../sim/state.ts';
 import type { Snapshot } from './server.ts';
@@ -119,6 +124,13 @@ export type AccountFile = {
   account: AccountRecord;
   snapshot: Snapshot;
   appliedLog: Command[];
+  /**
+   * seq des ersten Eintrags in `appliedLog`.
+   *
+   * Fehlt sie, stammt der Stand aus der Zeit vor dem Log-Fenster: Dann steht
+   * der ganze Log in der Datei und beginnt folglich bei 1.
+   */
+  logStartSeq?: number;
   pendingDeliveries: MailItem[];
   targetRulesetVersion: number;
   nextRequestId: number;
@@ -131,53 +143,117 @@ export class AccountError extends Error {
   }
 }
 
-function writeAtomic(path: string, data: unknown): void {
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(data));
-  renameSync(tmp, path);
-}
+/** Der Spielstand, wie er in der Zeile steht. */
+type GameBlob = Omit<AccountFile, 'version' | 'account'>;
 
 /**
  * Der Index über alle Accounts.
  *
- * Hält nur Kennungen im Speicher, keine Spielstände — die lädt der Aufrufer
- * bei Bedarf. Bei ein paar hundert Höfen ist das gemütlich; bei
- * Zehntausenden gehört an diese Stelle eine Datenbank, und das steht in der
- * Roadmap.
+ * Hält Kennungen im Speicher (ein paar hundert Byte je Hof) und die
+ * Spielstände in der Datenbank. Bei zehntausend Höfen sind das wenige Megabyte
+ * Index — das trägt ein Blech.
+ *
+ * ── Gesammelt schreiben ─────────────────────────────────────────────────────
+ *
+ * `save` schreibt NICHT sofort, sondern merkt sich den Hof als geändert.
+ * `flush` schreibt dann alle gemerkten in EINER Transaktion. Das ist der
+ * eigentliche Gewinn gegenüber Dateien: Zweitausend geänderte Spielstände
+ * kosten einen Schreibvorgang statt zweitausend.
+ *
+ * Der Preis ist ein Zeitfenster, in dem eine Änderung nur im Speicher steht.
+ * Deshalb ruft der Server `flush` in kurzem Takt und beim Beenden auf — und
+ * deshalb ist das Fenster in Sekunden gemessen und nicht in Minuten.
  */
 export class AccountStore {
-  private readonly dir: string;
+  private readonly db: Db;
   private readonly byId = new Map<string, AccountRecord>();
   private readonly byKeyHash = new Map<string, string>();
+  /** Geänderte Höfe samt ihrem Stand, bis zum nächsten `flush`. */
+  private readonly dirty = new Map<string, GameBlob>();
 
-  constructor(dir: string) {
-    this.dir = dir;
-    mkdirSync(dir, { recursive: true });
-    for (const name of readdirSync(dir)) {
-      if (!name.endsWith('.json')) continue;
-      try {
-        const file = JSON.parse(readFileSync(join(dir, name), 'utf8')) as AccountFile;
-        if (file.version !== 1 || !file.account) continue;
-        this.byId.set(file.account.id, file.account);
-        this.byKeyHash.set(file.account.keyHash, file.account.id);
-      } catch {
-        // Eine kaputte Datei darf nicht den ganzen Server am Start hindern —
-        // sie kostet einen Hof, nicht alle.
-        console.error(`Account-Datei unlesbar, übersprungen: ${name}`);
-      }
+  /**
+   * `dirOrDbPath` ist der Pfad zur Datenbank. Zeigt daneben noch ein altes
+   * Account-Verzeichnis, wird es einmalig übernommen.
+   */
+  constructor(dbPath: string, legacyDir?: string) {
+    this.db = openDb(dbPath);
+    if (legacyDir && existsSync(legacyDir)) this.importLegacy(legacyDir);
+
+    for (const row of this.db.prepare('select id, key_hash, created_at, last_seen_ms from accounts').all() as Array<{
+      id: string;
+      key_hash: string;
+      created_at: number;
+      last_seen_ms: number;
+    }>) {
+      const account: AccountRecord = {
+        id: row.id,
+        keyHash: row.key_hash,
+        createdAt: row.created_at,
+        lastSeenMs: row.last_seen_ms,
+      };
+      this.byId.set(account.id, account);
+      this.byKeyHash.set(account.keyHash, account.id);
     }
+  }
+
+  /**
+   * Alte Ein-Datei-je-Hof-Stände übernehmen. Läuft genau einmal.
+   *
+   * Das Verzeichnis wird danach umbenannt, nicht gelöscht: Falls beim Umzug
+   * etwas schiefgeht, ist der alte Stand noch da. Löschen darf der Betreiber.
+   */
+  private importLegacy(dir: string): void {
+    const files = readdirSync(dir).filter((n) => n.endsWith('.json'));
+    if (files.length === 0) return;
+
+    let imported = 0;
+    transaction(this.db, () => {
+      for (const name of files) {
+        try {
+          const file = JSON.parse(readFileSync(join(dir, name), 'utf8')) as AccountFile;
+          if (file.version !== 1 || !file.account) continue;
+          const { version, account, ...game } = file;
+          this.writeRow(account, game);
+          imported++;
+        } catch {
+          // Eine kaputte Datei kostet einen Hof, nicht den Umzug.
+          console.error(`Account-Datei unlesbar, übersprungen: ${name}`);
+        }
+      }
+    });
+
+    try {
+      renameSync(dir, `${dir}.uebernommen`);
+    } catch {
+      /* Umbenennen ist Komfort, kein Muss. */
+    }
+    console.log(`${imported} Höfe aus Einzeldateien übernommen → Datenbank.`);
+  }
+
+  private writeRow(account: AccountRecord, game: GameBlob): void {
+    this.db
+      .prepare(
+        `insert into accounts (id, key_hash, created_at, last_seen_ms, game)
+         values (?, ?, ?, ?, ?)
+         on conflict(id) do update set
+           key_hash = excluded.key_hash,
+           last_seen_ms = excluded.last_seen_ms,
+           game = excluded.game`,
+      )
+      .run(account.id, account.keyHash, account.createdAt, account.lastSeenMs, JSON.stringify(game));
   }
 
   get count(): number {
     return this.byId.size;
   }
 
-  list(): AccountRecord[] {
-    return [...this.byId.values()].sort((a, b) => a.createdAt - b.createdAt);
+  /** Wie viele Höfe gerade auf das Schreiben warten — Kennzahl fürs Monitoring. */
+  get pendingWrites(): number {
+    return this.dirty.size;
   }
 
-  pathFor(id: string): string {
-    return join(this.dir, `${id}.json`);
+  list(): AccountRecord[] {
+    return [...this.byId.values()].sort((a, b) => a.createdAt - b.createdAt);
   }
 
   has(id: string): boolean {
@@ -213,13 +289,13 @@ export class AccountStore {
   /**
    * Neuen Hof anlegen. Der Schlüssel wird **genau einmal** zurückgegeben —
    * danach kennt der Server nur noch seinen Hash.
+   *
+   * Wird sofort geschrieben, nicht gesammelt: Ein Hof, den es nach einem
+   * Neustart nicht mehr gibt, wäre ein verlorener Schlüssel.
    */
-  create(now: number, initial: Omit<AccountFile, 'version' | 'account'>): {
-    account: AccountRecord;
-    key: string;
-  } {
+  create(now: number, initial: GameBlob): { account: AccountRecord; key: string } {
     let key = generateKey();
-    // Praktisch unmöglich bei 128 Bit, aber eine Kollision würde zwei Spieler
+    // Praktisch unmöglich bei 120 Bit, aber eine Kollision würde zwei Spieler
     // in denselben Hof setzen — das ist die Zeile wert.
     while (this.byKeyHash.has(hashKey(key))) key = generateKey();
 
@@ -232,29 +308,66 @@ export class AccountStore {
 
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);
-    this.save(account, initial);
+    transaction(this.db, () => this.writeRow(account, initial));
     return { account, key };
   }
 
-  /** Spielstand eines Accounts laden. */
+  /** Spielstand laden. Ungeschriebene Änderungen gewinnen — sie sind neuer. */
   load(id: string): AccountFile | null {
-    const path = this.pathFor(id);
-    if (!existsSync(path)) return null;
-    const file = JSON.parse(readFileSync(path, 'utf8')) as AccountFile;
-    if (file.version !== 1) throw new AccountError(`unbekannte Account-Version: ${file.version}`);
-    return file;
+    const account = this.byId.get(id);
+    if (!account) return null;
+
+    const pending = this.dirty.get(id);
+    if (pending) return { version: 1, account, ...pending };
+
+    const row = this.db.prepare('select game from accounts where id = ?').get(id) as
+      | { game?: string }
+      | undefined;
+    if (!row?.game) return null;
+    return { version: 1, account, ...(JSON.parse(row.game) as GameBlob) };
   }
 
-  /** Spielstand schreiben — atomar, wie überall (siehe store.ts). */
-  save(account: AccountRecord, game: Omit<AccountFile, 'version' | 'account'>): void {
+  /** Merken, nicht schreiben. Geschrieben wird gesammelt in `flush`. */
+  save(account: AccountRecord, game: GameBlob): void {
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);
-    writeAtomic(this.pathFor(account.id), { version: 1, account, ...game } satisfies AccountFile);
+    this.dirty.set(account.id, game);
+  }
+
+  /**
+   * Alles Gemerkte in einer Transaktion schreiben. Gibt zurück, wie viele.
+   *
+   * Schlägt das Schreiben fehl, bleiben die Änderungen gemerkt: Beim nächsten
+   * Versuch geht es weiter, statt sie zu verlieren.
+   */
+  flush(): number {
+    if (this.dirty.size === 0) return 0;
+    const batch = [...this.dirty.entries()];
+    transaction(this.db, () => {
+      for (const [id, game] of batch) {
+        const account = this.byId.get(id);
+        if (account) this.writeRow(account, game);
+      }
+    });
+    for (const [id] of batch) this.dirty.delete(id);
+    return batch.length;
   }
 
   /** Übernimmt einen Account samt Schlüssel-Hash — für den Import alter Stände. */
-  adopt(account: AccountRecord, game: Omit<AccountFile, 'version' | 'account'>): void {
-    this.save(account, game);
+  adopt(account: AccountRecord, game: GameBlob): void {
+    this.byId.set(account.id, account);
+    this.byKeyHash.set(account.keyHash, account.id);
+    transaction(this.db, () => this.writeRow(account, game));
+  }
+
+  /** Zugriff auf die Datenbank, damit der Markt dieselbe Datei benutzt. */
+  get database(): Db {
+    return this.db;
+  }
+
+  close(): void {
+    this.flush();
+    this.db.close();
   }
 }
 

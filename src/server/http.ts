@@ -94,8 +94,12 @@ function resolveToken(): string {
 
 const TOKEN = resolveToken();
 
-// ── Accounts ───────────────────────────────────────────────────────────
-const accounts = new AccountStore(join(dirname(SAVE_PATH), 'accounts'));
+// ── Speicher ───────────────────────────────────────────────────────────
+//
+// Eine SQLite-Datei für Höfe UND Markt (siehe db.ts). Ein altes
+// `accounts/`-Verzeichnis wird beim ersten Start übernommen.
+const DB_PATH = process.env.NEUES_SPIEL_DB ?? join(dirname(SAVE_PATH), 'spiel.db');
+const accounts = new AccountStore(DB_PATH, join(dirname(SAVE_PATH), 'accounts'));
 const limiter = new CreateLimiter(
   Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
   Number(process.env.NEUES_SPIEL_MAX_ACCOUNTS ?? 5000),
@@ -107,7 +111,7 @@ const limiter = new CreateLimiter(
  * Eine Datei neben den Accounts, damit Dev und Produktion getrennte Märkte
  * haben: Ein Testverkauf darf nie in einer echten Auslage auftauchen.
  */
-const market = new Market(join(dirname(SAVE_PATH), 'market.json'));
+const market = new Market(accounts.database);
 
 /**
  * Geladene Höfe im Speicher.
@@ -135,6 +139,7 @@ function snapshotOf(game: Server) {
   return {
     snapshot: game.snapshot,
     appliedLog: game.appliedLog,
+    logStartSeq: game.logStartSeq,
     pendingDeliveries: game.pendingDeliveries,
     targetRulesetVersion: game.targetRulesetVersion,
     nextRequestId: game.nextRequestId,
@@ -155,6 +160,10 @@ function gameFor(account: AccountRecord): Server {
   if (file) {
     game.snapshot = file.snapshot;
     game.appliedLog = file.appliedLog;
+    game.logStartSeq = file.logStartSeq ?? 1;
+    // Ein Stand aus der Zeit vor dem Fenster bringt seinen ganzen Log mit —
+    // der soll nicht dauerhaft im Speicher hängen bleiben.
+    game.trimLog();
     game.pendingDeliveries = file.pendingDeliveries;
     game.nextRequestId = file.nextRequestId ?? 1;
     game.stockRequests();
@@ -440,7 +449,6 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     // Sonst stünden im Buch Angebote zu Aufträgen, die es nicht mehr gibt —
     // und jemand könnte Ware kaufen, die niemand mehr besitzt.
     market.forget(target.id);
-    market.save();
     game.stockRequests();
     game.stockOffers();
     persist(target, game);
@@ -481,6 +489,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       rulesetVersion: TARGET_RULESET,
       accounts: accounts.count,
       offers: market.size,
+      // Wie viele Spielstände gerade auf das Schreiben warten. Steigt die Zahl
+      // dauerhaft, kommt die Platte nicht hinterher.
+      pendingWrites: accounts.pendingWrites,
+      live: live.size,
       // Damit sich von außen prüfen lässt, ob wirklich verschlüsselt ankommt,
       // was man sich beim Aufsetzen vorgenommen hat.
       secure: isSecureTransport(CONFIG),
@@ -620,7 +632,6 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const result = game.sync(parsed, Date.now());
       // Was jetzt im Escrow liegt, ist die Wahrheit — das Buch zieht nach.
       publish(account.id, game);
-      market.save();
       persist(account, game);
 
       // `serverTime` mitgeben, damit der Client seine Uhr gegen die des Servers
@@ -725,6 +736,54 @@ server.listen(PORT, CONFIG.host, () => {
   console.log('');
 });
 
+/**
+ * Gesammelt schreiben statt bei jedem Sync.
+ *
+ * DAS ist der Unterschied zwischen „ein paar Dutzend Spieler" und „ein paar
+ * tausend": Zweitausend geänderte Spielstände kosten so einen Schreibvorgang
+ * statt zweitausend. Der Preis ist ein Fenster von zwei Sekunden, in dem eine
+ * Änderung nur im Speicher steht — deshalb ist es in Sekunden gemessen und
+ * nicht in Minuten, und deshalb wird beim Beenden noch einmal geschrieben.
+ */
+const FLUSH_MS = Number(process.env.NEUES_SPIEL_FLUSH_MS ?? 2000);
+const flushTimer = setInterval(() => {
+  try {
+    accounts.flush();
+    market.flush();
+  } catch (err) {
+    // Nicht geschrieben heißt: bleibt gemerkt, nächster Versuch in zwei
+    // Sekunden. Der Server soll daran nicht sterben.
+    console.error(`[speicher] Schreiben fehlgeschlagen: ${(err as Error).message}`);
+  }
+}, FLUSH_MS);
+flushTimer.unref();
+
+/**
+ * Ungenutzte Höfe aus dem Speicher werfen.
+ *
+ * Ohne das wächst `live` monoton: Wer einmal gespielt hat, bleibt bis zum
+ * Neustart im Arbeitsspeicher. Bei ein paar tausend Spielern am Tag ist das
+ * der Punkt, an dem ein Server mit 1 GB umkippt — und zwar nicht unter Last,
+ * sondern irgendwann nachts.
+ *
+ * Rausgeworfen wird nur, was geschrieben ist; beim nächsten Zugriff wird der
+ * Hof aus der Datenbank geladen, als wäre nichts gewesen.
+ */
+const IDLE_MS = Number(process.env.NEUES_SPIEL_IDLE_MS ?? 15 * 60_000);
+const evictTimer = setInterval(() => {
+  const cutoff = Date.now() - IDLE_MS;
+  let evicted = 0;
+  for (const [id] of live) {
+    const account = accounts.get(id);
+    if (!account || account.lastSeenMs > cutoff) continue;
+    if (accounts.pendingWrites > 0) accounts.flush();
+    live.delete(id);
+    evicted++;
+  }
+  if (evicted > 0) console.log(`[speicher] ${evicted} ruhende Höfe aus dem Speicher entlassen`);
+}, 60_000);
+evictTimer.unref();
+
 // Sauber beenden, damit der letzte Sync sicher auf der Platte liegt.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
@@ -733,7 +792,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       const account = accounts.get(id);
       if (account) persist(account, g);
     }
-    market.save();
+    market.flush();
+    accounts.close();
     server.close(() => process.exit(0));
   });
 }

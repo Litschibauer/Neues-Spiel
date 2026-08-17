@@ -252,6 +252,18 @@ stehen an einer Stelle, die Zeichnungen in einer austauschbaren Tabelle, und
 das Anzeigemodell (`view.ts`) enthält keinen einzigen Anzeigetext — das ist die
 Bedingung dafür, dass eine zweite Oberfläche billig bleibt.
 
+**Der Speicher** trägt jetzt die Größenordnung, um die es geht: eine
+SQLite-Datei statt einer JSON-Datei je Hof, gesammelt geschrieben, ruhende Höfe
+fliegen aus dem Speicher. Nachgemessen mit `npm run bench:scale`: ~7.200
+Syncs/s und 98 MB Arbeitsspeicher bei 4000 Höfen — 4000 gleichzeitig aktive
+Spieler erzeugen etwa 1000 Syncs/s. Zahlen und Grenzen stehen in
+[`deploy.md`](deploy.md).
+
+Der eigentliche Fund dabei war nicht die Datenbank, sondern der **ungedeckelte
+Command-Log**: Er wurde bei jedem Sync komplett neu geschrieben, der Aufwand
+einer Sitzung stieg also quadratisch — 344 MB Schreiblast für einen einzigen
+Spieler. Das hätte bei keiner Speichertechnik funktioniert.
+
 **Als Nächstes**, in dieser Reihenfolge:
 
 1. **Der Hof soll sich nach Hof anfühlen.** Die Oberfläche steht, aber die
@@ -260,8 +272,11 @@ Bedingung dafür, dass eine zweite Oberfläche billig bleibt.
 2. **Nachbarn.** Der Markt ist anonym; ein Hof, den man kennt, ist der Unterschied
    zwischen „Datenbank" und „Dorf". Braucht aber eine Antwort auf die Frage, wie
    man jemanden findet, ohne Benutzernamen zu haben.
-3. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
+3. **Backups.** Die Datenbank trägt ein paar tausend Spieler, aber niemand
+   sichert sie. Ein `cron` mit `.backup` ist zehn Minuten Arbeit — und der
+   Unterschied zwischen einem Ausfall und einem Ende.
+4. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
    echten Spielerschaft muss das gelöst sein — bewusst, mit einem zweiten Faktor,
    nicht nebenbei.
-4. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
+5. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
    wäre: Überraschungskisten.

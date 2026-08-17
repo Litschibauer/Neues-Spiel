@@ -13,7 +13,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -36,7 +36,7 @@ const WHEAT = 1;
 
 function tempStore() {
   const dir = mkdtempSync(join(tmpdir(), 'ns-accounts-'));
-  return { dir, store: new AccountStore(dir) };
+  return { dir, path: join(dir, 'spiel.db'), store: new AccountStore(join(dir, 'spiel.db')) };
 }
 
 function emptyGame() {
@@ -130,13 +130,14 @@ test('Spielstände bleiben getrennt — auch nach echtem Spielen', () => {
 });
 
 test('nach einem Neustart sind alle Höfe wieder da', () => {
-  const { dir, store } = tempStore();
+  const { dir, path, store } = tempStore();
   try {
     const a = store.create(T0, emptyGame());
     const b = store.create(T0 + 1, emptyGame());
+    store.flush();
 
-    // Neuer Store auf demselben Verzeichnis — wie ein Serverneustart.
-    const again = new AccountStore(dir);
+    // Neuer Store auf derselben Datei — wie ein Serverneustart.
+    const again = new AccountStore(path);
     assert.equal(again.count, 2);
     assert.equal(again.resolve(a.key)?.id, a.account.id);
     assert.equal(again.resolve(b.key)?.id, b.account.id);
@@ -146,12 +147,14 @@ test('nach einem Neustart sind alle Höfe wieder da', () => {
 });
 
 test('auf der Platte liegt nur der Hash, nie der Schlüssel', () => {
-  // Ein Backup, ein versehentlich geteiltes Verzeichnis — nichts davon soll
-  // fremde Höfe aufmachen können.
-  const { dir, store } = tempStore();
+  // Ein Backup, eine versehentlich geteilte Datei — nichts davon soll fremde
+  // Höfe aufmachen können. Geprüft wird die ROHE Datei, nicht eine Abfrage:
+  // Es geht ja gerade darum, was jemand sieht, der sie einfach aufmacht.
+  const { dir, path, store } = tempStore();
   try {
-    const { account, key } = store.create(T0, emptyGame());
-    const raw = readFileSync(store.pathFor(account.id), 'utf8');
+    const { key } = store.create(T0, emptyGame());
+    store.close();
+    const raw = readFileSync(path, 'latin1');
 
     assert.ok(!raw.includes(key), 'der Schlüssel steht im Klartext in der Datei');
     assert.ok(!raw.includes(normalizeKey(key)), 'der normalisierte Schlüssel steht in der Datei');
@@ -161,15 +164,54 @@ test('auf der Platte liegt nur der Hash, nie der Schlüssel', () => {
   }
 });
 
-test('eine kaputte Datei kostet einen Hof, nicht den Server', () => {
-  const { dir, store } = tempStore();
+test('beim Umzug alter Stände kostet eine kaputte Datei einen Hof, nicht alle', () => {
+  // Der Übergang von „eine JSON-Datei je Hof" auf die Datenbank. Wer so einen
+  // Stand liegen hat, soll ihn nicht verlieren — und eine unlesbare Datei
+  // darunter darf den Umzug nicht abbrechen.
+  const dir = mkdtempSync(join(tmpdir(), 'ns-accounts-'));
   try {
-    const good = store.create(T0, emptyGame());
-    writeFileSync(join(dir, 'kaputt.json'), '{ das ist kein JSON');
+    const legacy = join(dir, 'accounts');
+    mkdirSync(legacy, { recursive: true });
 
-    const again = new AccountStore(dir);
-    assert.equal(again.count, 1, 'der heile Hof ist mitgerissen worden');
-    assert.equal(again.resolve(good.key)?.id, good.account.id);
+    const key = 'hof_20EBTP-XACTHM-QK4H7E-D6T9KS';
+    writeFileSync(
+      join(legacy, 'a-alt.json'),
+      JSON.stringify({
+        version: 1,
+        account: { id: 'a-alt', keyHash: keyHashOf(key), createdAt: T0, lastSeenMs: T0 },
+        ...emptyGame(),
+      }),
+    );
+    writeFileSync(join(legacy, 'kaputt.json'), '{ das ist kein JSON');
+
+    const store = new AccountStore(join(dir, 'spiel.db'), legacy);
+    assert.equal(store.count, 1, 'der heile Hof ist mitgerissen worden');
+    assert.equal(store.resolve(key)?.id, 'a-alt', 'der alte Schlüssel öffnet den Hof nicht mehr');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('gesammeltes Schreiben verliert nichts — auch nicht vor dem Schreiben', () => {
+  // Der Server merkt sich Änderungen und schreibt sie im Takt. Ein Lesen
+  // dazwischen muss den NEUEN Stand liefern, sonst rechnete der nächste Sync
+  // auf einem veralteten Spielstand weiter.
+  const { dir, path, store } = tempStore();
+  try {
+    const { account } = store.create(T0, emptyGame());
+    const game = emptyGame();
+    game.nextRequestId = 42;
+    store.save({ ...account, lastSeenMs: T0 + 5 }, game);
+
+    assert.equal(store.pendingWrites, 1, 'es wurde sofort geschrieben statt gesammelt');
+    assert.equal(store.load(account.id)?.nextRequestId, 42, 'das Gemerkte ist nicht sichtbar');
+
+    assert.equal(store.flush(), 1);
+    assert.equal(store.pendingWrites, 0);
+    store.close();
+
+    // Und nach einem Neustart steht es wirklich in der Datei.
+    assert.equal(new AccountStore(path).load(account.id)?.nextRequestId, 42);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -210,8 +252,9 @@ test('ein alter Einzel-Spielstand lässt sich als Hof übernehmen', () => {
       { id: 'a-imported', keyHash: keyHashOf(oldToken), createdAt: T0, lastSeenMs: T0 },
       emptyGame(),
     );
+    store.close();
 
-    const again = new AccountStore(dir);
+    const again = new AccountStore(join(dir, 'spiel.db'));
     assert.equal(again.resolve(oldToken)?.id, 'a-imported', 'das alte Token öffnet den Hof nicht');
   } finally {
     rmSync(dir, { recursive: true, force: true });

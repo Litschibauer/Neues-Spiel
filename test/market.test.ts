@@ -18,6 +18,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Market, connectMarket, publishOrders, settleSales } from '../src/server/market.ts';
+import { openDb } from '../src/server/db.ts';
 import { Server } from '../src/server/server.ts';
 import { Client } from '../src/client/client.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
@@ -339,23 +340,49 @@ test('niemand kauft bei sich selbst', () => {
 
 test('das Buch überlebt einen Neustart', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ns-market-'));
-  const path = join(dir, 'market.json');
   try {
-    const market = new Market(path);
+    const db = openDb(join(dir, 'spiel.db'));
+    const market = new Market(db);
     const live = new Map<string, Server>();
     const anna = farm(market, live, 'anna', 0, 20);
     play(anna, (c) => c.listOrder(WHEAT, 10, 3));
     publishOrders(market, 'anna', anna);
+    market.flush();
 
     // Ein Verkauf, der noch nicht abgerechnet ist — das ist der Teil, dessen
     // Verlust wirklich wehtäte: Ben hätte bezahlt und Anna nichts bekommen.
+    // Deshalb wird er sofort geschrieben und nicht gesammelt.
     market.claim(market.entries()[0]!.id, 'ben', T0);
-    market.save();
+    db.close();
 
-    const again = new Market(path);
+    const again = new Market(openDb(join(dir, 'spiel.db')));
     assert.equal(again.size, 0, 'das verkaufte Angebot steht wieder im Buch');
     assert.equal(again.peekSettlements('anna').length, 1, 'Annas Erlös ist verloren');
     assert.equal(again.peekSettlements('anna')[0]!.gold, 30);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ns-market-'));
+  try {
+    const db = openDb(join(dir, 'spiel.db'));
+    const market = new Market(db);
+    const live = new Map<string, Server>();
+    const anna = farm(market, live, 'anna', 0, 20);
+    play(anna, (c) => c.listOrder(WHEAT, 10, 3));
+    publishOrders(market, 'anna', anna);
+    assert.equal(market.flush(), 1, 'nichts zu schreiben gemerkt');
+    db.close();
+
+    const again = new Market(openDb(join(dir, 'spiel.db')));
+    assert.equal(again.size, 1);
+    assert.equal(again.browse('ben', 10)[0]!.amount, 10);
+    // Die Nummernvergabe läuft weiter, statt bei 1 neu zu beginnen — sonst
+    // bekäme ein neues Angebot die Nummer eines alten.
+    again.reconcile('cem', [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 0 }], T0);
+    assert.notEqual(again.browse('anna', 10)[0]!.id, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

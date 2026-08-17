@@ -20,6 +20,17 @@ import { topUpRequests } from './requests.ts';
 /** 1 Tick = 1 Sekunde Echtzeit. */
 export const TICK_MS = 1000;
 
+/**
+ * Wie viele Commands rückwirkend nachweisbar bleiben.
+ *
+ * Gebraucht wird das nur für den Überlapp nach einer verlorenen Antwort, und
+ * der ist im Normalfall eine Handvoll Commands. Zweihundert ist damit
+ * großzügig und kostet je aktivem Hof rund 20 kB — bei ein paar tausend Höfen
+ * eine Größenordnung, die auf ein Blech passt. Der ungedeckelte Log tat das
+ * nicht.
+ */
+export const LOG_WINDOW = 200;
+
 export type Snapshot = {
   state: State;
   /** seq des zuletzt angewandten Commands. */
@@ -67,13 +78,37 @@ export class Server {
   /** Determinismus-Alarme (R1) — gehören ins Monitoring, nicht in eine Sanktion. */
   divergenceAlerts: Array<{ seq: number; clientHash: string; serverHash: string }> = [];
   /**
-   * Alle bisher angewandten Commands, nach seq.
+   * Die zuletzt angewandten Commands — ein **Fenster**, nicht die ganze
+   * Geschichte.
    *
-   * Braucht man ohnehin für Audit und Nachstellen von Fehlern — und er macht die
-   * Präfix-Prüfung beim Wiederaufsetzen trivial und lückenlos korrekt. In
-   * Produktion wird er hinter alten Snapshots abgeschnitten.
+   * Wozu er da ist: Nach einer verlorenen Antwort schickt der Client Commands
+   * erneut, die längst angewandt sind. Nur ein Vergleich mit dem, was wirklich
+   * ankam, unterscheidet diesen harmlosen Fall von zwei Geräten am selben
+   * Snapshot (R3).
+   *
+   * Warum er begrenzt sein MUSS: Vorher wuchs er unbegrenzt und wurde bei jedem
+   * Sync vollständig auf die Platte geschrieben. Der Aufwand einer Sitzung stieg
+   * damit quadratisch — gemessen: 344 MB Schreiblast für einen einzigen Spieler
+   * über 6000 Aktionen, bei 2000 gleichzeitigen Spielern jenseits von 100 MB/s.
+   * Das trägt kein einzelner Server, und es wurde mit jeder Spielstunde
+   * schlimmer statt besser.
+   *
+   * Was das Fenster kostet, ist erstaunlich wenig: Reicht ein Wiederaufsetzer
+   * weiter zurück, als das Fenster reicht, wird er abgelehnt (`LOG_TRUNCATED`)
+   * und der Client übernimmt den Serverstand. **Verloren geht dabei nichts** —
+   * die Arbeit steckt ja bereits in genau diesem Snapshot, sonst stünde die seq
+   * nicht so hoch. Und ein echter Fork endet damit ebenfalls beim Serverstand,
+   * also auf der sicheren Seite.
    */
   appliedLog: Command[] = [];
+  /**
+   * seq des ERSTEN Eintrags in `appliedLog`. Alles davor ist vergessen.
+   *
+   * Muss mitgespeichert werden: Ohne diesen Bezugspunkt wäre der Index im
+   * Fenster nicht mehr auf eine seq zurückzuführen — und die Präfix-Prüfung
+   * verglich stillschweigend die falschen Commands miteinander.
+   */
+  logStartSeq = 1;
   /**
    * Version, auf die neue Snapshots gehoben werden (R2).
    *
@@ -193,10 +228,25 @@ export class Server {
     this.snapshot = { ...this.snapshot, serverTs: this.snapshot.serverTs - seconds * TICK_MS };
   }
 
+  /**
+   * Das Fenster auf seine Größe zurückschneiden.
+   *
+   * Auch beim Laden aufzurufen: Ein Spielstand aus der Zeit vor dem Fenster
+   * bringt seinen gesamten Log mit, und der soll nicht dauerhaft im Speicher
+   * hängen bleiben.
+   */
+  trimLog(): void {
+    const excess = this.appliedLog.length - LOG_WINDOW;
+    if (excess <= 0) return;
+    this.appliedLog = this.appliedLog.slice(excess);
+    this.logStartSeq += excess;
+  }
+
   /** Von vorn anfangen. Der Client muss danach neu übernehmen. */
   reset(fresh: State, nowMs: number, rulesetVersion: number): void {
     this.snapshot = { state: fresh, seq: 0, serverTs: nowMs, rulesetVersion };
     this.appliedLog = [];
+    this.logStartSeq = 1;
     this.pendingDeliveries = [];
     this.activeDevice = null;
     this.divergenceAlerts = [];
@@ -378,7 +428,13 @@ export class Server {
     // Server wendet einfach nur den Rest an.
     for (const cmd of req.commands) {
       if (cmd.seq > snap.seq) break;
-      const applied = this.appliedLog[cmd.seq - 1];
+      if (cmd.seq < this.logStartSeq) {
+        // So weit zurück reicht das Fenster nicht mehr. Nicht beweisbar heißt
+        // hier ablehnen, nicht durchwinken: Der Client übernimmt den
+        // Serverstand, in dem diese Arbeit ohnehin schon steckt (§9).
+        return { ok: false, kind: 'rejected', reason: 'LOG_TRUNCATED', snapshot: snap };
+      }
+      const applied = this.appliedLog[cmd.seq - this.logStartSeq];
       if (!applied || canonicalizeCommand(applied) !== canonicalizeCommand(cmd)) {
         // Gleiche Nummer, andere Aktion → zwei Geräte am selben Snapshot (R3).
         return { ok: false, kind: 'rejected', reason: 'FORK_DETECTED', snapshot: snap };
@@ -532,6 +588,7 @@ export class Server {
     }
 
     this.appliedLog.push(...accepted);
+    this.trimLog();
     this.snapshot = {
       state,
       seq: accepted[accepted.length - 1]!.seq,
