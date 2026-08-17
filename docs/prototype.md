@@ -119,6 +119,7 @@ Schicht 5 ist im Server angelegt:
 | — | `accounts.test.ts` | Höfe vermischen sich nicht — der Punkt, an dem ein Mehrspieler-Server steht oder fällt. Dazu: nur Hashes auf der Platte, Anlege-Bremse, kaputte Datei kostet einen Hof statt aller. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Einstellgebühr, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
+| — | `events.test.ts` | Die Live-Leitung: dass ein Anstoß **keine Spieldaten** trägt, dass zwanzig Änderungen in einer Sekunde ein Anstoß sind und nicht zwanzig, dass abgerissene Leitungen vergessen werden — und ein Rundlauf über 1000 gleichzeitige Verbindungen. |
 
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,
 abgelehnte Aktionen) und schlagen fehl, wenn nicht. Ein Fuzz, der nur Sonnenschein testet,

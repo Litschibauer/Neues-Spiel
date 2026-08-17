@@ -28,6 +28,7 @@ import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from '.
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
+import { EventHub } from './events.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
@@ -121,6 +122,18 @@ const market = new Market(accounts.storage);
  */
 const live = new Map<string, Server>();
 
+/**
+ * Die offenen Live-Leitungen (`/api/events`).
+ *
+ * Sie tragen nur Anstöße, keinen Zustand — warum das so ist, steht in
+ * `events.ts`. Hier interessiert vor allem die Obergrenze: Jede offene
+ * Verbindung kostet Speicher, auch wenn stundenlang nichts passiert.
+ */
+const events = new EventHub({
+  minIntervalMs: Number(process.env.NEUES_SPIEL_NUDGE_MS ?? 1000),
+  maxSubscribers: Number(process.env.NEUES_SPIEL_MAX_EVENT_STREAMS ?? 2000),
+});
+
 function freshGame(): Server {
   const game = new Server(
     initialState(getRuleset(TARGET_RULESET)),
@@ -180,7 +193,19 @@ function gameFor(account: AccountRecord): Server {
  * Verkauf im Protokoll auftauchen soll.
  */
 function wireMarket(accountId: string, game: Server): void {
-  connectMarket(market, accountId, game, (id) => live.get(id) ?? null);
+  connectMarket(
+    market,
+    accountId,
+    game,
+    (id) => live.get(id) ?? null,
+    // Der Verkäufer soll seinen Erlös sehen, während er zuschaut. Und weil ein
+    // Angebot damit aus dem Buch ist, gehen alle anderen leer aus, wenn sie es
+    // noch anzeigen — also einmal in die Runde.
+    (sellerId) => {
+      events.nudge(sellerId, 'farm');
+      events.broadcast('market', accountId);
+    },
+  );
   const claim = game.claimOffer;
   game.claimOffer = (offerId) => {
     const ok = claim(offerId);
@@ -196,7 +221,10 @@ function settle(account: AccountRecord, game: Server): boolean {
 }
 
 function publish(accountId: string, game: Server): void {
-  publishOrders(market, accountId, game);
+  // Nur wenn sich am Buch wirklich etwas geändert hat. Ein Sync, der die
+  // Auslage nicht berührt, soll niemanden aufwecken — sonst wäre jeder
+  // Erntetipp irgendeines Spielers ein Anstoß für alle anderen.
+  if (publishOrders(market, accountId, game)) events.broadcast('market', accountId);
 }
 
 function persist(account: AccountRecord, game: Server): void {
@@ -492,6 +520,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       // dauerhaft, kommt die Platte nicht hinterher.
       pendingWrites: accounts.pendingWrites,
       live: live.size,
+      // Offene Live-Leitungen. Jede kostet Speicher, auch wenn nichts passiert
+      // — auf einem kleinen Server die Zahl, die man im Auge behält.
+      streams: events.size,
       // Damit sich von außen prüfen lässt, ob wirklich verschlüsselt ankommt,
       // was man sich beim Aufsetzen vorgenommen hat.
       secure: isSecureTransport(CONFIG),
@@ -598,6 +629,53 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         isActiveDevice: game.isActiveDevice(deviceId),
         activeSince: game.activeDevice?.lastSyncMs ?? null,
       });
+    }
+
+    /**
+     * Die Live-Leitung: ein offener Strom, auf dem „sync jetzt" steht.
+     *
+     * Kein Zustand, keine Spieldaten — warum, steht in `events.ts`. Für diese
+     * Schicht sind drei Dinge wichtig:
+     *
+     *  1. **Keine Kompression.** Ein `gzip`-Puffer, der auf mehr Daten wartet,
+     *     hält genau die Nachricht zurück, deren einziger Zweck es ist, sofort
+     *     anzukommen. `x-accel-buffering: no` sagt einem vorgeschalteten nginx
+     *     dasselbe.
+     *  2. **Kein Socket-Timeout.** Node schließt sonst eine Verbindung, auf der
+     *     minutenlang nichts passiert — und das ist hier der Normalfall.
+     *  3. **Eine Obergrenze.** Passt niemand mehr rein, gibt es eine ehrliche
+     *     Absage statt einer Leitung, die nie etwas liefert. Der Client spielt
+     *     dann mit seinem Timer weiter; er merkt nichts außer ein paar
+     *     Sekunden Verzögerung.
+     */
+    if (url.pathname === '/api/events' && req.method === 'GET') {
+      const stop = events.subscribe(account.id, {
+        write: (chunk) => {
+          if (res.writableEnded) return false;
+          res.write(chunk);
+          return true;
+        },
+        close: () => {
+          if (!res.writableEnded) res.end();
+        },
+      });
+      if (!stop) return json(res, 503, { error: 'TOO_MANY_STREAMS' });
+
+      req.socket.setTimeout(0);
+      req.socket.setNoDelay(true);
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-accel-buffering': 'no',
+      });
+      // Erste Zeile sofort, damit der Browser den Strom als offen ansieht und
+      // `onopen` feuert — sonst hängt die Anzeige auf „verbinde…".
+      res.write(': willkommen\n\n');
+
+      req.on('close', stop);
+      res.on('close', stop);
+      return;
     }
 
     if (url.pathname === '/api/sync' && req.method === 'POST') {
@@ -758,6 +836,19 @@ const flushTimer = setInterval(() => {
 flushTimer.unref();
 
 /**
+ * Aufgelaufene Anstöße rausschreiben, und die Leitungen wach halten.
+ *
+ * Zwei Takte, weil sie zwei verschiedene Dinge tun: Der schnelle bündelt, was
+ * sich seit dem letzten Mal getan hat (der Hub wirft Doppelte weg und hält
+ * seinen eigenen Mindestabstand ein), der langsame schickt ein Lebenszeichen,
+ * damit Proxys und Mobilfunknetze die stille Leitung nicht zumachen.
+ */
+const nudgeTimer = setInterval(() => events.flush(), 250);
+nudgeTimer.unref();
+const heartbeatTimer = setInterval(() => events.heartbeat(), 25_000);
+heartbeatTimer.unref();
+
+/**
  * Ungenutzte Höfe aus dem Speicher werfen.
  *
  * Ohne das wächst `live` monoton: Wer einmal gespielt hat, bleibt bis zum
@@ -787,6 +878,9 @@ evictTimer.unref();
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     console.log(`\n${signal} — speichere und beende.`);
+    // Erst die offenen Leitungen zumachen: Sonst wartet `server.close()` auf
+    // Verbindungen, die per Konstruktion nie von selbst enden.
+    events.closeAll();
     for (const [id, g] of live) {
       const account = accounts.get(id);
       if (account) persist(account, g);

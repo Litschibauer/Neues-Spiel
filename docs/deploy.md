@@ -672,6 +672,20 @@ Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 | `NEUES_SPIEL_TOKEN` | Datei | Admin-Token vorgeben (landet in der Shell-History) |
 | `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Anlege-Bremse je Herkunft |
 | `NEUES_SPIEL_MAX_ACCOUNTS` | 5000 | Obergrenze für Höfe |
+| `NEUES_SPIEL_MAX_EVENT_STREAMS` | 2000 | Gleichzeitig offene Live-Leitungen (`/api/events`) |
+| `NEUES_SPIEL_NUDGE_MS` | 1000 | Mindestabstand zwischen zwei Anstößen an denselben Hof |
+
+**Zu den Live-Leitungen:** Jede offene Verbindung kostet Speicher, auch wenn
+stundenlang nichts passiert — auf einer Kiste mit 1 GB ist das die Zahl, an der
+sie kippt. `/health` gibt sie als `streams` aus; steht sie dauerhaft an der
+Grenze, ist entweder die Grenze zu niedrig oder der Server zu klein. Wer keinen
+Platz mehr bekommt, spielt weiter und sieht Marktänderungen ein paar Sekunden
+später — die Leitung ist eine Beschleunigung, keine Voraussetzung.
+
+Steht ein **nginx** davor, braucht die Route `proxy_buffering off;` und
+`proxy_read_timeout` deutlich über dem Herzschlag von 25 Sekunden. Ohne das
+sammelt der Proxy die Anstöße, bis genug beisammen ist — und hält damit genau
+die Nachricht zurück, deren einziger Zweck es ist, sofort anzukommen.
 
 ## Was der Markt braucht — und was nicht
 

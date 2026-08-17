@@ -525,6 +525,93 @@
     });
   };
 
+  // ── Die Live-Leitung ──────────────────────────────────────────────
+  //
+  // Bis hierhin fragte die Seite alle vier Sekunden nach. Für den eigenen Hof
+  // reicht das — der ändert sich ja nur, wenn man selbst etwas tut. Für den
+  // Markt nicht: Ein neues Angebot sah man erst beim nächsten Timer, und bei
+  // einem Kauf, den der Schnellere gewinnt, ist das der Unterschied zwischen
+  // „geht" und „war schon weg".
+  //
+  // Über die Leitung kommen KEINE Spieldaten, nur das Wort „nudge". Die Seite
+  // macht daraufhin einen ganz normalen erzwungenen Sync — denselben, den auch
+  // der Timer auslöst. Ein Codeweg, kein zweiter Zustandspfad.
+  //
+  // Warum `fetch` und nicht `EventSource`: `EventSource` kann keine Header
+  // setzen, der Schlüssel müsste also in die URL. In der URL landet er im
+  // Serverprotokoll und in jedem Proxy dazwischen. Ein Lesestrom über `fetch`
+  // behält ihn im Header — dieselbe Behandlung wie bei jedem anderen Aufruf.
+  var liveAbort = null;
+  var liveRetryMs = 1000;
+
+  function stopLive() {
+    if (liveAbort) { liveAbort.abort(); liveAbort = null; }
+  }
+
+  function startLive() {
+    stopLive();
+    if (!token || !navigator.onLine || typeof AbortController !== 'function') return;
+
+    var ctl = new AbortController();
+    liveAbort = ctl;
+
+    fetch('/api/events', {
+      headers: { authorization: 'Bearer ' + token, accept: 'text/event-stream' },
+      signal: ctl.signal,
+      cache: 'no-store',
+    }).then(function (res) {
+      if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+      liveRetryMs = 1000; // Steht die Leitung, beginnt das Backoff wieder von vorn.
+
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      function pump() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) throw new Error('stream ended');
+          buffer += decoder.decode(chunk.value, { stream: true });
+
+          // SSE trennt Nachrichten durch eine Leerzeile. Alles Unvollständige
+          // bleibt im Puffer stehen — ein Paket darf mitten im Wort enden.
+          var parts = buffer.split('\n\n');
+          buffer = parts.pop();
+          parts.forEach(function (block) {
+            if (block.indexOf('event: nudge') === 0) onNudge();
+          });
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function () {
+      // Abgebrochen, abgerissen, Server voll — alles derselbe Fall: Der Timer
+      // spielt weiter, und wir versuchen es gleich noch mal. Wichtig ist nur,
+      // dass wir nicht in einer Schleife hämmern.
+      if (ctl.signal.aborted) return;
+      liveAbort = null;
+      setTimeout(startLive, liveRetryMs);
+      liveRetryMs = Math.min(liveRetryMs * 2, 60000);
+    });
+  }
+
+  /**
+   * Ein Anstoß ist angekommen.
+   *
+   * Nicht sofort syncen, sondern mit einer kleinen Zufallsverzögerung: Ein
+   * Anstoß geht an ALLE gleichzeitig. Ohne Streuung antworten tausend Geräte in
+   * derselben Millisekunde, und ein Server, der einen Verkauf verkraftet, geht
+   * an dessen Benachrichtigung kaputt. Eine halbe Sekunde Unschärfe merkt
+   * niemand; ein zeitgleicher Ansturm schon.
+   */
+  var nudgeTimer = null;
+  function onNudge() {
+    if (nudgeTimer) return; // Schon einer unterwegs — mehr als einmal syncen bringt nichts.
+    nudgeTimer = setTimeout(function () {
+      nudgeTimer = null;
+      attempt(true);
+    }, Math.floor(Math.random() * 500));
+  }
+
   /** Spielzeit aus der SERVERZEIT ableiten, nicht aus der Geräteuhr (§4). */
   function tickNow() {
     var snap = client.snapshotMeta;
@@ -1312,11 +1399,20 @@
     setInterval(function () { attempt(false); }, 4000);
     setInterval(refreshLease, 15000);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { attempt(true); refreshLease(); }
+      if (document.hidden) {
+        // Im Hintergrund braucht niemand eine offene Leitung. Handys machen sie
+        // ohnehin irgendwann zu — dann lieber selbst und sauber.
+        stopLive();
+      } else {
+        attempt(true);
+        refreshLease();
+        startLive();
+      }
     });
-    window.addEventListener('online', function () { render(); attempt(true); });
-    window.addEventListener('offline', function () { setConn('offline'); render(); });
-    window.addEventListener('pagehide', save);
+    window.addEventListener('online', function () { render(); attempt(true); startLive(); });
+    window.addEventListener('offline', function () { setConn('offline'); stopLive(); render(); });
+    window.addEventListener('pagehide', function () { save(); stopLive(); });
+    startLive();
   }
 
   function start(snapshot, serverTime, id) {

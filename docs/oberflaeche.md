@@ -213,3 +213,77 @@ die Verbindung eines Spielers wirklich ist.
 Die Frist steht auf 15 Sekunden. Bewusst großzügig: Es geht um hängende
 Verbindungen, nicht um langsame. Eine zu kurze Frist macht aus schwachem Netz
 gar keines.
+
+## Live-Anstöße — der Markt aktualisiert sich von selbst
+
+Bis vor Kurzem fragte die Seite alle vier Sekunden nach. Für den eigenen Hof
+reicht das: Der ändert sich nur, wenn man selbst etwas tut. Für den Markt nicht.
+Wer ein neues Angebot einstellte, sah es sofort — alle anderen erst beim
+nächsten Timer.
+
+Und tatsächlich nicht einmal dann. Die Sync-Maschine schickt ohne `force`
+nichts, wenn die Warteschlange leer ist (`nothing-to-do`); wer also nur zuschaut,
+saß auf einem Markt, der sich nie bewegte, bis er irgendwo hintippte.
+
+### Was über die Leitung geht
+
+**Ein Wort: „nudge".** Keine Spieldaten, keine Zustände, keine Preise.
+
+Das ist die wichtigste Entscheidung an dieser Stelle, und sie ist bewusst
+unbequem: Den neuen Zustand gleich mitzuschicken wäre naheliegend und wäre ein
+zweiter Weg in den Client hinein — mit eigener Reihenfolge, eigenem Fehlerfall
+und eigener Vertrauensfrage. Der Sync ist sorgfältig gebaut: lückenlose `seq`,
+Präfix-Commit, Kanarienvogel. Ein Nebeneingang, der Zustand hineinreicht, umginge
+das alles.
+
+Also stößt der Server nur an, und die Seite macht daraufhin, was sie ohnehin
+kann: einen ganz normalen erzwungenen Sync. **Ein Codeweg, kein zweiter
+Zustandspfad.** Wer sich in diesen Kanal einklinkt, kann einen Hof zu einem Sync
+überreden. Mehr nicht.
+
+### Wann angestoßen wird
+
+| Auslöser | Wer bekommt ihn |
+| --- | --- |
+| Angebot eingestellt oder zurückgezogen | alle **außer** dem Auslöser — der hält die Antwort schon in der Hand |
+| Angebot gekauft | der Verkäufer (`farm`) und alle anderen (`market`) |
+| Sonstiger Sync | niemand — ein Erntetipp geht keinen etwas an |
+
+Die letzte Zeile ist die wichtige: `publishOrders` meldet zurück, ob sich am Buch
+wirklich etwas geändert hat, und nur dann geht ein Anstoß raus.
+
+### Die drei Stellen, an denen so etwas kaputtgeht
+
+1. **Rückkopplung.** Kauf → Buchänderung → Anstoß an alle → Sync → Kauf. Ohne
+   Bremse baut sich das bei ein paar hundert Aktiven zu Dauerfeuer auf. Der Hub
+   bündelt deshalb: Was in derselben Sekunde auflief, ist **ein** Anstoß
+   (`minIntervalMs`, Standard 1 s).
+2. **Gleichzeitigkeit.** Ein Anstoß geht an alle zur selben Millisekunde. Ohne
+   Streuung antworten tausend Geräte gleichzeitig, und ein Server, der einen
+   Verkauf verkraftet, geht an dessen Benachrichtigung kaputt. Die Seite wartet
+   deshalb 0–500 ms zufällig, bevor sie synct.
+3. **Tote Leitungen.** Ein stiller SSE-Strom wird von Proxys, Mobilfunknetzen und
+   Handy-Betriebssystemen irgendwann leise zugemacht. Ohne Herzschlag hält der
+   Server ihn für offen und der Client wartet auf Anstöße, die nie kommen. Alle
+   25 Sekunden geht deshalb ein Kommentar raus; wessen Schreibversuch scheitert,
+   fliegt aus der Liste.
+
+### Warum `fetch` und nicht `EventSource`
+
+`EventSource` kann keine Header setzen — der Hof-Schlüssel müsste in die URL, und
+dort landet er im Serverprotokoll und in jedem Proxy dazwischen. Ein Lesestrom
+über `fetch` behält ihn im Header, wie bei jedem anderen Aufruf. Der Preis sind
+etwa fünfzehn Zeilen selbstgebauter Reconnect; das ist es wert.
+
+### Was passiert, wenn es nicht geht
+
+Nichts Schlimmes, und das ist Absicht. Der Timer läuft weiter, `visibilitychange`
+und `online` erzwingen ohnehin einen Sync, und der Server weist überzählige
+Leitungen ehrlich ab (`503 TOO_MANY_STREAMS`) statt eine offenzuhalten, die nie
+etwas liefert. **Es gibt keinen Zustand, in dem das Spiel auf einen Anstoß
+wartet.**
+
+Auf dem Server steht dafür eine Obergrenze (`NEUES_SPIEL_MAX_EVENT_STREAMS`,
+Standard 2000): Jede offene Verbindung kostet Speicher, auch wenn stundenlang
+nichts passiert, und auf einer Kiste mit 1 GB ist das die Zahl, an der sie kippt.
+`/health` gibt sie als `streams` aus.

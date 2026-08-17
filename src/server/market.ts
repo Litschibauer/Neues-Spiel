@@ -144,14 +144,20 @@ export class Market {
    * Der Abgleich statt zweier Einzelaufrufe ist Absicht: Er hat kein Gedächtnis
    * und kann deshalb nicht aus dem Tritt geraten. Was im Escrow liegt, ist die
    * Wahrheit; das Buch folgt.
+   *
+   * Gibt zurück, ob sich am Buch wirklich etwas geändert hat. Der Aufrufer
+   * braucht das, um die anderen Höfe anzustoßen — und zwar nur dann. Ein Sync,
+   * der die Auslage gar nicht berührt hat, soll niemanden aufwecken.
    */
-  reconcile(sellerId: string, orders: readonly Order[], nowMs: number): void {
+  reconcile(sellerId: string, orders: readonly Order[], nowMs: number): boolean {
     const live = new Set(orders.map((o) => o.id));
+    let changed = false;
 
     for (const entry of [...this.book.values()]) {
       if (entry.sellerId === sellerId && !live.has(entry.orderId)) {
         this.book.delete(entry.id);
         this.touched.add(entry.id);
+        changed = true;
       }
     }
 
@@ -164,6 +170,7 @@ export class Market {
       if (known.has(order.id)) continue;
       const id = this.nextOfferId++;
       this.touched.add(id);
+      changed = true;
       this.book.set(id, {
         id,
         sellerId,
@@ -187,6 +194,7 @@ export class Market {
     // geändert hat, und das passiert beim Einstellen und Zurückziehen — nicht
     // bei jedem Sync.
     this.flush();
+    return changed;
   }
 
   /**
@@ -299,12 +307,18 @@ export class Market {
  * geladen ist. Ist er es nicht, bleibt die Abrechnung im Markt liegen und wird
  * bei seinem nächsten Zugriff eingelöst — das ist der Normalfall, denn der
  * Verkäufer schläft üblicherweise.
+ *
+ * `onSold` erfährt, WESSEN Angebot gerade weg ist. Für die Abrechnung braucht
+ * es das nicht — die liegt ohnehin bereit —, wohl aber für den Live-Anstoß: Der
+ * Verkäufer soll seinen Erlös sehen, während er zuschaut, und nicht erst beim
+ * nächsten Timer.
  */
 export function connectMarket(
   market: Market,
   accountId: string,
   game: Server,
   liveGame: (id: string) => Server | null = () => null,
+  onSold: (sellerId: string) => void = () => {},
 ): void {
   game.offerSource = (limit) => market.browse(accountId, limit);
   game.claimOffer = (offerId) => {
@@ -312,6 +326,7 @@ export function connectMarket(
     if (!entry) return false;
     const seller = liveGame(entry.sellerId);
     if (seller) settleSales(market, entry.sellerId, seller);
+    onSold(entry.sellerId);
     return true;
   };
 }
@@ -332,7 +347,12 @@ export function settleSales(market: Market, accountId: string, game: Server): bo
   return true;
 }
 
-/** Nach jedem Sync: Was im Escrow liegt, ist die Wahrheit — das Buch zieht nach. */
-export function publishOrders(market: Market, accountId: string, game: Server): void {
-  market.reconcile(accountId, game.snapshot.state.orders, Date.now());
+/**
+ * Nach jedem Sync: Was im Escrow liegt, ist die Wahrheit — das Buch zieht nach.
+ *
+ * Gibt weiter, ob sich am Buch etwas geändert hat, damit der Server die anderen
+ * Höfe anstoßen kann (`events.ts`) — und zwar nur dann.
+ */
+export function publishOrders(market: Market, accountId: string, game: Server): boolean {
+  return market.reconcile(accountId, game.snapshot.state.orders, Date.now());
 }

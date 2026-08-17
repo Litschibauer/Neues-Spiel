@@ -780,6 +780,70 @@ try {
     ).catch(() => false);
   }
   check('Das Spiel startet im Funkloch — kein Dinosaurier', gameOffline);
+
+  // ── 8. Live-Anstöße ───────────────────────────────────────────────────
+  //
+  // Die Prüfung, die es vorher nicht geben konnte: Ein Angebot, das jemand
+  // ANDERS einstellt, muss auf einem stillstehenden Bildschirm auftauchen,
+  // ohne dass jemand tippt oder neu lädt.
+  //
+  // Dass hier wirklich der Anstoß wirkt und nicht der Vier-Sekunden-Timer,
+  // liegt an der Sync-Maschine: Ein Hof mit leerer Warteschlange sendet ohne
+  // `force` gar nichts (`nothing-to-do`). Wer nichts tut, bliebe also ewig auf
+  // einem alten Markt sitzen — genau das war die Beschwerde.
+  console.log('\n8. Live — ein fremdes Angebot erscheint ohne Zutun');
+
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await waitFor(
+    cdp,
+    `document.getElementById('conn').className.indexOf('live') >= 0`,
+    'wieder verbunden',
+    20_000,
+  );
+
+  // Die Leitung steht — von außen sichtbar, ohne in den Browser zu schauen.
+  let streams = 0;
+  for (let i = 0; i < 40 && streams === 0; i++) {
+    await sleep(250);
+    streams = ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as {
+      streams: number;
+    }).streams;
+  }
+  check('Der Browser hält eine Live-Leitung offen', streams >= 1, `${streams} offen`);
+
+  const offersBefore = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#market-list .card').length`,
+  );
+
+  // Jetzt stellt der zweite Hof etwas ein — komplett am Browser vorbei.
+  await api(`/api/admin/grant?account=${second.accountId}&item=eggs&amount=6`, 'POST');
+  const sellerSeq = (await stateAs(second.key)).snapshot.seq;
+  await syncAs(second.key, sellerSeq, [
+    { seq: sellerSeq + 1, tick: 0, type: 'COLLECT_MAIL' },
+    { seq: sellerSeq + 2, tick: 0, type: 'LIST_ORDER', item: 3, amount: 6, price: 12 },
+  ]);
+
+  // Kein Klick, kein Neuladen, kein Tastendruck: nur warten.
+  let offersAfter = offersBefore;
+  for (let i = 0; i < 40 && offersAfter <= offersBefore; i++) {
+    await sleep(250);
+    offersAfter = await evaluate<number>(
+      cdp,
+      `document.querySelectorAll('#market-list .card').length`,
+    );
+  }
+  check(
+    'Ein neues Angebot erscheint von selbst — ohne Neuladen',
+    offersAfter > offersBefore,
+    `${offersBefore} → ${offersAfter} Angebote`,
+  );
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);
