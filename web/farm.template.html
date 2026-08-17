@@ -399,6 +399,8 @@
     <section class="view" id="view-store" hidden>
       <h2>Vorräte</h2>
       <div class="chips" id="stock"></div>
+      <h2>Beim Händler kaufen</h2>
+      <div id="buy"></div>
       <h2>An den Händler verkaufen</h2>
       <div id="sell"></div>
       <h2>Selbst anbieten</h2>
@@ -768,7 +770,15 @@
     if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
     if (p.blocked === 'inputs') return 'Zutaten fehlen';
     if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
-    if (p.tap === 'start') return 'antippen zum Starten';
+    if (p.tap === 'start') {
+      // Was das Starten KOSTET, gehört auf die Kachel. Ein Feld, das ein Korn
+      // frisst und drei zurückgibt, ist ein gutes Geschäft — aber nur, wenn
+      // beide Zahlen dastehen.
+      var n = p.next;
+      if (!n) return 'antippen zum Starten';
+      if (n.inputs.length === 0) return 'antippen · +' + n.output.amount + ' ' + itemName(n.output.item);
+      return costText(n.inputs) + ' → ' + n.output.amount + ' ' + itemName(n.output.item);
+    }
     return 'nichts zu tun';
   }
 
@@ -982,12 +992,12 @@
       top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      // „Läuft ab" klingt nach Verlust — es ist aber keiner. Die Ware kommt
-      // zurück, und das muss dastehen: Sonst zieht jemand seinen Auftrag aus
-      // Angst zurück, statt ihn stehen zu lassen.
-      sub.textContent = o.expiresIn > 0
-        ? 'in ' + timeText(o.expiresIn) + ' zurück ins Postfach'
-        : 'kommt gleich ins Postfach zurück';
+      // Kein Countdown mehr: Die Ware bleibt stehen, bis jemand kauft oder der
+      // Verkäufer sie zurückholt. Bezahlt wurde schon beim Einstellen. Sollte
+      // ein Regelwerk die Frist wieder einschalten, steht sie hier wieder.
+      sub.textContent = o.expiresIn === null
+        ? 'steht seit ' + timeText(o.listedFor) + ' · läuft nicht ab'
+        : 'in ' + timeText(o.expiresIn) + ' zurück ins Postfach';
       body.appendChild(top); body.appendChild(sub);
       var go = document.createElement('span');
       go.className = 'go';
@@ -1036,31 +1046,86 @@
 
       // Am Markt bringt Ware mehr als beim Händler — deshalb der Vorschlag am
       // obersten Rand des Preisbandes.
+      //
+      // Die Gebühr steht VOR dem Tippen da, und sie steht da als Zahl, nicht
+      // als Prozentsatz: „5 %" muss man umrechnen, „4 Gold weg" nicht. Gerechnet
+      // wird sie mit derselben Funktion, die die Sim gleich abzieht.
       var free = v.orderSlotsFree;
+      var fee = NS.listingFee(rules, entry.item, entry.amount);
+      var canPayFee = v.currency.amount >= fee;
       var offer = document.createElement('button');
       offer.className = 'card';
-      offer.disabled = free <= 0;
+      offer.disabled = free <= 0 || !canPayFee;
       offer.innerHTML =
         '<div class="body"><div class="top">' + entry.amount + ' ' + nameOf(entry.id) + ' anbieten</div>' +
-        '<div class="sub">' + (free > 0
-          ? entry.bandMax + ' ' + itemName(v.currency.item) + ' pro Stück · ' +
-            free + (free === 1 ? ' Platz' : ' Plätze') + ' frei'
-          : 'alle Plätze belegt') + '</div></div>' +
+        '<div class="sub">' + (free <= 0
+          ? 'alle Plätze belegt'
+          : !canPayFee
+          ? 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' — so viel hast du nicht'
+          : entry.bandMax + ' ' + itemName(v.currency.item) + ' pro Stück · Gebühr ' +
+            fee + ' ' + itemName(v.currency.item)) + '</div></div>' +
         '<span class="go">' + entry.amount * entry.bandMax + ' ' + itemName(v.currency.item) + '</span>';
       offer.addEventListener('click', function () {
         var have = client.preview().items[entry.item] || 0;
         if (have > 0) {
-          act('Angeboten · ' + have + ' ' + nameOf(entry.id),
+          act('Angeboten · ' + have + ' ' + nameOf(entry.id) + ' · Gebühr ' +
+                NS.listingFee(rules, entry.item, have),
               client.listOrder(entry.item, have, entry.bandMax));
         }
       });
       listBox.appendChild(offer);
     });
 
+    renderSeedShop(v);
+
     if (!any) {
       sellBox.innerHTML = '<p class="empty">Nichts zu verkaufen.</p>';
       listBox.innerHTML = '<p class="empty">Nichts anzubieten.</p>';
     }
+  }
+
+  /**
+   * Der Händler in der Gegenrichtung — vor allem der Saatgutladen.
+   *
+   * Es gibt ihn, weil Saatgut verbraucht wird: Wer seinen letzten Weizen
+   * verkauft hat, säte sonst nie wieder. Der Hof wäre tot, und zwar endgültig.
+   * Deshalb ist dieser Kasten kein Komfort, sondern der Notausgang.
+   *
+   * Er verlangt mehr, als er zahlt. Das ist kein Versehen: Ein Händler, der zum
+   * selben Preis kauft und verkauft, wäre ein Nullsummen-Automat; einer, der
+   * billiger verkauft als er zahlt, wäre eine Geldpresse.
+   */
+  function renderSeedShop(v) {
+    var box = $('buy');
+    box.textContent = '';
+    var any = false;
+
+    v.stock.forEach(function (entry) {
+      if (entry.npcBuyPrice <= 0) return;
+      any = true;
+
+      // Wie viel geht überhaupt? Gold und Lagerplatz begrenzen beide.
+      var canPay = Math.floor(v.currency.amount / entry.npcBuyPrice);
+      var fits = entry.item === v.currency.item ? canPay : Math.min(canPay, v.silo.free);
+      var buyCard = document.createElement('button');
+      buyCard.className = 'card';
+      buyCard.disabled = fits <= 0;
+      buyCard.innerHTML =
+        '<div class="body"><div class="top">' + nameOf(entry.id) + ' kaufen</div>' +
+        '<div class="sub">' + (canPay <= 0
+          ? 'zu wenig ' + itemName(v.currency.item)
+          : fits <= 0
+          ? 'kein Platz im Lager'
+          : entry.npcBuyPrice + ' ' + itemName(v.currency.item) + ' pro Stück · ' +
+            'Verkauf bringt ' + entry.npcPrice) + '</div></div>' +
+        '<span class="go">+1</span>';
+      buyCard.addEventListener('click', function () {
+        act('Gekauft · 1 ' + nameOf(entry.id), client.buyNpc(entry.item, 1));
+      });
+      box.appendChild(buyCard);
+    });
+
+    if (!any) box.innerHTML = '<p class="empty">Der Händler hat gerade nichts im Angebot.</p>';
   }
 
   /** Zahlen an der Navigation: nur, wenn es wirklich etwas zu tun gibt. */
@@ -1090,6 +1155,8 @@
     NO_ORDER_SLOTS: 'Keine Auslage-Plätze frei',
     NOTHING_TO_COLLECT: 'Postfach ist leer',
     NO_SUCH_OFFER: 'Angebot ist weg',
+    NOT_BUYABLE: 'Das führt der Händler nicht',
+    OFFER_GONE: 'Jemand war schneller',
     PLOT_BUSY: 'Läuft noch',
     MAX_LEVEL: 'Voll ausgebaut',
   };
@@ -1120,29 +1187,17 @@
     }
     if (p.tap === 'buy') { tapBuy(i); return; }
     if (p.tap === 'start') {
-      // Welches Rezept, sagt das Regelwerk: das erste erlaubte, dessen Zutaten
-      // da sind. Bei einem Platz mit nur einem Rezept ist das die ganze Frage.
-      var recipe = firstStartable(p.index);
-      act('Gestartet · ' + nameOf(rules.recipes[recipe].id), client.start(i, recipe));
+      // Welches Rezept, sagt das Anzeigemodell — dasselbe, das eben schon die
+      // Kachel beschriftet hat. Die Suche danach stand hier früher ein zweites
+      // Mal; zwei Stellen mit derselben Regel laufen irgendwann auseinander.
+      act('Gestartet · ' + nameOf(p.next.id) +
+            (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
+          client.start(i, p.next.recipe));
       return;
     }
     if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
     else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
     else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
-  }
-
-  function firstStartable(i) {
-    var s = client.preview();
-    var allowed = rules.plots[i].levels[s.plots[i].level - 1].recipes || [];
-    for (var k = 0; k < allowed.length; k++) {
-      var recipe = rules.recipes[allowed[k]];
-      var ok = true;
-      for (var j = 0; j < recipe.inputs.length; j++) {
-        if ((s.items[recipe.inputs[j].item] || 0) < recipe.inputs[j].amount) ok = false;
-      }
-      if (ok) return allowed[k];
-    }
-    return -1;
   }
 
   function tapBuy(i) {

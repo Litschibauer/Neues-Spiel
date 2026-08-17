@@ -70,7 +70,12 @@ test('offline unter V1 gespielt, Patch kommt, Sync rechnet trotzdem unter V1', (
   // Kein Rollback, kein Divergenz-Alarm: unter V1 nachgerechnet war alles korrekt.
   assert.equal(res.kind, 'applied');
   assert.equal(res.divergence, false);
-  assert.equal(count(res.snapshot.state, WHEAT), V1.recipes[R_WHEAT]!.output.amount);
+  const seed = V1.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+  const startWheat = V1.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+  assert.equal(
+    count(res.snapshot.state, WHEAT),
+    startWheat - seed + V1.recipes[R_WHEAT]!.output.amount,
+  );
 
   // Und erst JETZT ist der Spieler auf V2.
   assert.equal(res.snapshot.rulesetVersion, 2);

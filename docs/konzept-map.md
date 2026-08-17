@@ -30,7 +30,7 @@ Eingaben verbrauchen  →  Zeit vergeht  →  Ausgabe liegt bereit  →  abholen
 
 | Was in der Liste stand | Ist in Wahrheit |
 | --- | --- |
-| Pflanzen säen und ernten | Platz ohne Eingabe, eine Ausgabe |
+| Pflanzen säen und ernten | Platz, dessen Eingabe seine eigene Ausgabe ist |
 | Obstbäume, Sträucher, Nachwachsen | Platz, der sich selbst neu bestellt |
 | Mehrstufige Pflanzen | ein Timer, mehrere Anzeigestufen |
 | Kuh → Milch, Huhn → Ei, Biene → Honig | Platz mit Futter als Eingabe |
@@ -43,6 +43,26 @@ des einen die Eingabe des anderen ist.
 
 Parameter statt neuer Mechaniken: Warteschlangenplätze, Kapazität, Geschwindigkeit.
 
+**Saatgut ist endlich.** Ein Feld frisst ein Korn und gibt drei zurück — der
+Gewinn sind die zwei, nicht die drei. Das klingt nach einer Kleinigkeit und ist
+die Stelle, an der die Wirtschaft überhaupt erst eine wird: Vorher entstand
+Weizen aus dem Nichts, und jede Zahl weiter oben in der Kette hing an einer
+Quelle ohne Boden.
+
+Drei Dinge hängen zwingend daran, und alle drei stehen in `rules.ts`, nicht im
+Code:
+
+| Regel | Warum sie nicht optional ist |
+| --- | --- |
+| `startingItems` | Ohne ein einziges Korn beginnt ein frischer Hof in der Sackgasse, die §6 verbietet |
+| `npcBuyPrice` | Wer seinen letzten Weizen verkauft, muss nachkaufen können — sonst ist der Hof endgültig tot |
+| `npcBuyPrice > npcPrice` | Sonst wäre der Händler eine Geldpresse. `validateRuleset` erzwingt es, damit es kein Balancing-Versehen werden kann |
+
+Die Gegenprobe steht als Test da (`rules.test.ts`): Für jedes ausgelieferte
+Regelwerk muss jede verbrauchte Zutat eines Startplatzes nachkaufbar sein **und**
+der Ertrag den Einkauf überzahlen. Ein Katalog, der das verletzt, kommt gar
+nicht erst durch.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 
@@ -53,7 +73,7 @@ Servergemessen, damit fälschungssicher (§4).
 Münzen, NPC-Preise, Produktionskosten, Verkaufspreise — eine Regel, viele Zahlen.
 
 ### M5 · Verkaufsauftrag mit Escrow 🟢 einstellen / 🔴 kaufen ✅ gebaut
-Preisband, Ablauffrist, Postfach — und seit dem Orderbuch auch die andere Seite:
+Preisband, Einstellgebühr, Postfach — und seit dem Orderbuch auch die andere Seite:
 **zwei Höfe handeln wirklich miteinander.**
 
 Die Grenze zwischen offline und online läuft hier mitten durch eine Mechanik
@@ -91,30 +111,40 @@ meldete er einen Determinismus-Bug, den es nicht gibt.
 Die Frage, an der sich entscheidet, ob eine Spielwirtschaft ehrlich ist:
 **Nichts wird vernichtet.**
 
+Ware in der Auslage **bleibt stehen**, bis jemand sie kauft oder der Verkäufer
+sie zurückholt (`orderTtlTicks: 0` — Frist aus). Es gab einmal eine Frist, nach
+der alles ins Postfach zurückfiel; sie ist weg, weil sie das falsche Problem
+löste. Der Spieler, der drei Tage nicht spielt, verlor damit seine
+Verkaufschance, ohne die Ware früher wiederzubekommen.
+
 | Fall | Was passiert |
 | --- | --- |
-| Auftrag läuft ab | Ware geht ins **Postfach** zurück, nicht ins Nichts |
-| Postfach voll | Der Auftrag bleibt stehen und verfällt später — nie wegwerfen, wovon der Spieler nichts wusste |
+| Niemand kauft | Der Auftrag steht weiter — unbegrenzt |
+| Zurückgezogen | Ware geht ins Lager, wenn Platz ist; sonst bleibt der Auftrag stehen |
+| Verkauft | Erlös ins **Postfach** des Verkäufers, Ware zum Käufer |
 | Abgeholt bei vollem Lager | Was passt, kommt ins Lager; der Rest bleibt liegen |
-| Verkauft **und** abgelaufen | Der Verkauf gewinnt, die Ware gibt es genau einmal |
 
-Der letzte Fall ist der einzige, in dem Ware entstehen könnte: Der Verkauf will
-sie dem Käufer geben, die Frist dem Verkäufer zurück. Weil ein Verkauf **vor**
-der Re-Simulation auf den Snapshot wirkt, ist der Auftrag dann schon weg und
-die Frist findet nichts mehr vor. `market.test.ts` prüft die Summe über beide
-Höfe.
+**Und was hindert einen daran, die Auslage als Zweitlager zu benutzen?** Zwei
+Dinge, und das erste allein reichte nicht:
 
-**Ein Angebot bleibt kaufbar, solange man weg ist.** Die Frist läuft in der
-Spielzeit des Verkäufers, und die steht still, wenn er nicht spielt. Das ist
-kein Versehen, sondern passt zum Rest: Der Hof arbeitet weiter, während man weg
-ist — die Auslage eben auch. Wer nach drei Tagen wiederkommt, findet entweder
-sein Geld im Postfach oder seine Ware. Eine Frist auf Marktseite würde das
-Gegenteil bewirken: Sie nähme abwesenden Spielern die Verkaufschance, ohne
-ihnen die Ware früher zurückzugeben.
+1. **Die Slots.** `orderSlots` begrenzt, wie viele Aufträge gleichzeitig
+   offenstehen. Ein harter Riegel, aber ein grober — mit ein paar Slots lässt
+   sich trotzdem dauerhaft Ware parken.
+2. **Die Einstellgebühr** (`listingFeePct`, aktuell 5 %). Sie fällt **beim
+   Einstellen** an, sofort, aufgerundet und unabhängig davon, ob je jemand
+   kauft. Damit kostet schon das Hinlegen etwas, und Parken ist kein Gratis-Trick
+   mehr, sondern eine Rechnung.
 
-Offen geblieben, bewusst: **keine Marktgebühr.** Ein Prozentsatz, der beim Verkauf
-verschwindet, wäre die naheliegendste Inflationsbremse — aber eine Balancing-Zahl,
-die man an echten Spielern ablesen muss und nicht am Schreibtisch erfindet.
+Bemessen wird sie am **NPC-Wert**, nicht am Wunschpreis. Sonst wäre sie eine
+Strafe aufs Hochpreisen, und alle böten am unteren Bandrand an. Gerechnet wird
+sie in `listingFee()` — einmal, für Sim und Oberfläche gemeinsam: Der angezeigte
+Preis und der bezahlte müssen dieselbe Zahl sein, sonst glaubt ein Spieler dem
+Spiel nichts mehr.
+
+Nebenwirkung, die man kennen muss: Ein Hof mit **null Gold kann nichts
+einstellen.** Das ist keine Sackgasse — der NPC-Händler kauft immer, und drei
+Münzen für ein Korn reichen für die erste Gebühr. Aber der Markt ist damit
+nicht mehr der allererste Schritt eines neuen Spielers, sondern der zweite.
 
 ### M6 · Auftrag erfüllen 🟢 ✅ gebaut
 „Liefere N×A und M×B, bekomme Münzen." LKW, Kunden, Boote, Sonderaufträge,

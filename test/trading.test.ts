@@ -30,20 +30,40 @@ const R_WHEAT = 0;
 const EGG_PRICE = rules.items[EGGS]!.npcPrice;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
 const YIELD = rules.recipes[R_WHEAT]!.output.amount;
+const SEED = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+/** Weizen nach genau einem Umlauf auf einem frischen Hof: Vorrat − Saat + Ernte. */
+const AFTER_ONE_HARVEST =
+  (rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0) - SEED + YIELD;
+
+/**
+ * Startausstattung wegräumen.
+ *
+ * Ein frischer Hof bringt seit dem Saatgut ein paar Körner mit. Für die
+ * Lagertests ist das nur Rauschen — sie rechnen mit genauen Mengen, und ein
+ * unerwartetes Korn verschiebt jede Grenze um eins.
+ */
+function bare() {
+  const base = initialState(rules);
+  return { ...base, items: base.items.map(() => 0) };
+}
 
 /** Spielstand mit vollem Lager, um am Limit zu testen. */
 function fullSilo() {
-  const base = initialState(rules);
+  const base = bare();
   const items = base.items.slice();
   items[EGGS] = rules.siloCapacity;
+  // Genug Münzen, dass die Einstellgebühr nie der Grund einer Ablehnung ist —
+  // hier geht es um Lagergrenzen, nicht um Geld.
+  items[GOLD] = 10_000;
   return { ...base, items };
 }
 
 /** Spielstand mit Eiern im Lager und ein paar Feldern — der Handelsalltag. */
 function withEggs(amount: number) {
-  const base = initialState(rules);
+  const base = bare();
   const items = base.items.slice();
   items[EGGS] = amount;
+  items[GOLD] = 10_000;
   return { ...base, items };
 }
 
@@ -75,8 +95,9 @@ test('Münzen sind ein Gegenstand, aber kein Lagerplatz', () => {
   });
 
   assert.equal(stored(client.state, rules), rules.siloCapacity);
+  const goldBefore = count(client.state, GOLD);
   assert.equal(client.sellNpc(EGGS, 10).ok, true);
-  assert.equal(count(client.state, GOLD), 10 * EGG_PRICE);
+  assert.equal(count(client.state, GOLD) - goldBefore, 10 * EGG_PRICE);
   // Das Gold zählt nicht mit — sonst wäre das Lager sofort wieder voll.
   assert.equal(stored(client.state, rules), rules.siloCapacity - 10);
 
@@ -95,8 +116,13 @@ test('Münzen sind ein Gegenstand, aber kein Lagerplatz', () => {
  * nachwächst; Eier wären nach ein paar Runden alle.
  */
 function runStashAttack(rounds: number) {
+  // Münzen für die Einstellgebühr — der Angreifer soll am Riegel scheitern,
+  // nicht daran, dass er pleite ist. Genau das wäre ein zu leichter Sieg.
+  const start = initialState(rules);
+  const items = start.items.slice();
+  items[GOLD] = 1_000_000;
   const client = new Client({
-    state: initialState(rules),
+    state: { ...start, items },
     seq: 0,
     serverTs: T0,
     rulesetVersion: CURRENT_RULESET_VERSION,
@@ -109,20 +135,24 @@ function runStashAttack(rounds: number) {
     for (let plot = 0; plot < 3; plot++) client.start(plot, R_WHEAT);
     client.advanceClock(GROW);
     for (let plot = 0; plot < 3; plot++) client.collect(plot);
+    // Ohne Saatgut endet der Angriff von allein — dann kauft er welches.
+    if (count(client.preview(), WHEAT) < 3) client.buyNpc(WHEAT, 6);
   }
   return client.preview();
 }
 
 test('DER EXPLOIT: Escrow lässt sich nicht als unendliches Lager missbrauchen', () => {
-  // Wichtig: Der Riegel ist NICHT „nach 4 Aufträgen ist Schluss". Aufträge
-  // verfallen ja und geben ihren Slot wieder frei. Der Riegel ist, dass die
-  // Kette dahinter ebenfalls gedeckelt ist — Slots UND Postfach.
+  // Der Riegel hat sich geändert, und zwar zum Schärferen.
   //
-  // Die zu prüfende Eigenschaft ist deshalb Sättigung, nicht Blockade:
-  // Ab irgendwann bringt Weiterspielen des Angriffs nichts mehr.
-  const short = runStashAttack(20);
-  const long = runStashAttack(8000);
-  const absurd = runStashAttack(12000);
+  // Früher verfielen Aufträge und gaben ihren Platz wieder frei — geparkt
+  // werden konnte also beliebig oft, nur eben im Kreis, und die Prüfung war
+  // „irgendwann sättigt es sich". Seit Angebote liegen bleiben, gibt es diesen
+  // Kreis nicht mehr: Vier Plätze, dann ist Schluss. Und jedes Hinlegen kostet
+  // vorher Gebühr.
+  // Die Sättigung tritt jetzt schnell ein — vier Plätze sind schnell voll.
+  const short = runStashAttack(2);
+  const long = runStashAttack(400);
+  const absurd = runStashAttack(900);
 
   assert.ok(
     totalGoods(long, rules) > totalGoods(short, rules),
@@ -134,18 +164,33 @@ test('DER EXPLOIT: Escrow lässt sich nicht als unendliches Lager missbrauchen',
     'Gesamtmenge wächst weiter — Escrow ist ein Leck',
   );
 
-  // Alle Behälter stehen am Anschlag, keiner darüber.
+  // Die Plätze stehen am Anschlag, das Lager auch — und das Postfach bleibt
+  // leer, weil ohne Frist nichts zurückfällt.
   assert.equal(absurd.orders.length, rules.orderSlots);
-  assert.equal(absurd.mail.length, rules.mailCapacity);
-  assert.equal(stored(absurd, rules), rules.siloCapacity);
+  assert.equal(absurd.mail.length, 0, 'ohne Frist darf nichts ins Postfach zurückfallen');
+  // Bis auf eine Erntegröße heran — genauer geht es nicht, weil Weizen in
+  // Dreierschritten kommt und der Hard Block eine zu große Ernte ganz ablehnt.
+  assert.ok(
+    stored(absurd, rules) > rules.siloCapacity - YIELD,
+    `Lager nicht am Anschlag: ${stored(absurd, rules)}`,
+  );
+  assert.ok(stored(absurd, rules) <= rules.siloCapacity);
   assertInvariants(absurd, rules);
 
-  // Und die Obergrenze ist die, die aus den Limits folgt — keine Überraschung.
-  const ceiling = rules.siloCapacity + (rules.orderSlots + rules.mailCapacity) * 20;
+  // Und die Obergrenze folgt jetzt allein aus Lager und Plätzen.
+  const ceiling = rules.siloCapacity + rules.orderSlots * rules.siloCapacity;
   assert.ok(
     totalGoods(absurd, rules) <= ceiling,
     `über der rechnerischen Grenze: ${totalGoods(absurd, rules)} > ${ceiling}`,
   );
+});
+
+test('Parken kostet — der Angriff bezahlt jedes Hinlegen', () => {
+  // Die eigentliche Bremse, seit es keine Frist mehr gibt: Wer Ware parkt,
+  // zahlt dafür, und zwar bevor irgendjemand kauft.
+  const before = 1_000_000;
+  const after = count(runStashAttack(400), GOLD);
+  assert.ok(after < before, 'die Einstellgebühr hat nichts gekostet');
 });
 
 test('bei vollen Behältern ist auch kein neuer Auftrag mehr möglich', () => {
@@ -209,27 +254,86 @@ test('Auftrag zurückziehen gibt die Ware zurück — aber nicht über das Limit
   assert.equal(blocked.code, 'SILO_FULL');
 });
 
-test('verfallene Aufträge landen im Postfach statt im Nichts', () => {
+/**
+ * Ein Regelwerk MIT Ablauffrist.
+ *
+ * In Produktion steht sie auf 0 — eingestellte Ware bleibt liegen, und was das
+ * Parken teuer macht, ist die Einstellgebühr. Die Verfallsmechanik steht
+ * trotzdem weiter im Kern, und deshalb wird sie hier weiter geprüft: Ein
+ * Regelwerk soll sie jederzeit wieder einschalten können, ohne dass jemand erst
+ * herausfinden muss, ob sie überhaupt noch funktioniert.
+ */
+const withTtl = { ...rules, orderTtlTicks: 86_400 };
+
+test('mit Frist landen verfallene Aufträge im Postfach statt im Nichts', () => {
   let s = withEggs(10);
-  s = advanceTo(s, 6000, rules);
+  s = advanceTo(s, 6000, withTtl);
   s = simulate(
     s,
     { seq: 1, tick: 6000, type: 'LIST_ORDER', item: EGGS, amount: 6, price: EGG_PRICE },
-    rules,
+    withTtl,
   );
   assert.equal(s.orders.length, 1);
 
   // Über die Ablauffrist hinaus warten.
-  s = advanceTo(s, 6000 + rules.orderTtlTicks, rules);
+  s = advanceTo(s, 6000 + withTtl.orderTtlTicks, withTtl);
 
   assert.equal(s.orders.length, 0);
   assert.equal(s.mail.length, 1);
   assert.equal(s.mail[0]!.amount, 6);
+  assertInvariants(s, withTtl);
+});
+
+test('OHNE Frist bleibt eingestellte Ware liegen — Parken kostet Gebühr, nicht Zeit', () => {
+  // Die Produktionsregel. Vorher fiel ein Auftrag nach einem Tag ins Postfach
+  // zurück, und genau das machte den Escrow zum kostenlosen Zwischenlager.
+  let s = withEggs(10);
+  s = simulate(
+    s,
+    { seq: 1, tick: 0, type: 'LIST_ORDER', item: EGGS, amount: 6, price: EGG_PRICE },
+    rules,
+  );
+  assert.equal(rules.orderTtlTicks, 0, 'die Produktionsregel hat wieder eine Frist');
+
+  s = advanceTo(s, 100 * 86_400, rules);
+  assert.equal(s.orders.length, 1, 'der Auftrag ist verfallen');
+  assert.equal(s.mail.length, 0);
   assertInvariants(s, rules);
 });
 
+test('Einstellen kostet eine Gebühr — sofort und unabhängig vom Verkauf', () => {
+  const before = withEggs(10);
+  const goldBefore = count(before, GOLD);
+  const s = simulate(
+    before,
+    { seq: 1, tick: 0, type: 'LIST_ORDER', item: EGGS, amount: 10, price: EGG_PRICE },
+    rules,
+  );
+
+  const expected = Math.ceil((EGG_PRICE * 10 * rules.listingFeePct) / 100);
+  assert.ok(expected > 0, 'die Gebühr rundet auf null ab');
+  assert.equal(goldBefore - count(s, GOLD), expected);
+});
+
+test('ohne Geld für die Gebühr kommt nichts in die Auslage', () => {
+  const base = bare();
+  const items = base.items.slice();
+  items[EGGS] = 10;
+  const broke = { ...base, items };
+
+  assert.throws(
+    () =>
+      simulate(
+        broke,
+        { seq: 1, tick: 0, type: 'LIST_ORDER', item: EGGS, amount: 10, price: EGG_PRICE },
+        rules,
+      ),
+    /CANT_AFFORD/,
+  );
+});
+
 test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () => {
-  const mail = Array.from({ length: rules.mailCapacity }, () => ({
+  const mail = Array.from({ length: withTtl.mailCapacity }, () => ({
     item: WHEAT,
     amount: 1,
     arrivedAt: 0,
@@ -238,19 +342,24 @@ test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () =
   s = simulate(
     s,
     { seq: 1, tick: 1000, type: 'LIST_ORDER', item: EGGS, amount: 5, price: EGG_PRICE },
-    rules,
+    withTtl,
   );
 
-  s = advanceTo(s, 1000 + rules.orderTtlTicks + 100, rules);
+  s = advanceTo(s, 1000 + withTtl.orderTtlTicks + 100, withTtl);
 
   // Nichts vernichtet: Der Auftrag wartet, bis Platz da ist.
   assert.equal(s.orders.length, 1);
-  assert.equal(s.mail.length, rules.mailCapacity);
-  assertInvariants(s, rules);
+  assert.equal(s.mail.length, withTtl.mailCapacity);
+  assertInvariants(s, withTtl);
 });
 
 test('Postfach abholen nimmt mit, was ins Lager passt — der Rest bleibt liegen', () => {
-  let s = withEggs(rules.siloCapacity - 4); // fast voll
+  // Ohne Münzkissen: Hier wird nichts eingestellt, und die Goldmenge ist Teil
+  // der Behauptung.
+  const base = bare();
+  const withGoods = base.items.slice();
+  withGoods[EGGS] = rules.siloCapacity - 4;
+  let s: ReturnType<typeof bare> = { ...base, items: withGoods };
   const space = rules.siloCapacity - stored(s, rules);
 
   s = {
@@ -295,7 +404,7 @@ test('externe Zustellung landet im Postfach — und löst keinen Fehlalarm aus',
   // Und es liegt im Postfach, nicht im Lager: Der Spieler hat nur seinen
   // eigenen Weizen, von den Eiern weiß er noch nichts.
   assert.equal(count(res.snapshot.state, EGGS), 0);
-  assert.equal(count(res.snapshot.state, WHEAT), YIELD);
+  assert.equal(count(res.snapshot.state, WHEAT), AFTER_ONE_HARVEST);
 });
 
 test('Zustellungen bei vollem Postfach gehen nicht verloren', () => {
@@ -393,7 +502,7 @@ test('Admin-Zeitgutschrift löst keinen Divergenz-Fehlalarm aus', () => {
   if (!res.ok) return;
   assert.equal(res.divergence, false, 'Kanarienvogel darf nicht anschlagen');
   assert.deepEqual(server.divergenceAlerts, []);
-  assert.equal(count(res.snapshot.state, WHEAT), YIELD);
+  assert.equal(count(res.snapshot.state, WHEAT), AFTER_ONE_HARVEST);
 });
 
 test('Zurücksetzen hinterlässt einen sauberen, leeren Hof', () => {

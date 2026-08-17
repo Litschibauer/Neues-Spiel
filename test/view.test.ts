@@ -25,6 +25,7 @@ const WHEAT = 1;
 const EGGS = 3;
 const R_WHEAT = 0;
 const MILL = 6;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
 
 function farm(patch: Partial<State> = {}): State {
   return { ...initialState(rules), ...patch };
@@ -41,7 +42,7 @@ test('ein frischer Hof: drei Felder bespielbar, der Rest wartet auf Stufen', () 
   const view = farmView(initialState(rules), rules);
 
   assert.equal(view.level, 1);
-  assert.equal(view.silo.used, 0);
+  assert.equal(view.silo.used, START_WHEAT, 'das Startsaatgut liegt im Lager');
   assert.equal(view.currency.amount, 0);
 
   const playable = view.plots.filter((p) => p.tap === 'start');
@@ -97,8 +98,9 @@ test('„zu teuer" und „Stufe fehlt" werden nicht verwechselt', () => {
 });
 
 test('fehlende Zutaten sperren die Mühle, ohne sie zu verstecken', () => {
-  // Mühle gekauft, aber kein Weizen im Lager.
-  const base = withItems({ [GOLD]: 0 });
+  // Mühle gekauft, aber kein Weizen im Lager — das Startsaatgut ist längst
+  // in der Erde.
+  const base = withItems({ [GOLD]: 0, [WHEAT]: 0 });
   const plots = base.plots.slice();
   plots[MILL] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
   const view = farmView({ ...base, plots }, rules);

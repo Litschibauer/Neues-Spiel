@@ -17,6 +17,11 @@ const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 const WHEAT = 1;
 const R_WHEAT = 0;
+const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
+
 
 test('vorgestellte Geräteuhr wird abgelehnt — Ernte findet nicht statt', () => {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
@@ -26,7 +31,7 @@ test('vorgestellte Geräteuhr wird abgelehnt — Ernte findet nicht statt', () =
   // Der Cheater springt lokal 2h nach vorn …
   client.advanceClock(7200);
   assert.equal(client.collect(0).ok, true, 'lokal sieht das für den Cheater erst mal gut aus');
-  assert.equal(count(client.state, WHEAT), 10);
+  assert.equal(count(client.state, WHEAT), AFTER_ONE);
 
   // … aber real sind nur 10 Sekunden vergangen.
   const res = server.sync(client.buildSyncRequest(), T0 + 10_000);
@@ -37,11 +42,11 @@ test('vorgestellte Geräteuhr wird abgelehnt — Ernte findet nicht statt', () =
 
   // Rollback: Der Server-Zustand ist unberührt. „Als wäre nie was passiert."
   assert.equal(res.snapshot.seq, 0);
-  assert.equal(count(res.snapshot.state, WHEAT), 0);
+  assert.equal(count(res.snapshot.state, WHEAT), START_WHEAT);
   assert.equal(res.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
 
   client.adopt(res.snapshot, DISCARD_QUEUE);
-  assert.equal(count(client.state, WHEAT), 0);
+  assert.equal(count(client.state, WHEAT), START_WHEAT);
   assert.equal(client.queue.length, 0);
 });
 
@@ -57,7 +62,7 @@ test('echtes Warten wird anerkannt — dieselben Commands, ehrliche Zeit', () =>
 
   assert.equal(res.ok, true);
   if (!res.ok) return;
-  assert.equal(count(res.snapshot.state, WHEAT), 10);
+  assert.equal(count(res.snapshot.state, WHEAT), AFTER_ONE);
 });
 
 test('Idle-Progression ist gratis offline-fähig: 2h weg == 2h offline gespielt', () => {

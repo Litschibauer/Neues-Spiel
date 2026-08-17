@@ -118,6 +118,11 @@ export class Client {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /** Beim Händler kaufen — vor allem Saatgut, wenn keines mehr da ist. */
+  buyNpc(item: number, amount: number): ActionResult {
+    return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   /** Auftrag einstellen — offline gültig, weil einseitig (§8). */
   listOrder(item: number, amount: number, price: number): ActionResult {
     return this.apply({ type: 'LIST_ORDER', item, amount, price } as Omit<Command, 'seq' | 'tick'>);

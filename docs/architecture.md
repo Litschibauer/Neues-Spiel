@@ -447,6 +447,19 @@ Vier Maßnahmen, in der Reihenfolge ihrer Wirksamkeit:
    ⚠️ Wenn eine Haltegebühr das Gold auf 0 treibt: Auftrag verfällt und geht ins Postfach — nie
    in negatives Gold laufen lassen.
 
+   **Entschieden wurde am Ende anders, und der Grund gehört hierher:** Punkt 3 ist raus
+   (`orderTtlTicks: 0`), Punkt 4 ist drin — die einmalige Einstellgebühr, die oben als
+   *schwach* bewertet ist. Die Bewertung stimmt auch weiterhin, sie war nur nicht das
+   entscheidende Kriterium. Die Ablauffrist bestrafte den Falschen: Wer eine Woche nicht
+   spielt, bekam seine Ware ins Postfach zurückgeschoben und verlor die Verkaufschance,
+   ohne früher an die Ware zu kommen — die Frist läuft ja in *seiner* Spielzeit. Für ein
+   Spiel, dessen ganzer Sinn Offline-Toleranz ist, war das die falsche Richtung.
+
+   Gegen den Stash bleibt damit: Slots (1) als harter Riegel, Preisband (2) und die Gebühr
+   (4) als laufende Kosten. Dass ein reicher Spieler die Gebühr aus der Portokasse zahlt,
+   ist hingenommen — er verbraucht dabei immer noch seine Slots, und die kann er nicht
+   kaufen.
+
 **Und ganz wichtig:** All das muss **in der Sim** leben, nicht als Server-Check beim Sync. Slot-
 und Preisgrenzen als Sim-Regeln sind nach dem Prinzip aus §7 automatisch offline durchgesetzt —
 der Client lässt den Exploit gar nicht erst zu. Ein reiner Server-Check würde stattdessen beim

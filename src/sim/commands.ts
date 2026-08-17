@@ -42,6 +42,18 @@ export type BuyCommand = CommandBase & { type: 'BUY'; plot: number };
 export type SellNpcCommand = CommandBase & { type: 'SELL_NPC'; item: number; amount: number };
 
 /**
+ * Kauf beim NPC-Händler — die Gegenrichtung, und ebenso offline gültig.
+ *
+ * Es gibt ihn, seit Saatgut verbraucht wird: Wer seinen letzten Weizen
+ * verkauft, säen kann er dann nicht mehr, und ohne Händler wäre der Hof
+ * endgültig tot. Genau der Sackgassen-Zustand, den §6 verbietet.
+ *
+ * Der Händler verlangt mehr, als er zahlt — sonst wäre er eine Geldpresse.
+ * `validateRuleset` erzwingt das, damit es kein Balancing-Versehen werden kann.
+ */
+export type BuyNpcCommand = CommandBase & { type: 'BUY_NPC'; item: number; amount: number };
+
+/**
  * Ware zum Verkauf einstellen. Einseitig, also offline gültig (§8): Der Spieler
  * committet Ware, die er nachweislich hat. Sie verlässt sofort das Lager
  * (Escrow) — damit ist ein Doppelverkauf strukturell ausgeschlossen.
@@ -93,6 +105,7 @@ export type Command =
   | CollectCommand
   | BuyCommand
   | SellNpcCommand
+  | BuyNpcCommand
   | ListOrderCommand
   | CancelOrderCommand
   | BuyOfferCommand
@@ -112,6 +125,8 @@ export type SimErrorCode =
   | 'RECIPE_NOT_ALLOWED'
   | 'NO_SUCH_ITEM'
   | 'NOT_SELLABLE'
+  /** Der Händler führt das nicht. */
+  | 'NOT_BUYABLE'
   | 'NOT_TRADABLE'
   | 'SILO_FULL'
   | 'NOT_ENOUGH_ITEMS'

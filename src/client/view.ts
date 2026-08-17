@@ -31,7 +31,7 @@
  */
 
 import type { Ruleset } from '../sim/rules.ts';
-import { levelOf, levelStartedAt, nextLevelAt } from '../sim/rules.ts';
+import { levelOf, levelStartedAt, listingFee, nextLevelAt } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import { EMPTY_PLOT, count, stored } from '../sim/state.ts';
 
@@ -57,6 +57,22 @@ export type PlotView = {
   producing: string | null;
   /** Was beim Abholen herauskommt. */
   output: Stack | null;
+  /**
+   * Das Rezept, das ein Tipp STARTEN würde — mit dem, was es kostet.
+   *
+   * `null`, wenn gerade nichts zu starten ist. Steht hier, seit Zutaten
+   * verbraucht werden: „Antippen zum Starten" verschweigt, dass ein Korn aus
+   * dem Lager verschwindet, und ein Spieler, der das erst hinterher merkt,
+   * zählt Verluste statt Erträge. Die Oberfläche soll den Preis nennen können,
+   * bevor getippt wird — und ihn nicht selbst ausrechnen müssen.
+   */
+  next: {
+    recipe: number;
+    id: string;
+    inputs: readonly Stack[];
+    output: Stack;
+    durationTicks: number;
+  } | null;
   /**
    * Was ein Tipp auf diesen Platz auslöst. Genau eine Antwort, damit nicht
    * jede Oberfläche ihre eigene Reihenfolge erfindet.
@@ -100,8 +116,17 @@ export type OrderView = {
   item: number;
   amount: number;
   price: number;
-  /** Ticks bis zum Verfall. Nie negativ. */
-  expiresIn: number;
+  /**
+   * Ticks bis zum Verfall — `null` heißt: verfällt nicht.
+   *
+   * Der Normalfall ist inzwischen `null`. Ware bleibt stehen, bis jemand sie
+   * kauft oder der Verkäufer sie zurückzieht; bezahlt wird stattdessen beim
+   * Einstellen (`fee`). Das Feld bleibt trotzdem, weil ein Regelwerk eine Frist
+   * wieder einschalten darf — und dann muss die Oberfläche sie zeigen können.
+   */
+  expiresIn: number | null;
+  /** Wie lange der Auftrag schon steht. Ohne Frist die interessantere Zahl. */
+  listedFor: number;
 };
 
 export type StockView = {
@@ -111,8 +136,25 @@ export type StockView = {
   /** An den NPC verkaufbar. */
   sellable: boolean;
   npcPrice: number;
+  /**
+   * Was der Händler dafür VERLANGT. `0` heißt: führt er nicht.
+   *
+   * Immer höher als `npcPrice` — sonst wäre der Händler eine Geldpresse, und
+   * `validateRuleset` ließe das Regelwerk gar nicht erst durch.
+   */
+  npcBuyPrice: number;
   /** Höchstpreis im Band — was ein Angebot am Markt bringen darf. */
   bandMax: number;
+  /** Mindestpreis im Band. Zusammen mit `bandMax` der erlaubte Bereich (§8). */
+  bandMin: number;
+  /**
+   * Was das Einstellen EINES Stücks kostet.
+   *
+   * Aufgerundet, also nicht linear: Zwei Stück kosten nicht zwangsläufig das
+   * Doppelte. Für die genaue Summe rechnet die Oberfläche mit `listingFee` —
+   * derselben Funktion wie die Sim.
+   */
+  feePerUnit: number;
 };
 
 export type FarmView = {
@@ -172,6 +214,8 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
   const done = busy && elapsed >= duration;
   const canRun = recipesAt(rules, i, plot.level).length > 0;
 
+  const nextRecipe = busy ? -1 : startable(state, rules, i);
+
   let tap: PlotView['tap'] = 'none';
   let blocked: Blocker = null;
 
@@ -182,11 +226,13 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     tap = upgrade ? 'buy' : 'none';
     if (upgrade && !upgrade.unlocked) blocked = 'level';
     else if (upgrade && !upgrade.affordable) blocked = 'cost';
-  } else if (startable(state, rules, i) < 0) {
+  } else if (nextRecipe < 0) {
     blocked = 'inputs';
   } else {
     tap = 'start';
   }
+
+  const startDef = nextRecipe >= 0 ? rules.recipes[nextRecipe] : undefined;
 
   return {
     index: i,
@@ -199,6 +245,15 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     remaining: busy && !done ? Math.max(0, duration - elapsed) : 0,
     producing: recipe ? recipe.id : null,
     output: recipe ? { item: recipe.output.item, amount: recipe.output.amount } : null,
+    next: startDef
+      ? {
+          recipe: nextRecipe,
+          id: startDef.id,
+          inputs: startDef.inputs.map((x) => ({ item: x.item, amount: x.amount })),
+          output: { item: startDef.output.item, amount: startDef.output.amount },
+          durationTicks: startDef.durationTicks,
+        }
+      : null,
     tap,
     blocked,
     upgrade,
@@ -237,7 +292,10 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     amount: count(state, i),
     sellable: item.storable && item.npcPrice > 0,
     npcPrice: item.npcPrice,
+    npcBuyPrice: item.npcBuyPrice,
     bandMax: Math.floor((item.npcPrice * rules.priceBandMaxPct) / 100),
+    bandMin: Math.floor((item.npcPrice * rules.priceBandMinPct) / 100),
+    feePerUnit: listingFee(rules, i, 1),
   }));
 
   return {
@@ -266,7 +324,9 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       item: o.item,
       amount: o.amount,
       price: o.price,
-      expiresIn: Math.max(0, rules.orderTtlTicks - (state.tick - o.listedAt)),
+      expiresIn:
+        rules.orderTtlTicks > 0 ? Math.max(0, rules.orderTtlTicks - (state.tick - o.listedAt)) : null,
+      listedFor: Math.max(0, state.tick - o.listedAt),
     })),
     orderSlotsFree: rules.orderSlots - state.orders.length,
     mail: {

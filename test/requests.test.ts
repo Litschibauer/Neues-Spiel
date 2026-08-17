@@ -122,6 +122,9 @@ test('eine ganze Sitzung im Funkloch: anbauen, ernten, liefern, wiederholen', ()
 
   let filled = 0;
   for (let round = 0; round < 40; round++) {
+    // Saatgut nachkaufen, wenn keines mehr da ist — seit Säen ein Korn kostet,
+    // gehört das zur Sitzung dazu. Genau dafür gibt es den Händler.
+    if (count(client.state, WHEAT) < 3) client.buyNpc(WHEAT, 6);
     for (let plot = 0; plot < 3; plot++) client.start(plot, R_WHEAT);
     client.advanceClock(grow);
     for (let plot = 0; plot < 3; plot++) client.collect(plot);

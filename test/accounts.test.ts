@@ -33,6 +33,10 @@ const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 const R_WHEAT = 0;
 const WHEAT = 1;
+const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
 function tempStore() {
   const dir = mkdtempSync(join(tmpdir(), 'ns-accounts-'));
@@ -121,8 +125,8 @@ test('Spielstände bleiben getrennt — auch nach echtem Spielen', () => {
 
     const loadedA = store.load(a.account.id)!;
     const loadedB = store.load(b.account.id)!;
-    assert.equal(count(loadedA.snapshot.state, WHEAT), 10, 'Hof A hat seine Ernte nicht');
-    assert.equal(count(loadedB.snapshot.state, WHEAT), 0, 'Hof B hat fremde Ernte');
+    assert.equal(count(loadedA.snapshot.state, WHEAT), AFTER_ONE, 'Hof A hat seine Ernte nicht');
+    assert.equal(count(loadedB.snapshot.state, WHEAT), START_WHEAT, 'Hof B hat fremde Ernte');
     assert.equal(loadedB.snapshot.seq, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });

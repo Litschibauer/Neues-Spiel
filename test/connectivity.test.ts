@@ -26,6 +26,11 @@ const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 const WHEAT = 1;
 const R_WHEAT = 0;
+const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
+
 
 function setup() {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
@@ -94,7 +99,11 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
 
   // Alle vier Offline-Commands sind angekommen.
   assert.equal(server.snapshot.seq, 5);
-  assert.equal(count(server.snapshot.state, WHEAT), 20);
+  // Drei Aussaaten (drei Saatkörner weg), zwei Ernten (zweimal Ertrag).
+  assert.equal(
+    count(server.snapshot.state, WHEAT),
+    START_WHEAT - 3 * SEED_COST + 2 * rules.recipes[R_WHEAT]!.output.amount,
+  );
   assert.equal(server.snapshot.state.plots[2]!.recipe, R_WHEAT);
 });
 
@@ -133,8 +142,9 @@ test('verlorene Antwort: Server hat den Batch, der Client weiß es nicht', async
   // Nichts verloren …
   assert.equal(server.snapshot.seq, 3);
   assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
-  // … und nichts doppelt: Feld 0 wurde genau einmal geerntet.
-  assert.equal(count(server.snapshot.state, WHEAT), 10);
+  // … und nichts doppelt: Feld 0 wurde genau einmal geerntet (und Feld 1 säte
+  // danach noch ein Korn aus).
+  assert.equal(count(server.snapshot.state, WHEAT), AFTER_ONE - SEED_COST);
   assert.equal(client.queue.length, 0);
 });
 
@@ -493,6 +503,6 @@ test('nach einer Frist ist der erneute Versuch sicher', async () => {
   if (again.kind === 'synced') assert.equal(again.result.kind, 'duplicate');
 
   // Die Ernte gibt es genau einmal.
-  assert.equal(count(server.snapshot.state, WHEAT), rules.recipes[R_WHEAT]!.output.amount);
+  assert.equal(count(server.snapshot.state, WHEAT), AFTER_ONE);
   assert.equal(server.snapshot.seq, 2);
 });

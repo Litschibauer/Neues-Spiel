@@ -37,6 +37,18 @@ export type ItemDef = {
   storable: boolean;
   /** NPC-Ankaufpreis. 0 = wird nicht angekauft (und ist damit auch nicht handelbar). */
   npcPrice: number;
+  /**
+   * Was der NPC dafür VERLANGT. 0 = verkauft er nicht.
+   *
+   * Muss über `npcPrice` liegen, sonst wäre der Händler eine Geldpresse:
+   * billig kaufen, teuer an ihn zurückverkaufen, beliebig oft.
+   * `validateRuleset` erzwingt das.
+   *
+   * Gebraucht wird das seit Saatgut verbraucht wird: Wer seinen letzten Weizen
+   * verkauft, käme sonst nie wieder an einen — ein Sackgassen-Zustand, den §6
+   * ausdrücklich verbietet.
+   */
+  npcBuyPrice: number;
 };
 
 /**
@@ -162,8 +174,18 @@ export type Ruleset = {
    * DAS ist der strukturelle Riegel gegen „Escrow als unendliches Lager" (§8).
    */
   orderSlots: number;
-  /** Nach dieser Zeit verfällt ein Auftrag und die Ware geht ins Postfach. */
+  /** Nach dieser Zeit verfällt ein Auftrag und die Ware geht ins Postfach. **0 = nie.** */
   orderTtlTicks: number;
+  /** Einstellgebühr in Prozent vom Warenwert (NPC-Preis × Menge). */
+  listingFeePct: number;
+  /**
+   * Was ein frischer Hof mitbekommt.
+   *
+   * Seit Saatgut verbraucht wird, ist das keine Freundlichkeit mehr, sondern
+   * Voraussetzung: Ohne ein einziges Korn ließe sich kein Feld bestellen, und
+   * das Spiel begänne in der Sackgasse, die §6 verbietet.
+   */
+  startingItems: readonly ItemStack[];
   /** Preisband um den Referenzwert, in Prozent — verhindert Parkpreise (§8). */
   priceBandMinPct: number;
   priceBandMaxPct: number;
@@ -270,15 +292,32 @@ const V1: Ruleset = {
   version: 1,
 
   items: [
-    { id: 'gold', storable: false, npcPrice: 0 },
-    { id: 'wheat', storable: true, npcPrice: 3 },
-    { id: 'feed', storable: true, npcPrice: 8 },
-    { id: 'eggs', storable: true, npcPrice: 25 },
+    { id: 'gold', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    // Weizen ist Saatgut UND Ware. Deshalb als einziges Gut beim Händler
+    // erhältlich — zum doppelten Verkaufspreis, damit daraus kein Kreisgeschäft
+    // wird.
+    { id: 'wheat', storable: true, npcPrice: 3, npcBuyPrice: 6 },
+    { id: 'feed', storable: true, npcPrice: 8, npcBuyPrice: 0 },
+    { id: 'eggs', storable: true, npcPrice: 25, npcBuyPrice: 0 },
   ],
   currency: GOLD,
 
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 120, xp: 2 },
+    /**
+     * Säen kostet ein Korn, Ernten bringt drei.
+     *
+     * Vorher kam Weizen aus dem Nichts, und damit war die ganze Wirtschaft eine
+     * Einbahnstraße: Zeit rein, Ware raus, ohne Einsatz. Mit Saatgut ist jedes
+     * Feld eine Entscheidung — und Weizen bekommt einen echten Preis, weil man
+     * ihn auch verbrauchen kann, statt ihn nur zu verkaufen.
+     */
+    {
+      id: 'wheat',
+      inputs: [{ item: WHEAT, amount: 1 }],
+      output: { item: WHEAT, amount: 3 },
+      durationTicks: 120,
+      xp: 2,
+    },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
@@ -349,7 +388,35 @@ const V1: Ruleset = {
 
   siloCapacity: 100,
   orderSlots: 4,
-  orderTtlTicks: 86_400,
+  /**
+   * 0 = Angebote verfallen nicht.
+   *
+   * Vorher fielen sie nach einem Tag ins Postfach zurück. Das klang fair und
+   * machte den Escrow zum **kostenlosen Zwischenlager**: einstellen, verfallen
+   * lassen, neu einstellen — Ware parken, ohne je etwas dafür zu zahlen.
+   *
+   * Jetzt bleibt liegen, was eingestellt wurde, bis es verkauft oder
+   * zurückgeholt wird. Begrenzt ist es durch die Zahl der Plätze, und teuer
+   * durch die Einstellgebühr darunter. Die Mechanik selbst steht weiter im
+   * Kern; ein Regelwerk kann sie mit einem Wert > 0 jederzeit wieder
+   * einschalten.
+   */
+  orderTtlTicks: 0,
+  /**
+   * Einstellgebühr in Prozent vom **Warenwert** (NPC-Preis × Menge), fällig
+   * beim Einstellen.
+   *
+   * Der Riegel gegen „Escrow als Lager": Parken kostet jetzt etwas, und zwar
+   * sofort und unabhängig davon, ob je jemand kauft. Nebenbei ist es die erste
+   * echte Geldsenke im Spiel — ohne eine solche wächst die Geldmenge nur.
+   *
+   * Bewusst vom NPC-Preis und nicht vom Wunschpreis: Sonst wäre die Gebühr
+   * eine Strafe aufs Hochpreisen, und alle böten am unteren Bandrand an.
+   */
+  listingFeePct: 5,
+  // Sechs Körner: zwei je Startfeld. Reicht für den ersten Umlauf, ohne den
+  // Anfang zu verschenken.
+  startingItems: [{ item: WHEAT, amount: 6 }],
   priceBandMinPct: 25,
   priceBandMaxPct: 150,
   mailCapacity: 20,
@@ -376,13 +443,19 @@ const V2: Ruleset = {
   ...V1,
   version: 2,
   items: [
-    { id: 'gold', storable: false, npcPrice: 0 },
-    { id: 'wheat', storable: true, npcPrice: 4 },
-    { id: 'feed', storable: true, npcPrice: 9 },
-    { id: 'eggs', storable: true, npcPrice: 28 },
+    { id: 'gold', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'wheat', storable: true, npcPrice: 4, npcBuyPrice: 8 },
+    { id: 'feed', storable: true, npcPrice: 9, npcBuyPrice: 0 },
+    { id: 'eggs', storable: true, npcPrice: 28, npcBuyPrice: 0 },
   ],
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 100, xp: 2 },
+    {
+      id: 'wheat',
+      inputs: [{ item: WHEAT, amount: 1 }],
+      output: { item: WHEAT, amount: 3 },
+      durationTicks: 100,
+      xp: 2,
+    },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
@@ -416,7 +489,13 @@ const DEV: Ruleset = {
   ...V1,
   version: 1001,
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 12, xp: 2 },
+    {
+      id: 'wheat',
+      inputs: [{ item: WHEAT, amount: 1 }],
+      output: { item: WHEAT, amount: 3 },
+      durationTicks: 12,
+      xp: 2,
+    },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
@@ -432,7 +511,6 @@ const DEV: Ruleset = {
       xp: 14,
     },
   ],
-  orderTtlTicks: 600,
 };
 
 /**
@@ -575,6 +653,28 @@ export function isTradable(rules: Ruleset, item: number): boolean {
 }
 
 /**
+ * Was das Einstellen kostet — die eine Rechnung, an zwei Stellen gebraucht.
+ *
+ * Die Sim zieht sie ab, die Oberfläche zeigt sie vorher an. Stünde sie zweimal
+ * da, wäre der angezeigte Preis irgendwann ein anderer als der bezahlte — und
+ * ein Spieler, der auf „Einstellen" tippt und plötzlich weniger Gold hat als
+ * angekündigt, glaubt dem Spiel nichts mehr.
+ *
+ * Bemessen am NPC-Wert, nicht am Wunschpreis: Sonst wäre die Gebühr eine Strafe
+ * aufs Hochpreisen, und alle böten am unteren Bandrand an.
+ *
+ * Aufgerundet mit `Math.floor`, nicht mit `Math.ceil`: Der Purity-Wächter lässt
+ * im Kern nur `Math.floor` durch, weil jede andere Math-Funktion Floats
+ * einschleppen kann (§2.2). `(x + 99) / 100` abgerundet ist dasselbe wie
+ * `x / 100` aufgerundet — für positive ganze Zahlen exakt.
+ */
+export function listingFee(rules: Ruleset, item: number, amount: number): number {
+  const def = rules.items[item];
+  if (!def) return 0;
+  return Math.floor((def.npcPrice * amount * rules.listingFeePct + 99) / 100);
+}
+
+/**
  * Prüft ein Regelwerk auf Widersprüche.
  *
  * Kataloge sind Daten, und Daten haben keinen Compiler. Ein Rezept, das auf
@@ -706,6 +806,18 @@ export function validateRuleset(rules: Ruleset): string[] {
   if (rules.mailCapacity < 1) problems.push('Postfachkapazität < 1');
   if (rules.priceBandMinPct > rules.priceBandMaxPct) problems.push('Preisband verkehrt herum');
   if (rules.offerSlots < 0) problems.push('Angebots-Slots negativ');
+  if (rules.listingFeePct < 0 || rules.listingFeePct > 100) {
+    problems.push(`Einstellgebühr außerhalb 0…100: ${rules.listingFeePct}`);
+  }
+  rules.items.forEach((item, i) => {
+    // Der Händler darf nie billiger verkaufen, als er ankauft — das wäre eine
+    // Geldpresse, und zwar eine, die ein Skript in Sekunden leerräumt.
+    if (item.npcBuyPrice > 0 && item.npcBuyPrice <= item.npcPrice) {
+      problems.push(
+        `Gegenstand ${i} (${item.id}): Ankauf ${item.npcBuyPrice} <= Verkauf ${item.npcPrice} — Geldpresse`,
+      );
+    }
+  });
 
   return problems;
 }

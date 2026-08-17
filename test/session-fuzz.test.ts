@@ -65,7 +65,11 @@ const IDLE: SessionOptions = {
  * kritische Ecke aus §7 nicht erreicht, beweist über sie genau nichts.
  */
 const HOARD: SessionOptions = {
-  steps: 60,
+  // Mehr Schritte als früher, aus einem Balancing-Grund: Ein Feld gibt drei
+  // Weizen und frisst einen — netto zwei statt vormals zehn. Der Weg ans
+  // Lagerlimit ist damit fünfmal so lang, und mit 60 Schritten kam der Hamster
+  // nicht mehr an.
+  steps: 120,
   maxAdvance: 1500,
   advanceChance: 0.45,
   chaosChance: 0.05,

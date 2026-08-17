@@ -27,6 +27,10 @@ const rules = getRuleset(CURRENT_RULESET_VERSION);
 const R_WHEAT = 0;
 const WHEAT = 1;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
+const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
 /** So, wie es im Browser passiert: durch JSON und zurück. */
 function roundTrip(client: Client, offset = -1234) {
@@ -94,11 +98,15 @@ test('gesichert wird der BESTÄTIGTE Snapshot, nicht der vorhergesagte', () => {
   client.start(0, R_WHEAT);
   client.advanceClock(GROW);
   client.collect(0);
-  assert.equal(count(client.state, WHEAT), 10, 'Testkulisse hat nichts geerntet');
+  assert.equal(count(client.state, WHEAT), AFTER_ONE, 'Testkulisse hat nichts geerntet');
 
   const blob = serializeClient(client, 0);
-  assert.equal(count(blob.snapshot.state, WHEAT), 0, 'der Speicherstand ist vorgelaufen');
-  assert.equal(count(roundTrip(client).client.state, WHEAT), 10, 'nach dem Neustart fehlt die Ernte');
+  assert.equal(count(blob.snapshot.state, WHEAT), START_WHEAT, 'der Speicherstand ist vorgelaufen');
+  assert.equal(
+    count(roundTrip(client).client.state, WHEAT),
+    AFTER_ONE,
+    'nach dem Neustart fehlt die Ernte',
+  );
 });
 
 test('nach einem Sync ist die Warteschlange auch im Speicher leer', () => {

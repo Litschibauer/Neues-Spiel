@@ -42,17 +42,19 @@ const PROFILES: Array<{ name: string; opts: SessionOptions; seeds: number[] }> =
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
   {
-    // Lange Zeitachse, damit Auftraege die Frist reissen, ins Postfach fallen
-    // und wieder abgeholt werden. Ohne dieses Profil bliebe der ganze
-    // Verfalls- und Postfachpfad im Korpus unabgedeckt.
+    // Lange Zeitachse: viel passive Produktion zwischen den Aktionen, Lager
+    // laeuft voll, Auftraege stehen lange offen. Das Postfach kommt aus dem
+    // Startzustand (fuzzStart) — es fuellt sich im Betrieb von aussen.
     name: 'trade',
     opts: { steps: 45, maxAdvance: 90_000, advanceChance: 0.4, chaosChance: 0.05 },
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
   {
-    // Nie verkaufen: der einzige verlaessliche Weg ans volle Lager.
+    // Nie verkaufen: der einzige verlaessliche Weg ans volle Lager. Seit ein
+    // Feld netto zwei Weizen bringt statt zehn, braucht der Weg dorthin
+    // deutlich mehr Schritte.
     name: 'hoard',
-    opts: { steps: 60, maxAdvance: 1500, advanceChance: 0.45, chaosChance: 0.05, hoard: true },
+    opts: { steps: 120, maxAdvance: 1500, advanceChance: 0.45, chaosChance: 0.05, hoard: true },
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
 ];
@@ -126,6 +128,22 @@ function coreLoopVector(version: number) {
     tick += rules.recipes[recipe]!.durationTicks;
   };
 
+  // Saatgut ist endlich (M5-Wirtschaft): Wer sät, verbraucht ein Korn. Drei
+  // Felder brauchen also drei, und wenn die Kundenaufträge den Vorrat
+  // abgenommen haben, muss beim Händler nachgekauft werden.
+  const SEED = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+  const seedsForARound = 3 * SEED;
+  const restock = () => {
+    const missing = seedsForARound - state.items[WHEAT]!;
+    if (missing > 0) push({ type: 'BUY_NPC', item: WHEAT, amount: missing });
+  };
+  const sowThreeFields = () => {
+    restock();
+    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
+    wait(R_WHEAT);
+    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+  };
+
   // Sich hocharbeiten: Weizen anbauen, Aufträge beliefern (das bringt die
   // Erfahrung), Rest verkaufen — bis Level UND Gold für die Kette reichen.
   const goal =
@@ -140,9 +158,7 @@ function coreLoopVector(version: number) {
   for (let round = 0; round < 200; round++) {
     if (state.items[rules.currency]! >= goal && levelOf(rules, state.xp) >= needLevel) break;
 
-    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
-    wait(R_WHEAT);
-    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+    sowThreeFields();
 
     // Aufträge beliefern, solange die Ware reicht — Erfahrung kommt fast nur
     // von hier.
@@ -154,8 +170,9 @@ function coreLoopVector(version: number) {
       push({ type: 'FILL_REQUEST', requestId: fillable.id });
     }
 
-    // Etwas Weizen zurückbehalten, sonst fehlt später das Mahlgut.
-    const keep = 3;
+    // Die Aussaat der nächsten Runde zurückbehalten — sie beim Händler
+    // zurückzukaufen wäre teurer, als der Weizen einbringt.
+    const keep = seedsForARound;
     const sellable = state.items[WHEAT]! - keep;
     if (sellable > 0) push({ type: 'SELL_NPC', item: WHEAT, amount: sellable });
   }
@@ -165,11 +182,7 @@ function coreLoopVector(version: number) {
   // Mahlgut sicherstellen: Die Aufträge oben haben den Weizen unter Umständen
   // komplett abgenommen.
   const needWheat = rules.recipes[R_FEED]!.inputs[0]!.amount;
-  while (state.items[WHEAT]! < needWheat) {
-    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
-    wait(R_WHEAT);
-    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
-  }
+  while (state.items[WHEAT]! < needWheat) sowThreeFields();
 
   push({ type: 'START', plot: MILL, recipe: R_FEED });
   wait(R_FEED);
@@ -179,9 +192,7 @@ function coreLoopVector(version: number) {
   const coopCost =
     rules.plots[COOP]!.levels[0]!.cost[0]!.amount + rules.plots[COOP]!.levels[1]!.cost[0]!.amount;
   for (let round = 0; round < 200 && state.items[rules.currency]! < coopCost; round++) {
-    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
-    wait(R_WHEAT);
-    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+    sowThreeFields();
     for (;;) {
       const fillable = state.requests
         .slice(0, rules.requestSlots)
@@ -189,9 +200,8 @@ function coreLoopVector(version: number) {
       if (!fillable) break;
       push({ type: 'FILL_REQUEST', requestId: fillable.id });
     }
-    if (state.items[WHEAT]! > 0) {
-      push({ type: 'SELL_NPC', item: WHEAT, amount: state.items[WHEAT]! });
-    }
+    const sellable = state.items[WHEAT]! - seedsForARound;
+    if (sellable > 0) push({ type: 'SELL_NPC', item: WHEAT, amount: sellable });
   }
 
   push({ type: 'BUY', plot: COOP }); // Gehege

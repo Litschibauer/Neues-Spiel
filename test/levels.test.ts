@@ -224,8 +224,17 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
   const cost = rules.plots[MILL]!.levels[0]!.cost[0]!.amount;
   let cycles = 0;
 
+  // Saatgut ist endlich: Drei Felder kosten drei Körner pro Runde. Wer die
+  // Aufträge beliefert hat, muss beim Händler nachkaufen — genau der Weg, den
+  // ein Spieler ohne Weizen im Lager gehen muss.
+  const seed = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+  const perRound = 3 * seed;
+
   while (cycles < 200) {
     if (levelOf(rules, client.state.xp) >= gate && count(client.state, 0) >= cost) break;
+
+    const missing = perRound - count(client.state, WHEAT);
+    if (missing > 0) client.buyNpc(WHEAT, missing);
     for (let plot = 0; plot < 3; plot++) client.start(plot, R_WHEAT);
     client.advanceClock(GROW);
     for (let plot = 0; plot < 3; plot++) client.collect(plot);
@@ -237,7 +246,9 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
       if (!fillable) break;
       client.fillRequest(fillable.id);
     }
-    if (count(client.state, WHEAT) > 0) client.sellNpc(WHEAT, count(client.state, WHEAT));
+    // Die Aussaat der nächsten Runde bleibt liegen — zurückkaufen wäre teurer.
+    const sellable = count(client.state, WHEAT) - perRound;
+    if (sellable > 0) client.sellNpc(WHEAT, sellable);
     cycles++;
   }
 

@@ -15,7 +15,14 @@
  */
 
 import type { Ruleset } from './rules.ts';
-import { derivedTables, isTradable, levelOf, levelRecipes, nextLevel } from './rules.ts';
+import {
+  derivedTables,
+  isTradable,
+  levelOf,
+  levelRecipes,
+  listingFee,
+  nextLevel,
+} from './rules.ts';
 import type { State } from './state.ts';
 import {
   EMPTY_PLOT,
@@ -79,6 +86,11 @@ export function advanceTo(state: State, toTick: number, rules: Ruleset): State {
  * verfällt später. Nie etwas vernichten, wovon der Spieler nichts wusste (§7).
  */
 function expireOrders(s: State, rules: Ruleset): void {
+  // 0 = nie. Eingestellte Ware bleibt liegen, bis sie verkauft oder
+  // zurückgeholt wird. Der Riegel gegen „Escrow als Lager" ist seither nicht
+  // die Frist, sondern die Einstellgebühr — man zahlt fürs Parken, statt es
+  // geschenkt zu bekommen.
+  if (rules.orderTtlTicks <= 0) return;
   if (s.orders.length === 0) return;
 
   const survivors: typeof s.orders = [];
@@ -226,6 +238,31 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    /**
+     * Beim Händler kaufen — die Gegenrichtung zu `SELL_NPC`.
+     *
+     * Er verlangt mehr, als er zahlt; dass das so bleibt, prüft
+     * `validateRuleset`. Ohne diesen Abstand wäre er eine Geldpresse, und ein
+     * Skript hätte in Sekunden beliebig viel Gold.
+     */
+    case 'BUY_NPC': {
+      if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
+      const def = rules.items[cmd.item];
+      if (!def) throw new SimError('NO_SUCH_ITEM');
+      if (def.npcBuyPrice <= 0) throw new SimError('NOT_BUYABLE');
+
+      const cost = cmd.amount * def.npcBuyPrice;
+      if (count(s, rules.currency) < cost) throw new SimError('CANT_AFFORD');
+      if (def.storable && spaceLeft(s, rules) < cmd.amount) throw new SimError('SILO_FULL');
+
+      const next = cloneState(s);
+      next.items = addItems(s.items, [
+        [rules.currency, -cost],
+        [cmd.item, cmd.amount],
+      ]);
+      return next;
+    }
+
     case 'LIST_ORDER': {
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
       if (!Number.isInteger(cmd.price) || cmd.price <= 0) throw new SimError('BAD_AMOUNT');
@@ -244,8 +281,22 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
 
+      /**
+       * Einstellgebühr — der eigentliche Riegel gegen „Escrow als Lager".
+       *
+       * Seit Angebote nicht mehr verfallen, könnte man Ware sonst beliebig
+       * lange kostenlos parken. Jetzt kostet schon das Hinlegen etwas, sofort
+       * und unabhängig davon, ob je jemand kauft. Gerechnet wird sie in
+       * `listingFee` — dieselbe Funktion, die auch die Oberfläche anzeigt.
+       */
+      const fee = listingFee(rules, cmd.item, cmd.amount);
+      if (count(s, rules.currency) < fee) throw new SimError('CANT_AFFORD');
+
       const next = cloneState(s);
-      next.items = addItem(s.items, cmd.item, -cmd.amount);
+      next.items = addItems(s.items, [
+        [cmd.item, -cmd.amount],
+        [rules.currency, -fee],
+      ]);
       next.orders = s.orders.concat({
         id: s.nextOrderId,
         item: cmd.item,

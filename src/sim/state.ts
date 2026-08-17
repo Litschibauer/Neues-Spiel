@@ -198,6 +198,12 @@ export function totalGoods(s: State, rules: Ruleset): number {
 export function initialState(rules: Ruleset): State {
   const items: number[] = [];
   for (let i = 0; i < rules.items.length; i++) items.push(0);
+  // Startausstattung aus dem Regelwerk, nicht aus dem Code: Seit Saatgut
+  // verbraucht wird, entscheidet diese Zeile darüber, ob ein frischer Hof
+  // überhaupt anfangen kann.
+  for (const stack of rules.startingItems) {
+    items[stack.item] = (items[stack.item] ?? 0) + stack.amount;
+  }
 
   const plots: Plot[] = [];
   for (const def of rules.plots) {

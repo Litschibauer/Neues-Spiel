@@ -37,6 +37,12 @@ const MILL = 6;
 const COOP = 7;
 
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
+const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+const YIELD = rules.recipes[R_WHEAT]!.output.amount;
+const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
+const GRIND = rules.recipes[R_FEED]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+/** Weizen nach `n` Ernten auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+const afterHarvests = (n: number) => START_WHEAT + n * (YIELD - SEED_COST);
 
 /**
  * Hof mit Kapital UND Erfahrung.
@@ -62,12 +68,12 @@ test('DER KERNKREISLAUF: Feld → Mühle → Gehege → Eier, über drei Rechenw
   client.advanceClock(GROW);
   assert.equal(client.collect(0).ok, true);
   assert.equal(client.collect(1).ok, true);
-  assert.equal(count(client.state, WHEAT), 20);
+  assert.equal(count(client.state, WHEAT), afterHarvests(2));
 
   // 2. Mühle kaufen und Hühnerfutter mahlen.
   assert.equal(client.buy(MILL).ok, true);
   assert.equal(client.start(MILL, R_FEED).ok, true);
-  assert.equal(count(client.state, WHEAT), 17, 'drei Weizen sind sofort weg');
+  assert.equal(count(client.state, WHEAT), afterHarvests(2) - GRIND, 'drei Weizen sind sofort weg');
   client.advanceClock(rules.recipes[R_FEED]!.durationTicks);
   assert.equal(client.collect(MILL).ok, true);
   assert.equal(count(client.state, FEED), 2);
@@ -193,10 +199,13 @@ test('ausbauen geht nur bei leerem Platz', () => {
   assert.equal(client.buy(COOP).ok, true); // Gehege
   assert.equal(client.buy(COOP).ok, true); // Hühner
   assert.equal(client.buy(MILL).ok, true);
+  // Das Startsaatgut muss weg, sonst hätte die Mühle etwas zu mahlen.
+  assert.equal(client.sellNpc(WHEAT, START_WHEAT).ok, true);
   assert.equal(client.start(MILL, R_FEED).ok, false, 'ohne Weizen kein Futter');
 
   // Ein laufendes Feld blockiert seinen eigenen Ausbau, bis abgeholt wurde.
   assert.equal(client.buy(3).ok, true);
+  assert.equal(client.buyNpc(WHEAT, SEED_COST).ok, true, 'Saatgut nachkaufen');
   assert.equal(client.start(3, R_WHEAT).ok, true);
   const busy = client.buy(3);
   assert.equal(busy.ok, false);
@@ -258,6 +267,6 @@ test('geteilte Arrays: ein neuer Zustand verändert den alten nie', () => {
   assert.equal(history[0]!.plots[0]!.recipe, EMPTY_PLOT, 'Startzustand hat einen Platz bekommen');
   assert.equal(history[1]!.plots[1]!.recipe, EMPTY_PLOT, 'Zustand 1 hat Platz 2 zu früh');
   assert.equal(history[0]!.plots[MILL]!.level, 0, 'Mühle rückwirkend gekauft');
-  assert.equal(history[0]!.items[WHEAT], 0, 'Inventar rückwirkend verändert');
+  assert.equal(history[0]!.items[WHEAT], START_WHEAT, 'Inventar rückwirkend verändert');
   assert.equal(history[3]!.orders.length, 0, 'Auftrag rückwirkend eingefügt');
 });

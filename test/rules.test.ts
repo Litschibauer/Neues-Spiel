@@ -234,10 +234,13 @@ test('DER KERNKREISLAUF steht als Tabelle da — Feld, Mühle, Gehege', () => {
   const v1 = getRuleset(1);
   const id = (i: number) => v1.items[i]!.id;
 
-  // Feld: keine Eingaben, gibt Weizen.
+  // Feld: frisst Saatgut, gibt mehr Weizen zurück, als es genommen hat. Der
+  // Gewinn ist die Differenz — nicht der Ertrag.
   const wheat = v1.recipes.find((r) => r.id === 'wheat')!;
-  assert.equal(wheat.inputs.length, 0);
+  assert.equal(wheat.inputs.length, 1, 'Weizen wächst nicht aus dem Nichts');
+  assert.equal(id(wheat.inputs[0]!.item), 'wheat', 'gesät wird Weizen');
   assert.equal(id(wheat.output.item), 'wheat');
+  assert.ok(wheat.output.amount > wheat.inputs[0]!.amount, 'Aussaat lohnt sich nicht');
 
   // Mühle: frisst Weizen, gibt Futter.
   const feed = v1.recipes.find((r) => r.id === 'feed')!;
@@ -260,19 +263,76 @@ test('DER KERNKREISLAUF steht als Tabelle da — Feld, Mühle, Gehege', () => {
 
 test('der Einstieg ist bespielbar, ohne dass etwas gekauft werden muss', () => {
   // Die Leerlauf-Regel aus Architektur §6: Es darf keinen Zustand geben, in dem
-  // offline nichts zu tun ist. Ein frischer Hof braucht deshalb Plätze, die
-  // ohne Eingaben und ohne Geld laufen.
+  // offline nichts zu tun ist.
+  //
+  // Früher war das leicht zu prüfen — die Startplätze brauchten keine Zutaten.
+  // Seit Saatgut verbraucht wird, ist die Bedingung länger, aber dieselbe: Was
+  // ein Startplatz braucht, muss von Anfang an dabei sein.
   const v1 = getRuleset(1);
   const free = v1.plots.filter((p) => p.startLevel > 0);
   assert.ok(free.length >= 3, `zu wenige Startplätze: ${free.length}`);
 
+  const startStock = new Map<number, number>();
+  for (const stack of v1.startingItems) {
+    startStock.set(stack.item, (startStock.get(stack.item) ?? 0) + stack.amount);
+  }
+
   for (const plot of free) {
     for (const recipe of plot.levels[plot.startLevel - 1]!.recipes) {
-      assert.equal(
-        v1.recipes[recipe]!.inputs.length,
-        0,
-        `Startplatz ${plot.id} braucht Zutaten, die es noch nicht gibt`,
-      );
+      for (const input of v1.recipes[recipe]!.inputs) {
+        assert.ok(
+          (startStock.get(input.item) ?? 0) >= input.amount,
+          `Startplatz ${plot.id} braucht ${v1.items[input.item]!.id}, das nicht im Startvorrat liegt`,
+        );
+      }
+    }
+  }
+
+  // Und der Vorrat muss für ALLE Startplätze gleichzeitig reichen — sonst
+  // stünde ein Feld von der ersten Minute an brach.
+  const need = new Map<number, number>();
+  for (const plot of free) {
+    const recipe = plot.levels[plot.startLevel - 1]!.recipes[0];
+    if (recipe === undefined) continue;
+    for (const input of v1.recipes[recipe]!.inputs) {
+      need.set(input.item, (need.get(input.item) ?? 0) + input.amount);
+    }
+  }
+  for (const [item, amount] of need) {
+    assert.ok(
+      (startStock.get(item) ?? 0) >= amount,
+      `Startvorrat an ${v1.items[item]!.id} reicht nicht für alle Startplätze`,
+    );
+  }
+});
+
+test('kein Sackgassen-Zustand: verbrauchte Zutaten sind nachkaufbar und lohnen sich', () => {
+  // Der Preis dafür, dass Saatgut endlich ist: Wer seinen letzten Weizen
+  // verkauft, muss zurück ins Spiel finden. Sonst wäre der Hof tot — genau das
+  // verbietet §6.
+  for (const version of [...RULESETS.keys()]) {
+    const rules = getRuleset(version);
+    const free = rules.plots.filter((p) => p.startLevel > 0);
+
+    for (const plot of free) {
+      for (const recipe of plot.levels[plot.startLevel - 1]!.recipes) {
+        const def = rules.recipes[recipe]!;
+        for (const input of def.inputs) {
+          assert.ok(
+            rules.items[input.item]!.npcBuyPrice > 0,
+            `v${version}: ${rules.items[input.item]!.id} ist verbraucht, aber nicht nachkaufbar`,
+          );
+        }
+
+        // Nachkaufen muss sich auch rechnen, sonst ist die Sackgasse nur
+        // langsamer: Der Ertrag muss den Einkauf überzahlen.
+        const cost = def.inputs.reduce(
+          (sum, i) => sum + i.amount * rules.items[i.item]!.npcBuyPrice,
+          0,
+        );
+        const worth = def.output.amount * rules.items[def.output.item]!.npcPrice;
+        assert.ok(worth > cost, `v${version}: Rezept ${def.id} verliert Geld (${worth} ≤ ${cost})`);
+      }
     }
   }
 });

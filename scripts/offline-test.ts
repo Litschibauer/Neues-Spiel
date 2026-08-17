@@ -479,9 +479,15 @@ try {
     'Ein Geschenk erreicht das Postfach ohne Zutun des Spielers',
     beforeAnyAction.snapshot.seq === 0,
   );
-  await syncAs(second.key, 0, [{ seq: 1, tick: 0, type: 'COLLECT_MAIL' }]);
-  const listed = await syncAs(second.key, 1, [
-    { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
+  // Einstellen kostet eine Gebühr, und ein frischer Hof hat kein Gold. Also
+  // erst ein paar Körner an den Händler — genau der Weg, den ein echter
+  // Spieler geht, bevor er zum ersten Mal selbst anbietet.
+  await syncAs(second.key, 0, [
+    { seq: 1, tick: 0, type: 'COLLECT_MAIL' },
+    { seq: 2, tick: 0, type: 'SELL_NPC', item: 1, amount: 5 },
+  ]);
+  const listed = await syncAs(second.key, 2, [
+    { seq: 3, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
   ]);
   check('Der zweite Hof stellt einen Auftrag ein', listed.ok, listed.reason ?? listed.kind);
   check(
@@ -597,16 +603,18 @@ try {
   ).json()) as { snapshot: { state: { orders: unknown[] } } };
   check('Der verkaufte Auftrag ist beim Verkäufer weg', sellerState.snapshot.state.orders.length === 0);
 
-  const paid = await syncAs(second.key, 2, [{ seq: 3, tick: 0, type: 'COLLECT_MAIL' }]);
+  const paid = await syncAs(second.key, 3, [{ seq: 4, tick: 0, type: 'COLLECT_MAIL' }]);
   const sellerAfter = (await (
     await fetch(`http://127.0.0.1:${PORT}/api/state`, {
       headers: { authorization: `Bearer ${second.key}` },
     })
   ).json()) as { snapshot: { state: { items: number[] } } };
+  // 5 Weizen an den Händler (15) − Einstellgebühr (3) + Verkaufserlös (60).
+  const expectedCoins = 15 - 3 + 60;
   check(
-    'Der Verkäufer hat sein Geld — 20 × 3 = 60',
-    paid.ok && sellerAfter.snapshot.state.items[0] === 60,
-    `${sellerAfter.snapshot.state.items[0]} Münzen`,
+    `Der Verkäufer hat sein Geld — 20 × 3 = 60, abzüglich Gebühr`,
+    paid.ok && sellerAfter.snapshot.state.items[0] === expectedCoins,
+    `${sellerAfter.snapshot.state.items[0]} statt ${expectedCoins} Münzen`,
   );
   // ── 7. Die Spieloberfläche ────────────────────────────────────────────
   //

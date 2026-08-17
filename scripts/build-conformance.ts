@@ -172,6 +172,10 @@ ${modules}
     nextLevelAt: nextLevelAt,
     levelStartedAt: levelStartedAt,
     hashState: hashState,
+    // Die Einstellgebühr rechnet die Oberfläche mit derselben Funktion wie die
+    // Sim — sonst wäre der angezeigte Preis irgendwann ein anderer als der
+    // bezahlte.
+    listingFee: listingFee,
     serializeClient: serializeClient,
     restoreClient: restoreClient,
     storageKeyFor: storageKeyFor,

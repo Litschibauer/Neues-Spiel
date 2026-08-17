@@ -103,8 +103,8 @@ Schicht 5 ist im Server angelegt:
 | --- | --- | --- |
 | **1 Verhindern** | `sim-purity.test.ts` | Ein CI-Wächter liest den Sim-Quelltext und blockiert Floats, Systemzeit, Locale, `for…in` und ungeschützte Division. Ein zweiter Test prüft, dass der Wächter selbst noch beißt. |
 | **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **40.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein — die Hälfte davon mit *mehreren* Produzenten am selben Lagerdeckel. |
-| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **500 zufällige Offline-Sitzungen** in drei Profilen (viele Aktionen / lange Sprünge / nie verkaufen) über alle Kataloge, jede über drei unabhängige Rechenwege — inklusive Kaufen, Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
-| **4 Beweisen (Plattform)** | `golden.test.ts` | **243 Golden Vectors, 5078 Commands** über alle Regelversionen — darunter ein *handgeschriebener* Vektor, der den Kernkreislauf in genau der Reihenfolge durchläuft, um die es im Spiel geht. Der Korpus, den der Mobile-Port an Tag eins abspielt. |
+| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **500 zufällige Offline-Sitzungen** in drei Profilen (viele Aktionen / lange Sprünge / nie verkaufen) über alle Kataloge, jede über drei unabhängige Rechenwege — inklusive Kaufen, Aufträgen, Saatgut-Nachschub und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
+| **4 Beweisen (Plattform)** | `golden.test.ts` | **243 Golden Vectors, 6952 Commands** über alle Regelversionen — darunter ein *handgeschriebener* Vektor, der den Kernkreislauf in genau der Reihenfolge durchläuft, um die es im Spiel geht. Der Korpus, den der Mobile-Port an Tag eins abspielt. |
 | **5 Erkennen** | `sync.test.ts` | Der Kanarienvogel-Hash schlägt bei Divergenz an — und blockiert den Sync **nicht**. |
 | — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
@@ -117,7 +117,7 @@ Schicht 5 ist im Server angelegt:
 | — | `levels.test.ts` | Erfahrung und Stufen: abgeleitet statt gespeichert, nie rückwärts, Schwellen dürfen über Versionen nur sinken — sonst würde ein Patch Spieler zurückstufen. |
 | — | `persist.test.ts` | Der Spielstand auf dem Gerät: derselbe Zustand nach dem Neustart, und der Server nimmt ihn ohne Divergenz an. |
 | — | `accounts.test.ts` | Höfe vermischen sich nicht — der Punkt, an dem ein Mehrspieler-Server steht oder fällt. Dazu: nur Hashes auf der Platte, Anlege-Bremse, kaputte Datei kostet einen Hof statt aller. |
-| — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
+| — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Einstellgebühr, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
 Die Fuzz-Tests zählen mit, ob sie die kritischen Zustände überhaupt erreichen (volles Lager,

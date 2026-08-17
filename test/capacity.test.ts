@@ -29,17 +29,27 @@ const MILL = 6;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
 const YIELD = rules.recipes[R_WHEAT]!.output.amount;
 
-/** Spielstand mit fast vollem Lager. */
+/**
+ * Spielstand mit fast vollem Lager.
+ *
+ * `freeSpace` ist der Platz VOR dem Säen. Säen gibt ein Korn ab, macht also
+ * einen Platz frei — wer eine Ernte blockieren will, muss das mitrechnen.
+ */
 function nearlyFull(freeSpace: number) {
   const base = initialState(rules);
-  const items = base.items.slice();
+  const items = base.items.map(() => 0);
   items[WHEAT] = rules.siloCapacity - freeSpace;
   return { ...base, items };
 }
 
+/** Gerade so wenig Platz, dass die Ernte nicht mehr passt. */
+const TIGHT = YIELD - 2;
+/** Wie viel Saatgut ein Feld verschluckt. */
+const SEED = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
+
 test('Lagerlimit kann offline gar nicht überschritten werden', () => {
   // Nur noch Platz für 5, die Ernte bringt 10.
-  const server = new Server(nearlyFull(5), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(nearlyFull(TIGHT), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
   client.start(0, R_WHEAT);
@@ -56,7 +66,7 @@ test('Lagerlimit kann offline gar nicht überschritten werden', () => {
 });
 
 test('Hard block statt stillem Verlust: der fertige Platz bleibt stehen', () => {
-  const server = new Server(nearlyFull(5), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(nearlyFull(TIGHT), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
   client.start(0, R_WHEAT);
@@ -66,7 +76,7 @@ test('Hard block statt stillem Verlust: der fertige Platz bleibt stehen', () => 
   // Platz schaffen → dieselbe Ernte geht jetzt durch, nichts ist verloren.
   assert.equal(client.sellNpc(WHEAT, 20).ok, true);
   assert.equal(client.collect(0).ok, true);
-  assert.equal(count(client.state, WHEAT), rules.siloCapacity - 5 - 20 + YIELD);
+  assert.equal(count(client.state, WHEAT), rules.siloCapacity - TIGHT - SEED - 20 + YIELD);
 
   const sync = server.sync(client.buildSyncRequest(), T0 + GROW * 1000);
   assert.equal(sync.ok, true);
@@ -75,7 +85,7 @@ test('Hard block statt stillem Verlust: der fertige Platz bleibt stehen', () => 
 });
 
 test('Server lehnt einen handgebauten Log ab, der das Limit verletzt', () => {
-  const server = new Server(nearlyFull(5), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(nearlyFull(TIGHT), T0, CURRENT_RULESET_VERSION);
 
   // Ein manipulierter Client, der die lokale Prüfung einfach überspringt.
   const res = server.sync(
@@ -97,7 +107,8 @@ test('Server lehnt einen handgebauten Log ab, der das Limit verletzt', () => {
   assert.equal(res.rejectedFrom, 2);
   assert.equal(res.reason, 'ILLEGAL_COMMAND:SILO_FULL');
   assert.equal(res.snapshot.seq, 1);
-  assert.equal(count(res.snapshot.state, WHEAT), rules.siloCapacity - 5);
+  // Gesät ist gesät: Das Korn ist weg, die Ernte kam nicht.
+  assert.equal(count(res.snapshot.state, WHEAT), rules.siloCapacity - TIGHT - SEED);
 });
 
 test('Eingaben verbrauchen macht Platz — die Mühle entlastet das Lager', () => {

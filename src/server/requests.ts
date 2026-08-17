@@ -31,6 +31,23 @@ import type { Request, State } from '../sim/state.ts';
 export function reachableItems(state: State, rules: Ruleset): Set<number> {
   const reachable = new Set<number>();
 
+  /**
+   * Der Anfang der Kette: was man hat oder kaufen kann.
+   *
+   * Vorher begann die Hülle bei den Rezepten ohne Zutaten — solange Weizen aus
+   * dem Nichts kam, ging das auf. Seit Säen ein Korn kostet, verbraucht das
+   * Weizenrezept sein eigenes Erzeugnis, und die Hülle blieb schlicht leer: Ein
+   * frischer Hof bekam gar keine Aufträge mehr.
+   *
+   * Richtig ist die weitere Frage — nicht „was entsteht aus dem Nichts",
+   * sondern „woran kommt dieser Hof heran": an alles im Lager, und an alles,
+   * was der Händler führt.
+   */
+  rules.items.forEach((item, i) => {
+    if (item.npcBuyPrice > 0) reachable.add(i);
+    else if ((state.items[i] ?? 0) > 0) reachable.add(i);
+  });
+
   // Rezepte, die auf einem freigeschalteten Platz laufen dürfen.
   const available: number[] = [];
   state.plots.forEach((plot, i) => {

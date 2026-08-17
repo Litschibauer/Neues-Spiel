@@ -59,6 +59,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|BUY|${c.plot}`;
     case 'SELL_NPC':
       return `${c.seq}|${c.tick}|SELL_NPC|${c.item}|${c.amount}`;
+    case 'BUY_NPC':
+      return `${c.seq}|${c.tick}|BUY_NPC|${c.item}|${c.amount}`;
     case 'LIST_ORDER':
       return `${c.seq}|${c.tick}|LIST_ORDER|${c.item}|${c.amount}|${c.price}`;
     case 'CANCEL_ORDER':

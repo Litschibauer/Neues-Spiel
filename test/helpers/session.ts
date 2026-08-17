@@ -14,7 +14,7 @@ import { Client } from '../../src/client/client.ts';
 import { getRuleset, levelOf, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
-import type { Offer } from '../../src/sim/state.ts';
+import type { MailItem, Offer } from '../../src/sim/state.ts';
 import { simulate } from '../../src/sim/sim.ts';
 import { advancePassivesReference } from '../../src/sim/produce.ts';
 import type { State } from '../../src/sim/state.ts';
@@ -125,7 +125,27 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
   // mit ihm die einzige Aktion, die von außen ins Lager greift. Wie im Betrieb
   // legt sie der Server hinein; hier nur mit festen Zahlen statt fremden Höfen.
   const offers = rnd ? fuzzOffers(rules, rnd) : [];
-  return { ...base, items, requests, offers };
+
+  // Ein paar Postfach-Einträge, aus demselben Grund. Seit Aufträge nicht mehr
+  // verfallen (die Ware bleibt im Angebot stehen), kann eine Einzelsitzung das
+  // Postfach nicht mehr selbst füllen — es kommt nur noch von außen, aus
+  // fremden Käufen. Ohne diese Zeilen bliebe der ganze Abholpfad ungeprüft.
+  const mail = rnd ? fuzzMail(rules, rnd) : [];
+  return { ...base, items, requests, offers, mail };
+}
+
+/** Eingegangene Zahlungen und Lieferungen, wie sie ein Verkauf hinterlässt. */
+function fuzzMail(rules: Ruleset, rnd: () => number): MailItem[] {
+  const goods = rules.items
+    .map((_, i) => i)
+    .filter((i) => rules.items[i]!.storable && rules.items[i]!.npcPrice > 0);
+  const mail: MailItem[] = [];
+  for (let i = 0; i < 3; i++) {
+    const item = goods[Math.floor(rnd() * goods.length)]!;
+    mail.push({ item, amount: 1 + Math.floor(rnd() * 5), arrivedAt: 0 });
+    mail.push({ item: rules.currency, amount: 5 + Math.floor(rnd() * 50), arrivedAt: 0 });
+  }
+  return mail;
 }
 
 /** Ein paar plausible Fremdangebote — Preise im Band, Mengen lagerverträglich. */
@@ -209,6 +229,8 @@ export function playRandomSession(
   const tradable = rules.items
     .map((_, i) => i)
     .filter((i) => rules.items[i]!.storable && rules.items[i]!.npcPrice > 0);
+  /** Was der Händler abgibt — seit Saatgut verbraucht wird, der Weg zurück ins Spiel. */
+  const buyable = rules.items.map((_, i) => i).filter((i) => rules.items[i]!.npcBuyPrice > 0);
 
   for (let i = 0; i < opts.steps; i++) {
     if (rnd() < opts.advanceChance) {
@@ -217,7 +239,11 @@ export function playRandomSession(
     }
 
     if (rnd() < opts.chaosChance) {
-      switch (pick(6)) {
+      switch (pick(7)) {
+        case 6:
+          // Beim Händler kaufen, was er nicht führt — muss sauber abprallen.
+          client.buyNpc(pick(rules.items.length + 1), 1 + pick(200));
+          break;
         case 0:
           client.start(pick(rules.plots.length + 1), pick(rules.recipes.length + 1));
           break;
@@ -295,6 +321,17 @@ export function playRandomSession(
         moves.push(() => client.buyOffer(offer.id));
       }
     }
+    // Saatgut nachkaufen. Auch der Hamster darf das: Er gibt nichts aus der
+    // Hand, er füllt sein Lager — und ohne Nachschub steht ein Hof, der seinen
+    // letzten Weizen ausgesät hat, für den Rest der Sitzung still.
+    for (const item of buyable) {
+      const price = rules.items[item]!.npcBuyPrice;
+      const canPay = Math.floor(count(s, rules.currency) / price);
+      const fits = rules.items[item]!.storable ? rules.siloCapacity - stored(s, rules) : canPay;
+      const max = Math.min(canPay, fits, 10);
+      if (max > 0) moves.push(() => client.buyNpc(item, 1 + pick(max)));
+    }
+
     if (s.mail.length > 0) moves.push(() => client.collectMail());
 
     // Kundenaufträge beliefern, sobald die Ware da ist (M6). Nur die vorderen
