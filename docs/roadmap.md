@@ -116,11 +116,17 @@ zusammengehen**: Der Server würfelt im Voraus und schickt einen Stapel mit; der
 Sim-Kern verbraucht ihn und würfelt nie selbst. Damit ist ein zufälliges Feature
 vollständig offline-fähig — das erste Mal, dass §5 und §6 sich in Code begegnen.
 
+Und **M8, Erfahrung und Stufen** — die kleinste Mechanik im Projekt und die
+einzige **ohne eigenes Command**. Erfahrung fällt beim Abholen und Liefern
+nebenbei an, das Level wird daraus abgeleitet, und seine ganze Wirkung ist eine
+Zahl neben dem Preis eines Platzes. Damit fühlt sich Fortschritt nicht mehr nur
+nach „mehr davon" an: Alle paar Minuten geht etwas auf, das es vorher nicht gab.
+
 Was noch fehlt:
 
-- **M8 Level und Freischaltungen** — Erfahrung, Schwelle, Tabelle.
 - **M9 Aufgeschobener Zufall** — für die Fälle, in denen Vorwissen ein Cheat wäre
   (Mystery-Kisten). Der Vorwürfel-Fall ist mit M6 erledigt.
+- **Warteschlangenplätze** als Parameter von M1 — mehrere Produktionen pro Platz.
 
 **Faustregel pro Mechanik:** Wenn du keine langsame, offensichtlich korrekte Variante
 danebenschreiben kannst, hast du sie noch nicht verstanden.
@@ -203,14 +209,16 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**M8: Level und Freischaltungen.**
+**Phase 5: die App-Hülle, die ohne Netz startet.**
 
-Der Kreislauf trägt jetzt: anbauen, verarbeiten, liefern, ausbauen. Was fehlt,
-ist das Gefühl, *vorwärts* zu kommen — im Moment wird alles nur mehr, nichts
-wird neu. Ein Level ist eine Schwelle, hinter der etwas auftaucht, das es vorher
-nicht gab, und die Mechanik dafür ist winzig: Erfahrung sammeln, Schwelle
-überschreiten, Tabelle sagt was.
+Acht von neun Mechaniken stehen, und der Kreislauf trägt. Die auffälligste
+Lücke ist keine Mechanik mehr, sondern das letzte fehlende Stück am
+Offline-Versprechen: Die Feldtest-Seite wird über das Netz geladen, ein
+Neuladen im Funkloch scheitert also. Alles andere funktioniert offline; die
+Hülle nicht.
 
-Sie kostet außerdem fast nichts an neuer Determinismus-Fläche — Erfahrung ist
-eine Zahl im Zustand, Schwellen sind Daten, und Freischaltungen sind die
-Startstufen, die es bei Plätzen schon gibt.
+Das ist ein Testaufbau-Artefakt, kein Architekturproblem — aber es ist das
+Erste, was jemand bemerkt, der das Spiel wirklich im Zug ausprobiert.
+
+Die Alternative wäre Phase 4 (Accounts, Datenbank, TLS). Sinnvoll, sobald es
+mehr als einen Spielstand gibt — heute noch nicht.

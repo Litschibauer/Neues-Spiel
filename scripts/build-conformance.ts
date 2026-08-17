@@ -166,6 +166,9 @@ ${modules}
     count: count,
     EMPTY_PLOT: EMPTY_PLOT,
     spaceLeft: spaceLeft,
+    levelOf: levelOf,
+    nextLevelAt: nextLevelAt,
+    levelStartedAt: levelStartedAt,
     hashState: hashState,
   };
 })();

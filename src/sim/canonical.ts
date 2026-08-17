@@ -32,10 +32,11 @@ export function canonicalize(state: State): string {
   const stacks = (list: readonly { item: number; amount: number }[]) =>
     list.map((x) => `${x.item}x${x.amount}`).join('+');
   const requests = state.requests
-    .map((r) => `${r.id}:${stacks(r.wants)}>${stacks(r.reward)}`)
+    .map((r) => `${r.id}:${stacks(r.wants)}>${stacks(r.reward)}+${r.xp}xp`)
     .join(',');
   return [
     `tick=${state.tick}`,
+    `xp=${state.xp}`,
     `items=[${items}]`,
     `plots=[${plots}]`,
     `passives=[${passives}]`,

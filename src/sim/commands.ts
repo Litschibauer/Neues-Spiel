@@ -86,6 +86,7 @@ export type SimErrorCode =
   | 'PLOT_EMPTY'
   | 'MAX_LEVEL'
   | 'CANT_AFFORD'
+  | 'PLAYER_LEVEL_TOO_LOW'
   | 'NOT_DONE'
   | 'RECIPE_NOT_ALLOWED'
   | 'NO_SUCH_ITEM'

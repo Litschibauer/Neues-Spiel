@@ -55,6 +55,8 @@ export type RecipeDef = {
   inputs: readonly ItemStack[];
   output: ItemStack;
   durationTicks: number;
+  /** Erfahrung fürs Abholen. Der Balken bewegt sich bei jeder Ernte (M8). */
+  xp: number;
 };
 
 /**
@@ -74,6 +76,14 @@ export type LevelDef = {
   cost: readonly ItemStack[];
   /** Welche Rezepte auf dieser Stufe laufen dürfen. Darf leer sein. */
   recipes: readonly number[];
+  /**
+   * Ab welchem Spielerlevel kaufbar (M8). Fehlt = sofort.
+   *
+   * Das ist die ganze Wirkung von Leveln: eine Schwelle, hinter der etwas
+   * auftaucht, das es vorher nicht gab. Sie braucht keine neue Mechanik —
+   * nur eine Zahl neben dem Preis.
+   */
+  minPlayerLevel?: number;
 };
 
 /**
@@ -108,6 +118,8 @@ export type RequestTemplate = {
   wants: readonly ItemStack[];
   /** Was es dafür gibt. */
   reward: readonly ItemStack[];
+  /** Erfahrung fürs Liefern — die Hauptquelle für Fortschritt (M8). */
+  xp: number;
 };
 
 /**
@@ -158,6 +170,20 @@ export type Ruleset = {
   /** Auch das Postfach ist ein Behälter und braucht daher ein Limit (§7). */
   mailCapacity: number;
 
+  /**
+   * Erfahrungsschwellen. `levelThresholds[i]` ist die XP-Grenze für Stufe i+2 —
+   * Stufe 1 beginnt bei null.
+   *
+   * Das Level steht bewusst NICHT im Zustand, sondern wird aus der Erfahrung
+   * abgeleitet. Zwei Zahlen, die dasselbe bedeuten, laufen sonst irgendwann
+   * auseinander, und dann ist unklar, welche stimmt.
+   *
+   * Preis dieser Entscheidung: Eine Kurve, die in einem Patch STEIGT, würde
+   * Spieler zurückstufen. Deshalb dürfen Schwellen über Versionen hinweg nur
+   * sinken — `rules.test.ts` erzwingt das.
+   */
+  levelThresholds: readonly number[];
+
   /** Auftragsvorlagen, aus denen der Server auswählt. */
   requestTemplates: readonly RequestTemplate[];
   /** Wie viele Kundenaufträge gleichzeitig annehmbar sind. */
@@ -203,15 +229,23 @@ const want = (item: number, amount: number): ItemStack => ({ item, amount });
  * Man produziert nicht mehr ins Leere, sondern auf etwas hin.
  */
 const REQUESTS: readonly RequestTemplate[] = [
-  { id: 'wheat-small', wants: [want(WHEAT, 5)], reward: gold(25) },
-  { id: 'wheat-big', wants: [want(WHEAT, 15)], reward: gold(80) },
-  { id: 'feed-small', wants: [want(FEED, 2)], reward: gold(25) },
-  { id: 'feed-big', wants: [want(FEED, 6)], reward: gold(85) },
-  { id: 'eggs-small', wants: [want(EGGS, 3)], reward: gold(110) },
-  { id: 'eggs-big', wants: [want(EGGS, 9)], reward: gold(350) },
-  { id: 'mixed-farm', wants: [want(WHEAT, 8), want(FEED, 2)], reward: gold(60) },
-  { id: 'mixed-market', wants: [want(EGGS, 3), want(WHEAT, 10)], reward: gold(160) },
+  { id: 'wheat-small', wants: [want(WHEAT, 5)], reward: gold(25), xp: 6 },
+  { id: 'wheat-big', wants: [want(WHEAT, 15)], reward: gold(80), xp: 18 },
+  { id: 'feed-small', wants: [want(FEED, 2)], reward: gold(25), xp: 10 },
+  { id: 'feed-big', wants: [want(FEED, 6)], reward: gold(85), xp: 30 },
+  { id: 'eggs-small', wants: [want(EGGS, 3)], reward: gold(110), xp: 35 },
+  { id: 'eggs-big', wants: [want(EGGS, 9)], reward: gold(350), xp: 100 },
+  { id: 'mixed-farm', wants: [want(WHEAT, 8), want(FEED, 2)], reward: gold(60), xp: 22 },
+  { id: 'mixed-market', wants: [want(EGGS, 3), want(WHEAT, 10)], reward: gold(160), xp: 50 },
 ];
+
+/**
+ * Die Levelkurve.
+ *
+ * Bewusst früh dicht und später weiter: Die ersten Stufen sollen in Minuten
+ * kommen, damit man merkt, dass etwas passiert. Danach zieht es an.
+ */
+const LEVELS: readonly number[] = [40, 120, 280, 560, 1000, 1700, 2800, 4400];
 
 /**
  * Der Basis-Kreislauf, Stand jetzt:
@@ -234,18 +268,20 @@ const V1: Ruleset = {
   currency: GOLD,
 
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 120 },
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 120, xp: 2 },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
       output: { item: FEED, amount: 2 },
       durationTicks: 300,
+      xp: 5,
     },
     {
       id: 'eggs',
       inputs: [{ item: FEED, amount: 1 }],
       output: { item: EGGS, amount: 3 },
       durationTicks: 900,
+      xp: 14,
     },
   ],
 
@@ -257,11 +293,27 @@ const V1: Ruleset = {
     { id: 'field-3', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
 
     // Drei weitere sind das erste, was man sich leisten kann.
-    { id: 'field-4', startLevel: 0, levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT] }] },
-    { id: 'field-5', startLevel: 0, levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT] }] },
-    { id: 'field-6', startLevel: 0, levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT] }] },
+    {
+      id: 'field-4',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT], minPlayerLevel: 2 }],
+    },
+    {
+      id: 'field-5',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT], minPlayerLevel: 4 }],
+    },
+    {
+      id: 'field-6',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT], minPlayerLevel: 6 }],
+    },
 
-    { id: 'mill', startLevel: 0, levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED] }] },
+    {
+      id: 'mill',
+      startLevel: 0,
+      levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED], minPlayerLevel: 2 }],
+    },
 
     // Zwei Stufen, und genau das sind deine zwei Kaufschritte: erst steht das
     // Gehege leer, dann sind Hühner drin. Ohne Hühner läuft kein Rezept.
@@ -269,7 +321,7 @@ const V1: Ruleset = {
       id: 'coop-1',
       startLevel: 0,
       levels: [
-        { label: 'Gehege', cost: gold(300), recipes: [] },
+        { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
         { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
       ],
     },
@@ -277,7 +329,7 @@ const V1: Ruleset = {
       id: 'coop-2',
       startLevel: 0,
       levels: [
-        { label: 'Gehege', cost: gold(800), recipes: [] },
+        { label: 'Gehege', cost: gold(800), recipes: [], minPlayerLevel: 5 },
         { label: 'Hühner', cost: gold(400), recipes: [R_EGGS] },
       ],
     },
@@ -292,6 +344,7 @@ const V1: Ruleset = {
   priceBandMaxPct: 150,
   mailCapacity: 20,
 
+  levelThresholds: LEVELS,
   requestTemplates: REQUESTS,
   requestSlots: 3,
   // Zwanzig auf Vorrat. Bei Produktionszeiten sind das mehrere Stunden
@@ -318,18 +371,20 @@ const V2: Ruleset = {
     { id: 'eggs', storable: true, npcPrice: 28 },
   ],
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 100 },
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 100, xp: 2 },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
       output: { item: FEED, amount: 2 },
       durationTicks: 240,
+      xp: 5,
     },
     {
       id: 'eggs',
       inputs: [{ item: FEED, amount: 1 }],
       output: { item: EGGS, amount: 3 },
       durationTicks: 720,
+      xp: 14,
     },
   ],
   siloCapacity: 120,
@@ -350,18 +405,20 @@ const DEV: Ruleset = {
   ...V1,
   version: 1001,
   recipes: [
-    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 12 },
+    { id: 'wheat', inputs: [], output: { item: WHEAT, amount: 10 }, durationTicks: 12, xp: 2 },
     {
       id: 'feed',
       inputs: [{ item: WHEAT, amount: 3 }],
       output: { item: FEED, amount: 2 },
       durationTicks: 30,
+      xp: 5,
     },
     {
       id: 'eggs',
       inputs: [{ item: FEED, amount: 1 }],
       output: { item: EGGS, amount: 3 },
       durationTicks: 90,
+      xp: 14,
     },
   ],
   orderTtlTicks: 600,
@@ -407,6 +464,40 @@ export function getRuleset(version: number): Ruleset {
 export function levelRecipes(rules: Ruleset, plot: number, level: number): readonly number[] {
   if (level <= 0) return [];
   return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
+}
+
+/**
+ * Spielerlevel aus Erfahrung ableiten (M8).
+ *
+ * Abgeleitet statt gespeichert: Zwei Zahlen, die dasselbe bedeuten, laufen
+ * irgendwann auseinander — und dann ist unklar, welche gilt. Stufe 1 beginnt
+ * bei null Erfahrung.
+ */
+export function levelOf(rules: Ruleset, xp: number): number {
+  let level = 1;
+  for (const threshold of rules.levelThresholds) {
+    if (xp < threshold) break;
+    level++;
+  }
+  return level;
+}
+
+/** Erfahrung, ab der die nächste Stufe beginnt — `null` beim Maximum. */
+export function nextLevelAt(rules: Ruleset, xp: number): number | null {
+  for (const threshold of rules.levelThresholds) {
+    if (xp < threshold) return threshold;
+  }
+  return null;
+}
+
+/** Erfahrung, bei der die aktuelle Stufe begonnen hat — für den Fortschrittsbalken. */
+export function levelStartedAt(rules: Ruleset, xp: number): number {
+  let start = 0;
+  for (const threshold of rules.levelThresholds) {
+    if (xp < threshold) break;
+    start = threshold;
+  }
+  return start;
 }
 
 /** Kosten für die nächste Stufe — `null`, wenn schon voll ausgebaut. */
@@ -498,6 +589,7 @@ export function validateRuleset(rules: Ruleset): string[] {
     if (!Number.isInteger(r.durationTicks) || r.durationTicks < 1) {
       problems.push(`Rezept ${i} (${r.id}): Dauer ${r.durationTicks} < 1`);
     }
+    if (!Number.isInteger(r.xp) || r.xp < 0) problems.push(`Rezept ${i} (${r.id}): XP ungültig`);
     if (!itemOk(r.output.item)) problems.push(`Rezept ${i} (${r.id}): Ausgabe unbekannt`);
     if (!Number.isInteger(r.output.amount) || r.output.amount < 1) {
       problems.push(`Rezept ${i} (${r.id}): Ausgabemenge ${r.output.amount} < 1`);
@@ -532,10 +624,24 @@ export function validateRuleset(rules: Ruleset): string[] {
           problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Preis ${c.amount} < 1`);
         }
       }
-      // Eine Startstufe, die etwas kostet, wäre ein Widerspruch: Sie ist ja
-      // schon da, bezahlt hat sie nie jemand.
+      // Eine Startstufe, die etwas kostet oder ein Level verlangt, wäre ein
+      // Widerspruch: Sie ist ja schon da, bezahlt hat sie nie jemand.
       if (l < p.startLevel && level.cost.length > 0) {
         problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Startstufe mit Preis`);
+      }
+      if (l < p.startLevel && level.minPlayerLevel !== undefined) {
+        problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Startstufe mit Levelsperre`);
+      }
+      if (
+        level.minPlayerLevel !== undefined &&
+        (!Number.isInteger(level.minPlayerLevel) || level.minPlayerLevel < 1)
+      ) {
+        problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre < 1`);
+      }
+      if ((level.minPlayerLevel ?? 1) > rules.levelThresholds.length + 1) {
+        problems.push(
+          `Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre über dem Maximum — nie erreichbar`,
+        );
       }
     }
   }
@@ -554,7 +660,16 @@ export function validateRuleset(rules: Ruleset): string[] {
     }
   }
 
+  let previous = 0;
+  for (const [i, threshold] of rules.levelThresholds.entries()) {
+    if (!Number.isInteger(threshold) || threshold <= previous) {
+      problems.push(`Levelschwelle ${i}: ${threshold} nicht größer als ${previous}`);
+    }
+    previous = threshold;
+  }
+
   for (const [i, t] of rules.requestTemplates.entries()) {
+    if (!Number.isInteger(t.xp) || t.xp < 0) problems.push(`Auftrag ${i} (${t.id}): XP ungültig`);
     if (t.wants.length === 0) problems.push(`Auftrag ${i} (${t.id}): verlangt nichts`);
     if (t.reward.length === 0) problems.push(`Auftrag ${i} (${t.id}): gibt nichts`);
     for (const stack of [...t.wants, ...t.reward]) {

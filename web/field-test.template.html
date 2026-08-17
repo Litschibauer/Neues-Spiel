@@ -116,6 +116,23 @@
   .field.locked-plot { opacity: .6; border-style: dashed; }
   .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
+
+  /* Levelleiste (M8): Erfahrung ist die einzige Zahl, die nur steigt. */
+  .levelbar { display: flex; flex-direction: column; gap: .35rem; }
+  .levelbar-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--mono); font-size: .72rem;
+  }
+  .levelbar-head strong { font-size: .85rem; letter-spacing: .04em; }
+  .levelbar-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .levelbar-track {
+    height: .45rem; border-radius: 999px; background: var(--surface-2);
+    border: 1px solid var(--line); overflow: hidden;
+  }
+  .levelbar-fill {
+    height: 100%; width: 0%; background: var(--accent);
+    transition: width .35s ease-out;
+  }
 </style>
 
 <div class="wrap">
@@ -123,6 +140,14 @@
     <h1>Feldtest-Hof</h1>
     <span class="pill off" id="pill"><i></i><span id="pill-text">getrennt</span></span>
   </header>
+
+  <div class="levelbar" id="levelbar" hidden>
+    <div class="levelbar-head">
+      <strong id="lvl-num">Stufe 1</strong>
+      <span id="lvl-xp">0 / 0 XP</span>
+    </div>
+    <div class="levelbar-track"><div class="levelbar-fill" id="lvl-fill"></div></div>
+  </div>
 
   <div class="card setup" id="setup">
     <h2>Zugang</h2>
@@ -417,9 +442,17 @@
         }
       } else if (recipesAt(i, p.level).length === 0 && upgrade) {
         // Noch nicht gekauft, oder gekauft aber leer (Gehege ohne Hühner).
-        var affordable = upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; });
-        value.textContent = upgrade.label + ': ' + costText(upgrade.cost);
-        if (!affordable) btn.disabled = true;
+        var need = upgrade.minPlayerLevel || 1;
+        if (NS.levelOf(rules, s.xp) < need) {
+          value.textContent = 'ab Stufe ' + need;
+          btn.disabled = true;
+        } else {
+          var affordable = upgrade.cost.every(function (c) {
+            return (s.items[c.item] || 0) >= c.amount;
+          });
+          value.textContent = upgrade.label + ': ' + costText(upgrade.cost);
+          if (!affordable) btn.disabled = true;
+        }
       } else {
         value.textContent = 'leer';
       }
@@ -430,7 +463,11 @@
       if (upgrade && recipesAt(i, p.level).length > 0 && !busy) {
         var up = document.createElement('span');
         up.className = 'upgrade';
-        up.textContent = '+ ' + upgrade.label + ' (' + costText(upgrade.cost) + ')';
+        var gate = upgrade.minPlayerLevel || 1;
+        up.textContent =
+          NS.levelOf(rules, s.xp) < gate
+            ? '+ ' + upgrade.label + ' (ab Stufe ' + gate + ')'
+            : '+ ' + upgrade.label + ' (' + costText(upgrade.cost) + ')';
         up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(i); });
         btn.appendChild(up);
       }
@@ -441,6 +478,29 @@
 
     renderSellButtons(s);
     renderRequests(s);
+    renderLevel(s);
+  }
+
+  /**
+   * Levelleiste. Beide Enden kommen aus dem Regelwerk — die Seite rechnet
+   * nichts nach, was der Sim-Kern schon weiß.
+   */
+  function renderLevel(s) {
+    var level = NS.levelOf(rules, s.xp);
+    var from = NS.levelStartedAt(rules, s.xp);
+    var to = NS.nextLevelAt(rules, s.xp);
+
+    $('levelbar').hidden = false;
+    $('lvl-num').textContent = 'Stufe ' + level;
+
+    if (to === null) {
+      $('lvl-xp').textContent = s.xp + ' XP — Höchststufe';
+      $('lvl-fill').style.width = '100%';
+      return;
+    }
+    $('lvl-xp').textContent = (s.xp - from) + ' / ' + (to - from) + ' XP';
+    var pct = Math.round(((s.xp - from) * 100) / (to - from));
+    $('lvl-fill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
   /**
@@ -466,7 +526,7 @@
       want.textContent = (isNext ? 'als Nächstes: ' : '') + stacks(r.wants);
       var pay = document.createElement('span');
       pay.className = 'pay';
-      pay.textContent = stacks(r.reward);
+      pay.textContent = stacks(r.reward) + ' · ' + r.xp + ' XP';
 
       btn.appendChild(want); btn.appendChild(pay);
 

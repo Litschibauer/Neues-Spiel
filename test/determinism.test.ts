@@ -38,10 +38,21 @@ const COOP = 7;
 
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
 
+/**
+ * Hof mit Kapital UND Erfahrung.
+ *
+ * Beides wird gebraucht, seit Plätze hinter Leveln liegen (M8): Gold allein
+ * kauft keine Mühle mehr. Tests, die das Kaufen prüfen, sollen nicht erst
+ * zwanzig Minuten Weizen anbauen — dafür gibt es den Kernkreislauf-Test.
+ */
+function established(gold: number) {
+  return { ...fuzzStart(rules, gold), xp: 5000 };
+}
+
 test('DER KERNKREISLAUF: Feld → Mühle → Gehege → Eier, über drei Rechenwege', () => {
   // Genau die Schrittfolge, um die es im Spiel geht. Startkapital, damit der
   // Test die Kaufschritte prüft und nicht das Weizen-Grinden davor.
-  const server = new Server(fuzzStart(rules, 1000), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(established(1000), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
   const start = cloneState(server.snapshot.state);
 
@@ -79,6 +90,9 @@ test('DER KERNKREISLAUF: Feld → Mühle → Gehege → Eier, über drei Rechenw
   assert.equal(client.sellNpc(EGGS, 3).ok, true);
   assert.ok(count(client.state, GOLD) > 0);
 
+  // Und Erfahrung ist unterwegs angefallen, ohne dass ein Command dafür nötig war.
+  assert.ok(client.state.xp > start.xp, 'keine Erfahrung gesammelt');
+
   // ── Weg 3: Referenz ────────────────────────────────────────────────
   const reference = referenceRun(start, client.queue, rules);
   assert.deepEqual(client.state, reference, 'Client weicht von der Grundwahrheit ab');
@@ -94,9 +108,32 @@ test('DER KERNKREISLAUF: Feld → Mühle → Gehege → Eier, über drei Rechenw
   assert.deepEqual(res.snapshot.state.items, client.state.items);
 });
 
+test('ohne Level gibt es kein Gehege — auch nicht mit vollen Taschen', () => {
+  // Die ganze Wirkung von M8: eine Schwelle, hinter der etwas auftaucht.
+  const rich = new Client({
+    state: fuzzStart(rules, 100_000),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 1,
+  });
+
+  const tooEarly = rich.buy(COOP);
+  assert.equal(tooEarly.ok, false);
+  if (!tooEarly.ok) assert.equal(tooEarly.code, 'PLAYER_LEVEL_TOO_LOW');
+
+  // Mit Erfahrung geht derselbe Kauf durch — Geld war nie das Problem.
+  const seasoned = new Client({
+    state: established(100_000),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 1,
+  });
+  assert.equal(seasoned.buy(COOP).ok, true);
+});
+
 test('ohne Geld gibt es kein Gehege — und ohne Gehege keine Eier', () => {
   const client = new Client({
-    state: initialState(rules),
+    state: { ...initialState(rules), xp: 5000 },
     seq: 0,
     serverTs: T0,
     rulesetVersion: 1,
@@ -116,7 +153,7 @@ test('ohne Geld gibt es kein Gehege — und ohne Gehege keine Eier', () => {
 
 test('ein Rezept auf dem falschen Platz wird abgelehnt', () => {
   const client = new Client({
-    state: fuzzStart(rules, 1000),
+    state: established(1000),
     seq: 0,
     serverTs: T0,
     rulesetVersion: 1,
@@ -132,7 +169,7 @@ test('ein Rezept auf dem falschen Platz wird abgelehnt', () => {
 
 test('ein voll ausgebauter Platz lässt sich nicht weiter kaufen', () => {
   const client = new Client({
-    state: fuzzStart(rules, 100_000),
+    state: established(100_000),
     seq: 0,
     serverTs: T0,
     rulesetVersion: 1,
@@ -147,7 +184,7 @@ test('ein voll ausgebauter Platz lässt sich nicht weiter kaufen', () => {
 
 test('ausbauen geht nur bei leerem Platz', () => {
   const client = new Client({
-    state: fuzzStart(rules, 100_000),
+    state: established(100_000),
     seq: 0,
     serverTs: T0,
     rulesetVersion: 1,
@@ -190,7 +227,7 @@ test('geteilte Arrays: ein neuer Zustand verändert den alten nie', () => {
   // `cloneState` teilt die Arrays aus Kostengründen. Das ist nur zulässig,
   // solange niemand sie an Ort und Stelle verändert — sonst wäre `simulate`
   // keine reine Funktion mehr, und ein Re-Sim liefe anders als der erste Lauf.
-  const start = fuzzStart(rules, 1000);
+  const start = established(1000);
 
   const history: State[] = [start];
   const snapshots: string[] = [hashState(start)];

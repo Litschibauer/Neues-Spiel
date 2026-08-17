@@ -215,6 +215,7 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (requestIds.has(r.id)) problems.push(`Auftrags-Nummer ${r.id} doppelt vergeben`);
     requestIds.add(r.id);
     if (r.wants.length === 0) problems.push(`Auftrag ${r.id} verlangt nichts`);
+    if (!Number.isSafeInteger(r.xp) || r.xp < 0) problems.push(`Auftrag ${r.id}: XP ungültig`);
     if (r.reward.length === 0) problems.push(`Auftrag ${r.id} gibt nichts`);
     for (const stack of [...r.wants, ...r.reward]) {
       if (!rules.items[stack.item]) problems.push(`Auftrag ${r.id}: Gegenstand unbekannt`);
@@ -236,6 +237,9 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!Number.isSafeInteger(value)) problems.push(`kein sicherer Integer: ${value}`);
   }
   if (!Number.isSafeInteger(state.tick)) problems.push(`tick kein sicherer Integer: ${state.tick}`);
+  if (!Number.isSafeInteger(state.xp) || state.xp < 0) {
+    problems.push(`Erfahrung ungültig: ${state.xp}`);
+  }
 
   for (const [i, p] of state.plots.entries()) {
     const def = rules.plots[i];

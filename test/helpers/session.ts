@@ -11,7 +11,7 @@
  */
 
 import { Client } from '../../src/client/client.ts';
-import { getRuleset, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
+import { getRuleset, levelOf, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
 import { simulate } from '../../src/sim/sim.ts';
@@ -154,6 +154,7 @@ function affordableUpgrades(s: State, rules: Ruleset): number[] {
     if (plot.recipe !== EMPTY_PLOT) return;
     const level = nextLevel(rules, i, plot.level);
     if (!level) return;
+    if (levelOf(rules, s.xp) < (level.minPlayerLevel ?? 1)) return;
     if (level.cost.every((c) => count(s, c.item) >= c.amount)) out.push(i);
   });
   return out;
@@ -278,6 +279,7 @@ export function playRandomSession(
 export function assertAllIntegers(s: State): void {
   const nums: Array<[string, number]> = [
     ['tick', s.tick],
+    ['xp', s.xp],
     ...s.items.map((v, i): [string, number] => [`items[${i}]`, v]),
     ...s.passives.map((v, i): [string, number] => [`passives[${i}]`, v]),
     ...s.plots.map((p, i): [string, number] => [`plots[${i}].startedAt`, p.startedAt]),

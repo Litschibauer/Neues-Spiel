@@ -91,6 +91,7 @@ export function topUpRequests(
       id,
       wants: template.wants.map((w) => ({ item: w.item, amount: w.amount })),
       reward: template.reward.map((r) => ({ item: r.item, amount: r.amount })),
+      xp: template.xp,
     });
     id++;
   }

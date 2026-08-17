@@ -76,11 +76,21 @@ export type Request = {
   id: number;
   wants: readonly { item: number; amount: number }[];
   reward: readonly { item: number; amount: number }[];
+  /** Erfahrung fürs Liefern (M8). Steht im Auftrag, nicht in der Vorlage:
+   *  Der Sim-Kern kennt keine Vorlagen, nur den fertigen Auftrag. */
+  xp: number;
 };
 
 export type State = {
   /** Spielzeit in Ticks. NIE die Geräteuhr (§4). */
   tick: number;
+  /**
+   * Gesammelte Erfahrung (M8). Wächst nur, nie zurück.
+   *
+   * Das Level steht bewusst nicht daneben — es wird daraus abgeleitet
+   * (`levelOf`). Zwei Zahlen für dieselbe Sache laufen irgendwann auseinander.
+   */
+  xp: number;
   /** Bestände in Katalogreihenfolge. Länge == `rules.items.length`. */
   items: readonly number[];
   /** Produktionsplätze in Ruleset-Reihenfolge. Länge == `rules.plots.length`. */
@@ -163,7 +173,17 @@ export function initialState(rules: Ruleset): State {
   const passives: number[] = [];
   for (let i = 0; i < rules.passives.length; i++) passives.push(0);
 
-  return { tick: 0, items, plots, passives, orders: [], mail: [], nextOrderId: 1, requests: [] };
+  return {
+    tick: 0,
+    xp: 0,
+    items,
+    plots,
+    passives,
+    orders: [],
+    mail: [],
+    nextOrderId: 1,
+    requests: [],
+  };
 }
 
 /**
@@ -183,6 +203,7 @@ export function initialState(rules: Ruleset): State {
 export function cloneState(s: State): State {
   return {
     tick: s.tick,
+    xp: s.xp,
     items: s.items,
     plots: s.plots,
     passives: s.passives,

@@ -21,7 +21,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Server } from '../src/server/server.ts';
-import { RULESETS, getRuleset } from '../src/sim/rules.ts';
+import { RULESETS, getRuleset, levelOf } from '../src/sim/rules.ts';
 import { hashState } from '../src/sim/hash.ts';
 import { simulate } from '../src/sim/sim.ts';
 import type { Command } from '../src/sim/commands.ts';
@@ -126,16 +126,34 @@ function coreLoopVector(version: number) {
     tick += rules.recipes[recipe]!.durationTicks;
   };
 
-  // Genug Weizen anbauen und verkaufen, um Mühle + Gehege + Hühner zu zahlen.
+  // Sich hocharbeiten: Weizen anbauen, Aufträge beliefern (das bringt die
+  // Erfahrung), Rest verkaufen — bis Level UND Gold für die Kette reichen.
   const goal =
     rules.plots[MILL]!.levels[0]!.cost[0]!.amount +
     rules.plots[COOP]!.levels[0]!.cost[0]!.amount +
     rules.plots[COOP]!.levels[1]!.cost[0]!.amount;
+  const needLevel = Math.max(
+    rules.plots[MILL]!.levels[0]!.minPlayerLevel ?? 1,
+    rules.plots[COOP]!.levels[0]!.minPlayerLevel ?? 1,
+  );
 
-  while (state.items[rules.currency]! < goal) {
+  for (let round = 0; round < 200; round++) {
+    if (state.items[rules.currency]! >= goal && levelOf(rules, state.xp) >= needLevel) break;
+
     for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
     wait(R_WHEAT);
     for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+
+    // Aufträge beliefern, solange die Ware reicht — Erfahrung kommt fast nur
+    // von hier.
+    for (;;) {
+      const fillable = state.requests
+        .slice(0, rules.requestSlots)
+        .find((r) => r.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount));
+      if (!fillable) break;
+      push({ type: 'FILL_REQUEST', requestId: fillable.id });
+    }
+
     // Etwas Weizen zurückbehalten, sonst fehlt später das Mahlgut.
     const keep = 3;
     const sellable = state.items[WHEAT]! - keep;
@@ -143,9 +161,38 @@ function coreLoopVector(version: number) {
   }
 
   push({ type: 'BUY', plot: MILL });
+
+  // Mahlgut sicherstellen: Die Aufträge oben haben den Weizen unter Umständen
+  // komplett abgenommen.
+  const needWheat = rules.recipes[R_FEED]!.inputs[0]!.amount;
+  while (state.items[WHEAT]! < needWheat) {
+    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
+    wait(R_WHEAT);
+    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+  }
+
   push({ type: 'START', plot: MILL, recipe: R_FEED });
   wait(R_FEED);
   push({ type: 'COLLECT', plot: MILL });
+
+  // Gold für Gehege und Hühner zusammenbekommen.
+  const coopCost =
+    rules.plots[COOP]!.levels[0]!.cost[0]!.amount + rules.plots[COOP]!.levels[1]!.cost[0]!.amount;
+  for (let round = 0; round < 200 && state.items[rules.currency]! < coopCost; round++) {
+    for (let plot = 0; plot < 3; plot++) push({ type: 'START', plot, recipe: R_WHEAT });
+    wait(R_WHEAT);
+    for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
+    for (;;) {
+      const fillable = state.requests
+        .slice(0, rules.requestSlots)
+        .find((r) => r.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount));
+      if (!fillable) break;
+      push({ type: 'FILL_REQUEST', requestId: fillable.id });
+    }
+    if (state.items[WHEAT]! > 0) {
+      push({ type: 'SELL_NPC', item: WHEAT, amount: state.items[WHEAT]! });
+    }
+  }
 
   push({ type: 'BUY', plot: COOP }); // Gehege
   push({ type: 'BUY', plot: COOP }); // Hühner
@@ -155,10 +202,10 @@ function coreLoopVector(version: number) {
 
   // Und zum Schluss der Punkt des Ganzen: einen Kundenauftrag beliefern,
   // sofern die Ware dafür reicht. Sonst an den NPC verkaufen.
-  const fillable = state.requests
+  const last = state.requests
     .slice(0, rules.requestSlots)
     .find((r) => r.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount));
-  if (fillable) push({ type: 'FILL_REQUEST', requestId: fillable.id });
+  if (last) push({ type: 'FILL_REQUEST', requestId: last.id });
   else push({ type: 'SELL_NPC', item: EGGS, amount: state.items[EGGS]! });
 
   return {

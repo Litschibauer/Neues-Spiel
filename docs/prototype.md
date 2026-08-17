@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 121 Tests, keine Dependencies, kein Build-Step
+npm test        # 132 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run build   # Prüfstand-, Spiel- und Werkbank-Seite bauen
@@ -55,7 +55,9 @@ externe Zustellungen.
 ```
 Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier
                           ↓
-                  Kundenauftrag → Gold → mehr Plätze
+                  Kundenauftrag → Gold + Erfahrung
+                          ↓
+                  Stufe erreicht → neuer Platz kaufbar
 ```
 
 Bewusst nicht mehr. Jede weitere Mechanik ist neue Fläche, auf der Client und
@@ -79,6 +81,9 @@ Zwei Verdichtungen tragen den ganzen Kreislauf:
 - **`FILL_REQUEST` für jedes Auftragssystem.** LKW, Kunden, Boote,
   Sonderaufträge und Eventaufgaben sind „liefere N×A und M×B" mit anderen
   Zahlen (M6).
+- **Erfahrung und Stufen ganz ohne Command.** XP fällt beim Abholen und
+  Liefern nebenbei an, das Level wird daraus abgeleitet, und seine ganze
+  Wirkung ist eine Zahl neben dem Preis eines Platzes (M8).
 
 Der Preis dafür steht in `rules.ts` und wird von `rules.test.ts` erzwungen:
 **Kataloge sind append-only.** Zustände speichern Indizes; wer einen Eintrag
@@ -106,6 +111,7 @@ Schicht 5 ist im Server angelegt:
 | — | `rules.test.ts` | Jeder Katalog ist widerspruchsfrei, und **Kataloge wachsen nur hinten** — die Invariante, ohne die gespeicherte Indizes ihre Bedeutung verlieren. |
 | — | `config.test.ts` | Die Betriebsregeln: Dev und Produktion teilen sich nichts, das Dev-Regelwerk kommt nicht in Produktion, die Werkbank ist dort aus. |
 | — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. |
+| — | `levels.test.ts` | Erfahrung und Stufen: abgeleitet statt gespeichert, nie rückwärts, Schwellen dürfen über Versionen nur sinken — sonst würde ein Patch Spieler zurückstufen. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 

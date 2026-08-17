@@ -70,9 +70,19 @@ sich im Spiel völlig verschieden anfühlen und dieselbe Regel sind. Deckt spät
 Felder erweitern, Ställe ausbauen, Lager vergrößern, Slots und Geschwindigkeit
 upgraden, Gebäude bauen.
 
-### M8 · Level und Freischaltungen 🟢 **M**
+### M8 · Level und Freischaltungen 🟢 ✅ gebaut
 Erfahrung sammeln, Schwelle überschreiten, Tabelle sagt was neu ist. Der
 Technologie-/Forschungsbaum ist dieselbe Mechanik mit Vorbedingungen statt Levelzahl.
+
+**Die kleinste Mechanik im Projekt — und die einzige ohne eigenes Command.**
+Erfahrung fällt beim Abholen und Liefern nebenbei an; das Level wird daraus
+abgeleitet (nicht gespeichert, sonst laufen zwei Zahlen auseinander); und seine
+ganze Wirkung ist eine Zahl neben dem Preis eines Platzes.
+
+Ein Haken, der nicht offensichtlich war: Weil das Level *abgeleitet* ist, würde
+eine Levelkurve, die in einem Patch **steigt**, Spieler zurückstufen — und ihnen
+Plätze wieder zusperren, die sie längst gekauft haben. Deshalb dürfen Schwellen
+über Versionen hinweg nur sinken. `levels.test.ts` erzwingt das.
 
 ### M9 · Aufgeschobener Zufall 🟡 **M**
 Eine Regel für alle Würfel (§5) — siehe die Zufalls-Regel unten.
@@ -171,8 +181,8 @@ Nachbarschafts-Aufgaben zu koppeln. Nicht tun.
 
 | | |
 | --- | --- |
-| **Gebaut** | M1, M2, M3, M4, M5, M6, M7 |
-| **Fehlt** | M8 Level, M9 Zufall — plus Warteschlangenplätze als Parameter von M1 |
+| **Gebaut** | M1, M2, M3, M4, M5, M6, M7, M8 |
+| **Fehlt** | M9 Zufall (nur noch der Fall, wo Vorwissen ein Cheat wäre) — plus Warteschlangenplätze als Parameter von M1 |
 | **Gesamt** | **9 Mechaniken** |
 
 Neun ist ein Projekt, das man bauen kann. Hundert Features wären es nicht — und die
@@ -183,14 +193,18 @@ hundert Features bekommt man trotzdem, weil sie aus diesen neun als Daten heraus
 ```
 Feld → Weizen → Mühle → Hühnerfutter → Gehege → Eier
                           ↓
-                  Kundenauftrag → Gold → mehr Plätze
+                  Kundenauftrag → Gold + Erfahrung
+                          ↓
+                  Stufe erreicht → neuer Platz kaufbar
 ```
 
 Bewusst genau so viel. Der Kreislauf schließt sich, hat mit den Kundenaufträgen
-ein Ziel, läuft vollständig offline und ist über echtes HTTP geprüft.
+ein Ziel, mit den Stufen eine Richtung, läuft vollständig offline und ist über
+echtes HTTP geprüft.
 
-Was noch fehlt, damit es sich nach Fortschritt anfühlt: **Level** (M8) — eine
-Schwelle, hinter der etwas Neues auftaucht.
+Gemessen am Dev-Server: Stufe 2 nach zwei Erntezyklen (Mühle geht auf), Stufe 3
+nach vieren (Gehege geht auf). In Produktionszeiten sind das rund vier und acht
+Minuten — die ersten Freischaltungen kommen also im ersten Sitzen.
 
 ---
 

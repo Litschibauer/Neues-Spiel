@@ -15,7 +15,7 @@
  */
 
 import type { Ruleset } from './rules.ts';
-import { derivedTables, isTradable, levelRecipes, nextLevel } from './rules.ts';
+import { derivedTables, isTradable, levelOf, levelRecipes, nextLevel } from './rules.ts';
 import type { State } from './state.ts';
 import {
   EMPTY_PLOT,
@@ -158,6 +158,12 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       const level = nextLevel(rules, cmd.plot, plot.level);
       if (!level) throw new SimError('MAX_LEVEL');
+      // Die einzige Wirkung von Spielerleveln (M8): eine Schwelle, hinter der
+      // etwas auftaucht, das es vorher nicht gab. Keine neue Mechanik — eine
+      // Zahl neben dem Preis.
+      if (levelOf(rules, s.xp) < (level.minPlayerLevel ?? 1)) {
+        throw new SimError('PLAYER_LEVEL_TOO_LOW');
+      }
       for (const price of level.cost) {
         if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
       }
@@ -199,6 +205,9 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         startedAt: 0,
       });
       next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
+      // Erfahrung fürs Abholen (M8) — damit sich der Balken bei jeder Ernte
+      // bewegt und nicht nur bei Lieferungen.
+      next.xp = s.xp + recipe.xp;
       return next;
     }
 
@@ -326,6 +335,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       next.items = items;
       next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
+      next.xp = s.xp + request.xp;
       return next;
     }
 
