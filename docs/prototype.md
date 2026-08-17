@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 140 Tests, keine Dependencies, kein Build-Step
+npm test        # 150 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run build   # Prüfstand-, Spiel- und Werkbank-Seite bauen
@@ -36,6 +36,7 @@ src/client/
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
 src/server/
   server.ts       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
+  accounts.ts     Höfe: ein Schlüssel je Hof, auf der Platte nur der Hash
   requests.ts     Kundenaufträge vorwürfeln — Zufall gehört dem Server (§5)
   http.ts         Spielserver: HTTP-API + Handy-Client, ohne Abhängigkeiten
   config.ts       Dev/Prod-Trennung samt Riegel gegen die teuren Betriebsfehler
@@ -115,6 +116,7 @@ Schicht 5 ist im Server angelegt:
 | — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. |
 | — | `levels.test.ts` | Erfahrung und Stufen: abgeleitet statt gespeichert, nie rückwärts, Schwellen dürfen über Versionen nur sinken — sonst würde ein Patch Spieler zurückstufen. |
 | — | `persist.test.ts` | Der Spielstand auf dem Gerät: derselbe Zustand nach dem Neustart, und der Server nimmt ihn ohne Divergenz an. |
+| — | `accounts.test.ts` | Höfe vermischen sich nicht — der Punkt, an dem ein Mehrspieler-Server steht oder fällt. Dazu: nur Hashes auf der Platte, Anlege-Bremse, kaputte Datei kostet einen Hof statt aller. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
@@ -352,10 +354,12 @@ Der Ablauf ist der Feldtest von damals, nur automatisch:
 
 | Schritt | Was geprüft wird |
 | --- | --- |
-| 1. Online spielen | Aktionen landen in der Warteschlange und auf dem Gerät, der Worker cacht die Hülle |
+| 1. Hof anlegen | Der Schlüssel wird gezeigt statt still weggespeichert, dann spielen |
+| 1b. Online spielen | Aktionen landen in der Warteschlange und auf dem Gerät, der Worker cacht die Hülle |
 | 2. **Netz aus, neu laden** | Die App startet — und die nicht bestätigten Aktionen sind noch da |
 | 3. Offline weiterspielen | Die Warteschlange wächst ohne Netz weiter |
 | 4. Netz zurück | Alles bestätigt, Server hat die Arbeit, kein Divergenz-Alarm |
+| 5. Zweiter Hof | Ein zweiter Account auf demselben Server ist leer — nichts vermischt sich |
 
 Bewusst kein Teil von `npm test`: Der Lauf braucht einen Browser. Ein Test,
 der ohne ihn rot wird, sagt nichts.
@@ -413,9 +417,14 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
   LAN registriert sich der Service Worker schlicht nicht, und die Seite
   verhält sich wie vorher. Das ist keine Lücke der Architektur, sondern eine
   Browser-Regel; der Weg dahin steht in [deploy.md](deploy.md).
-- **Betrieb im Maßstab.** Der Feldtest-Server speichert in eine JSON-Datei und kennt
-  einen einzigen Spielstand. Die reinen Re-Sim-Kosten sind gemessen, Datenbank,
-  Accounts und Last unter vielen Spielern nicht.
+- **Betrieb im Maßstab.** Es gibt Accounts, aber der Server hält jeden benutzten
+  Hof im Speicher und schreibt bei jedem Sync eine Datei. Für ein paar hundert
+  Spieler gemütlich, für Zehntausende die Stelle für eine Datenbank. Die reinen
+  Re-Sim-Kosten sind gemessen, die Last unter vielen Spielern nicht.
+- **Kontowiederherstellung.** Es gibt keine. Schlüssel weg heißt Hof weg — die
+  bewusste Vereinfachung für den Anfang, die vor echten Spielern fallen muss.
+- **TLS.** Der Hof-Schlüssel reist in jedem Aufruf mit. Über einfaches HTTP im
+  selben WLAN liest ihn jeder mit.
 - **Snapshot-Signatur.** In §9 vorgesehen, hier nicht implementiert — der Server
   hält ohnehin seine eigene Kopie.
 

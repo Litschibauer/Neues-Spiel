@@ -76,25 +76,66 @@ npm run dev     # Entwicklung, Port 8788
 npm run prod    # Produktion,  Port 8787
 ```
 
-Beim ersten Start erzeugt der Server selbst ein Token, legt es unter
-`data/<umgebung>/token` ab (nur für den Besitzer lesbar) und gibt es einmal aus.
-Danach findet er es dort von allein wieder. **Jede Umgebung hat ihr eigenes.**
+### Spieler brauchen kein Token — sie legen einen Hof an
 
-**Token jederzeit nachschlagen:**
+Auf der Seite gibt es zwei Wege: **Neuen Hof anlegen** oder einen vorhandenen
+**Schlüssel** eingeben. Der Schlüssel sieht so aus:
+
+```
+hof_YNP7T9-4K21C1-SC9WZY-9GKGBC
+```
+
+Er wird **genau einmal** angezeigt, direkt nach dem Anlegen. Danach kennt der
+Server nur noch seinen Hash — auch der Betreiber kann ihn nicht nachschlagen.
+
+> ⚠️ **Schlüssel weg heißt Hof weg.** Es gibt kein Passwort und keine E-Mail,
+> über die sich etwas wiederherstellen ließe. Das ist die bewusste Vereinfachung
+> für den Anfang; vor einer echten Spielerschaft braucht es einen zweiten Weg
+> zurück in den Account.
+
+Höfe liegen als je eine Datei unter `data/<umgebung>/accounts/`. Ein Backup ist
+damit ein `cp -r` — und weil dort nur Hashes stehen, öffnet ein kopiertes
+Verzeichnis keine fremden Höfe.
+
+### Das Admin-Token
+
+Es öffnet nur noch die Werkbank unter `/api/admin/*`, nicht mehr das Spiel.
+Beim ersten Start erzeugt der Server es selbst, legt es unter
+`data/<umgebung>/token` ab (nur für den Besitzer lesbar) und gibt es einmal aus.
 
 ```bash
 cat data/prod/token
 cat data/dev/token
 ```
 
-Ein eigenes vorgeben (überschreibt die Datei nicht, hat aber Vorrang):
+Ein eigenes vorgeben:
 
 ```bash
-NEUES_SPIEL_TOKEN='dein-token' npm run prod
+NEUES_SPIEL_TOKEN='dein-admin-token' npm run prod
 ```
 
-Neues Token erzwingen: `rm data/prod/token`, dann neu starten. Am Token hängt
-nichts — der Spielstand kennt es nicht.
+Neues erzwingen: `rm data/prod/token`, dann neu starten.
+
+Die Werkbank arbeitet immer auf **einem** Hof. Ohne Angabe nimmt sie den zuletzt
+angelegten; mit `?account=<id>` einen bestimmten. Welche es gibt:
+
+```bash
+curl -s -H "Authorization: Bearer $(cat data/dev/token)" \
+     http://127.0.0.1:8788/api/admin/accounts
+```
+
+### Wie viele Höfe verträgt der Server?
+
+Zwei Bremsen, beide über Umgebungsvariablen einstellbar:
+
+| Variable | Standard | Wogegen |
+| --- | --- | --- |
+| `NEUES_SPIEL_NEW_PER_HOUR` | 20 | Jemand legt im Skript tausend Höfe an |
+| `NEUES_SPIEL_MAX_ACCOUNTS` | 5000 | Die Platte läuft voll |
+
+Ehrlich zur Grenze: Der Server hält alle *benutzten* Höfe im Speicher und
+schreibt bei jedem Sync eine Datei. Für ein paar hundert Spieler ist das
+gemütlich, für Zehntausende gehört dort eine Datenbank hin (Roadmap, Phase 4).
 
 ### Welcher Stand läuft gerade?
 

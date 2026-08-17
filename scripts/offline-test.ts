@@ -141,7 +141,8 @@ function check(name: string, ok: boolean, detail?: string): void {
   console.log(`  ${ok ? '✓' : '✗'} ${name}${detail ? `  (${detail})` : ''}`);
 }
 
-const TOKEN = 'offline-test-token-0123456789';
+/** Nur noch fürs Admin-Panel — Spieler melden sich mit ihrem Hof-Schlüssel an. */
+const ADMIN_TOKEN = 'offline-test-admin-0123456789';
 const PORT = 8799;
 const dataDir = mkdtempSync(join(tmpdir(), 'ns-offline-'));
 const profileDir = mkdtempSync(join(tmpdir(), 'ns-chrome-'));
@@ -162,11 +163,11 @@ const server = spawn(
   process.execPath,
   ['--experimental-strip-types', join(ROOT, 'src', 'server', 'http.ts'), '--env=dev'],
   {
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
       PORT: String(PORT),
-      NEUES_SPIEL_TOKEN: TOKEN,
+      NEUES_SPIEL_TOKEN: ADMIN_TOKEN,
       NEUES_SPIEL_SAVE: join(dataDir, 'save.json'),
       NEUES_SPIEL_TOKEN_FILE: join(dataDir, 'token'),
       NEUES_SPIEL_VERSION: 'offline-test',
@@ -174,10 +175,17 @@ const server = spawn(
   },
 );
 
+let serverLog = '';
+server.stdout?.on('data', (d) => (serverLog += d));
+server.stderr?.on('data', (d) => (serverLog += d));
+server.on('exit', (code) => {
+  if (code !== null && code !== 0) console.error(`  Server beendet mit ${code}`);
+});
+
 const api = (path: string, method = 'GET') =>
   fetch(`http://127.0.0.1:${PORT}${path}`, {
     method,
-    headers: { authorization: `Bearer ${TOKEN}` },
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
   }).then((r) => r.json() as Promise<Record<string, unknown>>);
 
 const browser = spawn(
@@ -199,17 +207,19 @@ let failed = false;
 try {
   // Auf den Server warten.
   let up = false;
-  for (let i = 0; i < 60 && !up; i++) {
+  let lastError = '';
+  for (let i = 0; i < 80 && !up; i++) {
     await sleep(250);
     try {
       up = ((await api('/health')) as { ok?: boolean }).ok === true;
-    } catch {
-      /* noch nicht da */
+    } catch (e) {
+      lastError = (e as Error).message;
     }
   }
-  if (!up) throw new Error('Server ist nicht hochgekommen');
-  // Reichlich Zeitbudget, damit der Test nicht in Echtzeit auf Weizen wartet.
-  await api('/api/admin/time?seconds=4000', 'POST');
+  if (!up) {
+    console.error('  Serverprotokoll:', serverLog.split('\n').filter(Boolean).slice(-8).join(' | '));
+    throw new Error(`Server ist nicht hochgekommen (${lastError})`);
+  }
 
   // Auf den Debug-Port warten.
   let wsUrl = '';
@@ -251,12 +261,21 @@ try {
     }
   };
 
-  // ── 1. Erster Besuch: Token setzen, verbinden, spielen ────────────────
-  console.log('1. Erster Besuch, online');
+  // ── 1. Erster Besuch: Hof anlegen, Schlüssel bekommen, spielen ────────
+  console.log('1. Erster Besuch — neuen Hof anlegen');
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
-  await waitFor(cdp, 'document.getElementById("connect")', 'Seite geladen');
-  await evaluate(cdp, `document.getElementById('token').value = ${JSON.stringify(TOKEN)}`);
-  await evaluate(cdp, `document.getElementById('connect').click()`);
+  await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
+  await evaluate(cdp, `document.getElementById('create').click()`);
+  await waitFor(cdp, '!document.getElementById("keybox").hidden', 'Schlüssel gezeigt');
+
+  const shownKey = await evaluate<string>(cdp, `document.getElementById('keyvalue').textContent`);
+  check(
+    'Der Schlüssel wird gezeigt, statt still weggespeichert zu werden',
+    /^hof_[0-9A-Z]{6}-[0-9A-Z]{6}-[0-9A-Z]{6}-[0-9A-Z]{6}$/.test(shownKey),
+    shownKey,
+  );
+
+  await evaluate(cdp, `document.getElementById('keydone').click()`);
   try {
     await waitFor(cdp, '!document.getElementById("game").hidden', 'Spiel sichtbar', 10_000);
   } catch (e) {
@@ -271,6 +290,9 @@ try {
     throw e;
   }
   check('Seite verbindet und zeigt den Hof', true);
+
+  // Zeitbudget erst JETZT — der Hof existiert vorher noch nicht.
+  await api('/api/admin/time?seconds=4000', 'POST');
 
   // Zwei Felder bestellen, damit es etwas zu verlieren gibt. Das dritte bleibt
   // frei — daran wird später gezeigt, dass man OHNE Netz weiterspielen kann.
@@ -382,9 +404,31 @@ try {
   }
   check('Alles bestätigt, Warteschlange leer', synced);
 
-  const status = (await api('/api/admin/status')) as { seq: number; divergenceAlerts: number };
+  const status = (await api('/api/admin/status')) as {
+    seq: number;
+    divergenceAlerts: number;
+    accountId: string;
+  };
   check('Server hat die Offline-Arbeit übernommen', status.seq >= after, `seq ${status.seq}`);
   check('Kein Divergenz-Alarm', status.divergenceAlerts === 0);
+
+  // ── 5. Zweiter Hof: die Stände dürfen sich nicht vermischen ───────────
+  console.log('\n5. Zweiter Hof auf demselben Server');
+  const second = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/account`, { method: 'POST' })
+  ).json()) as { key: string; accountId: string };
+  const secondState = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    })
+  ).json()) as { accountId: string; snapshot: { seq: number } };
+
+  check('Der zweite Hof ist ein anderer', second.accountId !== status.accountId);
+  check('Und er ist leer — keine fremde Arbeit', secondState.snapshot.seq === 0);
+  check(
+    'Der Admin sieht beide',
+    ((await api('/api/admin/accounts')) as { count: number }).count === 2,
+  );
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

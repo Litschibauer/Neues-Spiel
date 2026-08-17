@@ -119,6 +119,15 @@
   .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
 
+  /* Der Schlüssel wird genau einmal gezeigt — also groß und lesbar. */
+  .keybox { display: flex; flex-direction: column; gap: .7rem; border-color: var(--wait); }
+  .keybox code {
+    font-family: var(--mono); font-size: 1rem; letter-spacing: .06em; word-break: break-all;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 3px;
+    padding: .7rem .6rem; text-align: center; user-select: all;
+  }
+  .keybox .warn { margin: 0; font-size: .82rem; color: var(--wait); }
+
   /* Levelleiste (M8): Erfahrung ist die einzige Zahl, die nur steigt. */
   .levelbar { display: flex; flex-direction: column; gap: .35rem; }
   .levelbar-head {
@@ -152,10 +161,27 @@
   </div>
 
   <div class="card setup" id="setup">
-    <h2>Zugang</h2>
-    <input id="token" type="password" placeholder="Server-Token" autocomplete="off" spellcheck="false">
-    <div class="row"><button class="primary" id="connect">Verbinden</button></div>
-    <p class="hint">Das Token bleibt nur auf diesem Gerät. Es geht nie an einen Dritten.</p>
+    <h2>Hof</h2>
+    <div class="row"><button class="primary" id="create">Neuen Hof anlegen</button></div>
+    <p class="hint">Oder mit dem Schlüssel eines bestehenden Hofs weitermachen:</p>
+    <input id="token" type="password" placeholder="hof_XXXXXX-XXXXXX-XXXXXX-XXXXXX"
+           autocomplete="off" spellcheck="false" autocapitalize="off">
+    <div class="row"><button id="connect">Weiterspielen</button></div>
+    <p class="hint">Der Schlüssel bleibt auf diesem Gerät. Er geht nie an einen Dritten.</p>
+  </div>
+
+  <div class="card keybox" id="keybox" hidden>
+    <h2>Dein Schlüssel</h2>
+    <code id="keyvalue"></code>
+    <p class="warn">
+      <strong>Jetzt aufschreiben.</strong> Er ist das Einzige, was zu diesem Hof führt —
+      es gibt kein Passwort und keine E-Mail, über die er sich wiederherstellen ließe.
+      Weg ist weg.
+    </p>
+    <div class="row">
+      <button id="keycopy">Kopieren</button>
+      <button class="primary" id="keydone">Hab ich notiert</button>
+    </div>
   </div>
 
   <div id="game" hidden style="display:flex;flex-direction:column;gap:1.15rem">
@@ -204,7 +230,7 @@
       </dl>
       <div class="row" style="margin-top:.75rem">
         <button id="sync">Jetzt syncen</button>
-        <button id="forget">Token vergessen</button>
+        <button id="forget">Abmelden</button>
       </div>
       <p class="hint">
         Flugmodus an, weiterspielen, Flugmodus aus — nichts darf verloren gehen und
@@ -252,7 +278,7 @@
     localStorage.setItem('ns-device', deviceId);
   }
   var isActive = true;
-  var client = null, engine = null, rules = null;
+  var client = null, engine = null, rules = null, accountId = null;
   /** Serveruhr minus Geräteuhr. Die Geräteuhr allein ist wertlos (§4). */
   var clockOffsetMs = 0;
 
@@ -276,7 +302,10 @@
   function save() {
     if (!client) return;
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(NS.serializeClient(client, clockOffsetMs)));
+      localStorage.setItem(
+        SAVE_KEY,
+        JSON.stringify(NS.serializeClient(client, clockOffsetMs, accountId)),
+      );
     } catch (e) {
       // Speicher voll oder gesperrt (privater Modus). Weiterspielen geht,
       // ein Neustart kostet dann eben die Sitzung — sagen statt verschweigen.
@@ -718,7 +747,8 @@
   }
 
   /** Frischer Start mit einem Snapshot vom Server. */
-  function start(snapshot, serverTime) {
+  function start(snapshot, serverTime, id) {
+    accountId = id || accountId;
     begin(new NS.Client(snapshot, deviceId));
     adopt(snapshot, serverTime);
     setPill('live');
@@ -734,6 +764,7 @@
    */
   function startOffline(saved) {
     clockOffsetMs = saved.clockOffsetMs;
+    accountId = saved.accountId || null;
     begin(saved.client);
     setPill(navigator.onLine ? 'wait' : 'offline');
     log(
@@ -754,15 +785,68 @@
     $('connect').disabled = true;
     api('/api/state?deviceId=' + encodeURIComponent(deviceId)).then(function (data) {
       localStorage.setItem('ns-token', token);
-      start(data.snapshot, data.serverTime);
+      start(data.snapshot, data.serverTime, data.accountId);
       setLease(data.isActiveDevice !== false, data.activeSince);
       if (!data.isActiveDevice) log('Anderes Gerät ist aktiv — Aktionen gesperrt', 'bad');
     }).catch(function (e) {
       $('connect').disabled = false;
-      alert(e.message === 'UNAUTHORIZED' ? 'Token stimmt nicht.' : 'Server nicht erreichbar: ' + e.message);
+      alert(
+        e.message === 'UNAUTHORIZED'
+          ? 'Diesen Schlüssel kennt der Server nicht. Tippfehler?'
+          : 'Server nicht erreichbar: ' + e.message,
+      );
     });
   }
 
+  /**
+   * Neuen Hof anlegen.
+   *
+   * Der Schlüssel kommt genau einmal über die Leitung — danach kennt der
+   * Server nur noch seinen Hash. Deshalb wird er hier angehalten und gezeigt,
+   * statt ihn stillschweigend wegzuspeichern: Wer das Gerät verliert, hat
+   * sonst keine Chance mehr.
+   */
+  var pendingStart = null;
+  function createFarm() {
+    $('create').disabled = true;
+    fetch('/api/account', { method: 'POST' })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) throw new Error(body.error || 'HTTP ' + r.status);
+          return body;
+        });
+      })
+      .then(function (data) {
+        token = data.key;
+        localStorage.setItem('ns-token', token);
+        pendingStart = data;
+        $('keyvalue').textContent = data.key;
+        $('setup').hidden = true;
+        $('keybox').hidden = false;
+      })
+      .catch(function (e) {
+        $('create').disabled = false;
+        alert(
+          e.message === 'TOO_MANY_NEW_FARMS'
+            ? 'Zu viele neue Höfe von hier. Später nochmal.'
+            : e.message === 'SERVER_FULL'
+              ? 'Der Server ist voll.'
+              : 'Konnte keinen Hof anlegen: ' + e.message,
+        );
+      });
+  }
+
+  $('create').addEventListener('click', createFarm);
+  $('keycopy').addEventListener('click', function () {
+    var text = $('keyvalue').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    else window.prompt('Schlüssel kopieren:', text);
+  });
+  $('keydone').addEventListener('click', function () {
+    $('keybox').hidden = true;
+    start(pendingStart.snapshot, pendingStart.serverTime, pendingStart.accountId);
+    setLease(true, null);
+  });
   $('connect').addEventListener('click', connect);
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
   $('sync').addEventListener('click', function () { attempt('manuell', true); });
@@ -775,7 +859,7 @@
     log('Übernahme angemeldet — gilt ab der nächsten Aktion', 'good');
   });
   $('forget').addEventListener('click', function () {
-    if (!confirm('Token UND lokalen Spielstand von diesem Gerät löschen?')) return;
+    if (!confirm('Schlüssel UND lokalen Spielstand von diesem Gerät löschen?\n\nOhne notierten Schlüssel ist der Hof damit weg.')) return;
     localStorage.removeItem('ns-token');
     try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
     location.reload();

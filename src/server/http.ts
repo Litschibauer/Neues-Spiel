@@ -24,6 +24,8 @@ import { load, save } from './store.ts';
 import { initialState } from '../sim/state.ts';
 import { RULESETS, getRuleset } from '../sim/rules.ts';
 import { ConfigError, describeConfig, resolveConfig } from './config.ts';
+import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
+import type { AccountRecord } from './accounts.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
@@ -48,16 +50,16 @@ const TARGET_RULESET = CONFIG.rulesetVersion;
 const TOKEN_PATH = CONFIG.tokenPath;
 
 /**
- * Token besorgen: Umgebungsvariable, sonst Datei, sonst neu erzeugen.
+ * Das ADMIN-Token besorgen: Umgebungsvariable, sonst Datei, sonst neu erzeugen.
+ *
+ * Seit es Accounts gibt, ist das hier nicht mehr der Spielzugang — Spieler
+ * melden sich mit ihrem eigenen Hof-Schlüssel an. Dieses Token öffnet nur die
+ * Werkbank unter `/api/admin/*`, und die ist in Produktion ohnehin aus.
  *
  * Die Datei ist der bequeme Normalfall. Ein Token, das nur in der
  * Umgebungsvariable steht, landet in der Shell-History und ist nach dem
  * nächsten Neustart schlicht weg — dann steht man vor „wie finde ich das
  * eigentlich wieder heraus".
- *
- * Erreichbar, aber nicht offen: Ohne Token läuft der Server nie. Wenn keines da
- * ist, erzeugt er eines statt sich zu verweigern — das ist ebenso sicher und
- * erspart den Umweg über ein Kommando, das man erst noch finden muss.
  */
 function resolveToken(): string {
   const fromEnv = process.env.NEUES_SPIEL_TOKEN;
@@ -80,7 +82,7 @@ function resolveToken(): string {
   mkdirSync(dirname(TOKEN_PATH), { recursive: true });
   writeFileSync(TOKEN_PATH, generated + '\n', { mode: 0o600 });
   console.log('\n' + '─'.repeat(52));
-  console.log('  Neues Zugangs-Token erzeugt:\n');
+  console.log('  Neues Admin-Token erzeugt:\n');
   console.log(`  ${generated}\n`);
   console.log(`  Liegt in ${TOKEN_PATH} — jederzeit wieder abrufbar mit:`);
   console.log(`  cat ${TOKEN_PATH}`);
@@ -90,49 +92,117 @@ function resolveToken(): string {
 
 const TOKEN = resolveToken();
 
-// ── Zustand laden oder neu anlegen ─────────────────────────────────────
-const persisted = load(SAVE_PATH);
-const game = new Server(
-  initialState(getRuleset(TARGET_RULESET)),
-  Date.now(),
-  persisted ? persisted.snapshot.rulesetVersion : TARGET_RULESET,
-  TARGET_RULESET,
+// ── Accounts ───────────────────────────────────────────────────────────
+const accounts = new AccountStore(join(dirname(SAVE_PATH), 'accounts'));
+const limiter = new CreateLimiter(
+  Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
+  Number(process.env.NEUES_SPIEL_MAX_ACCOUNTS ?? 5000),
 );
 
-if (persisted) {
-  game.snapshot = persisted.snapshot;
-  game.appliedLog = persisted.appliedLog;
-  game.pendingDeliveries = persisted.pendingDeliveries;
-  game.targetRulesetVersion = TARGET_RULESET;
-  game.nextRequestId = persisted.nextRequestId ?? 1;
-  console.log(`Spielstand geladen: seq=${game.snapshot.seq}, tick=${game.snapshot.state.tick}`);
-} else {
-  console.log('Kein Spielstand gefunden — neuer Hof.');
+/**
+ * Geladene Höfe im Speicher.
+ *
+ * Geschrieben wird sofort, gehalten wird danach — ein Sync soll nicht bei
+ * jedem Aufruf eine Datei lesen. Bei ein paar hundert Höfen ist das gemütlich;
+ * ab Zehntausenden gehört hier eine Datenbank hin (Roadmap, Phase 4).
+ */
+const live = new Map<string, Server>();
+
+function freshGame(): Server {
+  const game = new Server(
+    initialState(getRuleset(TARGET_RULESET)),
+    Date.now(),
+    TARGET_RULESET,
+    TARGET_RULESET,
+  );
+  // Kundenaufträge sofort auffüllen: Wer die App startet, soll nicht erst eine
+  // Verbindung brauchen, um ein Ziel zu haben (Architektur §6).
+  game.stockRequests();
+  return game;
 }
 
-// Kundenaufträge sofort auffüllen: Wer die App startet, soll nicht erst eine
-// Verbindung brauchen, um ein Ziel zu haben (Architektur §6).
-game.stockRequests();
-
-function persist(): void {
-  save(SAVE_PATH, {
-    version: 1,
+function snapshotOf(game: Server) {
+  return {
     snapshot: game.snapshot,
     appliedLog: game.appliedLog,
     pendingDeliveries: game.pendingDeliveries,
     targetRulesetVersion: game.targetRulesetVersion,
     nextRequestId: game.nextRequestId,
-  });
+  };
 }
 
+function gameFor(account: AccountRecord): Server {
+  const cached = live.get(account.id);
+  if (cached) return cached;
+
+  const file = accounts.load(account.id);
+  const game = new Server(
+    initialState(getRuleset(TARGET_RULESET)),
+    Date.now(),
+    file ? file.snapshot.rulesetVersion : TARGET_RULESET,
+    TARGET_RULESET,
+  );
+  if (file) {
+    game.snapshot = file.snapshot;
+    game.appliedLog = file.appliedLog;
+    game.pendingDeliveries = file.pendingDeliveries;
+    game.nextRequestId = file.nextRequestId ?? 1;
+    game.stockRequests();
+  }
+  live.set(account.id, game);
+  return game;
+}
+
+function persist(account: AccountRecord, game: Server): void {
+  accounts.save({ ...account, lastSeenMs: Date.now() }, snapshotOf(game));
+}
+
+/**
+ * Einen alten Ein-Spielstand-Server übernehmen.
+ *
+ * Vor den Accounts gab es genau einen Hof und ein Token. Wer so einen Stand
+ * liegen hat, soll ihn nicht verlieren: Das alte Token wird zum Hof-Schlüssel,
+ * der Spielstand zum ersten Account. Läuft genau einmal.
+ */
+if (accounts.count === 0 && existsSync(SAVE_PATH)) {
+  const old = load(SAVE_PATH);
+  if (old) {
+    const now = Date.now();
+    accounts.adopt(
+      { id: 'a-imported', keyHash: keyHashOf(TOKEN), createdAt: now, lastSeenMs: now },
+      {
+        snapshot: old.snapshot,
+        appliedLog: old.appliedLog,
+        pendingDeliveries: old.pendingDeliveries,
+        targetRulesetVersion: TARGET_RULESET,
+        nextRequestId: old.nextRequestId ?? 1,
+      },
+    );
+    console.log('Alter Einzel-Spielstand übernommen — das bisherige Token ist jetzt sein Schlüssel.');
+  }
+}
+
+console.log(`Höfe: ${accounts.count}`);
+
 // ── Hilfen ─────────────────────────────────────────────────────────────
-function authorized(req: IncomingMessage): boolean {
+function bearer(req: IncomingMessage): string {
   const header = req.headers.authorization ?? '';
-  const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const a = Buffer.from(given);
+  return header.startsWith('Bearer ') ? header.slice(7) : '';
+}
+
+/** Nur fürs Admin-Panel. Spieler kommen mit ihrem Hof-Schlüssel (siehe unten). */
+function isAdmin(req: IncomingMessage): boolean {
+  const a = Buffer.from(bearer(req));
   const b = Buffer.from(TOKEN as string);
   // Längen zuerst prüfen: timingSafeEqual wirft bei ungleicher Länge.
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Grobe Herkunft für die Anlege-Bremse. Reicht für Versehen, nicht gegen Botnetze. */
+function originOf(req: IncomingMessage): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) return forwarded.split(',')[0]!.trim();
+  return req.socket.remoteAddress ?? 'unbekannt';
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -170,7 +240,7 @@ function readBody(req: IncomingMessage, limitBytes: number): Promise<string> {
  * Übersetzung gehört genau hierhin — der Sim-Kern kennt keine Namen (§2.2),
  * und ein Mensch tippt keine Indizes.
  */
-function resolveItem(name: string): number | null {
+function resolveItem(game: Server, name: string): number | null {
   const rules = getRuleset(game.snapshot.rulesetVersion);
   const index = rules.items.findIndex((i) => i.id === name);
   return index >= 0 ? index : null;
@@ -213,6 +283,111 @@ const MANIFEST = JSON.stringify({
  */
 const ADMIN_ENABLED = CONFIG.adminEnabled;
 
+
+/**
+ * Die Werkbank (§ Feldtest).
+ *
+ * Alle Eingriffe laufen über Mechanismen, die es ohnehin gibt: Zustellungen
+ * ins Postfach (§7) und das Zeitbudget (§4). Kein direkter Griff in Plätze
+ * oder Bestände — der würde beim nächsten Sync einen Divergenz-Alarm
+ * auslösen, obwohl gar kein Bug vorliegt.
+ *
+ * Seit es Accounts gibt, braucht jeder Eingriff ein Ziel: `?account=<id>`.
+ * Ohne Angabe nimmt die Werkbank den zuletzt angelegten Hof — bequem, solange
+ * man allein entwickelt, und in Produktion ist sie ohnehin aus.
+ */
+function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
+  if (url.pathname === '/api/admin/accounts') {
+    return json(res, 200, {
+      count: accounts.count,
+      accounts: accounts.list().map((a) => ({
+        id: a.id,
+        createdAt: a.createdAt,
+        lastSeenMs: a.lastSeenMs,
+        seq: live.get(a.id)?.snapshot.seq ?? null,
+      })),
+    });
+  }
+
+  const wanted = url.searchParams.get('account');
+  const target = wanted
+    ? accounts.get(wanted)
+    : (accounts.list().at(-1) ?? null);
+  if (!target) return json(res, 404, { error: 'NO_SUCH_ACCOUNT' });
+  const game = gameFor(target);
+
+  if (url.pathname === '/api/admin/status') {
+    return json(res, 200, {
+      accountId: target.id,
+      accounts: accounts.count,
+      // Der Katalog gehört mit in die Antwort: Der Zustand hält nur Zahlen in
+      // Katalogreihenfolge, und welche Reihenfolge das ist, hängt an der
+      // Regelversion.
+      itemIds: getRuleset(game.snapshot.rulesetVersion).items.map((i) => i.id),
+      seq: game.snapshot.seq,
+      tick: game.snapshot.state.tick,
+      serverTs: game.snapshot.serverTs,
+      serverTime: Date.now(),
+      rulesetVersion: game.snapshot.rulesetVersion,
+      targetRulesetVersion: game.targetRulesetVersion,
+      pendingDeliveries: game.pendingDeliveries.length,
+      activeDevice: game.activeDevice,
+      divergenceAlerts: game.divergenceAlerts.length,
+      migrationFailures: game.migrationFailures.length,
+      state: game.snapshot.state,
+    });
+  }
+
+  if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+
+  if (url.pathname === '/api/admin/time') {
+    const seconds = Number(url.searchParams.get('seconds') ?? '0');
+    if (!Number.isInteger(seconds) || seconds <= 0 || seconds > 90 * 86_400) {
+      return json(res, 400, { error: 'BAD_SECONDS' });
+    }
+    game.grantTime(seconds);
+    persist(target, game);
+    console.log(`[admin] ${target.id}: ${seconds}s Zeit gutgeschrieben`);
+    return json(res, 200, { ok: true, serverTs: game.snapshot.serverTs });
+  }
+
+  if (url.pathname === '/api/admin/grant') {
+    const name = url.searchParams.get('item') ?? 'eggs';
+    const amount = Number(url.searchParams.get('amount') ?? '10');
+    const item = resolveItem(game, name);
+    if (item === null || !Number.isInteger(amount) || amount <= 0) {
+      return json(res, 400, { error: 'BAD_GRANT' });
+    }
+    game.deliver({ item, amount, arrivedAt: Date.now() });
+    persist(target, game);
+    console.log(`[admin] ${target.id}: ${amount} ${name} ins Postfach`);
+    return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
+  }
+
+  if (url.pathname === '/api/admin/ruleset') {
+    const version = Number(url.searchParams.get('version') ?? '0');
+    if (!RULESETS.has(version)) return json(res, 400, { error: 'UNKNOWN_RULESET' });
+    if (version < game.snapshot.rulesetVersion) {
+      // Downgrades sind bewusst nicht vorgesehen (siehe migrate.ts).
+      return json(res, 400, { error: 'DOWNGRADE_NOT_SUPPORTED' });
+    }
+    game.targetRulesetVersion = version;
+    persist(target, game);
+    console.log(`[admin] ${target.id}: Zielversion v${version} — greift beim nächsten Sync`);
+    return json(res, 200, { ok: true, targetRulesetVersion: version });
+  }
+
+  if (url.pathname === '/api/admin/reset') {
+    game.reset(initialState(getRuleset(TARGET_RULESET)), Date.now(), TARGET_RULESET);
+    game.stockRequests();
+    persist(target, game);
+    console.log(`[admin] ${target.id}: Spielstand zurückgesetzt`);
+    return json(res, 200, { ok: true });
+  }
+
+  return json(res, 404, { error: 'NOT_FOUND' });
+}
+
 // ── Routen ─────────────────────────────────────────────────────────────
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -226,13 +401,15 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/health') {
     // Umgebung und Stand gehören hier hinein: Nur so sieht man von außen,
     // WELCHE Version gerade läuft — die Frage, die man beim Deployen hat.
+    //
+    // Nichts über einzelne Höfe: Die Route braucht bewusst keine Zugangsdaten,
+    // also darf sie auch nichts verraten, was einem Hof gehört.
     return json(res, 200, {
       ok: true,
       env: CONFIG.env,
       version: CONFIG.version,
-      rulesetVersion: game.snapshot.rulesetVersion,
-      seq: game.snapshot.seq,
-      tick: game.snapshot.state.tick,
+      rulesetVersion: TARGET_RULESET,
+      accounts: accounts.count,
     });
   }
 
@@ -271,11 +448,48 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname.startsWith('/api/')) {
-    if (!authorized(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
+    // ── Neuen Hof anlegen ────────────────────────────────────────────
+    //
+    // Die einzige Route ohne Zugangsdaten — man hat ja noch keine. Deshalb
+    // steht davor eine Bremse (R4): Ohne sie füllt jemand in einer Minute
+    // die Platte.
+    if (url.pathname === '/api/account' && req.method === 'POST') {
+      const allowed = limiter.allow(originOf(req), Date.now(), accounts.count);
+      if (!allowed.ok) return json(res, 429, { error: allowed.reason });
+
+      const game = freshGame();
+      const { account, key } = accounts.create(Date.now(), snapshotOf(game));
+      live.set(account.id, game);
+      console.log(`[account] neuer Hof ${account.id} (${accounts.count} gesamt)`);
+
+      // Der Schlüssel wird GENAU EINMAL ausgeliefert. Danach kennt der Server
+      // nur seinen Hash — auch wir können ihn nicht mehr nachschlagen.
+      return json(res, 201, {
+        key,
+        accountId: account.id,
+        snapshot: game.snapshot,
+        serverTime: Date.now(),
+        isActiveDevice: true,
+        activeSince: null,
+      });
+    }
+
+    // ── Admin: eigenes Token, eigener Pfad ───────────────────────────
+    if (url.pathname.startsWith('/api/admin/')) {
+      if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
+      if (!isAdmin(req)) return json(res, 401, { error: 'UNAUTHORIZED' });
+      return handleAdmin(url, req, res);
+    }
+
+    // ── Alles Übrige gehört einem Hof ────────────────────────────────
+    const account = accounts.resolve(bearer(req));
+    if (!account) return json(res, 401, { error: 'UNAUTHORIZED' });
+    const game = gameFor(account);
 
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const deviceId = url.searchParams.get('deviceId') ?? undefined;
       return json(res, 200, {
+        accountId: account.id,
         snapshot: game.snapshot,
         serverTime: Date.now(),
         // Damit ein zweites Gerät es erfährt, BEVOR es losspielt (R3).
@@ -307,7 +521,7 @@ const server = createServer(async (req, res) => {
 
       // Zeitautorität: der Server misst selbst (§4).
       const result = game.sync(parsed, Date.now());
-      persist();
+      persist(account, game);
 
       // `serverTime` mitgeben, damit der Client seine Uhr gegen die des Servers
       // ausrichten kann. Ohne das müsste er seiner eigenen vertrauen — und die
@@ -315,99 +529,22 @@ const server = createServer(async (req, res) => {
       Object.assign(result as object, { serverTime: Date.now() });
 
       const label = result.ok ? result.kind : `abgelehnt: ${result.reason}`;
-      console.log(`[sync] ${parsed.commands.length} Commands → ${label}, seq=${game.snapshot.seq}`);
+      console.log(
+        `[sync] ${account.id} ${parsed.commands.length} Commands → ${label}, seq=${game.snapshot.seq}`,
+      );
       return json(res, 200, result);
     }
 
-    // ── Admin-Werkzeuge ──────────────────────────────────────────────
-    //
-    // Alle Eingriffe laufen über Mechanismen, die es ohnehin gibt:
-    // Zustellungen ins Postfach (§7) und das Zeitbudget (§4). Kein direkter
-    // Griff in Felder oder Bestände — der würde beim nächsten Sync einen
-    // Divergenz-Alarm auslösen, obwohl gar kein Bug vorliegt.
-    if (url.pathname.startsWith('/api/admin/')) {
-      if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
-
-      if (url.pathname === '/api/admin/status') {
-        return json(res, 200, {
-          // Der Katalog gehört mit in die Antwort: Der Zustand hält nur
-          // Zahlen in Katalogreihenfolge, und welche Reihenfolge das ist,
-          // hängt an der Regelversion.
-          itemIds: getRuleset(game.snapshot.rulesetVersion).items.map((i) => i.id),
-          seq: game.snapshot.seq,
-          tick: game.snapshot.state.tick,
-          serverTs: game.snapshot.serverTs,
-          serverTime: Date.now(),
-          rulesetVersion: game.snapshot.rulesetVersion,
-          targetRulesetVersion: game.targetRulesetVersion,
-          pendingDeliveries: game.pendingDeliveries.length,
-          activeDevice: game.activeDevice,
-          divergenceAlerts: game.divergenceAlerts.length,
-          migrationFailures: game.migrationFailures.length,
-          state: game.snapshot.state,
-        });
-      }
-
-      if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
-
-      if (url.pathname === '/api/admin/time') {
-        const seconds = Number(url.searchParams.get('seconds') ?? '0');
-        if (!Number.isInteger(seconds) || seconds <= 0 || seconds > 90 * 86_400) {
-          return json(res, 400, { error: 'BAD_SECONDS' });
-        }
-        game.grantTime(seconds);
-        persist();
-        console.log(`[admin] ${seconds}s Zeit gutgeschrieben`);
-        return json(res, 200, { ok: true, serverTs: game.snapshot.serverTs });
-      }
-
-      if (url.pathname === '/api/admin/grant') {
-        const name = url.searchParams.get('item') ?? 'eggs';
-        const amount = Number(url.searchParams.get('amount') ?? '10');
-        const item = resolveItem(name);
-        if (item === null || !Number.isInteger(amount) || amount <= 0) {
-          return json(res, 400, { error: 'BAD_GRANT' });
-        }
-        game.deliver({ item, amount, arrivedAt: Date.now() });
-        persist();
-        console.log(`[admin] ${amount} ${name} ins Postfach`);
-        return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
-      }
-
-      if (url.pathname === '/api/admin/ruleset') {
-        const version = Number(url.searchParams.get('version') ?? '0');
-        if (!RULESETS.has(version)) return json(res, 400, { error: 'UNKNOWN_RULESET' });
-        if (version < game.snapshot.rulesetVersion) {
-          // Downgrades sind bewusst nicht vorgesehen (siehe migrate.ts).
-          return json(res, 400, { error: 'DOWNGRADE_NOT_SUPPORTED' });
-        }
-        game.targetRulesetVersion = version;
-        persist();
-        console.log(`[admin] Zielversion v${version} — greift beim nächsten Sync`);
-        return json(res, 200, { ok: true, targetRulesetVersion: version });
-      }
-
-      if (url.pathname === '/api/admin/reset') {
-        game.reset(initialState(getRuleset(TARGET_RULESET)), Date.now(), TARGET_RULESET);
-        game.stockRequests();
-        persist();
-        console.log('[admin] Spielstand zurückgesetzt');
-        return json(res, 200, { ok: true });
-      }
-
-      return json(res, 404, { error: 'NOT_FOUND' });
-    }
-
-    // Alter Pfad, bleibt für Skripte erhalten.
+    // Zustellung an den EIGENEN Hof — praktisch für Skripte und Tests.
     if (url.pathname === '/api/deliver' && req.method === 'POST') {
       const name = url.searchParams.get('item') ?? 'eggs';
       const amount = Number(url.searchParams.get('amount') ?? '5');
-      const item = resolveItem(name);
+      const item = resolveItem(game, name);
       if (item === null || !Number.isInteger(amount) || amount <= 0) {
         return json(res, 400, { error: 'BAD_DELIVERY' });
       }
       game.deliver({ item, amount, arrivedAt: Date.now() });
-      persist();
+      persist(account, game);
       return json(res, 200, { queued: game.pendingDeliveries.length });
     }
 
@@ -420,9 +557,10 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log('');
   for (const line of describeConfig(CONFIG)) console.log(line);
-  console.log(`Snapshot:   v${game.snapshot.rulesetVersion} → Ziel v${TARGET_RULESET}`);
+  console.log(`Regelwerk:  Ziel v${TARGET_RULESET}`);
+  console.log(`Höfe:       ${accounts.count}`);
   console.log(`Seite:      ${page ? 'eingebunden' : 'FEHLT (npm run build)'}`);
-  console.log(`Token:      …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
+  console.log(`Admin:      …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
   console.log('');
 });
 
@@ -430,7 +568,10 @@ server.listen(PORT, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     console.log(`\n${signal} — speichere und beende.`);
-    persist();
+    for (const [id, g] of live) {
+      const account = accounts.get(id);
+      if (account) persist(account, g);
+    }
     server.close(() => process.exit(0));
   });
 }

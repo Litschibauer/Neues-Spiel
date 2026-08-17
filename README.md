@@ -22,7 +22,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 140 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 150 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -88,14 +88,18 @@ Schritt unabhängig nachrechnet. Determinismus über zwei Engine-Familien belegt
 und Postfach implementiert, Inhalt vollständig datengetrieben, Dev und Produktion
 getrennt.
 
-**Und das Offline-Versprechen ist vollständig:** Der Spielstand liegt auf dem Gerät,
+**Das Offline-Versprechen ist vollständig:** Der Spielstand liegt auf dem Gerät,
 die App startet ohne Netz, und ein Neuladen im Funkloch kostet nichts.
 
-Noch kein fertiges Spiel: kein Orderbuch, keine Nachbarn, keine Accounts, keine
-richtige Oberfläche.
+**Und es gibt Accounts** — bewusst so einfach wie möglich: ein Hof ist ein
+120-Bit-Schlüssel, den der Server einmal ausgibt. Kein Passwort, keine E-Mail. Der
+Preis steht offen dabei: Schlüssel weg heißt Hof weg.
+
+Noch kein fertiges Spiel: kein Orderbuch, keine Nachbarn, kein TLS, keine richtige
+Oberfläche.
 
 ## Nächster Schritt
 
 Der Weg zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** — in Phasen, mit dem,
-was jede absichert und kostet. Als Nächstes: Accounts und eine Datenbank, damit aus
-einem Spielstand viele werden.
+was jede absichert und kostet. Als Nächstes: TLS (der Hof-Schlüssel reist in jedem
+Aufruf mit), und danach das Orderbuch — das Erste, was zwei Spieler wirklich verbindet.

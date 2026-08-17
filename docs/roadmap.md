@@ -156,9 +156,17 @@ Sichert ab: dass das Offline-Versprechen aus Phase 0 auch mit sozialen Features 
       Produktion, keine Werkbank in Produktion. Siehe `src/server/config.ts`.
       Vorgezogen, weil sich sonst jede weitere Änderung am echten Spielstand testet.
 
+- [x] ~~**Accounts**~~ statt ein Spielstand, ein Token. Erledigt, und bewusst so
+      einfach wie möglich: Ein Account ist ein 120-Bit-Zufallsschlüssel, den der
+      Server einmal ausgibt — kein Benutzername, kein Passwort, keine E-Mail.
+      Auf der Platte liegt nur der Hash, eine Datei je Hof. Der Preis steht
+      offen dabei: **Schlüssel weg heißt Hof weg.** Vor einer echten
+      Spielerschaft braucht es einen zweiten Weg zurück — dann aber bewusst,
+      mit einem zweiten Faktor, nicht nebenbei.
+
 Der Rest des jetzigen Servers ist ein Werkzeug, kein Produkt:
 
-- **Accounts** statt ein Spielstand, ein Token.
+- **Kontowiederherstellung.** Der offene Punkt aus den Accounts oben.
 - **Datenbank** statt JSON-Datei; Command-Log hinter alten Snapshots abschneiden.
 - **TLS** und Rate-Limits pro Konto (R4).
 - **Snapshot-Signatur** (§9).
@@ -213,17 +221,17 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**Phase 4: Accounts.**
+**TLS — und damit Phase 3 aufmachen.**
 
-Acht von neun Mechaniken stehen, der Kreislauf trägt, und das Offline-Versprechen
-ist vollständig eingelöst — bis hin zum Neuladen im Tunnel. Was jetzt fehlt, ist
-nicht mehr Spiel, sondern Betrieb: Der Server kennt **einen** Spielstand und
-**ein** Token.
+Es gibt jetzt mehrere Höfe auf einem Server. Damit ist zum ersten Mal
+*technisch* möglich, was die halbe Konzept-Map ausmacht: Aufträge zwischen
+Spielern, Nachbarn, Geschenke, Ranglisten.
 
-Das ist die Grenze, an der alles Weitere hängt. Ohne Accounts gibt es keinen
-zweiten Spieler, ohne zweiten Spieler kein Orderbuch, keine Nachbarn, keine
-Ranglisten — also die ganze Phase 3. Und es ist kein Forschungsrisiko mehr,
-sondern gewöhnliche Arbeit.
+Davor steht allerdings TLS, und zwar aus zwei unabhängigen Gründen: Der
+Hof-Schlüssel reist in jedem Aufruf mit (über einfaches HTTP liest ihn jeder
+im selben WLAN), und ohne HTTPS registriert sich der Service Worker nicht —
+die App startet dann doch nicht ohne Netz. Der Weg über Tailscale Serve steht
+in deploy.md und kostet zwei Zeilen.
 
-TLS gehört mit dazu, und zwar früher als gedacht: Ohne HTTPS registriert sich
-der Service Worker nicht, und die App startet dann doch nicht ohne Netz.
+Danach ist das **Orderbuch** (Phase 3) das erste, was zwei Spieler wirklich
+verbindet. Escrow und Preisband stehen bereits; was fehlt, ist der Abgleich.
