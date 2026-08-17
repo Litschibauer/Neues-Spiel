@@ -264,6 +264,12 @@ Command-Log**: Er wurde bei jedem Sync komplett neu geschrieben, der Aufwand
 einer Sitzung stieg also quadratisch — 344 MB Schreiblast für einen einzigen
 Spieler. Das hätte bei keiner Speichertechnik funktioniert.
 
+Damit die Wahl des Speichers keine Einbahnstraße ist, liegt darunter jetzt eine
+echte Grenze (`storage.ts`) mit einem Vertrag, den **jede** Implementierung
+bestehen muss (`test/storage-contract.test.ts`, läuft heute gegen zwei). Der
+Weg zu mehreren Serverprozessen — und warum die Datenbank dabei der letzte
+Schritt wäre, nicht der erste — steht in [`skalierung.md`](skalierung.md).
+
 **Als Nächstes**, in dieser Reihenfolge:
 
 1. **Der Hof soll sich nach Hof anfühlen.** Die Oberfläche steht, aber die

@@ -49,43 +49,22 @@
  */
 
 import { getRuleset } from '../sim/rules.ts';
-import { readMeta, transaction, writeMeta } from './db.ts';
-import type { Db } from './db.ts';
+import type { BookEntry, Settlement, Storage } from './storage.ts';
+export type { BookEntry, Settlement } from './storage.ts';
 import type { Offer, Order } from '../sim/state.ts';
 import type { Server } from './server.ts';
 
-/** Ein Angebot, wie es im Buch steht — mit allem, was der Sim-Kern nicht sieht. */
-export type BookEntry = {
-  /** Marktweit eindeutig. Nicht die Auftragsnummer des Verkäufers. */
-  id: number;
-  sellerId: string;
-  /** Die Auftragsnummer beim Verkäufer — darüber wird abgerechnet. */
-  orderId: number;
-  item: number;
-  amount: number;
-  /** Pro Stück. */
-  price: number;
-  listedMs: number;
-};
-
-/**
- * Was einem Verkäufer zusteht, der gerade nicht da war.
- *
- * Zwei Teile, und beide müssen sein: Der Auftrag muss aus seinem Zustand
- * verschwinden (die Ware ist weg), und das Geld muss ankommen. Beides passiert
- * bei seinem nächsten Sync — bis dahin liegt es hier.
- */
-export type Settlement = {
-  orderId: number;
-  /** Erlös in Münzen, bereits ausgerechnet. */
-  gold: number;
-  soldMs: number;
-};
-
 export class Market {
-  private readonly db: Db | null;
+  private readonly store: Storage | null;
   private nextOfferId = 1;
-  /** Nach Angebots-ID. Eine Map, weil `claim` der heiße Pfad ist. */
+  /**
+   * Das Buch im Speicher — als **Auslage**, nicht als Wahrheit.
+   *
+   * Gelesen wird daraus (Stöbern ist der häufigste Zugriff und soll nichts
+   * kosten), entschieden wird im Speicher: `claimOffer` ist dort ein einziger
+   * atomarer Griff. Damit hängt die Frage „wer bekommt die Ware" nicht daran,
+   * dass genau ein Prozess läuft.
+   */
   private readonly book = new Map<number, BookEntry>();
   /** Verkäufer-ID → was ihm beim nächsten Sync zusteht. */
   private readonly settlements = new Map<string, Settlement[]>();
@@ -93,79 +72,53 @@ export class Market {
   private readonly touched = new Set<number>();
 
   /**
-   * `db === null` heißt: nur im Speicher. Für Tests — und dafür, dass ein
-   * Markt ohne Schreibrechte nicht gleich beim Start umfällt.
+   * `store === null` heißt: nur im Speicher, ohne Dauerhaftigkeit. Für Tests —
+   * und dafür, dass ein Markt ohne Schreibrechte nicht beim Start umfällt.
    */
-  constructor(db: Db | null) {
-    this.db = db;
-    if (db) this.load(db);
+  constructor(store: Storage | null) {
+    // `undefined` ist KEIN gültiger Wert, und die Prüfung ist keine Pedanterie:
+    // Genau so ist der Markt in einer Messung still in den Nur-Speicher-Betrieb
+    // gefallen — ein vertippter Zugriff lieferte `undefined`, `if (store)` war
+    // falsch, und niemand hat es gemerkt. In Produktion hieße das: eingestellte
+    // Angebote überleben keinen Neustart, und man erfährt es vom Spieler.
+    if (store === undefined) {
+      throw new TypeError('Market braucht einen Storage oder ausdrücklich null');
+    }
+    this.store = store;
+    if (store) this.load(store);
   }
 
-  private load(db: Db): void {
-    for (const row of db
-      .prepare('select id, seller, order_id, item, amount, price, listed_ms from market_offers')
-      .all() as Array<Record<string, number | string>>) {
-      const entry: BookEntry = {
-        id: Number(row.id),
-        sellerId: String(row.seller),
-        orderId: Number(row.order_id),
-        item: Number(row.item),
-        amount: Number(row.amount),
-        price: Number(row.price),
-        listedMs: Number(row.listed_ms),
-      };
-      this.book.set(entry.id, entry);
+  private load(store: Storage): void {
+    for (const entry of store.loadBook()) this.book.set(entry.id, entry);
+    for (const s of store.loadSettlements()) {
+      const list = this.settlements.get(s.sellerId) ?? [];
+      list.push(s);
+      this.settlements.set(s.sellerId, list);
     }
-
-    for (const row of db
-      .prepare('select seller, order_id, gold, sold_ms from market_settlements')
-      .all() as Array<Record<string, number | string>>) {
-      const seller = String(row.seller);
-      const list = this.settlements.get(seller) ?? [];
-      list.push({ orderId: Number(row.order_id), gold: Number(row.gold), soldMs: Number(row.sold_ms) });
-      this.settlements.set(seller, list);
-    }
-
-    this.nextOfferId = Number(readMeta(db, 'market.nextOfferId') ?? '1');
+    this.nextOfferId = Number(store.getMeta('market.nextOfferId') ?? '1');
   }
 
   /**
    * Gemerkte Änderungen am Buch schreiben. Gibt zurück, wie viele.
    *
-   * Abrechnungen sind hier NICHT dabei — die gehen sofort raus (siehe `claim`).
-   * Ein verlorenes Angebot kostet den Verkäufer eine Neueinstellung; eine
-   * verlorene Abrechnung kostet ihn sein Geld.
+   * Abrechnungen sind hier NICHT dabei — die schreibt der Speicher schon beim
+   * Kauf, im selben Griff. Ein verlorenes Angebot kostet den Verkäufer eine
+   * Neueinstellung; eine verlorene Abrechnung kostet ihn sein Geld.
    */
   flush(): number {
-    if (!this.db || this.touched.size === 0) return 0;
-    const ids = [...this.touched];
-    const db = this.db;
-    transaction(db, () => {
-      const del = db.prepare('delete from market_offers where id = ?');
-      const put = db.prepare(
-        `insert into market_offers (id, seller, order_id, item, amount, price, listed_ms)
-         values (?, ?, ?, ?, ?, ?, ?)
-         on conflict(id) do update set amount = excluded.amount, price = excluded.price`,
-      );
-      for (const id of ids) {
-        const entry = this.book.get(id);
-        if (!entry) del.run(id);
-        else {
-          put.run(
-            entry.id,
-            entry.sellerId,
-            entry.orderId,
-            entry.item,
-            entry.amount,
-            entry.price,
-            entry.listedMs,
-          );
-        }
-      }
-      writeMeta(db, 'market.nextOfferId', String(this.nextOfferId));
-    });
+    if (!this.store || this.touched.size === 0) return 0;
+    const upserts: BookEntry[] = [];
+    const removed: number[] = [];
+    for (const id of this.touched) {
+      const entry = this.book.get(id);
+      if (entry) upserts.push(entry);
+      else removed.push(id);
+    }
+    this.store.putOffers(upserts, removed);
+    this.store.setMeta('market.nextOfferId', String(this.nextOfferId));
+    const n = this.touched.size;
     this.touched.clear();
-    return ids.length;
+    return n;
   }
 
   get size(): number {
@@ -221,6 +174,19 @@ export class Market {
         listedMs: nowMs,
       });
     }
+
+    // SOFORT durchschreiben, nicht sammeln.
+    //
+    // Seit der Kauf im Speicher entschieden wird (`claimOffer`), ist die
+    // Auslage im Arbeitsspeicher nur noch ein Schaufenster — maßgeblich ist,
+    // was in der Datenbank steht. Ein Angebot, das erst zwei Sekunden später
+    // dort ankommt, wäre für den Käufer sichtbar und trotzdem nicht kaufbar:
+    // Er bekäme `OFFER_GONE` auf etwas, das gerade erst eingestellt wurde.
+    //
+    // Teuer ist das nicht: Geschrieben wird nur, wenn sich wirklich etwas
+    // geändert hat, und das passiert beim Einstellen und Zurückziehen — nicht
+    // bei jedem Sync.
+    this.flush();
   }
 
   /**
@@ -254,37 +220,43 @@ export class Market {
    * `null` heißt: zu spät.
    */
   claim(offerId: number, buyerId: string, nowMs: number): BookEntry | null {
-    const entry = this.book.get(offerId);
-    if (!entry) return null;
-    // Auch das noch prüfen: Ein Hof, der sein eigenes Angebot kauft, würde sich
-    // selbst Gold überweisen und die Ware zurückbekommen — eine Geldpresse.
-    if (entry.sellerId === buyerId) return null;
+    // Ohne Speicher (Tests) entscheidet die Auslage selbst.
+    if (!this.store) {
+      const entry = this.book.get(offerId);
+      if (!entry || entry.sellerId === buyerId) return null;
+      this.book.delete(offerId);
+      this.touched.add(offerId);
+      const list = this.settlements.get(entry.sellerId) ?? [];
+      list.push({
+        sellerId: entry.sellerId,
+        orderId: entry.orderId,
+        gold: entry.amount * entry.price,
+        soldMs: nowMs,
+      });
+      this.settlements.set(entry.sellerId, list);
+      return entry;
+    }
+
+    // Mit Speicher entscheidet DER — in einem Griff, samt Abrechnung. Die
+    // Auslage zieht danach nur nach.
+    const entry = this.store.claimOffer(offerId, buyerId, nowMs);
+    if (!entry) {
+      // Auch ein Fehlschlag ist eine Information: Das Angebot ist weg, die
+      // Auslage weiß es nur noch nicht.
+      if (this.book.delete(offerId)) this.touched.delete(offerId);
+      return null;
+    }
 
     this.book.delete(offerId);
-    this.touched.add(offerId);
-
-    const settlement: Settlement = {
+    this.touched.delete(offerId);
+    const list = this.settlements.get(entry.sellerId) ?? [];
+    list.push({
+      sellerId: entry.sellerId,
       orderId: entry.orderId,
       gold: entry.amount * entry.price,
       soldMs: nowMs,
-    };
-    const list = this.settlements.get(entry.sellerId) ?? [];
-    list.push(settlement);
+    });
     this.settlements.set(entry.sellerId, list);
-
-    // SOFORT schreiben, nicht sammeln. Ein Verkauf, der bei einem Absturz
-    // verschwindet, heißt: Der Käufer hat bezahlt, der Verkäufer bekommt
-    // nichts. Das ist der eine Fall im Markt, der keine Verzögerung verträgt.
-    if (this.db) {
-      const db = this.db;
-      transaction(db, () => {
-        db.prepare('delete from market_offers where id = ?').run(offerId);
-        db.prepare(
-          'insert into market_settlements (seller, order_id, gold, sold_ms) values (?, ?, ?, ?)',
-        ).run(entry.sellerId, settlement.orderId, settlement.gold, settlement.soldMs);
-      });
-      this.touched.delete(offerId);
-    }
     return entry;
   }
 
@@ -293,9 +265,7 @@ export class Market {
     const list = this.settlements.get(sellerId);
     if (!list || list.length === 0) return [];
     this.settlements.delete(sellerId);
-    if (this.db) {
-      this.db.prepare('delete from market_settlements where seller = ?').run(sellerId);
-    }
+    this.store?.takeSettlements(sellerId);
     return list;
   }
 
@@ -313,9 +283,7 @@ export class Market {
       }
     }
     this.settlements.delete(sellerId);
-    if (this.db) {
-      this.db.prepare('delete from market_settlements where seller = ?').run(sellerId);
-    }
+    this.store?.forgetSeller(sellerId);
   }
 }
 

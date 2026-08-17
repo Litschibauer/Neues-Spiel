@@ -43,7 +43,7 @@ const duration = rules.recipes[R_WHEAT]!.durationTicks;
 const dir = mkdtempSync(join(tmpdir(), 'ns-bench-'));
 const dbPath = join(dir, 'spiel.db');
 const accounts = new AccountStore(dbPath);
-const market = new Market(accounts.database);
+const market = new Market(accounts.storage);
 const live = new Map<string, Server>();
 
 console.log(`\n${FARMS} Höfe, ${ROUNDS} Runden je Hof — echter Kern, echter Speicher\n`);
@@ -127,6 +127,20 @@ try {
 } catch {
   /* kein WAL vorhanden */
 }
+/**
+ * Vor dem Messen aufräumen lassen.
+ *
+ * `heapUsed` ohne erzwungene Bereinigung misst überwiegend Müll, der noch
+ * nicht abgeholt wurde — zwei Läufe desselben Codes unterschieden sich damit
+ * um den Faktor zweieinhalb. Mit `--expose-gc` steht hier eine Zahl, die
+ * wirklich etwas über den Bedarf aussagt; ohne das Flag wird sie als
+ * unzuverlässig ausgewiesen, statt sie zu behaupten.
+ */
+const gc = (globalThis as { gc?: () => void }).gc;
+if (gc) {
+  gc();
+  gc();
+}
 const mem = process.memoryUsage();
 
 console.log(`Spielen:   ${elapsedMs.toFixed(0)} ms für ${syncs} Syncs`);
@@ -141,7 +155,7 @@ console.log(`  WAL               ${(walBytes / 1024 / 1024).toFixed(1)} MB`);
 console.log(`  je Hof            ${(dbBytes / FARMS / 1024).toFixed(1)} kB`);
 console.log(`  Schreibvorgänge   ${writes.toLocaleString('de-DE')} statt ${syncs.toLocaleString('de-DE')}`);
 console.log('');
-console.log('Speicher');
+console.log(gc ? 'Speicher (nach Bereinigung)' : 'Speicher (OHNE --expose-gc: unzuverlässig)');
 console.log(`  Heap benutzt      ${(mem.heapUsed / 1024 / 1024).toFixed(0)} MB`);
 console.log(`  je geladenem Hof  ${(mem.heapUsed / FARMS / 1024).toFixed(0)} kB`);
 console.log(`  hochgerechnet     ${((mem.heapUsed / FARMS) * 4000 / 1024 / 1024).toFixed(0)} MB bei 4000 gleichzeitig geladenen Höfen`);

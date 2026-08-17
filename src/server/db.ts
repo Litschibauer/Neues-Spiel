@@ -128,6 +128,20 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       create table meta (k text primary key, v text not null);
     `);
   },
+  /**
+   * Besitz eines Hofes.
+   *
+   * Noch ohne Wirkung, solange nur ein Prozess läuft — aber die Spalte muss da
+   * sein, bevor ein zweiter startet. Sonst wäre der Moment, in dem man sie
+   * braucht, genau der Moment, in dem man sie nicht mehr in Ruhe einführen
+   * kann.
+   */
+  (db) => {
+    db.exec(`
+      alter table accounts add column owner text;
+      alter table accounts add column owner_until integer not null default 0;
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

@@ -111,7 +111,7 @@ const limiter = new CreateLimiter(
  * Eine Datei neben den Accounts, damit Dev und Produktion getrennte Märkte
  * haben: Ein Testverkauf darf nie in einer echten Auslage auftauchen.
  */
-const market = new Market(accounts.database);
+const market = new Market(accounts.storage);
 
 /**
  * Geladene Höfe im Speicher.

@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Market, connectMarket, publishOrders, settleSales } from '../src/server/market.ts';
-import { openDb } from '../src/server/db.ts';
+import { SqliteStorage } from '../src/server/storage.ts';
 import { Server } from '../src/server/server.ts';
 import { Client } from '../src/client/client.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
@@ -341,7 +341,7 @@ test('niemand kauft bei sich selbst', () => {
 test('das Buch überlebt einen Neustart', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ns-market-'));
   try {
-    const db = openDb(join(dir, 'spiel.db'));
+    const db = new SqliteStorage(join(dir, 'spiel.db'));
     const market = new Market(db);
     const live = new Map<string, Server>();
     const anna = farm(market, live, 'anna', 0, 20);
@@ -355,7 +355,7 @@ test('das Buch überlebt einen Neustart', () => {
     market.claim(market.entries()[0]!.id, 'ben', T0);
     db.close();
 
-    const again = new Market(openDb(join(dir, 'spiel.db')));
+    const again = new Market(new SqliteStorage(join(dir, 'spiel.db')));
     assert.equal(again.size, 0, 'das verkaufte Angebot steht wieder im Buch');
     assert.equal(again.peekSettlements('anna').length, 1, 'Annas Erlös ist verloren');
     assert.equal(again.peekSettlements('anna')[0]!.gold, 30);
@@ -367,16 +367,19 @@ test('das Buch überlebt einen Neustart', () => {
 test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ns-market-'));
   try {
-    const db = openDb(join(dir, 'spiel.db'));
+    const db = new SqliteStorage(join(dir, 'spiel.db'));
     const market = new Market(db);
     const live = new Map<string, Server>();
     const anna = farm(market, live, 'anna', 0, 20);
     play(anna, (c) => c.listOrder(WHEAT, 10, 3));
     publishOrders(market, 'anna', anna);
-    assert.equal(market.flush(), 1, 'nichts zu schreiben gemerkt');
+    // Kein `flush` nötig: Ein eingestelltes Angebot geht sofort durch. Sonst
+    // wäre es sichtbar, aber nicht kaufbar — der Kauf wird im Speicher
+    // entschieden, nicht in der Auslage.
+    assert.equal(market.flush(), 0, 'das Angebot wartet noch aufs Schreiben');
     db.close();
 
-    const again = new Market(openDb(join(dir, 'spiel.db')));
+    const again = new Market(new SqliteStorage(join(dir, 'spiel.db')));
     assert.equal(again.size, 1);
     assert.equal(again.browse('ben', 10)[0]!.amount, 10);
     // Die Nummernvergabe läuft weiter, statt bei 1 neu zu beginnen — sonst

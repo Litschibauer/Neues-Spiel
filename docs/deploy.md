@@ -158,6 +158,10 @@ geht verloren; wegräumen darfst du selbst.
 > **keine Abhängigkeit**, und die Behauptung „läuft ohne npm install" bleibt
 > wahr.
 
+> Die ausführliche Antwort auf „trägt das, und sind wir eingesperrt?" steht in
+> [`skalierung.md`](skalierung.md) — samt dem, was ein zweiter Server kosten
+> würde und warum die Datenbank dabei der *letzte* Schritt wäre.
+
 ### Trägt das 1000–4000 gleichzeitige Spieler?
 
 Ja, auf einem Server, ohne Loadbalancer und ohne Regionen. Nachgemessen mit
@@ -166,11 +170,28 @@ Attrappe:
 
 | | 2000 Höfe | 4000 Höfe |
 | --- | --- | --- |
-| Durchsatz | ~9.100 Syncs/s | ~7.200 Syncs/s |
-| je Sync (inkl. Speichern) | 110 µs | 140 µs |
+| Durchsatz | ~9.100 Syncs/s | ~7.300 Syncs/s |
+| je Sync (inkl. Speichern) | 110 µs | 136 µs |
 | Datenbank | 16 MB | 32 MB |
-| Arbeitsspeicher | 75 MB | 98 MB |
+| Arbeitsspeicher | 40 MB | 73 MB |
 | Schreibvorgänge | 8.000 statt 60.000 | 16.000 statt 120.000 |
+
+Dazu der Fall, der am meisten Sorge macht — **alle kommen gleichzeitig aus dem
+Funkloch zurück und müssen validiert werden**:
+
+| Spieler | Aktionen je | zu prüfen | Server blockiert |
+| --- | --- | --- | --- |
+| 2000 | 200 | 402.000 | 0,1 s |
+| 4000 | 200 | 804.000 | 0,2 s |
+
+Ein einzelner Rückkehrer mit den maximal erlaubten 5000 Aktionen kostet 4,6 ms.
+Der Sim-Kern ist reine Integer-Arithmetik und schreibt Zeit in geschlossener
+Form fort (§7) — acht Stunden Abwesenheit kosten nicht mehr als die Aktionen
+darin.
+
+> Speicher bitte mit `--expose-gc` messen. Ohne erzwungene Bereinigung misst
+> `heapUsed` überwiegend Müll, der noch nicht abgeholt wurde — zwei Läufe
+> desselben Codes unterschieden sich damit um den Faktor zweieinhalb.
 
 Zur Einordnung: 4000 gleichzeitig **aktive** Spieler erzeugen etwa 1000 Syncs/s
 — rund ein Siebtel dessen, was die Maschine hergibt. Der Engpass ist damit die
