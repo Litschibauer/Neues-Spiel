@@ -177,8 +177,12 @@ Erst wenn die Mechaniken stehen, sonst baut man die Oberfläche zweimal.
   unverändert daneben laufen — nie nachbauen.
 - **Sim-Kern portieren.** Der Golden-Vector-Korpus ist die Abnahme: Läuft er durch, rechnet
   die neue Plattform bit-für-bit gleich. Dank der Vektoren ein Nachmittag, kein Projekt.
-- **App-Hülle lokal.** „Offline-fähig" heißt auch: Die App startet ohne Netz. Eine
-  installierte App bringt das mit; im Browser bräuchte es Service Worker und HTTPS.
+- [x] ~~**App-Hülle lokal.**~~ Erledigt: Der Spielstand (bestätigter Snapshot UND
+      Warteschlange) liegt nach jeder Aktion auf dem Gerät, ein Service Worker cacht
+      die Hülle, `/api/*` nie. Damit startet die App ohne Netz und ein Neuladen im
+      Funkloch kostet nichts. Geprüft von `npm run offlinetest` in einem echten
+      Chromium. Einschränkung: Service Worker brauchen HTTPS oder localhost — über
+      einfaches HTTP im LAN bleibt es beim alten Verhalten (siehe deploy.md).
 
 ---
 
@@ -209,16 +213,17 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**Phase 5: die App-Hülle, die ohne Netz startet.**
+**Phase 4: Accounts.**
 
-Acht von neun Mechaniken stehen, und der Kreislauf trägt. Die auffälligste
-Lücke ist keine Mechanik mehr, sondern das letzte fehlende Stück am
-Offline-Versprechen: Die Feldtest-Seite wird über das Netz geladen, ein
-Neuladen im Funkloch scheitert also. Alles andere funktioniert offline; die
-Hülle nicht.
+Acht von neun Mechaniken stehen, der Kreislauf trägt, und das Offline-Versprechen
+ist vollständig eingelöst — bis hin zum Neuladen im Tunnel. Was jetzt fehlt, ist
+nicht mehr Spiel, sondern Betrieb: Der Server kennt **einen** Spielstand und
+**ein** Token.
 
-Das ist ein Testaufbau-Artefakt, kein Architekturproblem — aber es ist das
-Erste, was jemand bemerkt, der das Spiel wirklich im Zug ausprobiert.
+Das ist die Grenze, an der alles Weitere hängt. Ohne Accounts gibt es keinen
+zweiten Spieler, ohne zweiten Spieler kein Orderbuch, keine Nachbarn, keine
+Ranglisten — also die ganze Phase 3. Und es ist kein Forschungsrisiko mehr,
+sondern gewöhnliche Arbeit.
 
-Die Alternative wäre Phase 4 (Accounts, Datenbank, TLS). Sinnvoll, sobald es
-mehr als einen Spielstand gibt — heute noch nicht.
+TLS gehört mit dazu, und zwar früher als gedacht: Ohne HTTPS registriert sich
+der Service Worker nicht, und die App startet dann doch nicht ohne Netz.

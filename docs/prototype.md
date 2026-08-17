@@ -4,12 +4,13 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 132 Tests, keine Dependencies, kein Build-Step
+npm test        # 140 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run build   # Prüfstand-, Spiel- und Werkbank-Seite bauen
 npm run dev     # Server, Entwicklung  (schnelle Uhren, Port 8788)
 npm run prod    # Server, Produktion   (echte Zeiten,   Port 8787)
+npm run offlinetest  # echter Browser: im Funkloch neu laden (siehe unten)
 ```
 
 Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
@@ -31,6 +32,7 @@ src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
 
 src/client/
   client.ts       Optimistisches Offline-Spiel + Command-Queue
+  persist.ts      Spielstand aufs Gerät — damit ein Neuladen nichts kostet
   sync-engine.ts  Verbindungsmodell: Backoff, Jitter, Wiederaufsetzen (§10)
 src/server/
   server.ts       Zeitautorität, Re-Simulation, Präfix-Commit, Snapshot
@@ -112,6 +114,7 @@ Schicht 5 ist im Server angelegt:
 | — | `config.test.ts` | Die Betriebsregeln: Dev und Produktion teilen sich nichts, das Dev-Regelwerk kommt nicht in Produktion, die Werkbank ist dort aus. |
 | — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. |
 | — | `levels.test.ts` | Erfahrung und Stufen: abgeleitet statt gespeichert, nie rückwärts, Schwellen dürfen über Versionen nur sinken — sonst würde ein Patch Spieler zurückstufen. |
+| — | `persist.test.ts` | Der Spielstand auf dem Gerät: derselbe Zustand nach dem Neustart, und der Server nimmt ihn ohne Divergenz an. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
@@ -316,6 +319,49 @@ Farbe wechselt.
 
 ---
 
+## Im Funkloch neu laden
+
+Lange war „offline spielbar" nur halb wahr. Der Sim-Kern rechnete ohne Netz,
+aber die Seite selbst kam vom Server — ein Neuladen im Tunnel zeigte den
+Dinosaurier. Und schlimmer: Die ganze Offline-Sitzung lag nur im Speicher der
+Seite. Ein Neustart, ein Tab, den iOS unter Speicherdruck wegwirft, und alles
+seit dem letzten Sync war weg. Ausgerechnet im Funkloch.
+
+Zwei Stücke schließen das:
+
+- **Der Spielstand liegt auf dem Gerät.** Nach jeder Aktion werden
+  bestätigter Snapshot UND Warteschlange zusammen gesichert. Einzeln wären sie
+  gefährlich: Eine Warteschlange auf einem anderen Snapshot als dem
+  gespeicherten erzeugt beim Sync einen Fork (R3). Gesichert wird der
+  *bestätigte* Stand — der vorhergesagte käme nach dem Neustart doppelt
+  obendrauf.
+- **Ein Service Worker cacht die Hülle.** Sie ist eine einzige eigenständige
+  Datei, also genügen dafür rund fünfzig Zeilen. `/api/*` wird **nie**
+  gecacht: Ein zwischengespeicherter Snapshot wäre ein zweiter Spielstand
+  neben dem echten.
+
+### Und das lässt sich nicht in Node prüfen
+
+`npm run offlinetest` startet einen echten Chromium und den echten Server —
+keinen nachgebauten, denn eine Attrappe prüft am Ende sich selbst. Gefahren
+wird über das DevTools-Protokoll, mit dem WebSocket-Client, den Node 22
+mitbringt: **keine Abhängigkeit**, die Kernaussage „npm test, keine
+Dependencies" bleibt heil.
+
+Der Ablauf ist der Feldtest von damals, nur automatisch:
+
+| Schritt | Was geprüft wird |
+| --- | --- |
+| 1. Online spielen | Aktionen landen in der Warteschlange und auf dem Gerät, der Worker cacht die Hülle |
+| 2. **Netz aus, neu laden** | Die App startet — und die nicht bestätigten Aktionen sind noch da |
+| 3. Offline weiterspielen | Die Warteschlange wächst ohne Netz weiter |
+| 4. Netz zurück | Alles bestätigt, Server hat die Arbeit, kein Divergenz-Alarm |
+
+Bewusst kein Teil von `npm test`: Der Lauf braucht einen Browser. Ein Test,
+der ohne ihn rot wird, sagt nichts.
+
+---
+
 ## Zufall, der offline funktioniert
 
 Der eigentliche Gewinn von M6 ist nicht das Auftragssystem, sondern dass hier
@@ -362,10 +408,11 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
   weiteres Feld: Tabellenzeile. Aufträge erfüllen, Ausbauten, Level und Zufall
   (M6–M9 der Konzept-Map) sind dagegen neue **Mechaniken** — die kosten weiter
   Regel, Referenzimplementierung und Golden Vectors.
-- **Die App-Hülle offline.** Der Feldtest lädt die Seite vom Server, ein Reload
-  im Funkloch schlägt deshalb fehl. Ein Artefakt des Testaufbaus, kein
-  Architekturproblem — eine installierte App trägt ihre Hülle lokal. Im Browser
-  bräuchte es dafür einen Service Worker, und der verlangt HTTPS.
+- **Die App-Hülle über einfaches HTTP.** Sie startet jetzt ohne Netz — aber
+  nur in einem *sicheren Kontext*: HTTPS oder localhost. Über `http://` im
+  LAN registriert sich der Service Worker schlicht nicht, und die Seite
+  verhält sich wie vorher. Das ist keine Lücke der Architektur, sondern eine
+  Browser-Regel; der Weg dahin steht in [deploy.md](deploy.md).
 - **Betrieb im Maßstab.** Der Feldtest-Server speichert in eine JSON-Datei und kennt
   einen einzigen Spielstand. Die reinen Re-Sim-Kosten sind gemessen, Datenbank,
   Accounts und Last unter vielen Spielern nicht.

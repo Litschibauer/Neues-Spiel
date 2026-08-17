@@ -66,7 +66,7 @@ cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
 npm run build   # baut dist/field-test.html, dist/conformance.html, dist/admin.html
-npm test        # 108 Tests, sollte grün sein
+npm test        # 140 Tests, sollte grün sein
 ```
 
 ## 3. Starten
@@ -138,6 +138,28 @@ NEUES_SPIEL_RULESET=2 npm run prod    # dasselbe Spiel, gepatcht
 
 Zurück geht es nicht — Downgrades sind bewusst nicht vorgesehen; für den alten
 Stand `rm data/prod/save.json`.
+
+### HTTPS — sonst startet die App nicht ohne Netz
+
+Der Service Worker, der die App-Hülle im Funkloch bereitstellt, läuft nur in
+einem **sicheren Kontext**: `https://` oder `localhost`. Über `http://` im LAN
+registriert er sich schlicht nicht. Das Spiel funktioniert dann trotzdem — nur
+ein Neuladen ohne Netz scheitert weiterhin.
+
+Der einfachste Weg zu echtem HTTPS ohne Domain und ohne Portfreigabe ist
+**Tailscale Serve**: Es besorgt ein gültiges Zertifikat für den
+`*.ts.net`-Namen der Maschine.
+
+```bash
+tailscale serve --bg --https 443 http://127.0.0.1:8787
+tailscale serve status          # zeigt die https://…ts.net-Adresse
+```
+
+Danach die Seite über diese Adresse öffnen, nicht über die IP. Im Protokoll
+der Seite steht sonst „App-Hülle nicht offline-fähig".
+
+Zum Ausprobieren ohne all das genügt `http://localhost:8788` direkt auf dem
+Rechner — localhost gilt als sicherer Kontext.
 
 ## 4. Erreichbarkeit prüfen
 

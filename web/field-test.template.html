@@ -1,4 +1,6 @@
 <title>Feldtest-Hof</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f7f81">
 <style>
   :root {
     --ground: #f2f5f6; --surface: #ffffff; --surface-2: #e9eef0; --line: #d2dbde;
@@ -254,6 +256,47 @@
   /** Serveruhr minus Geräteuhr. Die Geräteuhr allein ist wertlos (§4). */
   var clockOffsetMs = 0;
 
+  /**
+   * Wo der Spielstand auf diesem Gerät liegt.
+   *
+   * Der Schlüssel trägt den Server mit: Ein Dev-Stand auf dem Produktions-
+   * Server wäre ein Fork mit Ansage — gleiche Sequenznummern, andere
+   * Geschichte (R3).
+   */
+  var SAVE_KEY = NS.storageKeyFor(location.origin);
+
+  /**
+   * Nach JEDER Änderung sichern.
+   *
+   * Ohne das lebt die ganze Offline-Sitzung nur im Speicher der Seite. Ein
+   * Neustart, ein Tab, den iOS unter Speicherdruck wegwirft — und alles seit
+   * dem letzten Sync ist weg. Ausgerechnet im Funkloch, wo man am längsten
+   * nicht syncen kann.
+   */
+  function save() {
+    if (!client) return;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(NS.serializeClient(client, clockOffsetMs)));
+    } catch (e) {
+      // Speicher voll oder gesperrt (privater Modus). Weiterspielen geht,
+      // ein Neustart kostet dann eben die Sitzung — sagen statt verschweigen.
+      log('Konnte nicht lokal sichern: ' + e.message, 'bad');
+    }
+  }
+
+  function loadSaved() {
+    var raw = null;
+    try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+    try {
+      return NS.restoreClient(JSON.parse(raw));
+    } catch (e) {
+      log('Gespeicherter Stand unlesbar — verworfen', 'bad');
+      try { localStorage.removeItem(SAVE_KEY); } catch (ignored) {}
+      return null;
+    }
+  }
+
   function log(message, kind) {
     var row = document.createElement('div');
     var t = document.createElement('time');
@@ -345,6 +388,7 @@
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
+    save();
   }
 
   /**
@@ -573,7 +617,7 @@
 
   function act(name, result) {
     if (!isActive) return;
-    if (result.ok) log(name, 'good');
+    if (result.ok) { log(name, 'good'); save(); }
     else log(name + ' abgelehnt: ' + result.code, 'bad');
     render();
   }
@@ -644,16 +688,21 @@
     });
   }
 
-  function start(snapshot, serverTime) {
-    rules = NS.getRuleset(snapshot.rulesetVersion);
-    client = new NS.Client(snapshot, deviceId);
+  /** Gemeinsamer Aufbau, egal ob aus dem Netz oder vom Gerät. */
+  function begin(restored) {
+    client = restored;
+    rules = NS.getRuleset(client.rulesetVersion);
     engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
-    adopt(snapshot, serverTime);
+
+    // Zeitanker aus dem Snapshot, den der Client ohnehin hält. Muss VOR dem
+    // ersten Zeichnen stehen — `tickNow()` rechnet damit.
+    client.snapshotMeta = {
+      tick: client.baseSnapshot.state.tick,
+      serverTs: client.baseSnapshot.serverTs,
+    };
 
     $('setup').hidden = true;
     $('game').hidden = false;
-    setPill('live');
-    log('Verbunden — Regelversion v' + snapshot.rulesetVersion + ', seq ' + snapshot.seq, 'good');
 
     render();
     setInterval(render, 1000);
@@ -664,6 +713,39 @@
     });
     window.addEventListener('online', function () { log('Netz zurück'); attempt('online', true); });
     window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); });
+    // Letzte Gelegenheit zu sichern, bevor die Seite weg ist.
+    window.addEventListener('pagehide', save);
+  }
+
+  /** Frischer Start mit einem Snapshot vom Server. */
+  function start(snapshot, serverTime) {
+    begin(new NS.Client(snapshot, deviceId));
+    adopt(snapshot, serverTime);
+    setPill('live');
+    log('Verbunden — Regelversion v' + snapshot.rulesetVersion + ', seq ' + snapshot.seq, 'good');
+    render();
+  }
+
+  /**
+   * Start aus dem Gespeicherten — ohne eine einzige Netzanfrage.
+   *
+   * DAS ist der Unterschied zwischen „offline weiterspielen" und „offline
+   * spielen": Wer im Tunnel neu lädt, sieht seinen Hof, nicht ein Tokenfeld.
+   */
+  function startOffline(saved) {
+    clockOffsetMs = saved.clockOffsetMs;
+    begin(saved.client);
+    setPill(navigator.onLine ? 'wait' : 'offline');
+    log(
+      'Vom Gerät geladen — seq ' + saved.client.baseSeq +
+        ', ' + saved.client.queue.length + ' Aktion(en) noch nicht bestätigt',
+      'good',
+    );
+    if (saved.queueDropped) log('Warteschlange war unlesbar und wurde verworfen', 'bad');
+    render();
+    // Und dann im Hintergrund versuchen, das Netz einzuholen.
+    attempt('start', true);
+    refreshLease();
   }
 
   function connect() {
@@ -693,7 +775,9 @@
     log('Übernahme angemeldet — gilt ab der nächsten Aktion', 'good');
   });
   $('forget').addEventListener('click', function () {
+    if (!confirm('Token UND lokalen Spielstand von diesem Gerät löschen?')) return;
     localStorage.removeItem('ns-token');
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
     location.reload();
   });
 
@@ -720,6 +804,26 @@
     act('Postfach geleert', client.collectMail());
   });
 
-  if (token) { $('token').value = token; connect(); }
+  // ── Startreihenfolge: Gerät zuerst, Netz danach ─────────────────────
+  //
+  // Umgekehrt wäre die App ohne Netz nicht startbar — und genau das war die
+  // letzte Lücke im Offline-Versprechen.
+  var saved = token ? loadSaved() : null;
+  if (saved) {
+    startOffline(saved);
+  } else if (token) {
+    $('token').value = token;
+    connect();
+  }
+
+  // Service Worker: sorgt dafür, dass ÜBERHAUPT eine Seite da ist, wenn man
+  // im Funkloch neu lädt. Braucht einen sicheren Kontext (HTTPS oder
+  // localhost) — über einfaches HTTP im LAN registriert er sich schlicht
+  // nicht, und die Seite läuft trotzdem.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) {
+      log('App-Hülle nicht offline-fähig: ' + e.message);
+    });
+  }
 })();
 </script>

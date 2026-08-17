@@ -185,6 +185,29 @@ const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
 /**
+ * Service Worker und Manifest — die App-Hülle, die ohne Netz startet.
+ *
+ * Der Cachename trägt den Stand, den der Server ausliefert. Ein Deploy
+ * erneuert damit die Hülle bei allen; ohne das spielte jemand ewig auf einer
+ * alten Version weiter, während der Server längst neue Regeln kennt.
+ */
+const swSource = (() => {
+  const path = join(ROOT, 'web', 'sw.template.js');
+  if (!existsSync(path)) return null;
+  return readFileSync(path, 'utf8').replace('__VERSION__', CONFIG.version);
+})();
+
+const MANIFEST = JSON.stringify({
+  name: 'Neues Spiel',
+  short_name: 'Hof',
+  start_url: '/',
+  display: 'standalone',
+  background_color: '#f2f5f6',
+  theme_color: '#0f7f81',
+  icons: [],
+});
+
+/**
  * Das Admin-Panel ist ein Testwerkzeug: In Dev an, in Produktion aus.
  * Es kann Gegenstände verschenken und Zeit gutschreiben — siehe config.ts.
  */
@@ -211,6 +234,27 @@ const server = createServer(async (req, res) => {
       seq: game.snapshot.seq,
       tick: game.snapshot.state.tick,
     });
+  }
+
+  // Die Hülle: ohne Token, weil sie nichts über den Spielstand verrät. Wer
+  // spielen will, braucht danach trotzdem eines.
+  if (url.pathname === '/sw.js' && req.method === 'GET') {
+    if (!swSource) return json(res, 500, { error: 'sw.template.js fehlt' });
+    res.writeHead(200, {
+      'content-type': 'text/javascript; charset=utf-8',
+      // Der Worker selbst darf nie aus dem Browser-Cache kommen — sonst
+      // erneuert sich die Hülle nie wieder.
+      'cache-control': 'no-cache',
+    });
+    return res.end(swSource);
+  }
+
+  if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {
+    res.writeHead(200, {
+      'content-type': 'application/manifest+json; charset=utf-8',
+      'cache-control': 'no-cache',
+    });
+    return res.end(MANIFEST);
   }
 
   if (url.pathname === '/admin' && req.method === 'GET') {

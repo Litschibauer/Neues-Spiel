@@ -22,6 +22,14 @@ export type ActionResult = { ok: true } | { ok: false; code: string };
 export class Client {
   /** Zustand nach dem zuletzt angewandten Command — der Vergleichspunkt beim Sync. */
   state: State;
+  /**
+   * Der letzte vom Server bestätigte Snapshot.
+   *
+   * Wird aufgehoben, weil er die einzige Grundlage ist, auf der sich die
+   * Warteschlange nachrechnen lässt — nach einem Neuladen genauso wie beim
+   * Sync (siehe `persist.ts`).
+   */
+  baseSnapshot: Snapshot;
   baseSeq: number;
   rulesetVersion: number;
   queue: Command[] = [];
@@ -40,6 +48,7 @@ export class Client {
 
   constructor(snapshot: Snapshot, deviceId?: string) {
     this.deviceId = deviceId;
+    this.baseSnapshot = snapshot;
     this.state = snapshot.state;
     this.baseSeq = snapshot.seq;
     this.rulesetVersion = snapshot.rulesetVersion;
@@ -131,6 +140,7 @@ export class Client {
 
   /** Server gewinnt immer (§9). Lokale Vorhersage wird verworfen. */
   adopt(snapshot: Snapshot): void {
+    this.baseSnapshot = snapshot;
     this.state = snapshot.state;
     this.baseSeq = snapshot.seq;
     this.rulesetVersion = snapshot.rulesetVersion;

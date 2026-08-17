@@ -14,6 +14,7 @@
     "build": "node --experimental-strip-types scripts/build-conformance.ts",
     "golden": "node --experimental-strip-types scripts/generate-golden.ts",
     "bench": "node --experimental-strip-types scripts/bench-sync.ts",
-    "start": "node -e \"console.error('\\\\nBitte die Umgebung nennen: npm run dev oder npm run prod.\\\\n'); process.exit(1)\""
+    "start": "node -e \"console.error('\\\\nBitte die Umgebung nennen: npm run dev oder npm run prod.\\\\n'); process.exit(1)\"",
+    "offlinetest": "node --experimental-strip-types scripts/offline-test.ts"
   }
 }

@@ -42,6 +42,7 @@ const CLIENT_MODULES = [
   'sim/sim.ts',
   'client/client.ts',
   'client/sync-engine.ts',
+  'client/persist.ts',
 ];
 
 function toPlainJs(relativePath: string): string {
@@ -170,6 +171,9 @@ ${modules}
     nextLevelAt: nextLevelAt,
     levelStartedAt: levelStartedAt,
     hashState: hashState,
+    serializeClient: serializeClient,
+    restoreClient: restoreClient,
+    storageKeyFor: storageKeyFor,
   };
 })();
 `;

@@ -22,7 +22,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 132 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # 140 Tests, keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -33,6 +33,10 @@ ans Licht kamen: **[docs/prototype.md](docs/prototype.md)**.
 Ein abhängigkeitsfreier Server (nur `node:http`) mit Handy-Client, um das
 Verbindungsmodell über ein echtes Netzwerk zu prüfen statt über Testattrappen —
 Anleitung in **[docs/deploy.md](docs/deploy.md)**.
+
+Den entscheidenden Fall fährt inzwischen ein Skript: `npm run offlinetest`
+startet einen echten Chromium, spielt, **kappt das Netz, lädt neu** — und prüft,
+dass der Hof mit allen unbestätigten Aktionen wieder da ist.
 
 ## Der Kernkreislauf
 
@@ -84,11 +88,14 @@ Schritt unabhängig nachrechnet. Determinismus über zwei Engine-Familien belegt
 und Postfach implementiert, Inhalt vollständig datengetrieben, Dev und Produktion
 getrennt.
 
+**Und das Offline-Versprechen ist vollständig:** Der Spielstand liegt auf dem Gerät,
+die App startet ohne Netz, und ein Neuladen im Funkloch kostet nichts.
+
 Noch kein fertiges Spiel: kein Orderbuch, keine Nachbarn, keine Accounts, keine
-richtige Oberfläche — und die App-Hülle startet noch nicht ohne Netz.
+richtige Oberfläche.
 
 ## Nächster Schritt
 
 Der Weg zum Spiel steht in **[docs/roadmap.md](docs/roadmap.md)** — in Phasen, mit dem,
-was jede absichert und kostet. Als Nächstes: die App-Hülle, die auch im Funkloch startet.
-Es ist das letzte fehlende Stück am Offline-Versprechen.
+was jede absichert und kostet. Als Nächstes: Accounts und eine Datenbank, damit aus
+einem Spielstand viele werden.
