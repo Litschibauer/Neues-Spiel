@@ -1,0 +1,56 @@
+# Produktion. Kopieren nach /etc/systemd/system/neues-spiel-prod.service
+#
+# WorkingDirectory und die Pfade unten anpassen — sonst startet nichts.
+#
+# Entwicklung lauscht auf 0.0.0.0:8788 — im LAN erreichbar, damit man vom
+# Aufruf mit, und über einfaches HTTP liest ihn jedes Netz dazwischen. Nach
+# außen kommt er über einen TLS-Endpunkt davor — siehe docs/deploy.md.
+
+[Unit]
+Description=Neues Spiel — Entwicklung
+# network-online, nicht network: Sonst startet der Dienst, bevor die Adresse
+# steht, scheitert am Binden und landet in der Neustartschleife.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/neues-spiel
+
+# Kein Token nötig — der Dienst nimmt es aus data/prod/token.
+# --no-warnings: node:sqlite und das Typ-Strippen sind als „experimentell"
+# markiert und würden sonst bei jedem Start zwei Absätze ins Journal schreiben.
+ExecStart=/usr/bin/node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/http.ts --env=dev
+
+# Damit /health verrät, welcher Stand läuft. Beim Ausrollen mitsetzen:
+#   sed -i "s/^Environment=NEUES_SPIEL_VERSION=.*/Environment=NEUES_SPIEL_VERSION=$(git rev-parse --short HEAD)/" …
+Environment=NEUES_SPIEL_VERSION=unbekannt
+
+Restart=always
+RestartSec=5
+# SIGTERM schreibt alles Gemerkte und beendet sich in Sekundenbruchteilen.
+# Zwanzig Sekunden sind großzügig; danach würde hart abgeräumt und die letzten
+# Aktionen im Schreibfenster wären verloren.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# ── Einschnürung ───────────────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+# MUSS stimmen, sonst kann der Dienst seine eigenen Spielstände nicht
+# schreiben. Häufigster Grund, warum er nach dem Einschnüren nicht mehr
+# startet. Liegt das Repo unter /home, gehört ProtectHome=read-only hierher
+# und der Pfad entsprechend angepasst.
+ReadWritePaths=/opt/neues-spiel/data /opt/neues-spiel/backups
+
+[Install]
+WantedBy=multi-user.target

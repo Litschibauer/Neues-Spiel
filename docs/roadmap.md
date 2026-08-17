@@ -278,9 +278,9 @@ Schritt wäre, nicht der erste — steht in [`skalierung.md`](skalierung.md).
 2. **Nachbarn.** Der Markt ist anonym; ein Hof, den man kennt, ist der Unterschied
    zwischen „Datenbank" und „Dorf". Braucht aber eine Antwort auf die Frage, wie
    man jemanden findet, ohne Benutzernamen zu haben.
-3. **Backups.** Die Datenbank trägt ein paar tausend Spieler, aber niemand
-   sichert sie. Ein `cron` mit `.backup` ist zehn Minuten Arbeit — und der
-   Unterschied zwischen einem Ausfall und einem Ende.
+3. **Sicherungen außer Haus.** Die tägliche Sicherung läuft (`deploy/`, geprüft
+   und bei laufendem Server), liegt aber auf derselben Platte. Ein `rsync` auf
+   eine zweite Maschine ist der Rest.
 4. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
    echten Spielerschaft muss das gelöst sein — bewusst, mit einem zweiten Faktor,
    nicht nebenbei.

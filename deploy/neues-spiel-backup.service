@@ -1,0 +1,26 @@
+# Tägliche Sicherung der Spielstände. Läuft bei laufendem Server.
+#
+# Kopieren nach /etc/systemd/system/neues-spiel-backup.service, zusammen mit
+# der .timer-Datei daneben.
+#
+# Warum nicht `cp`: Die Datenbank läuft im WAL-Modus. Ein `cp` erwischt einen
+# Stand ohne die Änderungen im -wal, und wer beide kopiert, erwischt sie zu
+# verschiedenen Zeitpunkten. Das Ergebnis sieht heil aus und ist es nicht.
+
+[Unit]
+Description=Neues Spiel — Spielstände sichern
+After=neues-spiel-prod.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/neues-spiel
+ExecStart=/usr/bin/node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/backup.ts --env=prod
+
+# Wie viele Sicherungen aufgehoben werden.
+Environment=NEUES_SPIEL_BACKUP_KEEP=14
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/neues-spiel/backups

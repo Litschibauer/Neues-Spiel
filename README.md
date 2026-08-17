@@ -49,7 +49,9 @@ läuft nach.
 Automatisiert prüft beides `npm run offlinetest` (echter Chromium, 31 Prüfungen).
 Ob die Maschine die Spielerzahl trägt: `npm run bench:scale -- 4000 30`.
 
-Auf einem Server statt lokal — TLS, Dienst, Umgebungen: **[docs/deploy.md](docs/deploy.md)**.
+Auf einem Server statt lokal — TLS, systemd-Units, Sicherungen, Umgebungen:
+**[docs/deploy.md](docs/deploy.md)**. Fertige Unit-Dateien liegen in
+**`deploy/`**.
 
 ## Prototyp
 

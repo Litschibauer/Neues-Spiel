@@ -157,9 +157,11 @@ erste.
 
 Nicht bei 4000 Spielern. Sondern hier:
 
-- **Backups.** Die Datenbank trägt ein paar tausend Spieler, aber niemand
-  sichert sie. Ein `cron` mit `sqlite3 spiel.db ".backup …"` ist zehn Minuten
-  Arbeit und der Unterschied zwischen einem Ausfall und einem Ende.
+- ~~**Backups.**~~ Erledigt: `npm run backup -- --env=prod` schreibt bei
+  laufendem Server eine geprüfte Kopie, der Zeitgeber in `deploy/` macht es
+  täglich. Was noch fehlt, ist der Weg **nach außen** — die Sicherungen liegen
+  auf derselben Platte und helfen gegen Bedienfehler, nicht gegen einen
+  kaputten Server.
 - **Kein Rate-Limit auf `/api/sync`.** Ein entschlossener Angreifer kann fluten;
   die Anlege-Bremse deckt nur `/api/account` ab.
 - **Keine Account-Wiederherstellung.** Schlüssel weg heißt Hof weg.

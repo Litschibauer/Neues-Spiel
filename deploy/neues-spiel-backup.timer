@@ -1,0 +1,18 @@
+# Der Auslöser zur Sicherung.
+#
+#   systemctl enable --now neues-spiel-backup.timer
+#   systemctl list-timers neues-spiel-backup.timer
+
+[Unit]
+Description=Neues Spiel — tägliche Sicherung
+
+[Timer]
+OnCalendar=daily
+# Nach einem Neustart nachholen, statt einen Tag zu überspringen. Ein Server,
+# der nachts aus war, soll nicht ungesichert bleiben.
+Persistent=true
+# Streuung, damit nicht alle Zeitgeber der Maschine gleichzeitig loslegen.
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

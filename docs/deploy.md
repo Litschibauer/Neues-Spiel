@@ -399,93 +399,136 @@ nichts weiß — dort ebenfalls freigeben.
 
 ## Als Dienst laufen lassen
 
-Damit er Neustarts überlebt. Zuerst den Node-Pfad ermitteln, er landet gleich in
-der Unit:
+Fertige Unit-Dateien liegen im Repo unter **`deploy/`** — kopieren, Pfade
+anpassen, starten. Sie sind mit `systemd-analyze verify` geprüft.
 
 ```bash
-which node          # meist /usr/bin/node
-pwd                 # das Repo-Verzeichnis, hier als /home/Neues-Spiel angenommen
-```
+which node          # meist /usr/bin/node — muss zur Unit passen
+pwd                 # das Repo-Verzeichnis; die Units nehmen /opt/neues-spiel an
 
-Läuft noch eine Instanz von Hand, zuerst beenden — sonst ist der Port belegt:
+sudo cp deploy/neues-spiel-prod.service /etc/systemd/system/
+sudo cp deploy/neues-spiel-backup.{service,timer} /etc/systemd/system/
+sudoedit /etc/systemd/system/neues-spiel-prod.service    # WorkingDirectory + ReadWritePaths
 
-```bash
-pkill -f 'server/http'
-```
+sudo systemctl daemon-reload
+sudo systemctl enable --now neues-spiel-prod
+sudo systemctl enable --now neues-spiel-backup.timer
 
-**Eine Unit je Umgebung.** Sie stören sich nicht: eigener Port, eigener
-Spielstand, eigenes Token.
-
-`/etc/systemd/system/neues-spiel-prod.service`:
-
-```ini
-[Unit]
-Description=Neues Spiel — Produktion
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/home/Neues-Spiel
-# Kein Token nötig — der Dienst nimmt es aus data/prod/token.
-# Lauscht auf 127.0.0.1:8787. Nach außen kommt er über den TLS-Endpunkt davor
-# (tailscale serve). Soll er selbst nach außen lauschen, gehört hierhin
-# entweder NEUES_SPIEL_BEHIND_PROXY=1 oder ein Zertifikat — siehe HTTPS oben.
-ExecStart=/usr/bin/node --experimental-strip-types src/server/http.ts --env=prod
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`/etc/systemd/system/neues-spiel-dev.service` — dieselbe Datei mit
-`--env=dev` und `Description=Neues Spiel — Entwicklung`.
-
-```bash
-systemctl daemon-reload
-systemctl enable --now neues-spiel-prod
-systemctl enable --now neues-spiel-dev     # optional
 systemctl status neues-spiel-prod --no-pager
 journalctl -u neues-spiel-prod -f
 ```
 
+`deploy/neues-spiel-dev.service` daneben, falls die Entwicklungsumgebung
+dauerhaft laufen soll. Beide stören sich nicht: eigener Port, eigene Datenbank,
+eigenes Token, eigenes Regelwerk.
+
+### ⚠️ Wenn schon eine Unit von früher läuft
+
+Zwei Dinge haben sich geändert und brechen eine alte Unit still:
+
+1. **Produktion lauscht jetzt nur auf `127.0.0.1`.** Wer den Server bisher
+   direkt über die Server-IP erreicht hat, kommt nicht mehr durch — und im
+   Journal steht kein Fehler, weil das Absicht ist (Riegel 4). Nach außen führt
+   der Weg über einen TLS-Endpunkt davor; wer wirklich direkt lauschen will,
+   setzt `NEUES_SPIEL_HOST=0.0.0.0` **und** TLS oder
+   `NEUES_SPIEL_BEHIND_PROXY=1`, sonst bricht der Start ab.
+2. **Die Spielstände liegen in `data/<umgebung>/spiel.db`**, nicht mehr in
+   Einzeldateien. Der Umzug passiert beim ersten Start von allein; das alte
+   `accounts/`-Verzeichnis wird danach in `accounts.uebernommen/` umbenannt.
+   Steht in der Unit ein `ReadWritePaths`, muss es auf `data/` zeigen (nicht auf
+   eine einzelne Datei) — sonst schlägt der Umzug fehl.
+
+Nachsehen, ob es geklappt hat:
+
+```bash
+journalctl -u neues-spiel-prod -n 30 | grep -i übernommen
+curl -s localhost:8787/health      # "accounts" muss die alte Zahl zeigen
+```
+
+### Neustart heißt kurz, nicht sanft
+
+Beim Ausrollen ist der Neustart der heikle Moment. Gemessen:
+
+| | |
+| --- | --- |
+| `systemctl restart` (SIGTERM) | ~0,1 s bis beendet, **nichts geht verloren** |
+| harter Abbruch (OOM-Killer, Strom weg) | bis zu `NEUES_SPIEL_FLUSH_MS` (2 s) bestätigter Aktionen verloren |
+
+Der SIGTERM-Weg schreibt alles Gemerkte, bevor er beendet — auch dann, wenn der
+Schreibtakt gerade erst angefangen hat. Nachgeprüft mit einem Schreibfenster von
+60 Sekunden: Die Aktion war nach dem Neustart da.
+
+Der harte Abbruch nicht. Wer das nicht will, setzt `NEUES_SPIEL_FLUSH_MS`
+kleiner — der Preis ist mehr Schreiblast, und genau die war der Grund für das
+Sammeln.
+
 ### Eine neue Version ausrollen
 
 ```bash
-cd /home/Neues-Spiel
+cd /opt/neues-spiel
 git pull
 npm test                                    # erst prüfen, dann ausrollen
 npm run build                               # Seiten neu bauen
-systemctl restart neues-spiel-dev           # zuerst Dev
+sudo systemctl restart neues-spiel-dev      # zuerst Dev
 curl -s localhost:8788/health               # Stand kontrollieren, kurz spielen
-systemctl restart neues-spiel-prod          # dann Produktion
+sudo systemctl restart neues-spiel-prod     # dann Produktion
 curl -s localhost:8787/health
 ```
 
 Damit `version` in `/health` etwas Nützliches sagt, den Commit in die Unit
-schreiben — oder beim Deployen setzen:
+schreiben:
 
-```ini
-Environment=NEUES_SPIEL_VERSION=a1b2c3d
+```bash
+sudo sed -i "s|^Environment=NEUES_SPIEL_VERSION=.*|Environment=NEUES_SPIEL_VERSION=$(git rev-parse --short HEAD)|" \
+  /etc/systemd/system/neues-spiel-prod.service
+sudo systemctl daemon-reload && sudo systemctl restart neues-spiel-prod
 ```
 
-### Absicherung (optional, nachträglich)
+### Sicherungen
 
-Läuft der Dienst, kann man ihn einschnüren. Unter `[Service]` ergänzen:
+Der Zeitgeber oben ruft `scripts/backup.ts` auf. Der schreibt eine in sich
+stimmige Kopie **bei laufendem Server** (`VACUUM INTO`), prüft sie anschließend
+(`integrity_check`) und räumt alte auf.
 
-```ini
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-# MUSS gesetzt sein, wenn das Repo unter /home liegt — sonst kann der Dienst
-# seinen eigenen Spielstand nicht mehr schreiben.
-ReadWritePaths=/home/Neues-Spiel/data
+```bash
+sudo systemctl start neues-spiel-backup     # von Hand auslösen
+systemctl list-timers neues-spiel-backup.timer
+ls -lh backups/prod/
 ```
 
-Danach `systemctl daemon-reload && systemctl restart neues-spiel`. Startet er nicht
-mehr, ist fast immer `ReadWritePaths` schuld — der Pfad muss exakt auf das
-`data/`-Verzeichnis zeigen.
+> **`cp` der `.db`-Datei ist KEINE Sicherung.** Die Datenbank läuft im
+> WAL-Modus: Ein `cp` erwischt einen Stand ohne die Änderungen im `-wal`, und
+> wer beide kopiert, erwischt sie zu verschiedenen Zeitpunkten. Das Ergebnis
+> sieht heil aus und ist es nicht — auffallen würde es erst beim Zurückspielen.
+
+Zurückspielen:
+
+```bash
+sudo systemctl stop neues-spiel-prod
+cp backups/prod/spiel-prod-2026-01-31T03-00-00.db data/prod/spiel.db
+rm -f data/prod/spiel.db-wal data/prod/spiel.db-shm
+sudo systemctl start neues-spiel-prod
+```
+
+Ehrlich zur Grenze: Diese Sicherungen liegen auf **derselben Platte**. Das hilft
+gegen einen Bedienfehler, nicht gegen einen kaputten Server. Der Weg nach außen
+— `rsync` auf eine andere Maschine, ein Objektspeicher — fehlt und ist die
+nächste zehn Minuten wert.
+
+### Absicherung
+
+Die Units in `deploy/` sind bereits eingeschnürt: `ProtectSystem=strict`,
+`ProtectHome`, `NoNewPrivileges`, `PrivateTmp` und die üblichen `Protect*`.
+
+Startet der Dienst danach nicht mehr, ist es **fast immer `ReadWritePaths`**.
+Es muss auf das `data/`-Verzeichnis zeigen — SQLite legt neben der `.db` noch
+`-wal` und `-shm` an, braucht also Schreibrecht im Verzeichnis und nicht nur an
+der Datei.
+
+```bash
+systemd-analyze verify /etc/systemd/system/neues-spiel-prod.service
+journalctl -u neues-spiel-prod -n 50 --no-pager
+```
 
 ### Als eigener Benutzer statt root
 
@@ -493,8 +536,8 @@ Sauberer, aber mehr Schritte. Mit `User=spiel` in der Unit muss das Repo dem
 Benutzer gehören:
 
 ```bash
-useradd -r -s /usr/sbin/nologin spiel
-chown -R spiel:spiel /home/Neues-Spiel
+sudo useradd -r -s /usr/sbin/nologin spiel
+sudo chown -R spiel:spiel /opt/neues-spiel
 ```
 
 ---
