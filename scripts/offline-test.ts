@@ -159,28 +159,51 @@ console.log(`Server:   http://127.0.0.1:${PORT}\n`);
  * Service Worker hängt an Kleinigkeiten wie Content-Type und Cache-Header —
  * genau an dem, was eine Attrappe anders macht.
  */
-const server = spawn(
-  process.execPath,
-  ['--experimental-strip-types', join(ROOT, 'src', 'server', 'http.ts'), '--env=dev'],
-  {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      PORT: String(PORT),
-      NEUES_SPIEL_TOKEN: ADMIN_TOKEN,
-      NEUES_SPIEL_SAVE: join(dataDir, 'save.json'),
-      NEUES_SPIEL_TOKEN_FILE: join(dataDir, 'token'),
-      NEUES_SPIEL_VERSION: 'offline-test',
-    },
-  },
-);
-
 let serverLog = '';
-server.stdout?.on('data', (d) => (serverLog += d));
-server.stderr?.on('data', (d) => (serverLog += d));
-server.on('exit', (code) => {
-  if (code !== null && code !== 0) console.error(`  Server beendet mit ${code}`);
-});
+
+function startServer() {
+  const child = spawn(
+    process.execPath,
+    ['--experimental-strip-types', join(ROOT, 'src', 'server', 'http.ts'), '--env=dev'],
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PORT: String(PORT),
+        NEUES_SPIEL_TOKEN: ADMIN_TOKEN,
+        NEUES_SPIEL_SAVE: join(dataDir, 'save.json'),
+        NEUES_SPIEL_TOKEN_FILE: join(dataDir, 'token'),
+        NEUES_SPIEL_VERSION: 'offline-test',
+      },
+    },
+  );
+  child.stdout?.on('data', (d) => (serverLog += d));
+  child.stderr?.on('data', (d) => (serverLog += d));
+  child.on('exit', (code, signal) => {
+    // Ein absichtlicher Neustart ist kein Fehler — SIGTERM und SIGKILL kommen
+    // aus diesem Skript.
+    if (code !== null && code !== 0 && signal === null) {
+      console.error(`  Server beendet mit ${code}`);
+    }
+  });
+  return child;
+}
+
+/** Veränderlich, weil Abschnitt 9 den Server absichtlich neu startet. */
+let server = startServer();
+
+/** Warten, bis `/health` antwortet. Gibt zurück, ob es geklappt hat. */
+async function serverUp(tries = 80): Promise<boolean> {
+  for (let i = 0; i < tries; i++) {
+    await sleep(250);
+    try {
+      if (((await api('/health')) as { ok?: boolean }).ok === true) return true;
+    } catch {
+      /* noch nicht da */
+    }
+  }
+  return false;
+}
 
 const api = (path: string, method = 'GET') =>
   fetch(`http://127.0.0.1:${PORT}${path}`, {
@@ -844,6 +867,95 @@ try {
     offersAfter > offersBefore,
     `${offersBefore} → ${offersAfter} Angebote`,
   );
+
+  // ── 9. Neustart des Servers, mitten im Spiel ──────────────────────────
+  //
+  // Der Fall, den es im Betrieb garantiert gibt: neue Version ausrollen,
+  // Kernel-Update, Kiste neu gestartet. Für den Spieler darf das nichts
+  // anderes sein als ein kurzes Funkloch — und dafür ist die ganze Architektur
+  // gebaut. Hier wird das einmal wirklich durchgespielt statt behauptet.
+  console.log('\n9. Neustart des Servers, während jemand spielt');
+
+  // Die Seite hält ihren Client bewusst privat. Was sie nach außen gibt, ist
+  // der Spielstand im Gerätespeicher — und der reicht: Er enthält den
+  // bestätigten Snapshot und die noch offene Warteschlange.
+  const savedState = () =>
+    evaluate<{ seq: number; queue: number }>(
+      cdp!,
+      `(function () {
+         var raw = localStorage.getItem(globalThis.NeuesSpiel.storageKeyFor(location.origin));
+         var blob = JSON.parse(raw);
+         return { seq: blob.snapshot.seq, queue: blob.queue.length };
+       })()`,
+    );
+
+  const seqBeforeRestart = (await savedState()).seq;
+
+  const stopped = Date.now();
+  server.kill('SIGTERM');
+  await new Promise<void>((resolve) => server.once('exit', () => resolve()));
+  const stopMs = Date.now() - stopped;
+  // Zwanzig Sekunden gibt systemd (TimeoutStopSec), danach räumt es hart ab.
+  // Zwei sind die eigene Notbremse im Server. Alles darüber wäre ein Hänger.
+  check('SIGTERM beendet den Server zügig', stopMs < 3000, `${stopMs} ms`);
+
+  // Der Spieler tippt weiter, während gar nichts da ist.
+  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  const beforeQueue = (await savedState()).queue;
+  await evaluate(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+         return !p.disabled;
+       });
+       if (tile) tile.click();
+     })()`,
+  );
+  const queuedWhileDown = (await savedState()).queue;
+  check(
+    'Ohne Server geht das Spielen weiter — die Aktion wartet in der Warteschlange',
+    queuedWhileDown > beforeQueue,
+    `${beforeQueue} → ${queuedWhileDown} Commands`,
+  );
+
+  server = startServer();
+  if (!(await serverUp())) {
+    console.error('  Serverprotokoll:', serverLog.split('\n').filter(Boolean).slice(-8).join(' | '));
+    throw new Error('Server kam nach dem Neustart nicht hoch');
+  }
+
+  // Ab hier: kein Klick, kein Neuladen. Die Seite muss sich allein fangen.
+  const recovering = Date.now();
+  await waitFor(
+    cdp,
+    `document.getElementById('conn').className.indexOf('live') >= 0
+       && JSON.parse(localStorage.getItem(globalThis.NeuesSpiel.storageKeyFor(location.origin))).queue.length === 0`,
+    'Seite fängt sich nach dem Neustart',
+    40_000,
+  );
+  check(
+    'Die Seite verbindet sich von selbst wieder — ohne Neuladen',
+    true,
+    `nach ${Date.now() - recovering} ms`,
+  );
+
+  const seqAfterRestart = (await savedState()).seq;
+  check(
+    'Was während der Ausfallzeit getippt wurde, ist angekommen',
+    seqAfterRestart > seqBeforeRestart,
+    `seq ${seqBeforeRestart} → ${seqAfterRestart}`,
+  );
+
+  // Und die Live-Leitung baut sich ebenfalls allein wieder auf — sonst wäre
+  // der Markt nach dem ersten Neustart für immer wieder auf dem Timer.
+  let streamsBack = 0;
+  for (let i = 0; i < 60 && streamsBack === 0; i++) {
+    await sleep(250);
+    streamsBack = ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as {
+      streams: number;
+    }).streams;
+  }
+  check('Die Live-Leitung kommt von allein zurück', streamsBack >= 1, `${streamsBack} offen`);
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

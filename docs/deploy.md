@@ -462,6 +462,45 @@ Der harte Abbruch nicht. Wer das nicht will, setzt `NEUES_SPIEL_FLUSH_MS`
 kleiner — der Preis ist mehr Schreiblast, und genau die war der Grund für das
 Sammeln.
 
+**Die Reihenfolge beim Beenden ist der Grund, warum nichts verlorengeht:** erst
+alle Live-Leitungen zu, dann jeden geladenen Hof schreiben, dann das Orderbuch,
+dann die Datenbank schließen — und **erst danach** der Server-Socket. Wäre es
+andersherum, wartete `server.close()` auf Verbindungen, die per Konstruktion nie
+von selbst enden. Kommt der Socket trotzdem nicht zu (eine halb gesendete
+Anfrage, ein Client, der nicht loslässt), beendet sich der Prozess nach zwei
+Sekunden selbst; geschrieben ist da längst alles.
+
+Gemessen, mit offenen Live-Leitungen:
+
+| offene Leitungen | SIGTERM → Prozess weg |
+| --- | --- |
+| 1 | 13 ms |
+| 50 | 24 ms |
+| 300 | 55 ms |
+
+### Was ein Spieler vom Neustart merkt
+
+Im Idealfall: nichts außer einem kurzen „ohne Netz". Das ist kein Versprechen,
+sondern in `npm run offlinetest` als Abschnitt 9 nachgestellt — echter Browser,
+echter SIGTERM mitten im Spiel:
+
+| Was passiert | Was der Spieler erlebt |
+| --- | --- |
+| Server weg | Anzeige springt auf „ohne Netz — läuft weiter" |
+| Er tippt weiter | Aktionen landen in der Warteschlange, das Spiel läuft normal |
+| Server wieder da | Seite verbindet sich **von selbst** — gemessen nach 2,6 s |
+| Danach | Die Warteschlange ist bestätigt, `seq` ist gewachsen, die Live-Leitung steht wieder |
+
+Kein Klick nötig, kein Neuladen, kein Dialog. Wer während des Neustarts gar
+nicht hinschaut, merkt überhaupt nichts.
+
+**Wichtig für den Ansturm danach:** Bei einem Neustart reißen *alle* Leitungen in
+derselben Millisekunde ab. Der Wiederverbindungsversuch ist deshalb gestreut
+(Faktor 0,5–1,5 auf ein wachsendes Backoff) — ohne das kämen tausend Geräte
+exakt eine Sekunde später gleichzeitig zurück, und zwar bei jedem Fehlschlag
+erneut im Gleichtakt.
+
+
 ### Eine neue Version ausrollen
 
 ```bash
@@ -483,6 +522,17 @@ sudo sed -i "s|^Environment=NEUES_SPIEL_VERSION=.*|Environment=NEUES_SPIEL_VERSI
   /etc/systemd/system/neues-spiel-prod.service
 sudo systemctl daemon-reload && sudo systemctl restart neues-spiel-prod
 ```
+
+Zwei Stolperstellen dabei:
+
+- **`git pull` ohne `npm run build`.** Dann liegt neuer Server-Code neben einer
+  alten `dist/farm.html`, und die Spieler bekommen weiter die alte Oberfläche.
+  Der Server sagt nichts dazu — er liefert einfach aus, was da ist.
+- **Neues Regelwerk** (`NEUES_SPIEL_RULESET`) braucht trotzdem **kein**
+  Wartungsfenster. Migriert wird pro Hof beim ersten Sync danach, nicht für
+  alle beim Start. Wer gerade offline war, rechnet seinen Log noch unter der
+  alten Version nach und wechselt erst danach (R2) — genau dafür ist die
+  Versionierung da.
 
 ### Sicherungen
 
@@ -623,6 +673,7 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | `POST /api/account` | — | Neuen Hof anlegen (mit Bremse, R4) |
 | `GET /api/state` | Hof-Schlüssel | Snapshot + Serverzeit |
 | `POST /api/sync` | Hof-Schlüssel | Command-Log einreichen |
+| `GET /api/events` | Hof-Schlüssel | Offene Live-Leitung; trägt nur Anstöße, keine Spieldaten |
 | `POST /api/deliver?item=…&amount=N` | Hof-Schlüssel | Ware in den eigenen Briefkasten |
 
 Der Markt braucht **keine eigene Route**: Fremde Angebote reisen im Snapshot mit

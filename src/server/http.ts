@@ -887,6 +887,31 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     }
     market.flush();
     accounts.close();
-    server.close(() => process.exit(0));
+
+    /**
+     * Notausgang, falls `server.close()` nicht zurückkommt.
+     *
+     * Es wartet auf alle offenen Verbindungen, und eine davon kann hängen —
+     * eine halb gesendete Anfrage, ein Client, der den Socket nicht zumacht.
+     * Ohne diese Bremse liefe der Prozess dann bis `TimeoutStopSec` (20 s)
+     * weiter, systemd räumte ihn hart ab, und aus zwei Sekunden Neustart
+     * würden fünfundzwanzig.
+     *
+     * Verlieren kann man dabei nichts: Geschrieben ist oben schon, die
+     * Datenbank ist zu. Was hier noch offen ist, sind Verbindungen, keine
+     * Spielstände — und ein abgeschnittener Sync ist für den Client derselbe
+     * Fall wie ein Funkloch. Er behält seine Warteschlange und schickt sie
+     * gleich noch einmal (§9).
+     */
+    const giveUp = setTimeout(() => {
+      console.log('[stop] offene Verbindungen hängen — beende trotzdem.');
+      process.exit(0);
+    }, 2000);
+    giveUp.unref();
+
+    server.close(() => {
+      clearTimeout(giveUp);
+      process.exit(0);
+    });
   });
 }

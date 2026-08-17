@@ -589,7 +589,15 @@
       // dass wir nicht in einer Schleife hämmern.
       if (ctl.signal.aborted) return;
       liveAbort = null;
-      setTimeout(startLive, liveRetryMs);
+
+      // Mit Streuung, und das ist beim Neustart des Servers der entscheidende
+      // Punkt: Dann reißen ALLE Leitungen in derselben Millisekunde ab. Ohne
+      // Streuung kämen alle Geräte exakt eine Sekunde später gleichzeitig
+      // zurück — der Server hätte seinen ersten Ansturm, bevor er überhaupt
+      // fertig hochgefahren ist, und würde das Muster bei jedem Fehlschlag
+      // wiederholen. Ein halber bis ganzer Faktor Zufall bricht den Gleichtakt.
+      var wait = liveRetryMs * (0.5 + Math.random());
+      setTimeout(startLive, wait);
       liveRetryMs = Math.min(liveRetryMs * 2, 60000);
     });
   }
