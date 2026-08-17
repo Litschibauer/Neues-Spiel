@@ -13,7 +13,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
 import { EMPTY_PLOT, initialState, cloneState, count } from '../src/sim/state.ts';
@@ -217,7 +217,7 @@ test('Sync ist für den ehrlichen Spieler unsichtbar — nichts geht verloren', 
   assert.equal(res.ok, true);
   if (!res.ok) return;
 
-  client.adopt(res.snapshot);
+  client.adopt(res.snapshot, DISCARD_QUEUE);
 
   assert.deepEqual(client.state.items, before);
   assert.equal(client.queue.length, 0);

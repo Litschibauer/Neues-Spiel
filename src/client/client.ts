@@ -19,6 +19,16 @@ import type { Snapshot, SyncRequest } from '../server/server.ts';
 
 export type ActionResult = { ok: true } | { ok: false; code: string };
 
+/**
+ * „Warteschlange bewusst wegwerfen" für `adopt`.
+ *
+ * Als Zahl ist das `Infinity` — nichts hat eine höhere seq, also überlebt
+ * nichts. Der Name steht trotzdem hier, weil `adopt(snap, Infinity)` an der
+ * Aufrufstelle wie ein Tippfehler aussieht und `adopt(snap, DISCARD_QUEUE)`
+ * wie eine Entscheidung.
+ */
+export const DISCARD_QUEUE = Infinity;
+
 export class Client {
   /** Zustand nach dem zuletzt angewandten Command — der Vergleichspunkt beim Sync. */
   state: State;
@@ -170,8 +180,29 @@ export class Client {
    * neuen Stand nicht mehr erlaubt ist, fällt dabei heraus — besser hier, wo
    * der Client es sofort anzeigen kann, als beim Server.
    */
-  adopt(snapshot: Snapshot, keepAfterSeq: number = Infinity): { kept: number; dropped: number } {
-    const pending = this.queue.filter((c) => c.seq > keepAfterSeq);
+  adopt(snapshot: Snapshot, keepAfterSeq?: number): { kept: number; dropped: number } {
+    /**
+     * Ohne Angabe wird die Warteschlange verworfen — richtig beim
+     * Verbindungsaufbau, wo es keine gibt. Ist doch etwas drin, ist es fast
+     * sicher ein Fehler, und zwar einer der unangenehmen Sorte.
+     *
+     * Genau der ist passiert: Die Oberfläche rief nach jedem Sync noch einmal
+     * `adopt(snapshot)` auf, nachdem die Sync-Maschine bereits mit Grenze
+     * übernommen hatte. Damit war jede Aktion weg, die während der Rundreise
+     * entstanden war. Sichtbar war das als Ernte, die kurz aufblitzt und dann
+     * wieder verschwindet — ohne Fehlermeldung, ohne Spur.
+     *
+     * Deshalb hier ein Abbruch statt eines stillen Verlusts.
+     */
+    if (keepAfterSeq === undefined && this.queue.length > 0) {
+      throw new Error(
+        `adopt() würde ${this.queue.length} nicht gesendete Aktion(en) verwerfen. ` +
+          'Nach einem Sync übernimmt die Sync-Maschine bereits — hier ist nichts mehr zu tun. ' +
+          'Soll wirklich verworfen werden, ausdrücklich adopt(snapshot, Infinity) aufrufen.',
+      );
+    }
+    const boundary = keepAfterSeq ?? Infinity;
+    const pending = this.queue.filter((c) => c.seq > boundary);
 
     this.baseSnapshot = snapshot;
     this.state = snapshot.state;

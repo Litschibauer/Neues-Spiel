@@ -433,9 +433,33 @@
       .catch(function () { /* offline: Status bleibt, wie er war */ });
   }
 
+  /**
+   * Snapshot übernehmen — nur beim Verbindungsaufbau.
+   *
+   * Wirft die Warteschlange weg, und das ist hier richtig: Es gibt noch keine.
+   */
   function adopt(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
+    client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
+    save();
+  }
+
+  /**
+   * Nach einem Sync: Uhr und Zeitanker nachziehen — **mehr nicht.**
+   *
+   * Der Client wurde von der Sync-Maschine bereits übernommen, und zwar mit
+   * der Grenze, bis zu der gesendet wurde: Was der Spieler WÄHREND der
+   * Rundreise angetippt hat, bleibt erhalten (siehe `Client.adopt`).
+   *
+   * Hier noch einmal `client.adopt(snapshot)` aufzurufen, machte genau das
+   * zunichte — ohne zweites Argument wirft es die ganze Warteschlange weg.
+   * Der Fehler war von außen kaum zu greifen: Die Ernte wurde angezeigt, kurz
+   * darauf stand das Lager wieder auf dem alten Wert, und nichts meldete
+   * einen Fehler. Im Browser-Test fiel etwa jeder dritte Lauf darüber.
+   */
+  function afterSync(snapshot, serverTime) {
+    if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
     save();
   }
@@ -785,11 +809,11 @@
         } else {
           log('Server hat abgelehnt: ' + r.reason, 'bad');
         }
-        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') adopt(r.snapshot, r.serverTime);
+        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') afterSync(r.snapshot, r.serverTime);
         if (r.ok) { setLease(true, null); client.takeover = false; }
       } else if (outcome.kind === 'dropped') {
         log('Ab seq ' + outcome.rejectedFrom + ' verworfen: ' + outcome.reason, 'bad');
-        adopt(outcome.snapshot, outcome.serverTime);
+        afterSync(outcome.snapshot, outcome.serverTime);
       } else if (outcome.kind === 'failed') {
         log('Kein Netz — neuer Versuch in ' + Math.round(outcome.retryInMs / 1000) + ' s');
       }

@@ -7,7 +7,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
 import { EMPTY_PLOT, initialState, count } from '../src/sim/state.ts';
@@ -40,7 +40,7 @@ test('vorgestellte Geräteuhr wird abgelehnt — Ernte findet nicht statt', () =
   assert.equal(count(res.snapshot.state, WHEAT), 0);
   assert.equal(res.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
 
-  client.adopt(res.snapshot);
+  client.adopt(res.snapshot, DISCARD_QUEUE);
   assert.equal(count(client.state, WHEAT), 0);
   assert.equal(client.queue.length, 0);
 });

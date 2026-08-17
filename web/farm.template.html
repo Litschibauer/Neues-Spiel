@@ -531,9 +531,33 @@
     return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
   }
 
+  /**
+   * Snapshot übernehmen — nur beim Verbindungsaufbau.
+   *
+   * Wirft die Warteschlange weg, und das ist hier richtig: Es gibt noch keine.
+   */
   function adopt(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
+    client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
+    save();
+  }
+
+  /**
+   * Nach einem Sync: Uhr und Zeitanker nachziehen — **mehr nicht.**
+   *
+   * Der Client wurde von der Sync-Maschine bereits übernommen, und zwar mit
+   * der Grenze, bis zu der gesendet wurde: Was der Spieler WÄHREND der
+   * Rundreise angetippt hat, bleibt erhalten (siehe `Client.adopt`).
+   *
+   * Hier noch einmal `client.adopt(snapshot)` aufzurufen, machte genau das
+   * zunichte — ohne zweites Argument wirft es die ganze Warteschlange weg.
+   * Der Fehler war von außen kaum zu greifen: Die Ernte wurde angezeigt, kurz
+   * darauf stand das Lager wieder auf dem alten Wert, und nichts meldete
+   * einen Fehler. Im Browser-Test fiel etwa jeder dritte Lauf darüber.
+   */
+  function afterSync(snapshot, serverTime) {
+    if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
     save();
   }
@@ -958,7 +982,12 @@
       top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = o.expiresIn > 0 ? 'läuft in ' + timeText(o.expiresIn) + ' ab' : 'läuft gerade ab';
+      // „Läuft ab" klingt nach Verlust — es ist aber keiner. Die Ware kommt
+      // zurück, und das muss dastehen: Sonst zieht jemand seinen Auftrag aus
+      // Angst zurück, statt ihn stehen zu lassen.
+      sub.textContent = o.expiresIn > 0
+        ? 'in ' + timeText(o.expiresIn) + ' zurück ins Postfach'
+        : 'kommt gleich ins Postfach zurück';
       body.appendChild(top); body.appendChild(sub);
       var go = document.createElement('span');
       go.className = 'go';
@@ -1174,7 +1203,7 @@
         } else if (!r.ok) {
           toast(r.reason === 'RULESET_MISMATCH' ? 'Bitte neu laden — neue Version' : 'Server hat abgelehnt', true);
         }
-        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') adopt(r.snapshot, r.serverTime);
+        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') afterSync(r.snapshot, r.serverTime);
         if (r.ok) { setLease(true, null); client.takeover = false; }
       } else if (outcome.kind === 'failed') {
         // Nichts verloren — nur nicht durchgekommen. Die Warteschlange bleibt,
@@ -1185,7 +1214,7 @@
         // Präfix-Commit: Der Server hat einen Teil nicht übernommen. Beim Markt
         // ist das der Normalfall „jemand war schneller" und keine Panik wert.
         toast(/OFFER_GONE/.test(outcome.reason || '') ? 'Jemand war schneller' : 'Teil verworfen', true);
-        adopt(outcome.snapshot, outcome.serverTime);
+        afterSync(outcome.snapshot, outcome.serverTime);
       }
       render();
     }).catch(function () { setConn('offline'); });

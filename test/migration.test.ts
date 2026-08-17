@@ -19,7 +19,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { getRuleset } from '../src/sim/rules.ts';
 import type { Ruleset } from '../src/sim/rules.ts';
@@ -87,7 +87,7 @@ test('nach der Migration gelten die neuen Regeln — kürzere Wachstumszeit', ()
   if (!first.ok) return;
   assert.equal(first.snapshot.rulesetVersion, 2);
 
-  client.adopt(first.snapshot);
+  client.adopt(first.snapshot, DISCARD_QUEUE);
   assert.equal(client.rulesetVersion, 2);
 
   client.advanceClock(wheatTicks(V2));

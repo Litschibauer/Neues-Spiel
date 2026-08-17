@@ -390,3 +390,93 @@ test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/**
+ * Verfallen, während man weg war — und zwar über den echten Weg.
+ *
+ * Die Sim-Tests stellen die Uhr direkt. Im Betrieb passiert es anders: Der
+ * Verkäufer ist zwei Tage offline, kommt zurück, und seine Spielzeit springt
+ * beim ersten Command nach vorn. Erst dabei greift die Frist.
+ *
+ * Geprüft wird die Frage, die für die Wirtschaft zählt: **Wird die Ware
+ * vernichtet?** Nein — sie kommt zurück, und zwar durchs Postfach.
+ */
+test('ein Auftrag, der im Funkloch abläuft, gibt die Ware zurück', () => {
+  const { market, live } = setup();
+  const anna = farm(market, live, 'anna', 0, 30);
+
+  play(anna, (c) => c.listOrder(WHEAT, 20, 3));
+  publishOrders(market, 'anna', anna);
+  assert.equal(count(anna.snapshot.state, WHEAT), 10, 'Escrow hat nichts genommen');
+  assert.equal(market.size, 1);
+
+  // Zwei Tage später meldet sich Anna wieder — mehr als die Ablauffrist.
+  const later = rules.orderTtlTicks + 500;
+  const client = new Client(anna.snapshot);
+  client.advanceClock(later);
+  client.start(1, R_WHEAT);
+  const result = anna.sync(client.buildSyncRequest(), T0 + (later + 60) * 1000);
+  assert.equal(result.ok, true);
+
+  // Die Ware ist weder im Nichts noch im Lager, sondern im Postfach (§7).
+  assert.equal(anna.snapshot.state.orders.length, 0, 'der Auftrag lebt noch');
+  const returned = anna.snapshot.state.mail.find((m) => m.item === WHEAT);
+  assert.equal(returned?.amount, 20, 'die Ware ist nicht zurückgekommen');
+
+  // Und niemand kann sie mehr kaufen.
+  publishOrders(market, 'anna', anna);
+  assert.equal(market.size, 0, 'ein verfallener Auftrag steht weiter zum Verkauf');
+
+  // Abholen bringt sie ins Lager — die Bilanz ist wieder bei 30.
+  const pickup = new Client(anna.snapshot);
+  pickup.advanceClock(5);
+  pickup.collectMail();
+  anna.sync(pickup.buildSyncRequest(), T0 + (later + 120) * 1000);
+  assert.equal(count(anna.snapshot.state, WHEAT), 30, 'unterm Strich fehlt Ware');
+});
+
+/**
+ * DER GEFÄHRLICHE FALL: verkauft UND abgelaufen.
+ *
+ * Der Verkäufer ist so lange weg, dass sein Auftrag verfallen wäre — aber
+ * jemand hat ihn vorher gekauft. Beide Wege wollen dieselbe Ware anfassen:
+ * Der Verkauf gibt sie dem Käufer, die Frist gäbe sie dem Verkäufer zurück.
+ * Passierte beides, gäbe es sie zweimal.
+ */
+test('verkauft schlägt abgelaufen — die Ware gibt es genau einmal', () => {
+  const { market, live } = setup();
+  const anna = farm(market, live, 'anna', 0, 30);
+  const ben = farm(market, live, 'ben', 500);
+
+  play(anna, (c) => c.listOrder(WHEAT, 20, 3));
+  publishOrders(market, 'anna', anna);
+
+  // Anna verschwindet. Ben kauft.
+  live.delete('anna');
+  ben.stockOffers();
+  play(ben, (c) => c.buyOffer(ben.snapshot.state.offers[0]!.id));
+  assert.equal(count(ben.snapshot.state, WHEAT), 20);
+
+  // Anna kommt erst weit NACH der Ablauffrist zurück.
+  const later = rules.orderTtlTicks + 500;
+  settleSales(market, 'anna', anna);
+  const client = new Client(anna.snapshot);
+  client.advanceClock(later);
+  client.start(1, R_WHEAT);
+  anna.sync(client.buildSyncRequest(), T0 + (later + 60) * 1000);
+
+  // Kein Weizen zurück ins Postfach — er gehört Ben.
+  const wheatInMail = anna.snapshot.state.mail
+    .filter((m) => m.item === WHEAT)
+    .reduce((n, m) => n + m.amount, 0);
+  assert.equal(wheatInMail, 0, 'die verkaufte Ware kam dem Verkäufer zurück');
+
+  // Die Gegenprobe über beide Höfe: 30 waren es, 30 sind es.
+  const total =
+    count(anna.snapshot.state, WHEAT) + wheatInMail + count(ben.snapshot.state, WHEAT);
+  assert.equal(total, 30, `Ware verdoppelt oder verloren: ${total} statt 30`);
+
+  // Und das Geld ist trotzdem angekommen.
+  const gold = anna.snapshot.state.mail.find((m) => m.item === GOLD);
+  assert.equal(gold?.amount, 60, 'Anna hat ihren Erlös nicht bekommen');
+});

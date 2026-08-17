@@ -86,6 +86,32 @@ wissen konnte (§7). Und weil ein Verkauf den Zustand ändert, ohne dass der
 Spieler etwas getan hat, schweigt der Kanarienvogel in genau diesem Sync — sonst
 meldete er einen Determinismus-Bug, den es nicht gibt.
 
+### Was mit Ware passiert, die niemand kauft
+
+Die Frage, an der sich entscheidet, ob eine Spielwirtschaft ehrlich ist:
+**Nichts wird vernichtet.**
+
+| Fall | Was passiert |
+| --- | --- |
+| Auftrag läuft ab | Ware geht ins **Postfach** zurück, nicht ins Nichts |
+| Postfach voll | Der Auftrag bleibt stehen und verfällt später — nie wegwerfen, wovon der Spieler nichts wusste |
+| Abgeholt bei vollem Lager | Was passt, kommt ins Lager; der Rest bleibt liegen |
+| Verkauft **und** abgelaufen | Der Verkauf gewinnt, die Ware gibt es genau einmal |
+
+Der letzte Fall ist der einzige, in dem Ware entstehen könnte: Der Verkauf will
+sie dem Käufer geben, die Frist dem Verkäufer zurück. Weil ein Verkauf **vor**
+der Re-Simulation auf den Snapshot wirkt, ist der Auftrag dann schon weg und
+die Frist findet nichts mehr vor. `market.test.ts` prüft die Summe über beide
+Höfe.
+
+**Ein Angebot bleibt kaufbar, solange man weg ist.** Die Frist läuft in der
+Spielzeit des Verkäufers, und die steht still, wenn er nicht spielt. Das ist
+kein Versehen, sondern passt zum Rest: Der Hof arbeitet weiter, während man weg
+ist — die Auslage eben auch. Wer nach drei Tagen wiederkommt, findet entweder
+sein Geld im Postfach oder seine Ware. Eine Frist auf Marktseite würde das
+Gegenteil bewirken: Sie nähme abwesenden Spielern die Verkaufschance, ohne
+ihnen die Ware früher zurückzugeben.
+
 Offen geblieben, bewusst: **keine Marktgebühr.** Ein Prozentsatz, der beim Verkauf
 verschwindet, wäre die naheliegendste Inflationsbremse — aber eine Balancing-Zahl,
 die man an echten Spielern ablesen muss und nicht am Schreibtisch erfindet.

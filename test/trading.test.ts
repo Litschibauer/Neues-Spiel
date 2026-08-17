@@ -12,7 +12,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
 import { EMPTY_PLOT, initialState, count, stored, totalGoods } from '../src/sim/state.ts';
@@ -378,11 +378,11 @@ test('Admin-Zeitgutschrift löst keinen Divergenz-Fehlalarm aus', () => {
   const first = server.sync(client.buildSyncRequest(), T0 + 1000);
   assert.equal(first.ok, true);
   if (!first.ok) return;
-  client.adopt(first.snapshot);
+  client.adopt(first.snapshot, DISCARD_QUEUE);
 
   // Werkbank: die volle Wachstumszeit gutschreiben.
   server.grantTime(GROW);
-  client.adopt(server.snapshot);
+  client.adopt(server.snapshot, DISCARD_QUEUE);
 
   // Der Client darf jetzt so weit vorspulen — und ernten.
   client.advanceClock(GROW);

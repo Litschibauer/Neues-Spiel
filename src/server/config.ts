@@ -27,7 +27,7 @@
  *     gesagt, dass etwas anderes TLS beendet, oder nur auf localhost lauschen.
  */
 
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DEV_RULESET_VERSION, LATEST_RULESET_VERSION, RULESETS } from '../sim/rules.ts';
 
 export type Env = 'dev' | 'prod';
@@ -194,13 +194,23 @@ export function resolveConfig(vars: Vars, argv: readonly string[], root: string)
   }
 
   const dataDir = join(root, 'data', env);
+  const savePath = vars.NEUES_SPIEL_SAVE ?? join(dataDir, 'save.json');
 
   return {
     env,
     host,
     port,
-    dbPath: vars.NEUES_SPIEL_DB ?? join(dataDir, 'spiel.db'),
-    savePath: vars.NEUES_SPIEL_SAVE ?? join(dataDir, 'save.json'),
+    /**
+     * Ohne eigene Angabe liegt die Datenbank **neben** dem Spielstandpfad.
+     *
+     * Nicht einfach im Standardverzeichnis: Wer `NEUES_SPIEL_SAVE` woandershin
+     * zeigen lässt, meint sein Datenverzeichnis — und bekäme sonst still eine
+     * Datenbank an einer ganz anderen Stelle. Genau das ist einmal passiert:
+     * Der Browser-Test schrieb in ein temporäres Verzeichnis, die Datenbank
+     * aber ins Repo, und sammelte über Läufe hinweg Höfe an.
+     */
+    dbPath: vars.NEUES_SPIEL_DB ?? join(dirname(savePath), 'spiel.db'),
+    savePath,
     tokenPath: vars.NEUES_SPIEL_TOKEN_FILE ?? join(dataDir, 'token'),
     rulesetVersion,
     adminEnabled,

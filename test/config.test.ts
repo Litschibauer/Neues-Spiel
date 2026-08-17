@@ -180,6 +180,11 @@ test('alles Wichtige lässt sich überschreiben — ohne die Riegel aufzuweichen
   );
   assert.equal(cfg.tokenPath, '/etc/spiel/token');
   assert.equal(cfg.version, 'a1b2c3d');
+
+  // Die Datenbank folgt dem Spielstandpfad, wenn nichts anderes gesagt ist.
+  // Ohne das schriebe jemand, der sein Datenverzeichnis verlegt, still an zwei
+  // verschiedene Orte — und merkt es erst, wenn Höfe fehlen.
+  assert.equal(cfg.dbPath, '/var/lib/spiel/spiel.db');
 });
 
 test('das Startprotokoll verrät, was läuft — sonst rät man beim Deployen', () => {

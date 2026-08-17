@@ -5,7 +5,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { SyncEngine } from '../src/client/sync-engine.ts';
 import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
@@ -119,7 +119,7 @@ test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
 
   // Das Tablet übernimmt den Server-Stand und verliert seine Offline-Arbeit —
   // genau der UX-Bruch, den ein Aktiv-Gerät-Token verhindern soll (R3).
-  tablet.adopt(r2.snapshot);
+  tablet.adopt(r2.snapshot, DISCARD_QUEUE);
   assert.equal(tablet.state.plots[0]!.recipe, R_WHEAT);
   assert.equal(tablet.state.plots[1]!.recipe, EMPTY_PLOT);
 });

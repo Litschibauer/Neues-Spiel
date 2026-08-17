@@ -14,7 +14,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Client } from '../src/client/client.ts';
+import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { serializeClient, restoreClient, storageKeyFor } from '../src/client/persist.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
@@ -109,7 +109,7 @@ test('nach einem Sync ist die Warteschlange auch im Speicher leer', () => {
   const res = server.sync(client.buildSyncRequest(), T0 + 1000);
   assert.equal(res.ok, true);
   if (!res.ok) return;
-  client.adopt(res.snapshot);
+  client.adopt(res.snapshot, DISCARD_QUEUE);
 
   const blob = serializeClient(client, 0);
   assert.equal(blob.queue.length, 0);

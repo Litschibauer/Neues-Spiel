@@ -712,6 +712,18 @@ try {
          })`,
       ),
     );
+    const truth2 = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+      seq: number;
+      state: { items: number[]; plots: Array<{ recipe: number }> };
+    };
+    console.error(
+      '  Server:',
+      JSON.stringify({
+        seq: truth2.seq,
+        weizen: truth2.state.items[1],
+        belegteFelder: truth2.state.plots.filter((p) => p.recipe !== -1).length,
+      }),
+    );
   }
   check(
     'Ernten geht mit einem Tipp auf den Platz',
