@@ -28,6 +28,8 @@
     --leaf: #4f9159; --leaf-dark: #33693d;
     --sky: #cfe4ec;
     --wood: #a5764a; --wood-dark: #7d5735;
+    --on-accent: #ffffff; --feather: #f4f1ea; --feather-2: #e9e4d8; --egg: #fdf8ec;
+    --on-ripe: #3a2a06;
     --shadow: 0 1px 2px rgba(43, 37, 33, .06), 0 4px 14px rgba(43, 37, 33, .05);
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     --num: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -45,6 +47,8 @@
       --leaf: #55a05f; --leaf-dark: #2f6238;
       --sky: #2b3d45;
       --wood: #8b6440; --wood-dark: #63472c;
+      --on-accent: #10251c; --feather: #ded7c8; --feather-2: #c9c1b1; --egg: #f0e9d8;
+      --on-ripe: #2a1d04;
       --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
     }
   }
@@ -60,6 +64,8 @@
     --leaf: #55a05f; --leaf-dark: #2f6238;
     --sky: #2b3d45;
     --wood: #8b6440; --wood-dark: #63472c;
+    --on-accent: #10251c; --feather: #ded7c8; --feather-2: #c9c1b1; --egg: #f0e9d8;
+    --on-ripe: #2a1d04;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
   }
 
@@ -182,7 +188,7 @@
   .card.queued { border-style: dashed; box-shadow: none; opacity: .7; }
   .go {
     flex: none; border: 0; border-radius: 999px; padding: .4rem .8rem;
-    background: var(--accent); color: #fff; font-size: .74rem; font-weight: 700;
+    background: var(--accent); color: var(--on-accent); font-size: .74rem; font-weight: 700;
   }
   .go[disabled] { background: var(--sunk); color: var(--muted); }
 
@@ -218,7 +224,7 @@
   nav .dot {
     position: absolute; top: .25rem; right: 50%; margin-right: -1.05rem;
     min-width: .95rem; height: .95rem; padding: 0 .2rem; border-radius: 999px;
-    background: var(--ripe); color: #3a2a06;
+    background: var(--ripe); color: var(--on-ripe);
     font-size: .58rem; font-weight: 800; line-height: .95rem; text-align: center;
   }
 
@@ -251,7 +257,7 @@
     pointer-events: none; max-width: 90vw; text-align: center;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem); }
-  .toast.bad { background: var(--bad); color: #fff; }
+  .toast.bad { background: var(--bad); color: var(--surface); }
 
   /* ── Einstieg ───────────────────────────────────────────────────── */
   .gate {
@@ -261,7 +267,7 @@
   .gate h1 { font-size: 1.6rem; margin: 0; letter-spacing: -.02em; }
   .gate p { margin: 0; color: var(--muted); font-size: .9rem; }
   .gate .big {
-    border: 0; border-radius: 12px; background: var(--accent); color: #fff;
+    border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent);
     padding: .8rem; font-size: .95rem; font-weight: 700; width: 100%;
   }
   .gate .ghost {
@@ -566,19 +572,6 @@
   function recipesAt(i, level) {
     return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
   }
-  function startableRecipe(s, plot) {
-    var allowed = recipesAt(plot, s.plots[plot].level);
-    for (var k = 0; k < allowed.length; k++) {
-      var recipe = rules.recipes[allowed[k]];
-      var ok = true;
-      for (var j = 0; j < recipe.inputs.length; j++) {
-        if ((s.items[recipe.inputs[j].item] || 0) < recipe.inputs[j].amount) ok = false;
-      }
-      if (ok) return allowed[k];
-    }
-    return -1;
-  }
-
   // ── Bilder ────────────────────────────────────────────────────────
   //
   // Bewusst als Inline-SVG statt als Bilddateien: Sie färben sich über die
@@ -641,108 +634,147 @@
     // Stufe 1 ist ein leeres Gehege, ab Stufe 2 sitzen Hühner drin.
     if (level >= 2) {
       out += '<g transform="translate(16 56)">' +
-        '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="#f4f1ea"/>' +
-        '<circle cx="5" cy="-5" r="3.6" fill="#f4f1ea"/>' +
+        '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="var(--feather)"/>' +
+        '<circle cx="5" cy="-5" r="3.6" fill="var(--feather)"/>' +
         '<path d="M8 -5l3 1-3 1z" fill="var(--ripe)"/>' +
         '<circle cx="6" cy="-6" r=".8" fill="var(--ink)"/>' +
         '<path d="M4-8c1-2 3-1 2 1" fill="var(--bad)"/>' +
         '</g>' +
         '<g transform="translate(84 58) scale(-1 1)">' +
-        '<ellipse cx="0" cy="0" rx="6" ry="5" fill="#e9e4d8"/>' +
-        '<circle cx="4.5" cy="-4.5" r="3.2" fill="#e9e4d8"/>' +
+        '<ellipse cx="0" cy="0" rx="6" ry="5" fill="var(--feather-2)"/>' +
+        '<circle cx="4.5" cy="-4.5" r="3.2" fill="var(--feather-2)"/>' +
         '<path d="M7 -4.5l2.6 1-2.6 1z" fill="var(--ripe)"/>' +
         '</g>';
     }
     if (ready) {
       out += '<g transform="translate(50 70)">' +
-        '<ellipse cx="-8" cy="0" rx="4" ry="5" fill="#fdf8ec"/>' +
-        '<ellipse cx="0" cy="1" rx="4" ry="5" fill="#fdf8ec"/>' +
-        '<ellipse cx="8" cy="0" rx="4" ry="5" fill="#fdf8ec"/>' +
+        '<ellipse cx="-8" cy="0" rx="4" ry="5" fill="var(--egg)"/>' +
+        '<ellipse cx="0" cy="1" rx="4" ry="5" fill="var(--egg)"/>' +
+        '<ellipse cx="8" cy="0" rx="4" ry="5" fill="var(--egg)"/>' +
         '</g>';
     }
     return out;
   }
 
-  /** Zeichnung für einen Platz — nach Katalog-Kennung, mit Feld als Rückfall. */
-  function artFor(i, plot, progress, done) {
-    var id = rules.plots[i].id;
-    if (id === 'mill') return artMill(plot.recipe !== NS.EMPTY_PLOT && !done);
-    if (id.indexOf('coop-') === 0) return artCoop(plot.level, done);
-    if (plot.recipe === NS.EMPTY_PLOT) return artField(0);
-    return artField(done ? 3 : progress < .4 ? 1 : 2);
+  /**
+   * Die Zeichnungen, nach Katalog-Kennung.
+   *
+   * DAS IST DIE STELLE FÜR EIGENE GRAFIK. Jeder Eintrag bekommt eine
+   * Platz-Ansicht (siehe `view.ts`) und gibt SVG-Inhalt zurück — was darin
+   * steht, ist völlig frei: gezeichnete Pfade wie hier, ein `<image>` mit
+   * eingebettetem PNG, was auch immer. Ein Muster (`field-`) greift für alle
+   * Kennungen mit diesem Anfang.
+   *
+   * Wer nichts einträgt, verliert nichts: Eine unbekannte Kennung bekommt
+   * `fallback`. Ein neues Gebäude ist damit sofort spielbar und sieht nur eine
+   * Version lang generisch aus.
+   */
+  var ART = {
+    'field-': function (p) {
+      if (!p.busy && !p.done) return artField(0);
+      return artField(p.done ? 3 : p.progress < .4 ? 1 : 2);
+    },
+    'mill': function (p) { return artMill(p.busy); },
+    'coop-': function (p) { return artCoop(p.level, p.done); },
+    fallback: function () { return artField(0); },
+  };
+
+  function artFor(p) {
+    if (ART[p.id]) return ART[p.id](p);
+    for (var prefix in ART) {
+      if (prefix !== 'fallback' && p.id.indexOf(prefix) === 0) return ART[prefix](p);
+    }
+    return ART.fallback(p);
   }
 
   // ── Zeichnen ──────────────────────────────────────────────────────
+  /**
+   * Zeichnen.
+   *
+   * Alles Inhaltliche kommt aus `NS.farmView` — ist ein Feld reif, ist ein
+   * Angebot bezahlbar, passt es ins Lager. Diese Datei entscheidet nur noch,
+   * WIE das aussieht und WIE es heißt. Damit ist eine zweite Oberfläche (oder
+   * eine native App) eine Frage der Darstellung und keine Neuimplementierung
+   * der halben Spiellogik.
+   */
   function render() {
     if (!client) return;
     client.localTick = tickNow();
     var s = client.preview();
+    var v = NS.farmView(s, rules, navigator.onLine);
 
-    renderPurse(s);
-    renderPlots(s);
-    renderRequests(s);
-    renderMail(s);
-    renderMarket(s);
-    renderMyOrders(s);
-    renderStore(s);
-    renderBadges(s);
+    renderPurse(v);
+    renderPlots(v);
+    renderRequests(v);
+    renderMail(v);
+    renderMarket(v);
+    renderMyOrders(v);
+    renderStore(v);
+    renderBadges(v);
   }
 
-  function renderPurse(s) {
-    var level = NS.levelOf(rules, s.xp);
-    var from = NS.levelStartedAt(rules, s.xp);
-    var to = NS.nextLevelAt(rules, s.xp);
+  function renderPurse(v) {
+    $('lvl').textContent = v.level;
+    $('gold').textContent = v.currency.amount;
 
-    $('lvl').textContent = level;
-    $('gold').textContent = s.items[rules.currency] || 0;
-
-    var pct = to === null ? 1 : (s.xp - from) / (to - from);
+    var pct = v.xp.atMax ? 1 : v.xp.into / v.xp.span;
     // 2πr bei r=17 ≈ 107. Der Ring läuft von leer (Umfang) auf voll (0).
-    $('ring-fill').setAttribute('stroke-dashoffset', String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))));
-    $('xp').textContent = to === null
-      ? s.xp + ' XP · Höchststufe'
-      : (s.xp - from) + ' / ' + (to - from) + ' XP';
+    $('ring-fill').setAttribute(
+      'stroke-dashoffset',
+      String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))),
+    );
+    $('xp').textContent = v.xp.atMax
+      ? v.xp.total + ' XP · Höchststufe'
+      : v.xp.into + ' / ' + v.xp.span + ' XP';
 
-    var used = NS.stored(s, rules);
-    var cap = rules.siloCapacity;
-    $('silo-num').textContent = used + '/' + cap;
-    $('silo-fill').style.width = Math.round((used * 100) / cap) + '%';
-    $('silo').className = 'silo' + (used >= cap ? ' full' : '');
+    $('silo-num').textContent = v.silo.used + '/' + v.silo.capacity;
+    $('silo-fill').style.width = Math.round((v.silo.used * 100) / v.silo.capacity) + '%';
+    $('silo').className = 'silo' + (v.silo.full ? ' full' : '');
   }
 
-  function renderPlots(s) {
+  /**
+   * Die Plätze. Nur noch Darstellung: WAS gilt, steht im Anzeigemodell.
+   *
+   * Deshalb sind die Textbausteine hier zusammen an einer Stelle — wer die
+   * Sprache tauschen oder anders formulieren will, fasst nur diese Funktion an.
+   */
+  function plotStatus(p) {
+    if (p.done) return 'fertig · ' + nameOf(p.producing);
+    if (p.busy) return timeText(p.remaining);
+    if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
+    if (p.blocked === 'inputs') return 'Zutaten fehlen';
+    if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
+    if (p.tap === 'start') return 'antippen zum Starten';
+    return 'nichts zu tun';
+  }
+
+  function renderPlots(v) {
     var box = $('plots');
     box.textContent = '';
 
-    s.plots.forEach(function (p, i) {
-      var busy = p.recipe !== NS.EMPTY_PLOT;
-      var duration = busy ? rules.recipes[p.recipe].durationTicks : 0;
-      var elapsed = busy ? s.tick - p.startedAt : 0;
-      var done = busy && elapsed >= duration;
-      var progress = busy && duration > 0 ? Math.min(1, elapsed / duration) : 0;
-      var upgrade = nextLevelOf(i, p.level);
-      var canRun = recipesAt(i, p.level).length > 0;
-
+    v.plots.forEach(function (p) {
       var tile = document.createElement('button');
-      tile.className = 'plot' + (done ? ' ripe' : '') + (canRun ? '' : ' locked');
+      tile.className = 'plot' + (p.done ? ' ripe' : '') + (p.idle ? ' locked' : '') +
+        (p.blocked === 'level' ? ' gated' : '');
+      tile.disabled = p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false;
 
       var art = document.createElement('div');
       art.innerHTML =
         '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-        artFor(i, p, progress, done) + '</svg>';
+        artFor(p) + '</svg>';
       tile.appendChild(art.firstChild);
 
-      if (done) {
+      if (p.done) {
         var badge = document.createElement('span');
         badge.className = 'badge';
         tile.appendChild(badge);
       }
 
-      if (busy && !done) {
+      if (p.busy) {
         var bar = document.createElement('div');
         bar.className = 'bar';
         var fill = document.createElement('i');
-        fill.style.width = Math.round(progress * 100) + '%';
+        fill.style.width = Math.round(p.progress * 100) + '%';
         bar.appendChild(fill);
         tile.appendChild(bar);
       }
@@ -751,50 +783,26 @@
       meta.className = 'meta';
       var name = document.createElement('div');
       name.className = 'name';
-      name.textContent = plotName(i);
+      name.textContent = plotName(p.index);
       var status = document.createElement('div');
       status.className = 'status';
-
-      if (done) {
-        status.textContent = 'fertig · ' + nameOf(rules.recipes[p.recipe].id);
-      } else if (busy) {
-        status.textContent = timeText(duration - elapsed);
-      } else if (!canRun && upgrade) {
-        // Noch nicht gekauft, oder gekauft und leer (Gehege ohne Hühner).
-        var gate = upgrade.minPlayerLevel || 1;
-        if (NS.levelOf(rules, s.xp) < gate) {
-          status.textContent = 'ab Stufe ' + gate;
-          tile.className += ' gated';
-          tile.disabled = true;
-        } else {
-          status.textContent = upgrade.label + ' · ' + costText(upgrade.cost);
-          if (!upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; })) {
-            tile.disabled = true;
-          }
-        }
-      } else {
-        var next = startableRecipe(s, i);
-        status.textContent = next < 0 ? 'Zutaten fehlen' : 'antippen zum Starten';
-      }
-
+      status.textContent = plotStatus(p);
       meta.appendChild(name); meta.appendChild(status);
       tile.appendChild(meta);
-      tile.addEventListener('click', function () { tapPlot(i); });
+
+      tile.addEventListener('click', function () { tapPlot(p.index); });
       box.appendChild(tile);
 
       // Ausbau eines Platzes, der schon arbeiten kann — ein eigener Knopf,
       // damit ein Fehltipp nicht versehentlich Gold kostet.
-      if (upgrade && canRun && !busy) {
+      if (p.upgrade && !p.idle && !p.busy && !p.done) {
         var up = document.createElement('button');
-        var need = upgrade.minPlayerLevel || 1;
-        var locked = NS.levelOf(rules, s.xp) < need;
-        var afford = upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; });
         up.className = 'upgrade';
-        up.textContent = locked
-          ? upgrade.label + ' ab Stufe ' + need
-          : upgrade.label + ' · ' + costText(upgrade.cost);
-        up.disabled = locked || !afford;
-        up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(i); });
+        up.textContent = p.upgrade.unlocked
+          ? p.upgrade.label + ' · ' + costText(p.upgrade.cost)
+          : p.upgrade.label + ' ab Stufe ' + p.upgrade.minPlayerLevel;
+        up.disabled = !p.upgrade.affordable;
+        up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(p.index); });
         tile.appendChild(up);
       }
     });
@@ -807,22 +815,19 @@
    * genau dieser Vorrat ist der Grund, warum offline nicht die Luft ausgeht:
    * Er liegt schon auf dem Gerät.
    */
-  function renderRequests(s) {
+  function renderRequests(v) {
     var box = $('requests');
     box.textContent = '';
 
-    if (s.requests.length === 0) {
+    if (v.requests.length === 0) {
       box.innerHTML = '<p class="empty">Gerade wartet niemand. Neue Kunden kommen beim nächsten Sync.</p>';
       return;
     }
 
-    s.requests.slice(0, rules.requestSlots + 2).forEach(function (r, i) {
-      var waiting = i >= rules.requestSlots;
-      var ready = r.wants.every(function (w) { return (s.items[w.item] || 0) >= w.amount; });
-
+    v.requests.forEach(function (r) {
       var card = document.createElement('button');
-      card.className = 'card' + (waiting ? ' queued' : '');
-      card.disabled = waiting || !ready;
+      card.className = 'card' + (r.waiting ? ' queued' : '');
+      card.disabled = !r.deliverable;
 
       var body = document.createElement('div');
       body.className = 'body';
@@ -831,7 +836,7 @@
       top.textContent = stacks(r.wants);
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = waiting ? 'wartet noch' : ready ? 'lieferbar' : 'noch nicht genug da';
+      sub.textContent = r.waiting ? 'wartet noch' : r.deliverable ? 'lieferbar' : 'noch nicht genug da';
       body.appendChild(top); body.appendChild(sub);
 
       var pay = document.createElement('div');
@@ -845,7 +850,7 @@
       pay.appendChild(amount); pay.appendChild(xp);
 
       card.appendChild(body); card.appendChild(pay);
-      if (!waiting) {
+      if (r.deliverable) {
         card.addEventListener('click', function () {
           act('Geliefert · +' + stacks(r.reward), client.fillRequest(r.id));
         });
@@ -854,10 +859,10 @@
     });
   }
 
-  function renderMail(s) {
+  function renderMail(v) {
     var box = $('mail');
     box.textContent = '';
-    if (s.mail.length === 0) {
+    if (v.mail.entries.length === 0) {
       box.innerHTML = '<p class="empty">Postfach leer.</p>';
       return;
     }
@@ -867,10 +872,10 @@
     body.className = 'body';
     var top = document.createElement('div');
     top.className = 'top';
-    top.textContent = s.mail.map(function (m) { return m.amount + ' ' + itemName(m.item); }).join(', ');
+    top.textContent = stacks(v.mail.entries);
     var sub = document.createElement('div');
     sub.className = 'sub';
-    sub.textContent = s.mail.length + ' von ' + rules.mailCapacity + ' Fächern belegt';
+    sub.textContent = v.mail.entries.length + ' von ' + v.mail.capacity + ' Fächern belegt';
     body.appendChild(top); body.appendChild(sub);
     var go = document.createElement('span');
     go.className = 'go';
@@ -887,30 +892,24 @@
    * und deshalb der einzige, der ausgegraut wird statt zu verschwinden (§6).
    * Wer im Funkloch hinsieht, soll erkennen, dass es den Markt gibt.
    */
-  function renderMarket(s) {
+  function renderMarket(v) {
     var box = $('market-list');
     var online = navigator.onLine;
     box.textContent = '';
     box.className = online ? '' : 'no-net';
     $('market-note').hidden = online;
 
-    var offers = s.offers || [];
-    if (offers.length === 0) {
+    if (v.offers.length === 0) {
       box.innerHTML = '<p class="empty">' + (online
         ? 'Gerade bietet niemand etwas an. Stell selbst etwas ein — unter Lager.'
         : 'Keine Angebote auf dem Gerät. Der Markt kommt mit dem nächsten Sync.') + '</p>';
       return;
     }
 
-    offers.forEach(function (o) {
-      var total = o.amount * o.price;
-      var canPay = (s.items[rules.currency] || 0) >= total;
-      var fits = !rules.items[o.item].storable
-        || rules.siloCapacity - NS.stored(s, rules) >= o.amount;
-
+    v.offers.forEach(function (o) {
       var card = document.createElement('button');
       card.className = 'card';
-      card.disabled = !online || !canPay || !fits;
+      card.disabled = !online || !o.affordable || !o.fits;
 
       var body = document.createElement('div');
       body.className = 'body';
@@ -919,14 +918,14 @@
       top.textContent = o.amount + ' ' + itemName(o.item);
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = !fits ? 'kein Platz im Lager'
-        : !canPay ? 'zu teuer für dich'
+      sub.textContent = !o.fits ? 'kein Platz im Lager'
+        : !o.affordable ? 'zu teuer für dich'
         : o.price + ' pro Stück';
       body.appendChild(top); body.appendChild(sub);
 
       var go = document.createElement('span');
       go.className = 'go';
-      go.textContent = total + ' Gold';
+      go.textContent = o.total + ' ' + itemName(rules.currency);
 
       card.appendChild(body); card.appendChild(go);
       card.addEventListener('click', function () {
@@ -941,16 +940,15 @@
     });
   }
 
-  function renderMyOrders(s) {
+  function renderMyOrders(v) {
     var box = $('my-orders');
     box.textContent = '';
-    if (s.orders.length === 0) {
+    if (v.orders.length === 0) {
       box.innerHTML = '<p class="empty">Du bietest nichts an — alle ' +
-        rules.orderSlots + ' Plätze sind frei. Einstellen geht unter Lager, auch ohne Netz.</p>';
+        v.orderSlotsFree + ' Plätze sind frei. Einstellen geht unter Lager, auch ohne Netz.</p>';
       return;
     }
-    s.orders.forEach(function (o) {
-      var left = rules.orderTtlTicks - (s.tick - o.listedAt);
+    v.orders.forEach(function (o) {
       var card = document.createElement('button');
       card.className = 'card';
       var body = document.createElement('div');
@@ -960,7 +958,7 @@
       top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      sub.textContent = left > 0 ? 'läuft in ' + timeText(left) + ' ab' : 'läuft gerade ab';
+      sub.textContent = o.expiresIn > 0 ? 'läuft in ' + timeText(o.expiresIn) + ' ab' : 'läuft gerade ab';
       body.appendChild(top); body.appendChild(sub);
       var go = document.createElement('span');
       go.className = 'go';
@@ -973,94 +971,80 @@
     });
   }
 
-  function renderStore(s) {
-    // Vorräte
+  function renderStore(v) {
     var chips = $('stock');
     chips.textContent = '';
-    rules.items.forEach(function (item, i) {
-      if (i === rules.currency) return;
+    v.stock.forEach(function (entry) {
+      if (entry.item === v.currency.item) return;
       var chip = document.createElement('span');
       chip.className = 'chip';
-      if ((s.items[i] || 0) === 0) chip.setAttribute('disabled', '');
-      chip.innerHTML = '<span>' + nameOf(item.id) + '</span><span class="n">' + (s.items[i] || 0) + '</span>';
+      if (entry.amount === 0) chip.setAttribute('disabled', '');
+      chip.innerHTML = '<span>' + nameOf(entry.id) + '</span><span class="n">' + entry.amount + '</span>';
       chips.appendChild(chip);
     });
 
-    // Verkaufen und Anbieten — beides aus dem Katalog, nicht aus einer Liste
-    // hier: Was handelbar ist, sagt das Regelwerk.
     var sellBox = $('sell');
     var listBox = $('list');
     sellBox.textContent = '';
     listBox.textContent = '';
-    var anySell = false, anyList = false;
-    var slotsLeft = rules.orderSlots - s.orders.length;
+    var any = false;
 
-    rules.items.forEach(function (item, i) {
-      if (!item.storable || item.npcPrice <= 0) return;
-      var have = s.items[i] || 0;
-      if (have <= 0) return;
-      anySell = true;
+    v.stock.forEach(function (entry) {
+      if (!entry.sellable || entry.amount <= 0) return;
+      any = true;
 
-      var card = document.createElement('button');
-      card.className = 'card';
-      card.innerHTML =
-        '<div class="body"><div class="top">' + have + ' ' + nameOf(item.id) + '</div>' +
-        '<div class="sub">' + item.npcPrice + ' Gold pro Stück</div></div>' +
-        '<span class="go">' + have * item.npcPrice + ' Gold</span>';
-      card.addEventListener('click', function () {
-        var now = client.preview();
-        var amount = now.items[i] || 0;
-        if (amount > 0) act('Verkauft · ' + amount + ' ' + nameOf(item.id), client.sellNpc(i, amount));
+      var sell = document.createElement('button');
+      sell.className = 'card';
+      sell.innerHTML =
+        '<div class="body"><div class="top">' + entry.amount + ' ' + nameOf(entry.id) + '</div>' +
+        '<div class="sub">' + entry.npcPrice + ' ' + itemName(v.currency.item) + ' pro Stück</div></div>' +
+        '<span class="go">' + entry.amount * entry.npcPrice + ' ' + itemName(v.currency.item) + '</span>';
+      sell.addEventListener('click', function () {
+        var have = client.preview().items[entry.item] || 0;
+        if (have > 0) act('Verkauft · ' + have + ' ' + nameOf(entry.id), client.sellNpc(entry.item, have));
       });
-      sellBox.appendChild(card);
+      sellBox.appendChild(sell);
 
-      // Auf dem Markt bringt Ware mehr als beim Händler — deshalb der
-      // Vorschlag am obersten Rand des Preisbandes.
-      var top = Math.floor((item.npcPrice * rules.priceBandMaxPct) / 100);
-      anyList = true;
+      // Am Markt bringt Ware mehr als beim Händler — deshalb der Vorschlag am
+      // obersten Rand des Preisbandes.
+      var free = v.orderSlotsFree;
       var offer = document.createElement('button');
       offer.className = 'card';
-      offer.disabled = slotsLeft <= 0;
+      offer.disabled = free <= 0;
       offer.innerHTML =
-        '<div class="body"><div class="top">' + have + ' ' + nameOf(item.id) + ' anbieten</div>' +
-        '<div class="sub">' + (slotsLeft > 0
-          ? top + ' Gold pro Stück · ' + slotsLeft + (slotsLeft === 1 ? ' Platz' : ' Plätze') + ' frei'
-          : 'alle ' + rules.orderSlots + ' Plätze belegt') + '</div></div>' +
-        '<span class="go">' + have * top + ' Gold</span>';
+        '<div class="body"><div class="top">' + entry.amount + ' ' + nameOf(entry.id) + ' anbieten</div>' +
+        '<div class="sub">' + (free > 0
+          ? entry.bandMax + ' ' + itemName(v.currency.item) + ' pro Stück · ' +
+            free + (free === 1 ? ' Platz' : ' Plätze') + ' frei'
+          : 'alle Plätze belegt') + '</div></div>' +
+        '<span class="go">' + entry.amount * entry.bandMax + ' ' + itemName(v.currency.item) + '</span>';
       offer.addEventListener('click', function () {
-        var now = client.preview();
-        var amount = now.items[i] || 0;
-        if (amount > 0) act('Angeboten · ' + amount + ' ' + nameOf(item.id), client.listOrder(i, amount, top));
+        var have = client.preview().items[entry.item] || 0;
+        if (have > 0) {
+          act('Angeboten · ' + have + ' ' + nameOf(entry.id),
+              client.listOrder(entry.item, have, entry.bandMax));
+        }
       });
       listBox.appendChild(offer);
     });
 
-    if (!anySell) sellBox.innerHTML = '<p class="empty">Nichts zu verkaufen.</p>';
-    if (!anyList) listBox.innerHTML = '<p class="empty">Nichts anzubieten.</p>';
+    if (!any) {
+      sellBox.innerHTML = '<p class="empty">Nichts zu verkaufen.</p>';
+      listBox.innerHTML = '<p class="empty">Nichts anzubieten.</p>';
+    }
   }
 
   /** Zahlen an der Navigation: nur, wenn es wirklich etwas zu tun gibt. */
-  function renderBadges(s) {
-    var ready = 0;
-    s.requests.slice(0, rules.requestSlots).forEach(function (r) {
-      if (r.wants.every(function (w) { return (s.items[w.item] || 0) >= w.amount; })) ready++;
-    });
-    var openMail = s.mail.length;
+  function renderBadges(v) {
+    var todo = v.requests.filter(function (r) { return r.deliverable; }).length
+      + v.mail.entries.length;
     var dotOrders = $('dot-orders');
-    dotOrders.hidden = ready + openMail === 0;
-    dotOrders.textContent = ready + openMail;
+    dotOrders.hidden = todo === 0;
+    dotOrders.textContent = todo;
 
-    // Am Markt zählt nur, was gerade wirklich geht: bezahlbar UND es passt
-    // ins Lager. Eine Zahl, die auch Unerreichbares mitzählt, schickt einen
-    // auf einen Weg, an dessen Ende ein grauer Knopf steht.
-    var space = rules.siloCapacity - NS.stored(s, rules);
-    var affordable = (s.offers || []).filter(function (o) {
-      return (s.items[rules.currency] || 0) >= o.amount * o.price
-        && (!rules.items[o.item].storable || space >= o.amount);
-    }).length;
     var dotMarket = $('dot-market');
-    dotMarket.hidden = affordable === 0 || !navigator.onLine;
-    dotMarket.textContent = affordable;
+    dotMarket.hidden = v.buyable === 0;
+    dotMarket.textContent = v.buyable;
   }
 
   // ── Aktionen ──────────────────────────────────────────────────────
@@ -1088,22 +1072,48 @@
     render();
   }
 
+  /**
+   * Ein Tipp auf einen Platz.
+   *
+   * WAS er auslöst, entscheidet das Anzeigemodell (`p.tap`) — dieselbe Antwort,
+   * die auch die Kachel beschriftet hat. Vorher stand die Reihenfolge zweimal
+   * da: einmal beim Zeichnen, einmal hier. Zwei Stellen, die dasselbe wissen
+   * müssen, sind zwei Stellen, die auseinanderlaufen können.
+   */
   function tapPlot(i) {
     if (!isActive) return;
     client.localTick = tickNow();
-    var s = client.preview();
-    var p = s.plots[i];
+    var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
 
-    if (p.recipe !== NS.EMPTY_PLOT) {
-      var recipe = rules.recipes[p.recipe];
-      act('Geerntet · ' + recipe.output.amount + ' ' + itemName(recipe.output.item), client.collect(i));
+    if (p.tap === 'collect') {
+      act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item), client.collect(i));
       return;
     }
-    if (recipesAt(i, p.level).length === 0) { tapBuy(i); return; }
+    if (p.tap === 'buy') { tapBuy(i); return; }
+    if (p.tap === 'start') {
+      // Welches Rezept, sagt das Regelwerk: das erste erlaubte, dessen Zutaten
+      // da sind. Bei einem Platz mit nur einem Rezept ist das die ganze Frage.
+      var recipe = firstStartable(p.index);
+      act('Gestartet · ' + nameOf(rules.recipes[recipe].id), client.start(i, recipe));
+      return;
+    }
+    if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
+    else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
+    else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
+  }
 
-    var next = startableRecipe(s, i);
-    if (next < 0) { toast('Zutaten fehlen', true); return; }
-    act('Gestartet · ' + nameOf(rules.recipes[next].id), client.start(i, next));
+  function firstStartable(i) {
+    var s = client.preview();
+    var allowed = rules.plots[i].levels[s.plots[i].level - 1].recipes || [];
+    for (var k = 0; k < allowed.length; k++) {
+      var recipe = rules.recipes[allowed[k]];
+      var ok = true;
+      for (var j = 0; j < recipe.inputs.length; j++) {
+        if ((s.items[recipe.inputs[j].item] || 0) < recipe.inputs[j].amount) ok = false;
+      }
+      if (ok) return allowed[k];
+    }
+    return -1;
   }
 
   function tapBuy(i) {
@@ -1114,10 +1124,19 @@
     act(level.label + ' gekauft', client.buy(i));
   }
 
-  function setConn(state) {
+  /**
+   * Der Verbindungszustand ist eine ANZEIGE, kein Spielmodus (§10) — gespielt
+   * wird in allen dreien gleich.
+   *
+   * „Netz zu schwach" steht bewusst neben „ohne Netz": Eine hängende Leitung
+   * fühlt sich für den Spieler anders an als ein Funkloch, und wer den
+   * Unterschied nicht zu sehen bekommt, hält sein Handy für kaputt.
+   */
+  function setConn(state, weak) {
     var el = $('conn');
     if (state === 'live') { el.className = 'conn live'; $('conn-text').textContent = 'verbunden'; }
     else if (state === 'catching-up') { el.className = 'conn'; $('conn-text').textContent = 'synchronisiert…'; }
+    else if (weak) { el.className = 'conn off'; $('conn-text').textContent = 'Netz zu schwach — läuft weiter'; }
     else { el.className = 'conn off'; $('conn-text').textContent = 'ohne Netz — läuft weiter'; }
   }
 
@@ -1157,6 +1176,11 @@
         }
         if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') adopt(r.snapshot, r.serverTime);
         if (r.ok) { setLease(true, null); client.takeover = false; }
+      } else if (outcome.kind === 'failed') {
+        // Nichts verloren — nur nicht durchgekommen. Die Warteschlange bleibt,
+        // der nächste Versuch läuft von allein.
+        setConn('offline', outcome.timedOut);
+        return;
       } else if (outcome.kind === 'dropped') {
         // Präfix-Commit: Der Server hat einen Teil nicht übernommen. Beim Markt
         // ist das der Normalfall „jemand war schneller" und keine Panik wert.

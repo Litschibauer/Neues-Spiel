@@ -1,0 +1,215 @@
+# Eigene Designs einsetzen — und der Weg zur eigenen App
+
+Zwei Fragen, eine Antwort: **Die Oberfläche ist die Wegwerfschicht.** Alles
+darunter — Regeln, Zustand, Zeitautorität, Sync, Markt — ist von ihr getrennt
+und weiß nichts von Farben, Kacheln oder HTML. Ein neues Design tauscht die
+oberste Schicht aus, eine native App ersetzt sie durch eine andere. Beides
+lässt den Rest unberührt.
+
+```
+    ┌─────────────────────────────────────────────┐
+    │  Darstellung  — HTML/CSS heute, später was  │   austauschbar
+    │                 auch immer                  │
+    ├─────────────────────────────────────────────┤
+    │  view.ts      — „ist reif", „bezahlbar",    │   wiederverwendbar
+    │                 „passt ins Lager"           │
+    ├─────────────────────────────────────────────┤
+    │  client.ts / sync-engine.ts                 │   wiederverwendbar
+    ├─────────────────────────────────────────────┤
+    │  sim/*        — der Kern, bit-genau          │   unantastbar
+    └─────────────────────────────────────────────┘
+```
+
+---
+
+## Die drei Stellen, an denen Design stattfindet
+
+### 1. Die Farben und Maße — `:root` in `web/farm.template.html`
+
+Ganz oben in der Datei stehen die Gestaltungswerte, und **nur dort**. Kein
+Farbwert steht sonst irgendwo im Dokument; ein Test wäre übertrieben, ein
+`grep` nach `#` reicht.
+
+```css
+:root {
+  --ground: …; --surface: …; --line: …;   /* Flächen */
+  --ink: …; --muted: …;                   /* Schrift */
+  --accent: …; --gold: …; --ripe: …;      /* Bedeutung */
+  --soil: …; --leaf: …; --sky: …;         /* die Zeichnungen */
+  --on-accent: …; --egg: …;               /* Kontrastpartner */
+}
+```
+
+Drei Blöcke, und alle drei müssen mit: `:root` (hell), der
+`prefers-color-scheme: dark`-Block, und `:root[data-theme="dark"]`. Der dritte
+ist kein Duplikat — er lässt eine spätere Umschaltung im Spiel gewinnen,
+unabhängig von der Systemeinstellung.
+
+### 2. Die Zeichnungen — die Tabelle `ART`
+
+```js
+var ART = {
+  'field-': function (p) { … },   // Muster: greift für field-1, field-2, …
+  'mill':   function (p) { … },   // exakte Katalog-Kennung
+  'coop-':  function (p) { … },
+  fallback: function () { … },
+};
+```
+
+Jeder Eintrag bekommt eine **Platz-Ansicht** (siehe unten) und gibt SVG-Inhalt
+zurück. Was darin steht, ist frei: gezeichnete Pfade wie heute, ein `<image>`
+mit eingebettetem PNG, ein `<use>` auf ein Sprite.
+
+Was die Funktion an Information hat, reicht für jede Darstellung:
+
+| Feld | Bedeutung |
+| --- | --- |
+| `p.id` | Katalog-Kennung des Platzes |
+| `p.level` | Ausbaustufe — leeres Gehege oder eines mit Hühnern |
+| `p.busy` / `p.done` | läuft gerade / kann abgeholt werden |
+| `p.progress` | 0…1, für Wachstumsstufen oder einen Ring |
+| `p.producing` | Katalog-Kennung dessen, was gerade entsteht |
+
+Trägt man nichts ein, geht nichts kaputt: Eine unbekannte Kennung bekommt
+`fallback`. **Ein neues Gebäude ist sofort spielbar** und sieht nur eine
+Version lang generisch aus.
+
+> Warum eingebettet und nicht als Bilddatei: Die Seite muss im Funkloch
+> vollständig sein. Ein nachzuladendes PNG wäre genau die Lücke, die den
+> Offline-Start wieder kaputt macht. Als Data-URI in der Vorlage ist es Teil
+> der Datei — und der Service Worker hat es damit automatisch mit.
+
+### 3. Die Texte — die Renderer
+
+Anzeigenamen stehen in `NAMES`, alles andere direkt in der jeweiligen
+`render…`-Funktion; `plotStatus()` etwa erzeugt jeden Statussatz einer Kachel.
+Das ist bewusst nicht zentralisiert: Solange es eine Sprache gibt, ist eine
+Textdatei mehr Buchhaltung als Nutzen. Sobald es zwei werden, wird daraus eine
+Tabelle — und weil im Anzeigemodell **kein einziges deutsches Wort** steht,
+ist das dann eine reine Oberflächenarbeit.
+
+---
+
+## Das Anzeigemodell — warum ein eigenes Design billig ist
+
+`src/client/view.ts` beantwortet die Fragen, die **jede** Oberfläche stellt:
+
+```js
+var v = NS.farmView(client.preview(), rules, navigator.onLine);
+```
+
+```
+v.level, v.xp {into, span, atMax}   v.currency {item, amount}
+v.silo {used, capacity, full, free}
+v.plots[]      {id, level, idle, busy, done, progress, remaining,
+                producing, output, tap, blocked, upgrade}
+v.requests[]   {wants, reward, xp, waiting, deliverable}
+v.offers[]     {item, amount, price, total, affordable, fits}
+v.orders[]     {item, amount, price, expiresIn}
+v.stock[]      {id, amount, sellable, npcPrice, bandMax}
+v.buyable
+```
+
+Zwei Eigenschaften machen den Unterschied:
+
+**Es enthält keinen Anzeigetext.** Nur Zahlen, Flags und Katalog-Kennungen —
+ein Test erzwingt das. Ein Statussatz an dieser Stelle wäre bequem und würde
+genau verhindern, worum es geht: dass eine zweite Oberfläche, ein anderes
+Design oder eine andere Sprache billig bleibt.
+
+**Es beantwortet jede Frage genau einmal.** `p.tap` sagt, was ein Tipp auslöst
+— dieselbe Antwort, die auch die Kachel beschriftet. Vorher stand diese
+Reihenfolge zweimal da, einmal beim Zeichnen und einmal beim Antippen. Zwei
+Stellen, die dasselbe wissen müssen, laufen irgendwann auseinander.
+
+`p.blocked` sagt **warum** etwas nicht geht: `level`, `cost`, `inputs`,
+`space`, `slots`, `offline`. Der Unterschied zwischen „zu teuer" und „Stufe
+fehlt" ist der zwischen „gleich" und „später" — den muss eine Oberfläche
+zeigen können, und sie soll ihn nicht selbst herleiten müssen.
+
+Das Modell ist in Node prüfbar, ohne Browser: `test/view.test.ts`. Damit hat
+die Oberflächenlogik zum ersten Mal überhaupt eine Absicherung.
+
+---
+
+## Der Weg zur eigenständigen App
+
+Ehrlich der Reihe nach, vom billigsten zum teuersten.
+
+### Heute schon: installierbar
+
+Die Seite ist eine PWA — Manifest, Service Worker, Start ohne Netz. Auf iOS und
+Android landet sie über „Zum Home-Bildschirm" als eigenes Symbol ohne
+Browserleiste. **Kein App Store, keine Signierung, kein Review.** Für einen
+Feldtest mit echten Leuten reicht das vollständig.
+
+Grenzen, klar gesagt: kein Eintrag im Store, keine Push-Nachrichten auf iOS
+ohne Zusatzarbeit, und iOS räumt den Speicher einer selten benutzten PWA
+irgendwann auf — der Hof ist dann weg, wenn der Schlüssel nicht notiert ist.
+
+### Der nächste Schritt: dieselbe Seite in einer nativen Hülle
+
+Capacitor oder Tauri packen genau diese Dateien in eine echte App: Store-Eintrag,
+Symbol, Push, dauerhafter Speicher. Der Spielcode bleibt Zeile für Zeile
+derselbe. Das ist der Weg, den ich empfehlen würde, wenn „richtige App" das
+Ziel ist — er kostet Tage, nicht Monate.
+
+### Der teure Weg: native Oberfläche, portierter Kern
+
+Eine Oberfläche in Swift oder Kotlin bedeutet, dass der **Sim-Kern zweimal
+existiert**. Und zwei Implementierungen müssen bit-für-bit dasselbe rechnen,
+sonst wirft der Server die Arbeit des Spielers weg (R1).
+
+Dafür ist im Projekt schon alles vorbereitet, und das war kein Zufall:
+
+- **`sim/*` benutzt keine Plattform-API.** Nur Integer, keine Floats, keine
+  Systemzeit, keine Locale-abhängige Formatierung (§2.2).
+- **Die Golden Vectors** (`test/vectors/golden.json`) sind 243 komplette
+  Sitzungen mit erwartetem Endzustand. Eine Portierung ist genau dann fertig,
+  wenn sie alle reproduziert.
+- **Der Prüfstand** (`dist/conformance.html`) lässt sie in einer fremden
+  Laufzeit durchlaufen und zeigt die erste Abweichung.
+- **Die kanonische Serialisierung** (`sim/canonical.ts`) ist reines
+  String-Bauen aus Zahlen — bewusst ohne Krypto und ohne Bibliothek, damit sie
+  sich in jeder Sprache in einer Stunde nachbauen lässt.
+
+Der Server bleibt unverändert: HTTP und JSON, nichts Browserspezifisches.
+
+**Empfehlung:** PWA für den Feldtest, native Hülle für den Store. Den
+portierten Kern erst, wenn es einen Grund gibt, der über „nativ klingt besser"
+hinausgeht — die Prüfmaschinerie dafür steht, aber sie kostet dauerhaft Pflege.
+
+---
+
+## Schwaches Netz
+
+Der unangenehmste Netzzustand ist nicht „kein Netz", sondern „ein Balken".
+
+**Kein Netz ist harmlos.** Der Aufruf scheitert sofort, das Backoff greift, die
+Warteschlange bleibt, das Spiel läuft weiter. Es gibt keinen Offline-Modus, in
+den umgeschaltet werden müsste (§10).
+
+**Schwaches Netz hängt.** Die Anfrage scheitert nicht — sie kommt nur nie
+zurück. Genau daran fehlte lange eine Frist: `inFlight` blieb gesetzt, jeder
+weitere Versuch prallte daran ab, und der Client synchronisierte nie wieder,
+ohne dass irgendwo ein Fehler auftrat. Ein hängender Client sieht für den
+Spieler aus wie ein verbundener.
+
+Was jetzt passiert:
+
+| Lage | Verhalten |
+| --- | --- |
+| Anfrage hängt > 15 s | wird abgebrochen, gilt als Fehlversuch, Backoff greift |
+| Langsam, aber trägt | wird abgewartet — langsam ist nicht kaputt |
+| Server hatte den Batch schon | beim nächsten Versuch als Präfix erkannt, nichts doppelt (§9) |
+| Anzeige | „Netz zu schwach — läuft weiter", getrennt von „ohne Netz" |
+
+Abbrechen ist unbedenklich, weil der Sync idempotent ist: Ob der Server den
+Batch angewandt hatte, muss den Client nicht interessieren.
+
+`engine.timeouts` zählt die Fristüberschreitungen — das Maß dafür, wie schlecht
+die Verbindung eines Spielers wirklich ist.
+
+Die Frist steht auf 15 Sekunden. Bewusst großzügig: Es geht um hängende
+Verbindungen, nicht um langsame. Eine zu kurze Frist macht aus schwachem Netz
+gar keines.

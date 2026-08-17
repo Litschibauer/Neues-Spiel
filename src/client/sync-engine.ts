@@ -18,8 +18,15 @@
 import type { SyncRequest, SyncResult, Snapshot } from '../server/server.ts';
 import type { Client } from './client.ts';
 
-/** Wirft bei Netzwerkfehlern — genau das passiert im Tunnel. */
-export type Transport = (req: SyncRequest) => Promise<SyncResult>;
+/**
+ * Wirft bei Netzwerkfehlern — genau das passiert im Tunnel.
+ *
+ * `signal` bricht die Anfrage ab, wenn sie zu lange braucht. Der Transport
+ * sollte ihn durchreichen (bei `fetch` einfach mitgeben); tut er es nicht,
+ * greift trotzdem der Timeout in der Engine — nur bleibt die Verbindung dann
+ * unnötig offen.
+ */
+export type Transport = (req: SyncRequest, signal?: AbortSignal) => Promise<SyncResult>;
 
 /**
  * Nur eine Anzeige für die UI, KEIN Spielmodus. Das Gameplay verhält sich in
@@ -33,11 +40,33 @@ export type SyncOutcome =
   | { kind: 'in-flight' }
   | { kind: 'synced'; result: SyncResult }
   | { kind: 'dropped'; rejectedFrom: number; reason: string; snapshot: Snapshot }
-  | { kind: 'failed'; retryInMs: number };
+  /**
+   * `timedOut` unterscheidet „kein Netz" von „hängender Leitung". Fürs
+   * Gameplay ist beides gleich; für die Anzeige nicht, und fürs Nachsehen im
+   * Feld schon gar nicht.
+   */
+  | { kind: 'failed'; retryInMs: number; timedOut: boolean };
 
 export type SyncEngineOptions = {
   baseDelayMs: number;
   maxDelayMs: number;
+  /**
+   * Wann eine Anfrage als gescheitert gilt, auch wenn sie noch „läuft".
+   *
+   * Der wichtigste Wert für schwaches Netz — und der, der lange gefehlt hat.
+   * **Kein Netz ist harmlos**: Der Aufruf scheitert sofort, das Backoff greift,
+   * das Spiel läuft weiter. **Schwaches Netz ist schlimmer**: Die Anfrage
+   * scheitert nicht, sie hängt. Ohne Frist bliebe `inFlight` gesetzt, jeder
+   * weitere Versuch prallte daran ab, und der Client synchronisierte nie
+   * wieder — ohne dass irgendwo ein Fehler aufträte. Ein hängender Client
+   * sieht für den Spieler aus wie ein verbundener.
+   *
+   * Abbrechen ist unbedenklich: Der Sync ist idempotent (§9). Ob der Server
+   * den Batch schon angewandt hatte, muss uns nicht interessieren — beim
+   * nächsten Versuch erkennt er das überlappende Präfix und wendet nur den
+   * Rest an.
+   */
+  timeoutMs: number;
   /** Zufall für den Jitter. Injizierbar, damit Tests reproduzierbar bleiben. */
   rnd: () => number;
 };
@@ -45,6 +74,10 @@ export type SyncEngineOptions = {
 const DEFAULTS: SyncEngineOptions = {
   baseDelayMs: 2_000,
   maxDelayMs: 60_000,
+  // Großzügig: Auf einer schlechten Mobilverbindung sind fünf Sekunden für
+  // eine Rundreise normal. Es geht hier um hängende Verbindungen, nicht um
+  // langsame — eine zu kurze Frist macht ein schwaches Netz zu gar keinem.
+  timeoutMs: 15_000,
   rnd: Math.random,
 };
 
@@ -59,6 +92,8 @@ export class SyncEngine {
   inFlight = false;
   /** Zähler fürs Monitoring — wie oft musste nach verlorener Antwort aufgesetzt werden. */
   resumes = 0;
+  /** Wie oft eine Anfrage in die Frist gelaufen ist — das Maß für schwaches Netz. */
+  timeouts = 0;
 
   constructor(client: Client, transport: Transport, opts: Partial<SyncEngineOptions> = {}) {
     this.client = client;
@@ -124,21 +159,42 @@ export class SyncEngine {
     this.inFlight = true;
 
     let result: SyncResult;
+    let timedOut = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.opts.timeoutMs);
+
     try {
-      result = await this.transport(req);
+      // Die Frist gilt AUCH, wenn der Transport den Abbruch ignoriert: Das
+      // Rennen entscheidet, nicht der Transport. Sonst hinge die Engine an
+      // einem Versprechen, das nie eingelöst wird.
+      result = await Promise.race([
+        this.transport(req, controller.signal),
+        new Promise<never>((_, reject) => {
+          controller.signal.addEventListener('abort', () => reject(new Error('TIMEOUT')), {
+            once: true,
+          });
+        }),
+      ]);
     } catch {
-      // Tunnel. Kein Fehler fürs Gameplay — nur ein späterer neuer Versuch.
+      // Tunnel oder hängende Leitung. Kein Fehler fürs Gameplay — nur ein
+      // späterer neuer Versuch.
       //
       // Die Commands bleiben unangetastet in der Queue. Ob der Server sie
       // vielleicht doch schon angewandt hat, muss uns nicht interessieren:
       // Der Sync ist idempotent, ein erneutes Senden ist immer sicher.
+      clearTimeout(timer);
       this.inFlight = false;
       this.consecutiveFailures++;
       this.view = 'offline';
+      this.timeouts += timedOut ? 1 : 0;
       const retryInMs = this.backoffMs();
       this.nextAttemptAt = nowMs + retryInMs;
-      return { kind: 'failed', retryInMs };
+      return { kind: 'failed', retryInMs, timedOut };
     }
+    clearTimeout(timer);
 
     this.inFlight = false;
 

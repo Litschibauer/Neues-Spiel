@@ -364,3 +364,135 @@ test('eine ausdrückliche Handlung überspringt das Backoff', async () => {
   assert.equal(forced.kind, 'synced', 'erzwungener Versuch muss durchgehen');
   assert.equal(client.queue.length, 0);
 });
+
+/**
+ * Schwaches Netz — der Fall, der schlimmer ist als gar keines.
+ *
+ * Kein Netz ist harmlos: Der Aufruf scheitert sofort, das Backoff greift, das
+ * Spiel läuft weiter. Ein Balken mit einem halben Balken Empfang scheitert
+ * aber nicht — er **hängt**. Ohne Frist bliebe `inFlight` für immer gesetzt,
+ * jeder weitere Versuch prallte daran ab, und der Client synchronisierte nie
+ * wieder, ohne dass irgendwo ein Fehler aufträte.
+ *
+ * Das ist die unangenehmste Sorte Fehler: Ein hängender Client sieht für den
+ * Spieler genauso aus wie ein verbundener.
+ */
+test('eine hängende Leitung blockiert den Client nicht dauerhaft', async () => {
+  const { server, client } = setup();
+
+  let hangs = true;
+  let aborted = false;
+  const transport: Transport = (req, signal) =>
+    new Promise((resolve, reject) => {
+      if (!hangs) {
+        resolve(server.sync(req, T0 + 60_000));
+        return;
+      }
+      // Genau wie ein `fetch`, das auf Antwort wartet: Es passiert nichts —
+      // weder Erfolg noch Fehler.
+      signal?.addEventListener('abort', () => {
+        aborted = true;
+        reject(new Error('aborted'));
+      });
+    });
+
+  const engine = new SyncEngine(client, transport, {
+    baseDelayMs: 5,
+    maxDelayMs: 10,
+    timeoutMs: 40,
+    rnd: () => 0.5,
+  });
+
+  client.start(0, R_WHEAT);
+  const first = await engine.attempt(Date.now(), true);
+
+  assert.equal(first.kind, 'failed');
+  if (first.kind === 'failed') assert.equal(first.timedOut, true, 'nicht als Frist erkannt');
+  assert.equal(aborted, true, 'die Anfrage läuft im Hintergrund weiter');
+  assert.equal(engine.inFlight, false, 'der Client bleibt für immer „beschäftigt"');
+  assert.equal(engine.timeouts, 1);
+
+  // Die Arbeit ist unangetastet — nichts wurde verworfen, nur nicht gesendet.
+  assert.equal(client.queue.length, 1);
+
+  // Und sobald die Leitung wieder trägt, geht es ohne Zutun weiter.
+  hangs = false;
+  const second = await engine.attempt(Date.now(), true);
+  assert.equal(second.kind, 'synced');
+  assert.equal(client.queue.length, 0);
+  assert.equal(server.snapshot.seq, 1);
+});
+
+/**
+ * Und die Gegenprobe: Eine langsame, aber funktionierende Verbindung darf
+ * nicht abgewürgt werden. Sonst hätte man aus schwachem Netz gar keines
+ * gemacht — dieselbe Krankheit mit umgekehrtem Vorzeichen.
+ */
+test('langsam ist nicht kaputt — eine träge Antwort wird abgewartet', async () => {
+  const { server, client } = setup();
+
+  const transport: Transport = (req) =>
+    new Promise((resolve) => setTimeout(() => resolve(server.sync(req, T0 + 60_000)), 30));
+
+  const engine = new SyncEngine(client, transport, {
+    baseDelayMs: 5,
+    maxDelayMs: 10,
+    timeoutMs: 400,
+    rnd: () => 0.5,
+  });
+
+  client.start(0, R_WHEAT);
+  const outcome = await engine.attempt(Date.now(), true);
+
+  assert.equal(outcome.kind, 'synced');
+  assert.equal(engine.timeouts, 0);
+  assert.equal(server.snapshot.seq, 1);
+});
+
+/**
+ * Ein abgebrochener Sync darf nichts doppelt anwenden.
+ *
+ * Der Server kann den Batch längst haben — die Frist lief ja auf dem Rückweg
+ * ab. Genau dafür ist der Sync idempotent (§9): Beim nächsten Versuch erkennt
+ * der Server das überlappende Präfix und wendet nur den Rest an.
+ */
+test('nach einer Frist ist der erneute Versuch sicher', async () => {
+  const { server, client } = setup();
+
+  let swallowResponse = true;
+  const transport: Transport = (req, signal) =>
+    new Promise((resolve, reject) => {
+      // Der Server wendet an — die Antwort bleibt auf der Strecke.
+      // Reichlich Zeitbudget: Der Server misst selbst (§4), und die Ernte
+      // liegt zwei Minuten Spielzeit hinter dem Start.
+      const result = server.sync(req, T0 + 600_000);
+      if (!swallowResponse) {
+        resolve(result);
+        return;
+      }
+
+      signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+
+  const engine = new SyncEngine(client, transport, {
+    baseDelayMs: 5,
+    maxDelayMs: 10,
+    timeoutMs: 30,
+    rnd: () => 0.5,
+  });
+
+  client.start(0, R_WHEAT);
+  client.advanceClock(rules.recipes[R_WHEAT]!.durationTicks);
+  client.collect(0);
+  await engine.attempt(Date.now(), true);
+  assert.equal(server.snapshot.seq, 2, 'der Server hat den Batch nicht angewandt');
+
+  swallowResponse = false;
+  const again = await engine.attempt(Date.now(), true);
+  assert.equal(again.kind, 'synced');
+  if (again.kind === 'synced') assert.equal(again.result.kind, 'duplicate');
+
+  // Die Ernte gibt es genau einmal.
+  assert.equal(count(server.snapshot.state, WHEAT), rules.recipes[R_WHEAT]!.output.amount);
+  assert.equal(server.snapshot.seq, 2);
+});

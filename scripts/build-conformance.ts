@@ -43,6 +43,7 @@ const CLIENT_MODULES = [
   'client/client.ts',
   'client/sync-engine.ts',
   'client/persist.ts',
+  'client/view.ts',
 ];
 
 function toPlainJs(relativePath: string): string {
@@ -174,6 +175,7 @@ ${modules}
     serializeClient: serializeClient,
     restoreClient: restoreClient,
     storageKeyFor: storageKeyFor,
+    farmView: farmView,
   };
 })();
 `;

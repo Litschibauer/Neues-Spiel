@@ -93,6 +93,8 @@ demselben Sim-Kern. Zeigen sie denselben Hof unterschiedlich, liegt es an einer
 Anzeige und nicht an der Simulation — und genau das will man unterscheiden
 können, wenn etwas nicht stimmt.
 
+Eigene Gestaltung einsetzen: [`oberflaeche.md`](oberflaeche.md).
+
 ### Spieler brauchen kein Token — sie legen einen Hof an
 
 Auf der Seite gibt es zwei Wege: **Neuen Hof anlegen** oder einen vorhandenen

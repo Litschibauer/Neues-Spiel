@@ -246,6 +246,12 @@ Das Messgerät bleibt daneben auf `/feldtest` stehen. Zwei echte Clients auf
 einem Kern sind billig und verraten sofort, ob eine Abweichung an der Anzeige
 liegt oder an der Simulation.
 
+Wie eigene Designs eingesetzt werden und was der Weg zur eigenständigen App
+kostet, steht in [`oberflaeche.md`](oberflaeche.md). Kurzform: Farben und Maße
+stehen an einer Stelle, die Zeichnungen in einer austauschbaren Tabelle, und
+das Anzeigemodell (`view.ts`) enthält keinen einzigen Anzeigetext — das ist die
+Bedingung dafür, dass eine zweite Oberfläche billig bleibt.
+
 **Als Nächstes**, in dieser Reihenfolge:
 
 1. **Der Hof soll sich nach Hof anfühlen.** Die Oberfläche steht, aber die
