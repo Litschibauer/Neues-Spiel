@@ -300,6 +300,15 @@ function loadPage(name: string): string | null {
   return existsSync(path) ? readFileSync(path, 'utf8') : null;
 }
 
+/**
+ * Zwei Oberflächen auf demselben Kern.
+ *
+ * `/` ist das Spiel. `/feldtest` ist das Messgerät: dieselbe Sim, aber mit
+ * Warteschlangenlänge, `seq`, Tick und Protokoll im Bild. Beide sind echte
+ * Clients — wenn sie auseinanderlaufen, liegt es an der Sim und nicht an einer
+ * Anzeige, und genau das will man wissen können.
+ */
+const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
@@ -506,10 +515,16 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return res.end(adminPage);
   }
 
-  if (url.pathname === '/' && req.method === 'GET') {
+  if (url.pathname === '/feldtest' && req.method === 'GET') {
     if (!page) return json(res, 500, { error: 'Seite fehlt — bitte `npm run build` ausführen.' });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(page);
+  }
+
+  if (url.pathname === '/' && req.method === 'GET') {
+    if (!farmPage) return json(res, 500, { error: 'Seite fehlt — bitte `npm run build` ausführen.' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(farmPage);
   }
 
   if (url.pathname.startsWith('/api/')) {
@@ -704,7 +719,8 @@ server.listen(PORT, CONFIG.host, () => {
   for (const line of describeConfig(CONFIG)) console.log(line);
   console.log(`Regelwerk:  Ziel v${TARGET_RULESET}`);
   console.log(`Höfe:       ${accounts.count}`);
-  console.log(`Seite:      ${page ? 'eingebunden' : 'FEHLT (npm run build)'}`);
+  console.log(`Spiel:      ${farmPage ? '/' : 'FEHLT (npm run build)'}`);
+  console.log(`Feldtest:   ${page ? '/feldtest' : 'FEHLT (npm run build)'}`);
   console.log(`Admin:      …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
   console.log('');
 });

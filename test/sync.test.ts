@@ -7,6 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
+import { SyncEngine } from '../src/client/sync-engine.ts';
 import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
 import { EMPTY_PLOT, initialState } from '../src/sim/state.ts';
 
@@ -288,4 +289,88 @@ test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
   );
   assert.equal(script.ok, true, 'Anfragen ohne deviceId dürfen nicht gesperrt werden');
   assert.equal(server.activeDevice?.id, 'handy', 'und sie beanspruchen die Rechte nicht');
+});
+
+/**
+ * Weiterspielen, WÄHREND ein Sync unterwegs ist.
+ *
+ * Auf einem Handy ist eine Rundreise leicht eine Sekunde lang, und in dieser
+ * Sekunde tippt niemand brav still. Vorher hat die eintreffende Antwort die
+ * Warteschlange komplett geleert — inklusive der Tipps, die der Server nie
+ * gesehen hatte. Für den Spieler sah das aus wie ein Feld, das sich von selbst
+ * wieder füllt: kein Fehler, keine Meldung, nur weg.
+ */
+test('Aktionen während eines laufenden Syncs überleben die Antwort', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+
+  client.start(0, R_WHEAT);
+
+  // Die Antwort kommt erst, nachdem der Spieler weitergetippt hat.
+  let queuedDuringFlight = false;
+  const engine = new SyncEngine(
+    client,
+    async (req) => {
+      const result = server.sync(req, T0 + 30_000);
+      if (!queuedDuringFlight) {
+        queuedDuringFlight = true;
+        client.advanceClock(5);
+        client.start(1, R_WHEAT);
+      }
+      return result;
+    },
+    { baseDelayMs: 1, maxDelayMs: 2 },
+  );
+
+  const outcome = await engine.attempt(Date.now(), true);
+  assert.equal(outcome.kind, 'synced');
+
+  assert.equal(client.baseSeq, 1, 'der gesendete Zug ist nicht bestätigt');
+  assert.equal(client.queue.length, 1, 'der Zug während des Fluges ist verschwunden');
+  assert.equal(client.queue[0]!.type, 'START');
+  // Neu nummeriert: Die alte Nummer gehörte zu einem Snapshot, den es nicht
+  // mehr gibt.
+  assert.equal(client.queue[0]!.seq, 2);
+
+  // Und beide Felder laufen — der Server nimmt den Nachzügler ohne Murren an.
+  const second = server.sync(client.buildSyncRequest(), T0 + 60_000);
+  assert.equal(second.ok, true);
+  assert.notEqual(second.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
+  assert.notEqual(second.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
+});
+
+/**
+ * Die Gegenprobe, und sie ist die wichtigere: Was der Server ABGELEHNT hat,
+ * darf nicht zurück in die Warteschlange.
+ *
+ * Sonst schickt der Client es endlos erneut. Beim Markt ist das kein
+ * Gedankenspiel: Ein Kauf auf ein vergriffenes Angebot ist für den lokalen
+ * Sim-Kern völlig regelkonform — er sieht die geteilte Welt ja nicht.
+ */
+test('vom Server abgelehnte Commands wandern nicht zurück in die Warteschlange', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+
+  client.start(0, R_WHEAT);
+  client.advanceClock(1);
+  client.start(1, R_WHEAT);
+
+  // Der Server nimmt nur das erste und lehnt ab dem zweiten ab.
+  const engine = new SyncEngine(
+    client,
+    async (req) => ({
+      ok: true as const,
+      kind: 'partial' as const,
+      snapshot: server.sync({ ...req, commands: req.commands.slice(0, 1) }, T0 + 30_000).snapshot,
+      divergence: null,
+      rejectedFrom: 2,
+      reason: 'ILLEGAL_COMMAND:OFFER_GONE',
+    }),
+    { baseDelayMs: 1, maxDelayMs: 2 },
+  );
+
+  const outcome = await engine.attempt(Date.now(), true);
+  assert.equal(outcome.kind, 'dropped');
+  assert.equal(client.baseSeq, 1);
+  assert.equal(client.queue.length, 0, 'der abgelehnte Zug steht wieder in der Schlange');
 });

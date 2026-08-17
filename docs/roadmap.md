@@ -236,13 +236,26 @@ bricht den Start ab — der Hof-Schlüssel reist in jedem Aufruf mit.
 zwei Spieler wirklich verbindet — und die Offline-Regel aus §6 hat ihren ersten
 echten Anwendungsfall: Der Markt ist ohne Netz sichtbar, aber ausgegraut.
 
+**Die Oberfläche** steht seit dem Orderbuch ebenfalls — und zwar erst jetzt,
+mit Absicht. Weil Inhalt Daten ist, liest sie `state` und `rules` und kennt
+keine einzige Spielregel: Eine neue Feldfrucht, ein neues Gebäude, ein neuer
+Gegenstand tauchen von allein auf, ohne dass hier eine Zeile fällt. Hätten wir
+sie vor der Datenumstellung gebaut, wäre jede Feldfrucht ein UI-Ticket geworden.
+
+Das Messgerät bleibt daneben auf `/feldtest` stehen. Zwei echte Clients auf
+einem Kern sind billig und verraten sofort, ob eine Abweichung an der Anzeige
+liegt oder an der Simulation.
+
 **Als Nächstes**, in dieser Reihenfolge:
 
-1. **Nachbarn.** Der Markt ist anonym; ein Hof, den man kennt, ist der Unterschied
+1. **Der Hof soll sich nach Hof anfühlen.** Die Oberfläche steht, aber die
+   Plätze sind Kacheln in einem Raster — kein Grundstück, über das man wandert.
+   Das ist die nächste Stelle, an der Arbeit direkt sichtbar wird.
+2. **Nachbarn.** Der Markt ist anonym; ein Hof, den man kennt, ist der Unterschied
    zwischen „Datenbank" und „Dorf". Braucht aber eine Antwort auf die Frage, wie
    man jemanden findet, ohne Benutzernamen zu haben.
-2. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
+3. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
    echten Spielerschaft muss das gelöst sein — bewusst, mit einem zweiten Faktor,
    nicht nebenbei.
-3. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
+4. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
    wäre: Überraschungskisten.

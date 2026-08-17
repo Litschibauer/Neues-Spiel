@@ -150,13 +150,57 @@ export class Client {
     };
   }
 
-  /** Server gewinnt immer (§9). Lokale Vorhersage wird verworfen. */
-  adopt(snapshot: Snapshot): void {
+  /**
+   * Server gewinnt immer (§9). Lokale Vorhersage wird verworfen.
+   *
+   * `keepAfterSeq` rettet die Aktionen, die der Server noch gar nicht gesehen
+   * hat — und das ist kein Randfall, sondern der Normalfall auf einem Handy.
+   * Ein Sync dauert auf schlechter Verbindung leicht eine Sekunde, und in
+   * dieser Sekunde tippt jemand weiter. Vorher hat die eintreffende Antwort
+   * diese Tipps stillschweigend mitgelöscht: Das Feld war wieder voll, die
+   * Ernte weg, und nichts sagte warum.
+   *
+   * Der Aufrufer gibt an, bis zu welcher Nummer er gesendet hat. Alles
+   * darüber wurde danach eingereiht, kann also unmöglich in der Antwort
+   * stecken. Ohne Angabe wird wie bisher alles verworfen — richtig für einen
+   * frischen Verbindungsaufbau, wo es nichts zu retten gibt.
+   *
+   * Gerettete Commands werden **neu nummeriert und nachgerechnet**: Ihre alten
+   * Nummern gehören zu einem Snapshot, den es nicht mehr gibt. Was unter dem
+   * neuen Stand nicht mehr erlaubt ist, fällt dabei heraus — besser hier, wo
+   * der Client es sofort anzeigen kann, als beim Server.
+   */
+  adopt(snapshot: Snapshot, keepAfterSeq: number = Infinity): { kept: number; dropped: number } {
+    const pending = this.queue.filter((c) => c.seq > keepAfterSeq);
+
     this.baseSnapshot = snapshot;
     this.state = snapshot.state;
     this.baseSeq = snapshot.seq;
     this.rulesetVersion = snapshot.rulesetVersion;
     this.localTick = snapshot.state.tick;
     this.queue = [];
+
+    if (pending.length === 0) return { kept: 0, dropped: 0 };
+
+    const rules = getRuleset(this.rulesetVersion);
+    let dropped = 0;
+    for (const cmd of pending) {
+      const moved = {
+        ...cmd,
+        seq: this.baseSeq + this.queue.length + 1,
+        // Der neue Snapshot kann zeitlich weiter sein als der alte. Ein Command
+        // in die Vergangenheit zu datieren wäre eine Zeitreise (§4) — also auf
+        // den neuen Stand vorziehen statt verwerfen.
+        tick: Math.max(cmd.tick, this.state.tick),
+      } as Command;
+      try {
+        this.state = simulate(this.state, moved, rules);
+        this.queue.push(moved);
+        this.localTick = moved.tick;
+      } catch {
+        dropped++;
+      }
+    }
+    return { kept: this.queue.length, dropped };
   }
 }

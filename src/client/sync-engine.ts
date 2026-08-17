@@ -114,6 +114,13 @@ export class SyncEngine {
     }
 
     const req = this.client.buildSyncRequest();
+    /**
+     * Bis hierher ist gesendet. Alles mit höherer Nummer entsteht erst
+     * WÄHREND der Rundreise und kann unmöglich in der Antwort stecken —
+     * es muss die Antwort also überleben (siehe `Client.adopt`).
+     */
+    const sentThrough =
+      req.commands.length > 0 ? req.commands[req.commands.length - 1]!.seq : req.baseSeq;
     this.inFlight = true;
 
     let result: SyncResult;
@@ -137,8 +144,9 @@ export class SyncEngine {
 
     if (!result.ok) {
       // Der Server hat inhaltlich abgelehnt (Fork, Uhr, veraltete Version).
-      // Server gewinnt: lokalen Stand übernehmen (§9).
-      this.client.adopt(result.snapshot);
+      // Server gewinnt: lokalen Stand übernehmen (§9). Der abgelehnte Batch
+      // ist verloren — was danach getippt wurde, nicht.
+      this.client.adopt(result.snapshot, sentThrough);
       this.consecutiveFailures = 0;
       this.nextAttemptAt = 0;
       this.view = 'live';
@@ -151,7 +159,14 @@ export class SyncEngine {
       this.resumes++;
     }
 
-    this.client.adopt(result.snapshot);
+    /**
+     * Auch bei `partial` gilt dieselbe Grenze, und das ist wichtig: Der vom
+     * Server abgelehnte Rest des Batches darf NICHT erneut in die
+     * Warteschlange. Sonst schickte der Client ihn endlos weiter — beim Markt
+     * etwa ein Kauf auf ein vergriffenes Angebot, den der lokale Sim-Kern für
+     * völlig regelkonform hält, weil er die geteilte Welt nicht sieht.
+     */
+    this.client.adopt(result.snapshot, sentThrough);
     this.consecutiveFailures = 0;
     this.nextAttemptAt = 0;
     this.view = 'live';

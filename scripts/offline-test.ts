@@ -256,14 +256,29 @@ try {
       void cdp!.send('Page.handleJavaScriptDialog', { accept: true });
     }
     if (method === 'Runtime.exceptionThrown') {
-      const d = params as { exceptionDetails?: { text?: string } };
-      console.error('  Seitenfehler:', d.exceptionDetails?.text);
+      // `text` ist meist nur „Uncaught". Was wirklich passiert ist, steht in
+      // der Beschreibung samt Stack — ohne die sucht man im Dunkeln.
+      const d = params as {
+        exceptionDetails?: {
+          text?: string;
+          lineNumber?: number;
+          exception?: { description?: string };
+        };
+      };
+      console.error(
+        '  Seitenfehler:',
+        d.exceptionDetails?.exception?.description ??
+          `${d.exceptionDetails?.text} (Zeile ${d.exceptionDetails?.lineNumber})`,
+      );
     }
   };
 
   // ── 1. Erster Besuch: Hof anlegen, Schlüssel bekommen, spielen ────────
-  console.log('1. Erster Besuch — neuen Hof anlegen');
-  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+  console.log('1. Erster Besuch — neuen Hof anlegen (Feldtest-Ansicht)');
+  // Bewusst die Feldtest-Ansicht: Sie zeigt Warteschlange, `seq` und Tick im
+  // DOM, und genau daran hängen die Prüfungen unten. Das Spiel selbst liegt
+  // auf `/` und wird in Abschnitt 7 geprüft.
+  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/feldtest` });
   await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
   await evaluate(cdp, `document.getElementById('create').click()`);
   await waitFor(cdp, '!document.getElementById("keybox").hidden', 'Schlüssel gezeigt');
@@ -593,6 +608,158 @@ try {
     paid.ok && sellerAfter.snapshot.state.items[0] === 60,
     `${sellerAfter.snapshot.state.items[0]} Münzen`,
   );
+  // ── 7. Die Spieloberfläche ────────────────────────────────────────────
+  //
+  // Zwei Oberflächen auf einem Kern: Wenn das Spiel denselben Hof anders sieht
+  // als das Messgerät, liegt es an einer Anzeige — und das will man merken.
+  // Geprüft wird deshalb nicht das Aussehen, sondern dass dieselben Zahlen
+  // ankommen und dass eine Ernte über echte Klicks funktioniert.
+  console.log('\n7. Die Spieloberfläche auf /');
+
+  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+  // Null-sicher: Direkt nach `Page.navigate` gibt es das Element noch nicht,
+  // und `waitFor` würde an der Ausnahme abbrechen statt weiterzuwarten.
+  await waitFor(
+    cdp,
+    'document.getElementById("shell") && !document.getElementById("shell").hidden',
+    'Spiel geladen',
+    20_000,
+  );
+  check('Das Spiel startet mit dem gespeicherten Hof — ohne Schlüsseleingabe', true);
+
+  const shown = await evaluate<{ gold: string; plots: number; lvl: string }>(
+    cdp,
+    `({
+       gold: document.getElementById('gold').textContent,
+       plots: document.querySelectorAll('#plots .plot').length,
+       lvl: document.getElementById('lvl').textContent,
+     })`,
+  );
+  // Mit `?account=`: Ohne Angabe nimmt die Werkbank den ZULETZT angelegten Hof
+  // — das wäre hier der Verkäufer aus Abschnitt 6, nicht der im Browser.
+  const truth = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { items: number[]; plots: unknown[] };
+  };
+  check(
+    'Es zeigt dieselben Zahlen wie der Server',
+    Number(shown.gold) === truth.state.items[0] && shown.plots === truth.state.plots.length,
+    `${shown.gold} Gold, ${shown.plots} Plätze, Stufe ${shown.lvl}`,
+  );
+
+  // Jeder Platz zeichnet sich selbst — aus dem Katalog, nicht aus einer Liste
+  // in der Seite. Ein neues Gebäude taucht damit von allein auf.
+  check(
+    'Jeder Platz hat ein Bild',
+    (await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot svg.art').length`)) ===
+      shown.plots,
+  );
+
+  // Ernten über einen echten Klick: Zeit gutschreiben, bis etwas reif ist.
+  await api('/api/admin/time?seconds=4000', 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  // Auf den Sync warten, den das Netz-zurück auslöst — nicht nur darauf, dass
+  // irgendwo „reif" steht. Sonst klickt man auf eine Kachel, die der nächste
+  // Neuzeichnung schon ersetzt hat, und der Klick fällt ins Leere.
+  await waitFor(
+    cdp,
+    `document.getElementById('conn').className.indexOf('live') >= 0
+       && document.querySelector('#plots .plot.ripe')`,
+    'Verbindung steht und ein Platz ist reif',
+    20_000,
+  );
+
+  const stockOf = (name: string) =>
+    evaluate<number>(
+      cdp,
+      `(function () {
+         var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+           return x.textContent.indexOf(${JSON.stringify(name)}) === 0;
+         });
+         return c ? Number(c.querySelector('.n').textContent) : -1;
+       })()`,
+    );
+
+  const beforeHarvest = await stockOf('Weizen');
+  await evaluate(cdp, `document.querySelector('#plots .plot.ripe').click()`);
+
+  // Bewusst eine eigene Schleife statt `waitFor`: Bei einer Zeitüberschreitung
+  // bricht `waitFor` ab, und dann steht man ohne die eine Information da, die
+  // man bräuchte — was die Seite in diesem Moment eigentlich anzeigte.
+  let afterHarvest = beforeHarvest;
+  for (let i = 0; i < 40 && afterHarvest <= beforeHarvest; i++) {
+    await sleep(250);
+    afterHarvest = await stockOf('Weizen');
+  }
+  if (afterHarvest <= beforeHarvest) {
+    console.error(
+      '  Plätze:',
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify([...document.querySelectorAll('#plots .plot')].map(function (p) {
+           return p.querySelector('.name').textContent + '=' + p.querySelector('.status').textContent;
+         }))`,
+      ),
+    );
+    console.error(
+      '  Zustand:',
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify({
+           meldung: document.getElementById('toast').textContent,
+           gesperrt: !document.getElementById('lease').hidden,
+           verbindung: document.getElementById('conn').textContent,
+           lager: document.getElementById('silo-num').textContent,
+         })`,
+      ),
+    );
+  }
+  check(
+    'Ernten geht mit einem Tipp auf den Platz',
+    afterHarvest > beforeHarvest,
+    `${beforeHarvest} → ${afterHarvest} Weizen`,
+  );
+
+  // Die Navigation muss die vier Ansichten wirklich umschalten — sonst ist der
+  // halbe Hof unerreichbar.
+  const tabs = await evaluate<string>(
+    cdp,
+    `JSON.stringify(['orders', 'market', 'store', 'farm'].map(function (name) {
+       document.querySelector('nav button[data-view="' + name + '"]').click();
+       return document.getElementById('view-' + name).hidden === false;
+     }))`,
+  );
+  check('Alle vier Ansichten öffnen sich', JSON.parse(tabs).every(Boolean), tabs);
+
+  // Und die Offline-Regel aus §6, jetzt in der echten Oberfläche.
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: true,
+    latency: 0,
+    downloadThroughput: 0,
+    uploadThroughput: 0,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
+  await evaluate(cdp, `document.querySelector('nav button[data-view="market"]').click()`);
+  check(
+    'Ohne Netz ist der Markt ausgegraut und der Hinweis sichtbar',
+    await evaluate<boolean>(
+      cdp,
+      `document.getElementById('market-list').className === 'no-net'
+         && !document.getElementById('market-note').hidden`,
+    ),
+  );
+
+  // Neu laden im Funkloch — dieselbe Prüfung wie für das Messgerät, jetzt für
+  // die Seite, die Spieler wirklich sehen.
+  await cdp.send('Page.reload', { ignoreCache: false });
+  let gameOffline = false;
+  for (let i = 0; i < 40 && !gameOffline; i++) {
+    await sleep(500);
+    gameOffline = await evaluate<boolean>(
+      cdp,
+      `!!document.getElementById('shell') && !document.getElementById('shell').hidden`,
+    ).catch(() => false);
+  }
+  check('Das Spiel startet im Funkloch — kein Dinosaurier', gameOffline);
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

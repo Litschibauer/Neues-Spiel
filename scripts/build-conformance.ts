@@ -180,9 +180,26 @@ ${modules}
 }
 
 export function buildFieldTestPage(): string {
-  const template = readFileSync(join(ROOT, 'web', 'field-test.template.html'), 'utf8');
+  return buildPageWithBundle('field-test.template.html');
+}
+
+/**
+ * Die Spieloberfläche.
+ *
+ * Sie bekommt exakt dasselbe Bündel wie die Feldtest-Seite — denselben Sim-Kern,
+ * denselben Client, dieselbe Sync-Maschine. Der Unterschied ist ausschließlich
+ * die Darstellung. Zwei Oberflächen auf einem Kern sind dabei kein Luxus,
+ * sondern ein Prüfmittel: Wer beide auf denselben Hof zeigt, sieht sofort, ob
+ * die Sim wirklich die einzige Quelle der Wahrheit ist.
+ */
+export function buildFarmPage(): string {
+  return buildPageWithBundle('farm.template.html');
+}
+
+function buildPageWithBundle(name: string): string {
+  const template = readFileSync(join(ROOT, 'web', name), 'utf8');
   if (!template.includes('<!--BUNDLE-->')) {
-    throw new Error('Platzhalter <!--BUNDLE--> fehlt in der Feldtest-Vorlage');
+    throw new Error(`Platzhalter <!--BUNDLE--> fehlt in ${name}`);
   }
   return template.replace('<!--BUNDLE-->', () => buildClientBundle());
 }
@@ -210,11 +227,15 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const field = buildFieldTestPage();
   writeFileSync(join(outDir, 'field-test.html'), field);
 
+  const farm = buildFarmPage();
+  writeFileSync(join(outDir, 'farm.html'), farm);
+
   const admin = buildAdminPage();
   writeFileSync(join(outDir, 'admin.html'), admin);
 
   console.log(
     `Prüfstand ${(page.length / 1024).toFixed(1)} kB → dist/conformance.html\n` +
+      `Spiel      ${(farm.length / 1024).toFixed(1)} kB → dist/farm.html\n` +
       `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html\n` +
       `Werkbank   ${(admin.length / 1024).toFixed(1)} kB → dist/admin.html`,
   );

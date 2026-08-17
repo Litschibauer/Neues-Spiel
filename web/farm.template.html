@@ -1,0 +1,1315 @@
+<title>Hof</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2f7d5d">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  /*
+   * Die Oberfläche.
+   *
+   * Sie kennt KEINE Spielregel. Sie liest `state` und `rules` und zeichnet, was
+   * dort steht — welche Plätze es gibt, welche Rezepte laufen dürfen, was ein
+   * Ausbau kostet. Eine neue Feldfrucht, ein neues Gebäude, ein neuer
+   * Gegenstand ändern hier keine Zeile; sie tauchen von allein auf.
+   *
+   * Das ist der Grund, warum es sich gelohnt hat, mit dem Aussehen zu warten,
+   * bis Inhalt Daten war: Jetzt kostet die Oberfläche einmal Arbeit statt
+   * einmal pro Feldfrucht.
+   */
+  :root {
+    --ground: #f7f4ee; --surface: #ffffff; --sunk: #efeae0; --line: #e2dbcd;
+    --ink: #2b2521; --muted: #7d7266;
+    --accent: #2f7d5d; --accent-soft: #e4f0ea;
+    --gold: #b8811f; --gold-soft: #f8efd9;
+    --ripe: #d8a02c;
+    --warn: #a8622a; --warn-soft: #f8ebe0;
+    --bad: #a33a44;
+    --soil: #8a6a4d; --soil-dark: #6d5238;
+    --leaf: #4f9159; --leaf-dark: #33693d;
+    --sky: #cfe4ec;
+    --wood: #a5764a; --wood-dark: #7d5735;
+    --shadow: 0 1px 2px rgba(43, 37, 33, .06), 0 4px 14px rgba(43, 37, 33, .05);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --num: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #16130f; --surface: #211d18; --sunk: #2b2620; --line: #38312a;
+      --ink: #f0ebe3; --muted: #a49889;
+      --accent: #4fb083; --accent-soft: #163024;
+      --gold: #e0b055; --gold-soft: #2e2617;
+      --ripe: #e8b943;
+      --warn: #d3915c; --warn-soft: #2f2318;
+      --bad: #e2848d;
+      --soil: #6b5340; --soil-dark: #503d2d;
+      --leaf: #55a05f; --leaf-dark: #2f6238;
+      --sky: #2b3d45;
+      --wood: #8b6440; --wood-dark: #63472c;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #16130f; --surface: #211d18; --sunk: #2b2620; --line: #38312a;
+    --ink: #f0ebe3; --muted: #a49889;
+    --accent: #4fb083; --accent-soft: #163024;
+    --gold: #e0b055; --gold-soft: #2e2617;
+    --ripe: #e8b943;
+    --warn: #d3915c; --warn-soft: #2f2318;
+    --bad: #e2848d;
+    --soil: #6b5340; --soil-dark: #503d2d;
+    --leaf: #55a05f; --leaf-dark: #2f6238;
+    --sky: #2b3d45;
+    --wood: #8b6440; --wood-dark: #63472c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.45;
+    -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain;
+  }
+  [hidden] { display: none !important; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  /* ── Gerüst ─────────────────────────────────────────────────────── */
+  #shell { display: flex; flex-direction: column; min-height: 100%; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--surface); border-bottom: 1px solid var(--line);
+    padding: max(.6rem, env(safe-area-inset-top)) .85rem .55rem;
+    display: flex; flex-direction: column; gap: .5rem;
+  }
+  .purse { display: flex; align-items: center; gap: .5rem; }
+
+  /* Levelring: Stufe in der Mitte, Fortschritt als Kreis. Eine Zahl, die nur
+     steigt, verdient die auffälligste Stelle. */
+  .ring { position: relative; width: 2.5rem; height: 2.5rem; flex: none; }
+  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring b {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .purse-main { flex: 1; min-width: 0; }
+  .purse-main .xp { font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .purse-main .who { font-size: .95rem; font-weight: 650; letter-spacing: -.01em; }
+
+  .coins {
+    display: inline-flex; align-items: center; gap: .3rem; flex: none;
+    background: var(--gold-soft); color: var(--gold);
+    border-radius: 999px; padding: .25rem .6rem .25rem .35rem;
+    font-weight: 700; font-variant-numeric: tabular-nums; font-size: .9rem;
+  }
+  .coins svg { flex: none; }
+
+  /* Lagerbalken. Volles Lager ist die häufigste Frustquelle im Genre — also
+     immer sichtbar und nicht in einem Menü versteckt. */
+  .silo { display: flex; align-items: center; gap: .5rem; font-size: .7rem; color: var(--muted); }
+  .silo-track {
+    flex: 1; height: .3rem; border-radius: 999px; background: var(--sunk); overflow: hidden;
+  }
+  .silo-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .3s; }
+  .silo.full .silo-fill { background: var(--warn); }
+  .silo.full { color: var(--warn); }
+  .silo b { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  main { flex: 1; padding: .85rem .85rem 5.5rem; }
+  .view { display: flex; flex-direction: column; gap: .85rem; }
+  h2 {
+    font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin: .2rem 0 -.3rem .15rem;
+  }
+  .empty {
+    color: var(--muted); font-size: .85rem; text-align: center;
+    padding: 1.6rem 1rem; background: var(--surface);
+    border: 1px dashed var(--line); border-radius: 14px; margin: 0;
+  }
+
+  /* ── Plätze ─────────────────────────────────────────────────────── */
+  .plots { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: .6rem; }
+  .plot {
+    position: relative; padding: 0; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); text-align: left;
+    display: flex; flex-direction: column; transition: transform .12s, border-color .2s;
+  }
+  .plot:active { transform: scale(.97); }
+  .plot .art { display: block; width: 100%; aspect-ratio: 1 / .8; }
+  .plot .meta { padding: .4rem .55rem .5rem; display: flex; flex-direction: column; gap: .1rem; }
+  .plot .name { font-size: .78rem; font-weight: 650; letter-spacing: -.01em; }
+  .plot .status { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .plot.ripe { border-color: var(--ripe); }
+  .plot.ripe .status { color: var(--ripe); font-weight: 700; }
+  .plot.locked .art { filter: saturate(.35) brightness(.98); }
+  .plot.gated { opacity: .55; }
+  .plot[disabled] { cursor: default; }
+
+  /* Reifezeichen: ein Punkt, den man aus dem Augenwinkel sieht. */
+  .plot .badge {
+    position: absolute; top: .4rem; right: .4rem; width: .6rem; height: .6rem;
+    border-radius: 50%; background: var(--ripe);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ripe) 25%, transparent);
+  }
+  .bar { height: .25rem; background: var(--sunk); }
+  .bar i { display: block; height: 100%; background: var(--leaf); transition: width 1s linear; }
+
+  .upgrade {
+    margin: 0 .45rem .45rem; padding: .3rem .4rem; border-radius: 8px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: .66rem; font-weight: 650; text-align: center; border: 0; width: auto;
+  }
+  .upgrade[disabled] { background: var(--sunk); color: var(--muted); }
+
+  /* ── Karten: Aufträge, Angebote, Lager ──────────────────────────── */
+  .card {
+    width: 100%; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; box-shadow: var(--shadow); padding: .7rem .8rem;
+    display: flex; align-items: center; gap: .7rem; text-align: left;
+    transition: transform .12s;
+  }
+  .card:active { transform: scale(.985); }
+  .card + .card { margin-top: .5rem; }
+  .card .body { flex: 1; min-width: 0; }
+  .card .top { font-size: .85rem; font-weight: 620; letter-spacing: -.01em; }
+  .card .sub { font-size: .7rem; color: var(--muted); }
+  .card .pay { text-align: right; flex: none; }
+  .card .pay .amount { font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .card .pay .xp { font-size: .66rem; color: var(--accent); font-weight: 650; }
+  .card[disabled] { opacity: .5; box-shadow: none; }
+  .card.queued { border-style: dashed; box-shadow: none; opacity: .7; }
+  .go {
+    flex: none; border: 0; border-radius: 999px; padding: .4rem .8rem;
+    background: var(--accent); color: #fff; font-size: .74rem; font-weight: 700;
+  }
+  .go[disabled] { background: var(--sunk); color: var(--muted); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .35rem;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    padding: .35rem .7rem; font-size: .76rem; font-weight: 600;
+  }
+  .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
+  .chip[disabled] { opacity: .45; }
+
+  /* ── Markt: ohne Netz sichtbar, aber nicht bedienbar (§6) ───────── */
+  #market-list.no-net { opacity: .45; pointer-events: none; }
+  .note {
+    margin: 0; font-size: .75rem; color: var(--warn);
+    background: var(--warn-soft); border-radius: 10px; padding: .55rem .7rem;
+  }
+
+  /* ── Untere Navigation ──────────────────────────────────────────── */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+    background: var(--surface); border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: .3rem .2rem calc(.3rem + env(safe-area-inset-bottom));
+  }
+  nav button {
+    border: 0; background: none; padding: .35rem .1rem .25rem;
+    display: flex; flex-direction: column; align-items: center; gap: .1rem;
+    font-size: .62rem; font-weight: 650; color: var(--muted); position: relative;
+  }
+  nav button[aria-current="true"] { color: var(--accent); }
+  nav .dot {
+    position: absolute; top: .25rem; right: 50%; margin-right: -1.05rem;
+    min-width: .95rem; height: .95rem; padding: 0 .2rem; border-radius: 999px;
+    background: var(--ripe); color: #3a2a06;
+    font-size: .58rem; font-weight: 800; line-height: .95rem; text-align: center;
+  }
+
+  /* ── Statusleiste unten am Inhalt ───────────────────────────────── */
+  .conn {
+    display: flex; align-items: center; justify-content: center; gap: .4rem;
+    font-size: .68rem; color: var(--muted); padding: .3rem 0;
+  }
+  .conn i { width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
+  .conn.live { color: var(--accent); }
+  .conn.off { color: var(--warn); }
+
+  /* ── Bänder ─────────────────────────────────────────────────────── */
+  .banner {
+    background: var(--warn-soft); color: var(--warn); border-radius: 12px;
+    padding: .6rem .75rem; font-size: .78rem;
+    display: flex; flex-direction: column; gap: .5rem;
+  }
+  .banner p { margin: 0; }
+  .banner button {
+    align-self: flex-start; border: 1px solid currentColor; background: none;
+    border-radius: 999px; padding: .3rem .8rem; font-size: .74rem; font-weight: 650;
+  }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 40;
+    background: var(--ink); color: var(--ground);
+    border-radius: 999px; padding: .45rem .9rem; font-size: .78rem; font-weight: 600;
+    box-shadow: var(--shadow); opacity: 0; transition: opacity .2s, transform .2s;
+    pointer-events: none; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem); }
+  .toast.bad { background: var(--bad); color: #fff; }
+
+  /* ── Einstieg ───────────────────────────────────────────────────── */
+  .gate {
+    min-height: 100%; display: flex; flex-direction: column; justify-content: center;
+    gap: 1rem; padding: 2rem 1.2rem; max-width: 26rem; margin: 0 auto;
+  }
+  .gate h1 { font-size: 1.6rem; margin: 0; letter-spacing: -.02em; }
+  .gate p { margin: 0; color: var(--muted); font-size: .9rem; }
+  .gate .big {
+    border: 0; border-radius: 12px; background: var(--accent); color: #fff;
+    padding: .8rem; font-size: .95rem; font-weight: 700; width: 100%;
+  }
+  .gate .ghost {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+    padding: .7rem; font-size: .85rem; font-weight: 600; width: 100%;
+  }
+  .gate input {
+    font-family: var(--num); font-size: .95rem; padding: .7rem; width: 100%;
+    border: 1px solid var(--line); border-radius: 12px;
+    background: var(--surface); color: var(--ink);
+  }
+  .gate hr { border: 0; border-top: 1px solid var(--line); margin: .3rem 0; }
+  .keybox {
+    background: var(--surface); border: 2px solid var(--gold); border-radius: 14px;
+    padding: 1rem; display: flex; flex-direction: column; gap: .7rem;
+  }
+  .keybox code {
+    font-family: var(--num); font-size: 1.05rem; letter-spacing: .04em;
+    word-break: break-all; text-align: center; user-select: all;
+    background: var(--sunk); border-radius: 10px; padding: .8rem .5rem;
+  }
+  .keybox .why { margin: 0; font-size: .8rem; color: var(--warn); }
+  .gate .row { display: flex; gap: .5rem; }
+  .gate .row > * { flex: 1; }
+
+  .tiny { font-size: .68rem; color: var(--muted); text-align: center; }
+  .tiny a { color: inherit; }
+</style>
+
+<!-- ── Einstieg ─────────────────────────────────────────────────── -->
+<div class="gate" id="gate">
+  <div>
+    <h1>Dein Hof</h1>
+    <p>Säen, mahlen, füttern, ernten. Läuft auch ohne Netz weiter.</p>
+  </div>
+  <button class="big" id="create">Neuen Hof anlegen</button>
+  <hr>
+  <p>Schon einen Hof? Schlüssel eintragen:</p>
+  <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
+         placeholder="hof_XXXXXX-XXXXXX-XXXXXX-XXXXXX">
+  <button class="ghost" id="connect">Weiterspielen</button>
+  <p class="tiny"><a href="/feldtest">Feldtest-Ansicht</a></p>
+</div>
+
+<!--
+  Der Schlüssel wird GENAU EINMAL gezeigt. Deshalb hält der Ablauf hier an,
+  statt ihn stillschweigend wegzuspeichern: Wer das Gerät verliert und ihn nie
+  gesehen hat, hat keine Chance mehr.
+-->
+<div class="gate" id="keygate" hidden>
+  <div class="keybox">
+    <strong>Das ist dein Schlüssel</strong>
+    <code id="keyvalue"></code>
+    <p class="why">
+      Er ist Passwort und Benutzername in einem. Notiere ihn — ohne ihn ist der
+      Hof weg, und auch der Betreiber kann ihn nicht nachschlagen.
+    </p>
+    <div class="row">
+      <button class="ghost" id="keycopy">Kopieren</button>
+      <button class="big" id="keydone">Hab ich notiert</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Das Spiel ────────────────────────────────────────────────── -->
+<div id="shell" hidden>
+  <header class="topbar">
+    <div class="purse">
+      <div class="ring">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" fill="none" stroke="var(--sunk)" stroke-width="4"></circle>
+          <circle id="ring-fill" cx="20" cy="20" r="17" fill="none" stroke="var(--accent)"
+                  stroke-width="4" stroke-linecap="round" stroke-dasharray="107" stroke-dashoffset="107"></circle>
+        </svg>
+        <b id="lvl">1</b>
+      </div>
+      <div class="purse-main">
+        <div class="who">Dein Hof</div>
+        <div class="xp" id="xp">0 / 0 XP</div>
+      </div>
+      <span class="coins">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" fill="currentColor" opacity=".25"></circle>
+          <circle cx="8" cy="8" r="4.5" fill="currentColor"></circle>
+        </svg>
+        <span id="gold">0</span>
+      </span>
+    </div>
+    <div class="silo" id="silo">
+      <span>Lager</span>
+      <span class="silo-track"><i class="silo-fill" id="silo-fill"></i></span>
+      <b id="silo-num">0/0</b>
+    </div>
+  </header>
+
+  <main>
+    <div class="banner" id="lease" hidden>
+      <p id="lease-text"></p>
+      <button id="takeover">Hier weiterspielen</button>
+    </div>
+
+    <!-- Hof -->
+    <section class="view" id="view-farm">
+      <div class="plots" id="plots"></div>
+      <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
+    </section>
+
+    <!-- Aufträge -->
+    <section class="view" id="view-orders" hidden>
+      <h2>Kunden warten</h2>
+      <div id="requests"></div>
+      <h2>Postfach</h2>
+      <div id="mail"></div>
+    </section>
+
+    <!-- Markt -->
+    <section class="view" id="view-market" hidden>
+      <p class="note" id="market-note" hidden>
+        Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich
+        nicht auf diesem Gerät. Anschauen geht trotzdem.
+      </p>
+      <h2>Andere Höfe bieten an</h2>
+      <div id="market-list"></div>
+      <h2>Deine Auslage</h2>
+      <div id="my-orders"></div>
+    </section>
+
+    <!-- Lager -->
+    <section class="view" id="view-store" hidden>
+      <h2>Vorräte</h2>
+      <div class="chips" id="stock"></div>
+      <h2>An den Händler verkaufen</h2>
+      <div id="sell"></div>
+      <h2>Selbst anbieten</h2>
+      <div id="list"></div>
+      <h2>Gerät</h2>
+      <button class="card" id="forget">
+        <div class="body">
+          <div class="top">Von diesem Gerät abmelden</div>
+          <div class="sub">Schlüssel und lokaler Stand werden gelöscht</div>
+        </div>
+      </button>
+      <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
+    </section>
+  </main>
+
+  <nav>
+    <button data-view="farm" aria-current="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+      Hof
+    </button>
+    <button data-view="orders">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg>
+      Aufträge
+      <span class="dot" id="dot-orders" hidden>0</span>
+    </button>
+    <button data-view="market">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.2 10H5.2z"/><path d="M9 9V6a3 3 0 016 0v3"/></svg>
+      Markt
+      <span class="dot" id="dot-market" hidden>0</span>
+    </button>
+    <button data-view="store">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>
+      Lager
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+<!--BUNDLE-->
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  /**
+   * Der Sim-Kern, wie ihn der Server benutzt — dasselbe Bündel, dieselben
+   * Funktionen. Das Skript oben legt ihn auf `globalThis`; hier bekommt er
+   * einen kurzen Namen.
+   */
+  var NS = globalThis.NeuesSpiel;
+  var $ = function (id) { return document.getElementById(id); };
+
+  /**
+   * Sicherheitsabstand auf die Uhr (§4).
+   *
+   * Der Client darf NIE eine Spielzeit annehmen, die vor dem Server liegt —
+   * sonst lehnt der die Aktion als Zeitreise ab und ein ehrlicher Spieler
+   * verliert seine Sitzung. Zwei Sekunden Rückstand kosten nichts.
+   */
+  var CLOCK_SAFETY_TICKS = 2;
+
+  var token = localStorage.getItem('ns-token') || '';
+  var deviceId = localStorage.getItem('ns-device');
+  if (!deviceId) {
+    deviceId = 'd-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    localStorage.setItem('ns-device', deviceId);
+  }
+
+  var isActive = true;
+  var client = null, engine = null, rules = null, accountId = null;
+  var clockOffsetMs = 0;
+  var view = 'farm';
+  var SAVE_KEY = NS.storageKeyFor(location.origin);
+
+  // ── Speichern und Laden ───────────────────────────────────────────
+  function save() {
+    if (!client) return;
+    try {
+      localStorage.setItem(
+        SAVE_KEY,
+        JSON.stringify(NS.serializeClient(client, clockOffsetMs, accountId)),
+      );
+    } catch (e) {
+      toast('Konnte nicht sichern: ' + e.message, true);
+    }
+  }
+
+  function loadSaved() {
+    var raw = null;
+    try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+    try { return NS.restoreClient(JSON.parse(raw)); } catch (e) { return null; }
+  }
+
+  var toastTimer = null;
+  function toast(message, bad) {
+    var el = $('toast');
+    el.textContent = message;
+    el.className = 'toast show' + (bad ? ' bad' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.className = 'toast'; }, 2200);
+  }
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign({ authorization: 'Bearer ' + token }, options.headers || {});
+    return fetch(path, options).then(function (res) {
+      if (res.status === 401) throw new Error('UNAUTHORIZED');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    });
+  }
+
+  var transport = function (request) {
+    return api('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  };
+
+  /** Spielzeit aus der SERVERZEIT ableiten, nicht aus der Geräteuhr (§4). */
+  function tickNow() {
+    var snap = client.snapshotMeta;
+    var serverNow = Date.now() + clockOffsetMs;
+    var elapsed = Math.floor((serverNow - snap.serverTs) / 1000);
+    return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
+  }
+
+  function adopt(snapshot, serverTime) {
+    if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
+    client.adopt(snapshot);
+    client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
+    save();
+  }
+
+  /**
+   * Anzeigenamen — der einzige Ort im Projekt, der welche kennt.
+   *
+   * Der Sim-Kern rechnet mit Katalogindizes. Fehlt hier ein Name, steht die
+   * Katalog-Kennung da: Ein neuer Gegenstand macht die Seite nicht kaputt, er
+   * sieht nur eine Version lang technisch aus.
+   */
+  var NAMES = { gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier', mill: 'Mühle' };
+  function nameOf(id) { return NAMES[id] || id; }
+  function itemName(i) { return nameOf(rules.items[i].id); }
+  function plotName(i) {
+    var id = rules.plots[i].id;
+    if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
+    if (id.indexOf('coop-') === 0) return 'Gehege ' + id.slice(5);
+    return nameOf(id);
+  }
+  function stacks(list) {
+    return list.map(function (x) { return x.amount + ' ' + itemName(x.item); }).join(' + ');
+  }
+  function costText(cost) { return stacks(cost); }
+
+  /** Wartezeit menschlich: Sekunden, Minuten, Stunden. */
+  function timeText(seconds) {
+    if (seconds < 60) return seconds + ' s';
+    if (seconds < 3600) return Math.ceil(seconds / 60) + ' min';
+    var h = Math.floor(seconds / 3600);
+    var m = Math.round((seconds % 3600) / 60);
+    return m > 0 ? h + ' h ' + m + ' min' : h + ' h';
+  }
+
+  function nextLevelOf(i, level) { return rules.plots[i].levels[level] || null; }
+  function recipesAt(i, level) {
+    return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
+  }
+  function startableRecipe(s, plot) {
+    var allowed = recipesAt(plot, s.plots[plot].level);
+    for (var k = 0; k < allowed.length; k++) {
+      var recipe = rules.recipes[allowed[k]];
+      var ok = true;
+      for (var j = 0; j < recipe.inputs.length; j++) {
+        if ((s.items[recipe.inputs[j].item] || 0) < recipe.inputs[j].amount) ok = false;
+      }
+      if (ok) return allowed[k];
+    }
+    return -1;
+  }
+
+  // ── Bilder ────────────────────────────────────────────────────────
+  //
+  // Bewusst als Inline-SVG statt als Bilddateien: Sie färben sich über die
+  // CSS-Variablen mit (Hell/Dunkel), skalieren ohne Unschärfe, und die App
+  // bleibt eine einzige Datei — also auch im Funkloch vollständig.
+  //
+  // Welche Zeichnung ein Platz bekommt, hängt an seiner Katalog-Kennung. Eine
+  // unbekannte Kennung bekommt das Feld; ein neues Gebäude ist damit sofort
+  // spielbar und sieht nur eine Version lang generisch aus.
+
+  function artField(stage) {
+    var soil = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
+      '<path d="M0 34h100v46H0z" fill="var(--soil)"/>' +
+      '<path d="M0 34h100v4H0zM0 46h100v3H0zM0 57h100v3H0zM0 68h100v3H0z" fill="var(--soil-dark)" opacity=".45"/>';
+    if (stage <= 0) return soil;
+
+    var out = soil, x, i;
+    // Stufe 1: Keimlinge, 2: Halme, 3: reife Ähren.
+    for (i = 0; i < 5; i++) {
+      x = 14 + i * 18;
+      if (stage === 1) {
+        out += '<path d="M' + x + ' 62v-7" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
+          '<path d="M' + x + ' 57c-3-2-4-5-4-5s4 0 4 3" fill="var(--leaf)"/>';
+      } else if (stage === 2) {
+        out += '<path d="M' + x + ' 66V42" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
+          '<path d="M' + x + ' 52c-5-2-6-7-6-7s6 1 6 5zM' + x + ' 46c5-2 6-7 6-7s-6 1-6 5z" fill="var(--leaf-dark)"/>';
+      } else {
+        out += '<path d="M' + x + ' 68V44" stroke="var(--leaf-dark)" stroke-width="2.5" stroke-linecap="round"/>' +
+          '<ellipse cx="' + x + '" cy="36" rx="5" ry="10" fill="var(--ripe)"/>' +
+          '<path d="M' + x + ' 27v18" stroke="var(--soil-dark)" stroke-width="1.2" opacity=".5"/>';
+      }
+    }
+    return out;
+  }
+
+  function artMill(working) {
+    // Die Flügel drehen sich nur, wenn wirklich etwas läuft — eine Animation,
+    // die immer läuft, sagt nichts.
+    var spin = working
+      ? '<animateTransform attributeName="transform" type="rotate" from="0" to="360"' +
+        ' dur="7s" repeatCount="indefinite"/>'
+      : '';
+    return '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
+      '<path d="M0 62h100v18H0z" fill="var(--soil)"/>' +
+      '<path d="M36 62V36h28v26z" fill="var(--wood)"/>' +
+      '<path d="M50 24 32 38h36z" fill="var(--wood-dark)"/>' +
+      '<rect x="45" y="50" width="10" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>' +
+      '<g transform="translate(50 40)"><g>' + spin +
+      '<path d="M0-20V20M-20 0H20" stroke="var(--wood-dark)" stroke-width="3" stroke-linecap="round"/>' +
+      '<circle r="3" fill="var(--wood-dark)"/>' +
+      '</g></g>';
+  }
+
+  function artCoop(level, ready) {
+    var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
+      '<path d="M0 62h100v18H0z" fill="var(--leaf)" opacity=".45"/>' +
+      '<path d="M28 62V40h44v22z" fill="var(--wood)"/>' +
+      '<path d="M50 28 22 42h56z" fill="var(--wood-dark)"/>' +
+      '<rect x="44" y="50" width="12" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>';
+    // Stufe 1 ist ein leeres Gehege, ab Stufe 2 sitzen Hühner drin.
+    if (level >= 2) {
+      out += '<g transform="translate(16 56)">' +
+        '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="#f4f1ea"/>' +
+        '<circle cx="5" cy="-5" r="3.6" fill="#f4f1ea"/>' +
+        '<path d="M8 -5l3 1-3 1z" fill="var(--ripe)"/>' +
+        '<circle cx="6" cy="-6" r=".8" fill="var(--ink)"/>' +
+        '<path d="M4-8c1-2 3-1 2 1" fill="var(--bad)"/>' +
+        '</g>' +
+        '<g transform="translate(84 58) scale(-1 1)">' +
+        '<ellipse cx="0" cy="0" rx="6" ry="5" fill="#e9e4d8"/>' +
+        '<circle cx="4.5" cy="-4.5" r="3.2" fill="#e9e4d8"/>' +
+        '<path d="M7 -4.5l2.6 1-2.6 1z" fill="var(--ripe)"/>' +
+        '</g>';
+    }
+    if (ready) {
+      out += '<g transform="translate(50 70)">' +
+        '<ellipse cx="-8" cy="0" rx="4" ry="5" fill="#fdf8ec"/>' +
+        '<ellipse cx="0" cy="1" rx="4" ry="5" fill="#fdf8ec"/>' +
+        '<ellipse cx="8" cy="0" rx="4" ry="5" fill="#fdf8ec"/>' +
+        '</g>';
+    }
+    return out;
+  }
+
+  /** Zeichnung für einen Platz — nach Katalog-Kennung, mit Feld als Rückfall. */
+  function artFor(i, plot, progress, done) {
+    var id = rules.plots[i].id;
+    if (id === 'mill') return artMill(plot.recipe !== NS.EMPTY_PLOT && !done);
+    if (id.indexOf('coop-') === 0) return artCoop(plot.level, done);
+    if (plot.recipe === NS.EMPTY_PLOT) return artField(0);
+    return artField(done ? 3 : progress < .4 ? 1 : 2);
+  }
+
+  // ── Zeichnen ──────────────────────────────────────────────────────
+  function render() {
+    if (!client) return;
+    client.localTick = tickNow();
+    var s = client.preview();
+
+    renderPurse(s);
+    renderPlots(s);
+    renderRequests(s);
+    renderMail(s);
+    renderMarket(s);
+    renderMyOrders(s);
+    renderStore(s);
+    renderBadges(s);
+  }
+
+  function renderPurse(s) {
+    var level = NS.levelOf(rules, s.xp);
+    var from = NS.levelStartedAt(rules, s.xp);
+    var to = NS.nextLevelAt(rules, s.xp);
+
+    $('lvl').textContent = level;
+    $('gold').textContent = s.items[rules.currency] || 0;
+
+    var pct = to === null ? 1 : (s.xp - from) / (to - from);
+    // 2πr bei r=17 ≈ 107. Der Ring läuft von leer (Umfang) auf voll (0).
+    $('ring-fill').setAttribute('stroke-dashoffset', String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))));
+    $('xp').textContent = to === null
+      ? s.xp + ' XP · Höchststufe'
+      : (s.xp - from) + ' / ' + (to - from) + ' XP';
+
+    var used = NS.stored(s, rules);
+    var cap = rules.siloCapacity;
+    $('silo-num').textContent = used + '/' + cap;
+    $('silo-fill').style.width = Math.round((used * 100) / cap) + '%';
+    $('silo').className = 'silo' + (used >= cap ? ' full' : '');
+  }
+
+  function renderPlots(s) {
+    var box = $('plots');
+    box.textContent = '';
+
+    s.plots.forEach(function (p, i) {
+      var busy = p.recipe !== NS.EMPTY_PLOT;
+      var duration = busy ? rules.recipes[p.recipe].durationTicks : 0;
+      var elapsed = busy ? s.tick - p.startedAt : 0;
+      var done = busy && elapsed >= duration;
+      var progress = busy && duration > 0 ? Math.min(1, elapsed / duration) : 0;
+      var upgrade = nextLevelOf(i, p.level);
+      var canRun = recipesAt(i, p.level).length > 0;
+
+      var tile = document.createElement('button');
+      tile.className = 'plot' + (done ? ' ripe' : '') + (canRun ? '' : ' locked');
+
+      var art = document.createElement('div');
+      art.innerHTML =
+        '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
+        artFor(i, p, progress, done) + '</svg>';
+      tile.appendChild(art.firstChild);
+
+      if (done) {
+        var badge = document.createElement('span');
+        badge.className = 'badge';
+        tile.appendChild(badge);
+      }
+
+      if (busy && !done) {
+        var bar = document.createElement('div');
+        bar.className = 'bar';
+        var fill = document.createElement('i');
+        fill.style.width = Math.round(progress * 100) + '%';
+        bar.appendChild(fill);
+        tile.appendChild(bar);
+      }
+
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = plotName(i);
+      var status = document.createElement('div');
+      status.className = 'status';
+
+      if (done) {
+        status.textContent = 'fertig · ' + nameOf(rules.recipes[p.recipe].id);
+      } else if (busy) {
+        status.textContent = timeText(duration - elapsed);
+      } else if (!canRun && upgrade) {
+        // Noch nicht gekauft, oder gekauft und leer (Gehege ohne Hühner).
+        var gate = upgrade.minPlayerLevel || 1;
+        if (NS.levelOf(rules, s.xp) < gate) {
+          status.textContent = 'ab Stufe ' + gate;
+          tile.className += ' gated';
+          tile.disabled = true;
+        } else {
+          status.textContent = upgrade.label + ' · ' + costText(upgrade.cost);
+          if (!upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; })) {
+            tile.disabled = true;
+          }
+        }
+      } else {
+        var next = startableRecipe(s, i);
+        status.textContent = next < 0 ? 'Zutaten fehlen' : 'antippen zum Starten';
+      }
+
+      meta.appendChild(name); meta.appendChild(status);
+      tile.appendChild(meta);
+      tile.addEventListener('click', function () { tapPlot(i); });
+      box.appendChild(tile);
+
+      // Ausbau eines Platzes, der schon arbeiten kann — ein eigener Knopf,
+      // damit ein Fehltipp nicht versehentlich Gold kostet.
+      if (upgrade && canRun && !busy) {
+        var up = document.createElement('button');
+        var need = upgrade.minPlayerLevel || 1;
+        var locked = NS.levelOf(rules, s.xp) < need;
+        var afford = upgrade.cost.every(function (c) { return (s.items[c.item] || 0) >= c.amount; });
+        up.className = 'upgrade';
+        up.textContent = locked
+          ? upgrade.label + ' ab Stufe ' + need
+          : upgrade.label + ' · ' + costText(upgrade.cost);
+        up.disabled = locked || !afford;
+        up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(i); });
+        tile.appendChild(up);
+      }
+    });
+  }
+
+  /**
+   * Kundenaufträge (M6).
+   *
+   * Die vorderen `requestSlots` sind annehmbar, danach kommt der Vorrat — und
+   * genau dieser Vorrat ist der Grund, warum offline nicht die Luft ausgeht:
+   * Er liegt schon auf dem Gerät.
+   */
+  function renderRequests(s) {
+    var box = $('requests');
+    box.textContent = '';
+
+    if (s.requests.length === 0) {
+      box.innerHTML = '<p class="empty">Gerade wartet niemand. Neue Kunden kommen beim nächsten Sync.</p>';
+      return;
+    }
+
+    s.requests.slice(0, rules.requestSlots + 2).forEach(function (r, i) {
+      var waiting = i >= rules.requestSlots;
+      var ready = r.wants.every(function (w) { return (s.items[w.item] || 0) >= w.amount; });
+
+      var card = document.createElement('button');
+      card.className = 'card' + (waiting ? ' queued' : '');
+      card.disabled = waiting || !ready;
+
+      var body = document.createElement('div');
+      body.className = 'body';
+      var top = document.createElement('div');
+      top.className = 'top';
+      top.textContent = stacks(r.wants);
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = waiting ? 'wartet noch' : ready ? 'lieferbar' : 'noch nicht genug da';
+      body.appendChild(top); body.appendChild(sub);
+
+      var pay = document.createElement('div');
+      pay.className = 'pay';
+      var amount = document.createElement('div');
+      amount.className = 'amount';
+      amount.textContent = stacks(r.reward);
+      var xp = document.createElement('div');
+      xp.className = 'xp';
+      xp.textContent = '+' + r.xp + ' XP';
+      pay.appendChild(amount); pay.appendChild(xp);
+
+      card.appendChild(body); card.appendChild(pay);
+      if (!waiting) {
+        card.addEventListener('click', function () {
+          act('Geliefert · +' + stacks(r.reward), client.fillRequest(r.id));
+        });
+      }
+      box.appendChild(card);
+    });
+  }
+
+  function renderMail(s) {
+    var box = $('mail');
+    box.textContent = '';
+    if (s.mail.length === 0) {
+      box.innerHTML = '<p class="empty">Postfach leer.</p>';
+      return;
+    }
+    var card = document.createElement('button');
+    card.className = 'card';
+    var body = document.createElement('div');
+    body.className = 'body';
+    var top = document.createElement('div');
+    top.className = 'top';
+    top.textContent = s.mail.map(function (m) { return m.amount + ' ' + itemName(m.item); }).join(', ');
+    var sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = s.mail.length + ' von ' + rules.mailCapacity + ' Fächern belegt';
+    body.appendChild(top); body.appendChild(sub);
+    var go = document.createElement('span');
+    go.className = 'go';
+    go.textContent = 'Abholen';
+    card.appendChild(body); card.appendChild(go);
+    card.addEventListener('click', function () { act('Postfach geleert', client.collectMail()); });
+    box.appendChild(card);
+  }
+
+  /**
+   * Die Auslage des Marktes (M5).
+   *
+   * Der einzige Teil dieser Oberfläche, der ohne Netz nicht bedienbar ist —
+   * und deshalb der einzige, der ausgegraut wird statt zu verschwinden (§6).
+   * Wer im Funkloch hinsieht, soll erkennen, dass es den Markt gibt.
+   */
+  function renderMarket(s) {
+    var box = $('market-list');
+    var online = navigator.onLine;
+    box.textContent = '';
+    box.className = online ? '' : 'no-net';
+    $('market-note').hidden = online;
+
+    var offers = s.offers || [];
+    if (offers.length === 0) {
+      box.innerHTML = '<p class="empty">' + (online
+        ? 'Gerade bietet niemand etwas an. Stell selbst etwas ein — unter Lager.'
+        : 'Keine Angebote auf dem Gerät. Der Markt kommt mit dem nächsten Sync.') + '</p>';
+      return;
+    }
+
+    offers.forEach(function (o) {
+      var total = o.amount * o.price;
+      var canPay = (s.items[rules.currency] || 0) >= total;
+      var fits = !rules.items[o.item].storable
+        || rules.siloCapacity - NS.stored(s, rules) >= o.amount;
+
+      var card = document.createElement('button');
+      card.className = 'card';
+      card.disabled = !online || !canPay || !fits;
+
+      var body = document.createElement('div');
+      body.className = 'body';
+      var top = document.createElement('div');
+      top.className = 'top';
+      top.textContent = o.amount + ' ' + itemName(o.item);
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = !fits ? 'kein Platz im Lager'
+        : !canPay ? 'zu teuer für dich'
+        : o.price + ' pro Stück';
+      body.appendChild(top); body.appendChild(sub);
+
+      var go = document.createElement('span');
+      go.className = 'go';
+      go.textContent = total + ' Gold';
+
+      card.appendChild(body); card.appendChild(go);
+      card.addEventListener('click', function () {
+        if (!navigator.onLine) return;
+        var res = client.buyOffer(o.id);
+        act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res);
+        // Sofort syncen: Das Fenster, in dem jemand schneller sein kann, soll
+        // eine Rundreise bleiben und keine Sitzung.
+        if (res.ok) attempt(true);
+      });
+      box.appendChild(card);
+    });
+  }
+
+  function renderMyOrders(s) {
+    var box = $('my-orders');
+    box.textContent = '';
+    if (s.orders.length === 0) {
+      box.innerHTML = '<p class="empty">Du bietest nichts an — alle ' +
+        rules.orderSlots + ' Plätze sind frei. Einstellen geht unter Lager, auch ohne Netz.</p>';
+      return;
+    }
+    s.orders.forEach(function (o) {
+      var left = rules.orderTtlTicks - (s.tick - o.listedAt);
+      var card = document.createElement('button');
+      card.className = 'card';
+      var body = document.createElement('div');
+      body.className = 'body';
+      var top = document.createElement('div');
+      top.className = 'top';
+      top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
+      var sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = left > 0 ? 'läuft in ' + timeText(left) + ' ab' : 'läuft gerade ab';
+      body.appendChild(top); body.appendChild(sub);
+      var go = document.createElement('span');
+      go.className = 'go';
+      go.textContent = 'Zurück';
+      card.appendChild(body); card.appendChild(go);
+      card.addEventListener('click', function () {
+        act('Zurückgeholt · ' + o.amount + ' ' + itemName(o.item), client.cancelOrder(o.id));
+      });
+      box.appendChild(card);
+    });
+  }
+
+  function renderStore(s) {
+    // Vorräte
+    var chips = $('stock');
+    chips.textContent = '';
+    rules.items.forEach(function (item, i) {
+      if (i === rules.currency) return;
+      var chip = document.createElement('span');
+      chip.className = 'chip';
+      if ((s.items[i] || 0) === 0) chip.setAttribute('disabled', '');
+      chip.innerHTML = '<span>' + nameOf(item.id) + '</span><span class="n">' + (s.items[i] || 0) + '</span>';
+      chips.appendChild(chip);
+    });
+
+    // Verkaufen und Anbieten — beides aus dem Katalog, nicht aus einer Liste
+    // hier: Was handelbar ist, sagt das Regelwerk.
+    var sellBox = $('sell');
+    var listBox = $('list');
+    sellBox.textContent = '';
+    listBox.textContent = '';
+    var anySell = false, anyList = false;
+    var slotsLeft = rules.orderSlots - s.orders.length;
+
+    rules.items.forEach(function (item, i) {
+      if (!item.storable || item.npcPrice <= 0) return;
+      var have = s.items[i] || 0;
+      if (have <= 0) return;
+      anySell = true;
+
+      var card = document.createElement('button');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="body"><div class="top">' + have + ' ' + nameOf(item.id) + '</div>' +
+        '<div class="sub">' + item.npcPrice + ' Gold pro Stück</div></div>' +
+        '<span class="go">' + have * item.npcPrice + ' Gold</span>';
+      card.addEventListener('click', function () {
+        var now = client.preview();
+        var amount = now.items[i] || 0;
+        if (amount > 0) act('Verkauft · ' + amount + ' ' + nameOf(item.id), client.sellNpc(i, amount));
+      });
+      sellBox.appendChild(card);
+
+      // Auf dem Markt bringt Ware mehr als beim Händler — deshalb der
+      // Vorschlag am obersten Rand des Preisbandes.
+      var top = Math.floor((item.npcPrice * rules.priceBandMaxPct) / 100);
+      anyList = true;
+      var offer = document.createElement('button');
+      offer.className = 'card';
+      offer.disabled = slotsLeft <= 0;
+      offer.innerHTML =
+        '<div class="body"><div class="top">' + have + ' ' + nameOf(item.id) + ' anbieten</div>' +
+        '<div class="sub">' + (slotsLeft > 0
+          ? top + ' Gold pro Stück · ' + slotsLeft + (slotsLeft === 1 ? ' Platz' : ' Plätze') + ' frei'
+          : 'alle ' + rules.orderSlots + ' Plätze belegt') + '</div></div>' +
+        '<span class="go">' + have * top + ' Gold</span>';
+      offer.addEventListener('click', function () {
+        var now = client.preview();
+        var amount = now.items[i] || 0;
+        if (amount > 0) act('Angeboten · ' + amount + ' ' + nameOf(item.id), client.listOrder(i, amount, top));
+      });
+      listBox.appendChild(offer);
+    });
+
+    if (!anySell) sellBox.innerHTML = '<p class="empty">Nichts zu verkaufen.</p>';
+    if (!anyList) listBox.innerHTML = '<p class="empty">Nichts anzubieten.</p>';
+  }
+
+  /** Zahlen an der Navigation: nur, wenn es wirklich etwas zu tun gibt. */
+  function renderBadges(s) {
+    var ready = 0;
+    s.requests.slice(0, rules.requestSlots).forEach(function (r) {
+      if (r.wants.every(function (w) { return (s.items[w.item] || 0) >= w.amount; })) ready++;
+    });
+    var openMail = s.mail.length;
+    var dotOrders = $('dot-orders');
+    dotOrders.hidden = ready + openMail === 0;
+    dotOrders.textContent = ready + openMail;
+
+    // Am Markt zählt nur, was gerade wirklich geht: bezahlbar UND es passt
+    // ins Lager. Eine Zahl, die auch Unerreichbares mitzählt, schickt einen
+    // auf einen Weg, an dessen Ende ein grauer Knopf steht.
+    var space = rules.siloCapacity - NS.stored(s, rules);
+    var affordable = (s.offers || []).filter(function (o) {
+      return (s.items[rules.currency] || 0) >= o.amount * o.price
+        && (!rules.items[o.item].storable || space >= o.amount);
+    }).length;
+    var dotMarket = $('dot-market');
+    dotMarket.hidden = affordable === 0 || !navigator.onLine;
+    dotMarket.textContent = affordable;
+  }
+
+  // ── Aktionen ──────────────────────────────────────────────────────
+  //
+  // Jede Aktion läuft durch denselben Sim-Kern, den der Server gleich benutzt.
+  // Eine unzulässige Aktion wird deshalb schon hier abgelehnt und landet nicht
+  // im Log — kein Rollback, keine Enttäuschung nach dem Sync.
+  var CODES = {
+    SILO_FULL: 'Lager voll',
+    CANT_AFFORD: 'Zu wenig Gold',
+    NOT_ENOUGH_ITEMS: 'Zutaten fehlen',
+    NOT_DONE: 'Noch nicht fertig',
+    PLAYER_LEVEL_TOO_LOW: 'Stufe zu niedrig',
+    NO_ORDER_SLOTS: 'Keine Auslage-Plätze frei',
+    NOTHING_TO_COLLECT: 'Postfach ist leer',
+    NO_SUCH_OFFER: 'Angebot ist weg',
+    PLOT_BUSY: 'Läuft noch',
+    MAX_LEVEL: 'Voll ausgebaut',
+  };
+
+  function act(name, result) {
+    if (!isActive) return;
+    if (result.ok) { toast(name); save(); }
+    else toast(CODES[result.code] || result.code, true);
+    render();
+  }
+
+  function tapPlot(i) {
+    if (!isActive) return;
+    client.localTick = tickNow();
+    var s = client.preview();
+    var p = s.plots[i];
+
+    if (p.recipe !== NS.EMPTY_PLOT) {
+      var recipe = rules.recipes[p.recipe];
+      act('Geerntet · ' + recipe.output.amount + ' ' + itemName(recipe.output.item), client.collect(i));
+      return;
+    }
+    if (recipesAt(i, p.level).length === 0) { tapBuy(i); return; }
+
+    var next = startableRecipe(s, i);
+    if (next < 0) { toast('Zutaten fehlen', true); return; }
+    act('Gestartet · ' + nameOf(rules.recipes[next].id), client.start(i, next));
+  }
+
+  function tapBuy(i) {
+    if (!isActive) return;
+    client.localTick = tickNow();
+    var level = nextLevelOf(i, client.preview().plots[i].level);
+    if (!level) { toast('Voll ausgebaut'); return; }
+    act(level.label + ' gekauft', client.buy(i));
+  }
+
+  function setConn(state) {
+    var el = $('conn');
+    if (state === 'live') { el.className = 'conn live'; $('conn-text').textContent = 'verbunden'; }
+    else if (state === 'catching-up') { el.className = 'conn'; $('conn-text').textContent = 'synchronisiert…'; }
+    else { el.className = 'conn off'; $('conn-text').textContent = 'ohne Netz — läuft weiter'; }
+  }
+
+  function setLease(active, since) {
+    isActive = active;
+    $('lease').hidden = active;
+    if (!active) {
+      var ago = since ? Math.round((Date.now() - since) / 1000) : null;
+      $('lease-text').textContent =
+        'Ein anderes Gerät spielt gerade diesen Hof' +
+        (ago !== null ? ' (zuletzt vor ' + ago + ' s)' : '') +
+        '. Aktionen sind hier gesperrt, damit nichts entsteht, was später verworfen wird.';
+    }
+  }
+
+  function refreshLease() {
+    return api('/api/state?deviceId=' + encodeURIComponent(deviceId))
+      .then(function (data) {
+        var wasActive = isActive;
+        setLease(data.isActiveDevice !== false, data.activeSince);
+        if (wasActive && !isActive) toast('Anderes Gerät hat übernommen', true);
+      })
+      .catch(function () { /* offline: Status bleibt, wie er war */ });
+  }
+
+  function attempt(force) {
+    if (!engine) return;
+    client.localTick = tickNow();
+    engine.attempt(Date.now(), force === true).then(function (outcome) {
+      setConn(engine.view);
+      if (outcome.kind === 'synced') {
+        var r = outcome.result;
+        if (!r.ok && r.reason === 'NOT_ACTIVE_DEVICE') {
+          setLease(false, null);
+        } else if (!r.ok) {
+          toast(r.reason === 'RULESET_MISMATCH' ? 'Bitte neu laden — neue Version' : 'Server hat abgelehnt', true);
+        }
+        if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') adopt(r.snapshot, r.serverTime);
+        if (r.ok) { setLease(true, null); client.takeover = false; }
+      } else if (outcome.kind === 'dropped') {
+        // Präfix-Commit: Der Server hat einen Teil nicht übernommen. Beim Markt
+        // ist das der Normalfall „jemand war schneller" und keine Panik wert.
+        toast(/OFFER_GONE/.test(outcome.reason || '') ? 'Jemand war schneller' : 'Teil verworfen', true);
+        adopt(outcome.snapshot, outcome.serverTime);
+      }
+      render();
+    }).catch(function () { setConn('offline'); });
+  }
+
+  // ── Ansichten ─────────────────────────────────────────────────────
+  function show(next) {
+    view = next;
+    ['farm', 'orders', 'market', 'store'].forEach(function (name) {
+      $('view-' + name).hidden = name !== next;
+    });
+    document.querySelectorAll('nav button').forEach(function (b) {
+      b.setAttribute('aria-current', b.dataset.view === next ? 'true' : 'false');
+    });
+    window.scrollTo(0, 0);
+    render();
+  }
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.dataset.view); });
+  });
+
+  // ── Start ─────────────────────────────────────────────────────────
+  function begin(restored) {
+    client = restored;
+    rules = NS.getRuleset(client.rulesetVersion);
+    engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
+
+    // Zeitanker VOR dem ersten Zeichnen — `tickNow()` rechnet damit.
+    client.snapshotMeta = {
+      tick: client.baseSnapshot.state.tick,
+      serverTs: client.baseSnapshot.serverTs,
+    };
+
+    $('gate').hidden = true;
+    $('keygate').hidden = true;
+    $('shell').hidden = false;
+
+    render();
+    setInterval(render, 1000);
+    setInterval(function () { attempt(false); }, 4000);
+    setInterval(refreshLease, 15000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { attempt(true); refreshLease(); }
+    });
+    window.addEventListener('online', function () { render(); attempt(true); });
+    window.addEventListener('offline', function () { setConn('offline'); render(); });
+    window.addEventListener('pagehide', save);
+  }
+
+  function start(snapshot, serverTime, id) {
+    accountId = id || accountId;
+    begin(new NS.Client(snapshot, deviceId));
+    adopt(snapshot, serverTime);
+    setConn('live');
+    render();
+  }
+
+  /**
+   * Start aus dem Gespeicherten — ohne eine einzige Netzanfrage.
+   *
+   * Das ist der Unterschied zwischen „offline weiterspielen" und „offline
+   * spielen": Wer im Tunnel neu lädt, sieht seinen Hof und kein Eingabefeld.
+   */
+  function startOffline(saved) {
+    clockOffsetMs = saved.clockOffsetMs;
+    accountId = saved.accountId || null;
+    begin(saved.client);
+    setConn(navigator.onLine ? 'catching-up' : 'offline');
+    render();
+    attempt(true);
+    refreshLease();
+  }
+
+  function connect() {
+    token = $('key').value.trim();
+    if (!token) return;
+    $('connect').disabled = true;
+    api('/api/state?deviceId=' + encodeURIComponent(deviceId)).then(function (data) {
+      localStorage.setItem('ns-token', token);
+      start(data.snapshot, data.serverTime, data.accountId);
+      setLease(data.isActiveDevice !== false, data.activeSince);
+    }).catch(function (e) {
+      $('connect').disabled = false;
+      toast(e.message === 'UNAUTHORIZED' ? 'Diesen Schlüssel kennt der Server nicht' : 'Server nicht erreichbar', true);
+    });
+  }
+
+  var pendingStart = null;
+  $('create').addEventListener('click', function () {
+    $('create').disabled = true;
+    fetch('/api/account', { method: 'POST' })
+      .then(function (r) {
+        return r.json().then(function (body) {
+          if (!r.ok) throw new Error(body.error || 'HTTP ' + r.status);
+          return body;
+        });
+      })
+      .then(function (data) {
+        token = data.key;
+        localStorage.setItem('ns-token', token);
+        pendingStart = data;
+        $('keyvalue').textContent = data.key;
+        $('gate').hidden = true;
+        $('keygate').hidden = false;
+      })
+      .catch(function (e) {
+        $('create').disabled = false;
+        toast(e.message === 'TOO_MANY_NEW_FARMS' ? 'Zu viele neue Höfe von hier'
+          : e.message === 'SERVER_FULL' ? 'Der Server ist voll'
+          : 'Konnte keinen Hof anlegen', true);
+      });
+  });
+  $('keycopy').addEventListener('click', function () {
+    var text = $('keyvalue').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('Kopiert'); });
+    else window.prompt('Schlüssel kopieren:', text);
+  });
+  $('keydone').addEventListener('click', function () {
+    start(pendingStart.snapshot, pendingStart.serverTime, pendingStart.accountId);
+    setLease(true, null);
+  });
+  $('connect').addEventListener('click', connect);
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
+  $('takeover').addEventListener('click', function () {
+    client.takeover = true;
+    setLease(true, null);
+    toast('Übernahme gilt ab der nächsten Aktion');
+  });
+  $('forget').addEventListener('click', function () {
+    if (!confirm('Schlüssel und lokalen Stand von diesem Gerät löschen?\n\nOhne notierten Schlüssel ist der Hof damit weg.')) return;
+    localStorage.removeItem('ns-token');
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    location.reload();
+  });
+
+  // ── Startreihenfolge: Gerät zuerst, Netz danach ───────────────────
+  //
+  // Umgekehrt wäre die App ohne Netz nicht startbar — und genau das ist der
+  // Kern des Versprechens.
+  var saved = token ? loadSaved() : null;
+  if (saved) startOffline(saved);
+  else if (token) { $('key').value = token; connect(); }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function () {
+      // Ohne sicheren Kontext (HTTPS oder localhost) registriert er sich nicht.
+      // Das Spiel läuft trotzdem — nur ein Neuladen im Funkloch scheitert.
+    });
+  }
+})();
+</script>

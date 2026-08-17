@@ -71,7 +71,7 @@ git clone https://github.com/Litschibauer/Neues-Spiel.git
 cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
-npm run build   # baut dist/field-test.html, dist/conformance.html, dist/admin.html
+npm run build   # baut dist/farm.html (das Spiel), dist/field-test.html, dist/conformance.html, dist/admin.html
 npm test        # muss grün sein — sonst nicht ausrollen
 ```
 
@@ -81,6 +81,17 @@ npm test        # muss grün sein — sonst nicht ausrollen
 npm run dev     # Entwicklung, Port 8788
 npm run prod    # Produktion,  Port 8787
 ```
+
+### Zwei Oberflächen auf einem Kern
+
+`/` ist das Spiel: Plätze als Kacheln, Levelring, Markt, Lager. `/feldtest` ist
+dasselbe Spiel mit Messinstrumenten — Warteschlangenlänge, `seq`, Tick,
+Divergenz-Protokoll.
+
+Das ist kein Doppelaufwand, sondern ein Prüfmittel: Beide sind echte Clients auf
+demselben Sim-Kern. Zeigen sie denselben Hof unterschiedlich, liegt es an einer
+Anzeige und nicht an der Simulation — und genau das will man unterscheiden
+können, wenn etwas nicht stimmt.
 
 ### Spieler brauchen kein Token — sie legen einen Hof an
 
@@ -472,7 +483,8 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 
 | Route | Auth | Zweck |
 | --- | --- | --- |
-| `GET /` | — | Feldtest-Seite |
+| `GET /` | — | **Das Spiel** |
+| `GET /feldtest` | — | Messgerät: dieselbe Sim mit `seq`, Tick, Warteschlange und Protokoll |
 | `GET /admin` | — | Werkbank (Aktionen brauchen das Admin-Token) |
 | `GET /health` | — | Umgebung, Stand, Regelwerk, `secure` |
 | `GET /sw.js`, `GET /manifest.webmanifest` | — | App-Hülle für den Funkloch-Start |
