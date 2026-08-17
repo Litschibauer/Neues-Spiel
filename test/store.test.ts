@@ -15,10 +15,14 @@ import { load, save } from '../src/server/store.ts';
 import type { Persisted } from '../src/server/store.ts';
 import { Server } from '../src/server/server.ts';
 import { initialState } from '../src/sim/state.ts';
-import { CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
+import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
 import { Client } from '../src/client/client.ts';
 
 const T0 = 1_700_000_000_000;
+const rules = getRuleset(CURRENT_RULESET_VERSION);
+const WHEAT = 1;
+const EGGS = 2;
+const R_WHEAT = 0;
 
 function tempFile(): { path: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), 'neues-spiel-'));
@@ -38,14 +42,14 @@ function snapshotOf(server: Server): Persisted {
 test('ein gespielter Stand überlebt Speichern und Laden unverändert', () => {
   const { path, dir } = tempFile();
   try {
-    const server = new Server(initialState(4), T0, CURRENT_RULESET_VERSION);
+    const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     const client = new Client(server.snapshot);
 
-    client.plant(0);
+    client.start(0, R_WHEAT);
     client.advanceClock(7200);
-    client.harvest(0);
-    client.sellNpc('wheat', 5);
-    server.deliver({ item: 'eggs', amount: 3, arrivedAt: T0 });
+    client.collect(0);
+    client.sellNpc(WHEAT, 5);
+    server.deliver({ item: EGGS, amount: 3, arrivedAt: T0 });
     server.sync(client.buildSyncRequest(), T0 + 7200 * 1000);
 
     save(path, snapshotOf(server));
@@ -54,16 +58,16 @@ test('ein gespielter Stand überlebt Speichern und Laden unverändert', () => {
     assert.ok(loaded);
     assert.deepEqual(loaded.snapshot, server.snapshot);
     assert.deepEqual(loaded.appliedLog, server.appliedLog);
-    assert.equal(loaded.snapshot.state.gold, server.snapshot.state.gold);
+    assert.deepEqual(loaded.snapshot.state.items, server.snapshot.state.items);
 
     // Ein Server, der daraus hochfährt, macht nahtlos weiter.
-    const restarted = new Server(initialState(4), T0, CURRENT_RULESET_VERSION);
+    const restarted = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     restarted.snapshot = loaded.snapshot;
     restarted.appliedLog = loaded.appliedLog;
 
     const client2 = new Client(restarted.snapshot);
     client2.advanceClock(60);
-    assert.equal(client2.plant(1).ok, true);
+    assert.equal(client2.start(1, R_WHEAT).ok, true);
     const res = restarted.sync(client2.buildSyncRequest(), T0 + 7300 * 1000);
     assert.equal(res.ok, true);
   } finally {
@@ -83,7 +87,7 @@ test('nicht vorhandene Datei ist kein Fehler, sondern ein neuer Hof', () => {
 test('Schreiben hinterlässt keine Nebendatei', () => {
   const { path, dir } = tempFile();
   try {
-    const server = new Server(initialState(2), T0, CURRENT_RULESET_VERSION);
+    const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     save(path, snapshotOf(server));
     save(path, snapshotOf(server));
 

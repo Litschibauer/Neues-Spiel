@@ -7,6 +7,10 @@
  * Genau das macht sie zum Vergleichspunkt für den Plattform-Beweis: Zwei
  * Runtimes müssen für denselben Command-Log denselben kanonischen String
  * erzeugen. Ein Hash darüber ist nur noch Bequemlichkeit.
+ *
+ * Seit Inhalt Daten ist, stehen hier nur noch Zahlen — Katalogindizes statt
+ * Namen. Ein neuer Gegenstand verlängert das Inventar-Array um einen Eintrag
+ * und ändert sonst nichts an der Form.
  */
 
 import type { State } from './state.ts';
@@ -18,18 +22,18 @@ import type { Command } from './commands.ts';
  * Praxis stabil, aber nichts, worauf man einen Konsistenzbeweis stützen will.
  */
 export function canonicalize(state: State): string {
-  const fields = state.fields.map((f) => `${f.crop ?? '-'}:${f.plantedAt}`).join(',');
+  const items = state.items.join(',');
+  const plots = state.plots.map((p) => `${p.recipe}:${p.startedAt}`).join(',');
+  const passives = state.passives.join(',');
   const orders = state.orders
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
     .join(',');
   const mail = state.mail.map((m) => `${m.item}:${m.amount}:${m.arrivedAt}`).join(',');
   return [
     `tick=${state.tick}`,
-    `fields=[${fields}]`,
-    `wheat=${state.wheat}`,
-    `eggs=${state.eggs}`,
-    `gold=${state.gold}`,
-    `coopProgress=${state.coopProgress}`,
+    `items=[${items}]`,
+    `plots=[${plots}]`,
+    `passives=[${passives}]`,
     `orders=[${orders}]`,
     `mail=[${mail}]`,
     `nextOrderId=${state.nextOrderId}`,
@@ -38,10 +42,10 @@ export function canonicalize(state: State): string {
 
 export function canonicalizeCommand(c: Command): string {
   switch (c.type) {
-    case 'PLANT':
-      return `${c.seq}|${c.tick}|PLANT|${c.field}`;
-    case 'HARVEST':
-      return `${c.seq}|${c.tick}|HARVEST|${c.field}`;
+    case 'START':
+      return `${c.seq}|${c.tick}|START|${c.plot}|${c.recipe}`;
+    case 'COLLECT':
+      return `${c.seq}|${c.tick}|COLLECT|${c.plot}`;
     case 'SELL_NPC':
       return `${c.seq}|${c.tick}|SELL_NPC|${c.item}|${c.amount}`;
     case 'LIST_ORDER':

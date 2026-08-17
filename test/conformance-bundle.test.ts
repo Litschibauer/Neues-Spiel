@@ -23,7 +23,12 @@ type VectorResult = {
   actual: string;
   expected: string;
 };
-type Report = { rulesetVersion: number; total: number; passed: number; results: VectorResult[] };
+type Report = {
+  rulesetVersions: number[];
+  total: number;
+  passed: number;
+  results: VectorResult[];
+};
 
 function runBundle(): Report {
   const context: Record<string, unknown> = { console };
@@ -39,7 +44,9 @@ function runBundle(): Report {
 test('der Bundle lässt sich bauen und besteht alle Golden Vectors', () => {
   const report = runBundle();
 
-  assert.ok(report.total >= 30, `zu wenige Vektoren im Bundle: ${report.total}`);
+  assert.ok(report.total >= 100, `zu wenige Vektoren im Bundle: ${report.total}`);
+  // Umkopieren: Arrays aus dem VM-Kontext haben einen fremden Prototyp.
+  assert.deepEqual([...report.rulesetVersions], [1, 2, 3, 4], 'Bundle deckt nicht alle Kataloge ab');
 
   const failures = report.results.filter((r) => !r.pass);
   const detail = failures

@@ -18,7 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getRuleset } from '../src/sim/rules.ts';
+import { RULESETS, getRuleset } from '../src/sim/rules.ts';
 import { initialState } from '../src/sim/state.ts';
 import { simulateAll } from '../src/sim/sim.ts';
 import { hashState } from '../src/sim/hash.ts';
@@ -27,14 +27,14 @@ import type { Command } from '../src/sim/commands.ts';
 
 type Vector = {
   name: string;
-  fieldCount: number;
+  rulesetVersion: number;
   commands: Command[];
   expectedStateHash: string;
   expectedState: State;
 };
 
 type GoldenDoc = {
-  rulesetVersion: number;
+  rulesetVersions: number[];
   vectorCount: number;
   vectors: Vector[];
 };
@@ -55,16 +55,27 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   const types = new Set(golden.vectors.flatMap((v) => v.commands.map((c) => c.type)));
   assert.deepEqual(
     [...types].sort(),
-    ['CANCEL_ORDER', 'COLLECT_MAIL', 'HARVEST', 'LIST_ORDER', 'PLANT', 'SELL_NPC'],
+    ['CANCEL_ORDER', 'COLLECT', 'COLLECT_MAIL', 'LIST_ORDER', 'SELL_NPC', 'START'],
     'Korpus deckt nicht alle Command-Typen ab',
   );
+
+  // Und jede ausgelieferte Regelversion muss vorkommen. Sonst bliebe ein
+  // ganzer Katalog — samt seiner Rezepte und Plätze — ohne Plattform-Beweis.
+  const versions = new Set(golden.vectors.map((v) => v.rulesetVersion));
+  assert.deepEqual([...versions].sort(), [...RULESETS.keys()].sort());
+
+  // Der Inhalt der späteren Kataloge muss auch wirklich benutzt werden:
+  // Rezepte mit Eingaben (Mühle, Bäckerei) sind der neue Pfad.
+  const withInputs = golden.vectors.some((v) =>
+    v.commands.some((c) => c.type === 'START' && c.recipe >= 3),
+  );
+  assert.ok(withInputs, 'kein Vektor benutzt ein Rezept mit Eingaben');
 });
 
 test('jeder Golden Vector reproduziert exakt seinen erwarteten Endzustand', () => {
-  const rules = getRuleset(golden.rulesetVersion);
-
   for (const v of golden.vectors) {
-    const final = simulateAll(initialState(v.fieldCount), v.commands, rules);
+    const rules = getRuleset(v.rulesetVersion);
+    const final = simulateAll(initialState(rules), v.commands, rules);
 
     // Erst der volle Zustand — der zeigt bei einem Fehlschlag, WAS abweicht.
     assert.deepEqual(final, v.expectedState, `Vektor ${v.name}: Zustand weicht ab`);

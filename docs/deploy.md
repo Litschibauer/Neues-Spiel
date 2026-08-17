@@ -78,13 +78,15 @@ Lager wird jede Aktion **lokal abgelehnt**, die Warteschlange bleibt leer — un
 ein Verbindungstest ohne Warteschlange prüft nichts.
 
 ```bash
-NEUES_SPIEL_RULESET=3 npm start     # Weizen 60 s, Ei 20 s
+NEUES_SPIEL_RULESET=4 npm start     # Weizen 60 s, Ei 20 s, Mehl 30 s, Brot 90 s
 ```
 
-Auf einem bestehenden Spielstand ist das ein **echter Balance-Patch**: Der Server
-migriert ihn beim nächsten Sync von v1 über v2 nach v3 und rechnet laufende
-Felder fair um (R2). Man kann also live zusehen, wie ein Patch durch eine
-Offline-Phase geht. Zurück geht es nicht — Downgrades sind bewusst nicht
+Auf einem bestehenden Spielstand ist das ein **echter Patch in vier Schritten**:
+Der Server migriert beim nächsten Sync von v1 über v2 und v3 nach v4, rechnet
+laufende Plätze fair um (R2) — und v2 -> v3 lässt dabei den Zustand *wachsen*:
+Milch, Mehl und Brot kommen in den Katalog, Mühle, Bäckerei und Weide auf den
+Hof. Man kann also live zusehen, wie ein Inhalts-Patch durch eine Offline-Phase
+geht. Zurück geht es nicht — Downgrades sind bewusst nicht
 vorgesehen; für den alten Stand `rm data/save.json`.
 
 ## 4. Erreichbarkeit prüfen

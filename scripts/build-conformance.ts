@@ -63,7 +63,11 @@ export function buildConformanceBundle(): string {
     (f) => `// ── src/sim/${f} ${'─'.repeat(Math.max(0, 46 - f.length))}\n${toPlainJs('sim/' + f)}`,
   ).join('\n');
 
-  const golden = readFileSync(join(ROOT, 'test', 'vectors', 'golden.json'), 'utf8');
+  // Kompakt einbetten: Der Korpus wird auf dem Testgerät gelesen, nicht von
+  // Menschen. Die eingerückte Fassung bleibt in test/vectors/golden.json.
+  const golden = JSON.stringify(
+    JSON.parse(readFileSync(join(ROOT, 'test', 'vectors', 'golden.json'), 'utf8')),
+  );
 
   return `/* Erzeugt von scripts/build-conformance.ts — nicht von Hand bearbeiten. */
 (function () {
@@ -71,15 +75,17 @@ export function buildConformanceBundle(): string {
 
 ${modules}
 
-  var GOLDEN = ${golden.trim()};
+  var GOLDEN = ${golden};
 
   /**
    * Spielt jeden Golden Vector ab und vergleicht die kanonische Form des
    * Ergebnisses mit der hinterlegten. Kein Hash nötig: Der kanonische String
    * IST die deterministische Größe.
+   *
+   * Jeder Vektor bringt seine eigene Regelversion mit — der Korpus deckt alle
+   * ausgelieferten Kataloge ab, nicht nur den ältesten.
    */
   function runVectors() {
-    var rules = getRuleset(GOLDEN.rulesetVersion);
     var results = [];
 
     for (var i = 0; i < GOLDEN.vectors.length; i++) {
@@ -87,7 +93,8 @@ ${modules}
       var actual, error = null;
 
       try {
-        actual = canonicalize(simulateAll(initialState(v.fieldCount), v.commands, rules));
+        var rules = getRuleset(v.rulesetVersion);
+        actual = canonicalize(simulateAll(initialState(rules), v.commands, rules));
       } catch (e) {
         error = String((e && e.message) || e);
       }
@@ -104,7 +111,7 @@ ${modules}
     }
 
     return {
-      rulesetVersion: GOLDEN.rulesetVersion,
+      rulesetVersions: GOLDEN.rulesetVersions,
       total: results.length,
       passed: results.filter(function (r) { return r.pass; }).length,
       results: results,
@@ -156,6 +163,8 @@ ${modules}
     initialState: initialState,
     stored: stored,
     totalGoods: totalGoods,
+    count: count,
+    EMPTY_PLOT: EMPTY_PLOT,
     hashState: hashState,
   };
 })();

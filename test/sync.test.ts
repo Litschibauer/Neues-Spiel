@@ -7,22 +7,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
-import { CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
-import { initialState } from '../src/sim/state.ts';
+import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
+import { EMPTY_PLOT, initialState } from '../src/sim/state.ts';
 
 const T0 = 1_700_000_000_000;
+const rules = getRuleset(CURRENT_RULESET_VERSION);
+const R_WHEAT = 0;
 
 test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const res = server.sync(
     {
       baseSeq: 0,
       rulesetVersion: CURRENT_RULESET_VERSION,
       commands: [
-        { seq: 1, tick: 0, type: 'PLANT', field: 0 },
-        { seq: 2, tick: 100, type: 'PLANT', field: 0 }, // Feld schon belegt
-        { seq: 3, tick: 200, type: 'PLANT', field: 1 },
+        { seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT },
+        { seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }, // Feld schon belegt
+        { seq: 3, tick: 200, type: 'START', plot: 1, recipe: R_WHEAT },
       ],
     },
     T0 + 200 * 1000,
@@ -34,22 +36,22 @@ test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor'
   if (!res.ok) return;
   assert.equal(res.kind, 'partial');
   assert.equal(res.rejectedFrom, 2);
-  assert.equal(res.reason, 'ILLEGAL_COMMAND:FIELD_OCCUPIED');
+  assert.equal(res.reason, 'ILLEGAL_COMMAND:PLOT_BUSY');
 
   assert.equal(server.snapshot.seq, 1);
-  assert.equal(server.snapshot.state.fields[0]!.crop, 'wheat');
+  assert.equal(server.snapshot.state.plots[0]!.recipe, R_WHEAT);
   // Alles ab dem Verstoß ist verworfen — auch das legale seq 3 dahinter,
   // denn es wurde auf einem Zustand gerechnet, den es nie gab.
-  assert.equal(server.snapshot.state.fields[1]!.crop, null);
+  assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
 test('ist schon das erste neue Command illegal, wird gar nichts übernommen', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   server.sync(
     {
       baseSeq: 0,
       rulesetVersion: CURRENT_RULESET_VERSION,
-      commands: [{ seq: 1, tick: 0, type: 'PLANT', field: 0 }],
+      commands: [{ seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT }],
     },
     T0 + 1000,
   );
@@ -58,24 +60,24 @@ test('ist schon das erste neue Command illegal, wird gar nichts übernommen', ()
     {
       baseSeq: 1,
       rulesetVersion: CURRENT_RULESET_VERSION,
-      commands: [{ seq: 2, tick: 100, type: 'PLANT', field: 0 }], // belegt
+      commands: [{ seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }], // belegt
     },
     T0 + 100 * 1000,
   );
 
   assert.equal(res.ok, false);
   if (res.ok) return;
-  assert.equal(res.reason, 'ILLEGAL_COMMAND:FIELD_OCCUPIED');
+  assert.equal(res.reason, 'ILLEGAL_COMMAND:PLOT_BUSY');
   assert.equal(server.snapshot.seq, 1);
 });
 
 test('R8 — ein wiederholter Sync ist ein No-op, kein Fehler', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.plant(0);
+  client.start(0, R_WHEAT);
   client.advanceClock(7200);
-  client.harvest(0);
+  client.collect(0);
 
   const req = client.buildSyncRequest();
   const first = server.sync(req, T0 + 7200 * 1000);
@@ -93,16 +95,16 @@ test('R8 — ein wiederholter Sync ist ein No-op, kein Fehler', () => {
 });
 
 test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   // Handy und Tablet starten beide vom selben Snapshot.
   const phone = new Client(server.snapshot);
   const tablet = new Client(server.snapshot);
 
-  phone.plant(0);
+  phone.start(0, R_WHEAT);
   phone.advanceClock(100);
 
-  tablet.plant(1);
+  tablet.start(1, R_WHEAT);
   tablet.advanceClock(100);
 
   const r1 = server.sync(phone.buildSyncRequest(), T0 + 100 * 1000);
@@ -117,8 +119,8 @@ test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
   // Das Tablet übernimmt den Server-Stand und verliert seine Offline-Arbeit —
   // genau der UX-Bruch, den ein Aktiv-Gerät-Token verhindern soll (R3).
   tablet.adopt(r2.snapshot);
-  assert.equal(tablet.state.fields[0]!.crop, 'wheat');
-  assert.equal(tablet.state.fields[1]!.crop, null);
+  assert.equal(tablet.state.plots[0]!.recipe, R_WHEAT);
+  assert.equal(tablet.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
 test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entscheidet', () => {
@@ -126,12 +128,12 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
   // zweites Gerät, das vom selben Snapshot aus offline ging, benutzt zwangsläufig
   // dieselben Nummern — und wurde deshalb als „schon erledigt" durchgewinkt.
   // Seine Offline-Arbeit verschwand kommentarlos.
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const original = {
     baseSeq: 0,
     rulesetVersion: CURRENT_RULESET_VERSION,
-    commands: [{ seq: 1, tick: 0, type: 'PLANT' as const, field: 0 }],
+    commands: [{ seq: 1, tick: 0, type: 'START' as const, plot: 0, recipe: R_WHEAT }],
   };
   assert.equal(server.sync(original, T0 + 1000).ok, true);
 
@@ -139,7 +141,7 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
   const forked = {
     baseSeq: 0,
     rulesetVersion: CURRENT_RULESET_VERSION,
-    commands: [{ seq: 1, tick: 0, type: 'PLANT' as const, field: 2 }],
+    commands: [{ seq: 1, tick: 0, type: 'START' as const, plot: 2, recipe: R_WHEAT }],
   };
   const res = server.sync(forked, T0 + 2000);
   assert.equal(res.ok, false);
@@ -154,10 +156,10 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
 });
 
 test('R2 — nicht mehr unterstützte Ruleset-Version erzwingt ein Update', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const res = server.sync(
-    { baseSeq: 0, rulesetVersion: 99, commands: [{ seq: 1, tick: 0, type: 'PLANT', field: 0 }] },
+    { baseSeq: 0, rulesetVersion: 99, commands: [{ seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT }] },
     T0 + 1000,
   );
 
@@ -167,15 +169,15 @@ test('R2 — nicht mehr unterstützte Ruleset-Version erzwingt ein Update', () =
 });
 
 test('Lücken in der Sequenz werden abgelehnt', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const res = server.sync(
     {
       baseSeq: 0,
       rulesetVersion: CURRENT_RULESET_VERSION,
       commands: [
-        { seq: 1, tick: 0, type: 'PLANT', field: 0 },
-        { seq: 3, tick: 10, type: 'PLANT', field: 1 }, // seq 2 fehlt
+        { seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT },
+        { seq: 3, tick: 10, type: 'START', plot: 1, recipe: R_WHEAT }, // seq 2 fehlt
       ],
     },
     T0 + 100 * 1000,
@@ -187,12 +189,12 @@ test('Lücken in der Sequenz werden abgelehnt', () => {
 });
 
 test('R1 — der Kanarienvogel schlägt bei einem Determinismus-Bug an', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.plant(0);
+  client.start(0, R_WHEAT);
   client.advanceClock(7200);
-  client.harvest(0);
+  client.collect(0);
 
   // Wir simulieren einen Client, der (etwa durch eine kaputte Optimierung)
   // einen anderen Zustand berechnet hat als der Server.
@@ -214,10 +216,10 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   // Der Unterschied zu FORK_DETECTED: Diese Ablehnung kommt aus dem
   // Aktiv-Gerät-Verfahren, nicht aus der Kollision. Der Client kann daraus
   // eine Frage machen statt einer Fehlermeldung nach dem Verlust.
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const phone = new Client(server.snapshot, 'handy');
-  phone.plant(0);
+  phone.start(0, R_WHEAT);
   phone.advanceClock(10);
   assert.equal(server.sync(phone.buildSyncRequest(), T0 + 10_000).ok, true);
   assert.equal(server.activeDevice?.id, 'handy');
@@ -227,7 +229,7 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   assert.equal(server.isActiveDevice('handy'), true);
 
   const tablet = new Client(server.snapshot, 'tablet');
-  tablet.plant(1);
+  tablet.start(1, R_WHEAT);
   tablet.advanceClock(10);
   const res = server.sync(tablet.buildSyncRequest(), T0 + 20_000);
 
@@ -236,25 +238,25 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   assert.equal(res.reason, 'NOT_ACTIVE_DEVICE');
   // Der Stand des Handys ist unberührt.
   assert.equal(server.snapshot.seq, 1);
-  assert.equal(server.snapshot.state.fields[1]!.crop, null);
+  assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
 test('R3 — ausdrückliche Übernahme geht durch', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const phone = new Client(server.snapshot, 'handy');
-  phone.plant(0);
+  phone.start(0, R_WHEAT);
   phone.advanceClock(10);
   server.sync(phone.buildSyncRequest(), T0 + 10_000);
 
   const tablet = new Client(server.snapshot, 'tablet');
-  tablet.plant(1);
+  tablet.start(1, R_WHEAT);
   tablet.advanceClock(10);
   tablet.takeover = true;
 
   const res = server.sync(tablet.buildSyncRequest(), T0 + 20_000);
   assert.equal(res.ok, true);
   assert.equal(server.activeDevice?.id, 'tablet');
-  assert.equal(server.snapshot.state.fields[1]!.crop, 'wheat');
+  assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
 
   // Und jetzt ist das Handy dran mit Abgewiesenwerden — es erfährt es beim
   // nächsten Sync, statt es nie zu erfahren.
@@ -270,9 +272,9 @@ test('R3 — ausdrückliche Übernahme geht durch', () => {
 test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
   // Skripte und Tests nehmen nicht teil — sonst wäre jede curl-Zeile ein
   // Geräte-Wechsel.
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const withId = new Client(server.snapshot, 'handy');
-  withId.plant(0);
+  withId.start(0, R_WHEAT);
   withId.advanceClock(10);
   server.sync(withId.buildSyncRequest(), T0 + 10_000);
 
@@ -280,7 +282,7 @@ test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
     {
       baseSeq: 1,
       rulesetVersion: CURRENT_RULESET_VERSION,
-      commands: [{ seq: 2, tick: 20, type: 'PLANT', field: 1 }],
+      commands: [{ seq: 2, tick: 20, type: 'START', plot: 1, recipe: R_WHEAT }],
     },
     T0 + 20_000,
   );

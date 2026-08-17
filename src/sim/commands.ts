@@ -4,6 +4,10 @@
  * Der Client schickt NIEMALS Zustand („ich habe 500 Gold"), sondern nur Absichten.
  * Diese Liste ist damit faktisch das Regelwerk des Spiels — was hier nicht steht,
  * kann ein Spieler nicht tun.
+ *
+ * Bemerkenswert kurz, und das ist der Punkt: Säen, Tiere versorgen, Mahlen,
+ * Backen sind **ein** Commandpaar (`START` / `COLLECT`). Der Unterschied steckt
+ * im Rezept, und Rezepte sind Daten (Konzept-Map, M1).
  */
 
 export type CommandBase = {
@@ -13,14 +17,19 @@ export type CommandBase = {
   tick: number;
 };
 
-export type PlantCommand = CommandBase & { type: 'PLANT'; field: number };
-export type HarvestCommand = CommandBase & { type: 'HARVEST'; field: number };
+/**
+ * Produktion auf einem Platz beginnen: Eingaben verbrauchen, Uhr starten.
+ *
+ * `recipe` muss auf dem Platz erlaubt sein — welche das sind, sagt das
+ * Regelwerk. Ein Feld nimmt Feldfrüchte, die Mühle nimmt Mahlrezepte.
+ */
+export type StartCommand = CommandBase & { type: 'START'; plot: number; recipe: number };
+
+/** Fertige Ausgabe abholen. Kein Platz im Lager → die Ware bleibt liegen (§7). */
+export type CollectCommand = CommandBase & { type: 'COLLECT'; plot: number };
+
 /** Verkauf an den NPC-Händler — offline gültig, da kein geteilter Zustand (§8). */
-export type SellNpcCommand = CommandBase & {
-  type: 'SELL_NPC';
-  item: 'wheat' | 'eggs';
-  amount: number;
-};
+export type SellNpcCommand = CommandBase & { type: 'SELL_NPC'; item: number; amount: number };
 
 /**
  * Ware zum Verkauf einstellen. Einseitig, also offline gültig (§8): Der Spieler
@@ -29,7 +38,7 @@ export type SellNpcCommand = CommandBase & {
  */
 export type ListOrderCommand = CommandBase & {
   type: 'LIST_ORDER';
-  item: 'wheat' | 'eggs';
+  item: number;
   amount: number;
   price: number;
 };
@@ -41,8 +50,8 @@ export type CancelOrderCommand = CommandBase & { type: 'CANCEL_ORDER'; orderId: 
 export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
 
 export type Command =
-  | PlantCommand
-  | HarvestCommand
+  | StartCommand
+  | CollectCommand
   | SellNpcCommand
   | ListOrderCommand
   | CancelOrderCommand
@@ -50,10 +59,14 @@ export type Command =
 
 /** Gründe, aus denen die Sim eine Aktion ablehnt. Client und Server nutzen dieselben. */
 export type SimErrorCode =
-  | 'NO_SUCH_FIELD'
-  | 'FIELD_OCCUPIED'
-  | 'FIELD_EMPTY'
-  | 'NOT_RIPE'
+  | 'NO_SUCH_PLOT'
+  | 'PLOT_BUSY'
+  | 'PLOT_EMPTY'
+  | 'NOT_DONE'
+  | 'RECIPE_NOT_ALLOWED'
+  | 'NO_SUCH_ITEM'
+  | 'NOT_SELLABLE'
+  | 'NOT_TRADABLE'
   | 'SILO_FULL'
   | 'NOT_ENOUGH_ITEMS'
   | 'BAD_AMOUNT'

@@ -11,6 +11,7 @@
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { State } from '../sim/state.ts';
+import type { Ruleset } from '../sim/rules.ts';
 import { getRuleset } from '../sim/rules.ts';
 import { advanceTo, simulate } from '../sim/sim.ts';
 import { hashState } from '../sim/hash.ts';
@@ -74,20 +75,27 @@ export class Client {
     return { ok: true };
   }
 
-  plant(field: number): ActionResult {
-    return this.apply({ type: 'PLANT', field } as Omit<Command, 'seq' | 'tick'>);
+  /** Das Regelwerk, unter dem dieser Client gerade rechnet. */
+  rules(): Ruleset {
+    return getRuleset(this.rulesetVersion);
   }
 
-  harvest(field: number): ActionResult {
-    return this.apply({ type: 'HARVEST', field } as Omit<Command, 'seq' | 'tick'>);
+  /** Produktion starten — Feld bestellen, Mühle beschicken, Teig ansetzen. */
+  start(plot: number, recipe: number): ActionResult {
+    return this.apply({ type: 'START', plot, recipe } as Omit<Command, 'seq' | 'tick'>);
   }
 
-  sellNpc(item: 'wheat' | 'eggs', amount: number): ActionResult {
+  /** Fertige Ausgabe abholen. */
+  collect(plot: number): ActionResult {
+    return this.apply({ type: 'COLLECT', plot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  sellNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
   /** Auftrag einstellen — offline gültig, weil einseitig (§8). */
-  listOrder(item: 'wheat' | 'eggs', amount: number, price: number): ActionResult {
+  listOrder(item: number, amount: number, price: number): ActionResult {
     return this.apply({ type: 'LIST_ORDER', item, amount, price } as Omit<Command, 'seq' | 'tick'>);
   }
 

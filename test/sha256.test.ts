@@ -56,9 +56,8 @@ test('stimmt mit node:crypto überein — echte kanonische Spielzustände', () =
 
   for (let seed = 1; seed <= 60; seed++) {
     const rnd = mulberry32(seed);
-    const fieldCount = 1 + Math.floor(rnd() * 8);
     const snapshot = {
-      state: initialState(fieldCount),
+      state: initialState(rules),
       seq: 0,
       serverTs: 0,
       rulesetVersion: CURRENT_RULESET_VERSION,
@@ -66,12 +65,11 @@ test('stimmt mit node:crypto überein — echte kanonische Spielzustände', () =
     const client = playRandomSession(snapshot, rnd, {
       steps: 25,
       maxAdvance: 9000,
-      fieldCount,
       advanceChance: 0.4,
       chaosChance: 0.15,
     });
 
-    const canonical = canonicalize(simulateAll(initialState(fieldCount), client.queue, rules));
+    const canonical = canonicalize(simulateAll(initialState(rules), client.queue, rules));
     assert.equal(sha256Hex(canonical), reference(canonical), `seed=${seed}`);
   }
 });

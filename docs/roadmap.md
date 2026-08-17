@@ -27,7 +27,8 @@ machen, dann Inhalt schaufeln.** Wer es andersherum macht, baut jede Mechanik do
 Kein Code, aber die teuersten Fehler entstehen hier.
 
 1. **Was ist das Spiel genau?** Hay-Day-Klon oder eigener Dreh? Der Kernkreislauf entscheidet
-   über das Command-Set, und das Command-Set ist das Regelwerk.
+   über das Command-Set, und das Command-Set ist das Regelwerk. Offen bleiben nur noch
+   Setting und der Haken — beides blockiert den Bau nicht.
 2. ~~**Was ist das Offline-Versprechen?**~~ **Entschieden:** Alles, was offline gehen kann,
    geht offline. Soziale Features sind online-only und werden ausgegraut — bei geteiltem
    knappem Zustand ist das Physik, kein Aufwand (§8).
@@ -48,26 +49,40 @@ Ergebnis: eine Liste der Mechaniken und ein Satz, der das Offline-Versprechen fe
 
 ---
 
-## Phase 1 — Inhalt als Daten
+## Phase 1 — Inhalt als Daten ✅ erledigt
 
-**Der wichtigste technische Schritt.** Aktuell sind `wheat` und `eggs` fest im Code. Solange
-das so ist, ist „Inhalt skaliert als Daten" eine Behauptung, kein Zustand.
+**Der wichtigste technische Schritt war das hier.** Vorher standen `wheat` und `eggs`
+fest im Code — „Inhalt skaliert als Daten" war damit eine Behauptung, kein Zustand.
 
-Umbau:
+Umgebaut:
 
-- **Gegenstands-Katalog** im Regelwerk statt fester Felder. Zustand hält ein Inventar in
-  fester Katalogreihenfolge — deterministisch serialisierbar, ohne Sortierfragen.
+- **Gegenstands-Katalog** im Regelwerk statt fester Felder. Der Zustand hält ein
+  Inventar als Zahlenarray in Katalogreihenfolge — deterministisch serialisierbar,
+  ohne Sortierfragen. Auch Münzen sind ein Katalogeintrag, nur ohne Lagerpflicht.
 - **Rezepte als Daten:** Eingaben, Ausgabe, Dauer.
-- **Gebäude als Daten:** welche Rezepte, wie viele Warteschlangenplätze.
+- **Plätze als Daten:** welche Rezepte, wie viele — die Weltkarte ist eine Tabelle.
+- **Ein Commandpaar für alles:** `START` / `COLLECT` statt `PLANT` / `HARVEST`.
+  Feld, Werkstatt und Tier sind derselbe Platz mit demselben Timer.
 
-Nebeneffekt: Ein wachsender Katalog ist eine **strukturelle** Migration (neuer Gegenstand →
-Inventar wächst um einen Eintrag). Bisher ändern die Migrationen nur Zeiten. Das ist der
-ehrlichere Test für R2.
+Was das gebracht hat, in einer Zahl: Die Produktionskette **Weizen → Mehl → Brot**
+kostete **null Zeilen Sim-Code**. Mühle und Bäckerei sind Tabellenzeilen; die Kette
+entsteht daraus, dass die Ausgabe des einen die Eingabe des anderen ist.
 
-Aufwand: spürbar. Es fasst Zustand, kanonische Form, Sim, Migration und alle Tests an, und
-die Golden Vectors müssen bewusst neu erzeugt werden.
+Der versprochene Nebeneffekt ist eingetreten: v2 → v3 ist eine **strukturelle**
+Migration (Inventar wächst, Plätze kommen dazu, eine zweite Weide entsteht). Bisher
+änderten Migrationen nur Zeiten. Das ist der ehrlichere Test für R2 — und er läuft.
 
-Sichert ab: dass Inhalt später wirklich billig ist.
+Zwei Dinge, die dabei teurer waren als geplant:
+
+- **Zwei passive Produzenten teilen sich einen Lagerdeckel.** Wer den letzten Platz
+  bekommt, entscheidet die Zeitachse, nicht die Reihenfolge in der Liste. Die
+  geschlossene Form dafür braucht eine Binärsuche auf den Zeitpunkt des Volllaufens
+  — und traf dabei denselben Off-by-one wie beim ersten Mal.
+- **Der Sync wurde langsamer**, von ~4 µs auf ~6 µs (Katalogschleifen statt zweier
+  Additionen). Gemessen, nicht geschätzt — siehe prototype.md.
+
+Der Preis, den man dauerhaft zahlt: **Kataloge sind append-only.** Zustände speichern
+Indizes. `test/rules.test.ts` erzwingt das über alle Versionen hinweg.
 
 ---
 
@@ -146,7 +161,7 @@ und skalieren mit, aber sie wollen bedient werden:
 ## Was man jetzt NICHT tun sollte
 
 - **Oberfläche vor Mechanik.** Man baut sie zweimal.
-- **Skalierung vor Spielern.** Ein Kern schafft ~220.000 Syncs pro Sekunde. Das reicht
+- **Skalierung vor Spielern.** Ein Kern schafft ~160.000 Syncs pro Sekunde. Das reicht
   erstmal.
 - **Features, die offline nicht gehen, ohne bewusste Entscheidung.** Jedes davon verkleinert
   das Versprechen, mit dem das Spiel antritt.
@@ -157,5 +172,10 @@ und skalieren mit, aber sie wollen bedient werden:
 
 ## Wenn nur eine Sache als Nächstes passiert
 
-**Phase 1.** Ohne datengetriebenen Inhalt kostet jeder neue Gegenstand Code, und die ganze
-Rechnung aus dem Hebel oben geht nicht auf. Alles andere baut darauf auf.
+**Phase 2, und darin zuerst M6 (Aufträge erfüllen).**
+
+Zwei Gründe. Erstens ist es die Mechanik, aus der die meisten Inhalte als Daten
+herausfallen: LKW, Kunden, Boote, Sonderaufträge und Eventaufgaben sind alle
+„liefere N×A und M×B" mit anderen Zahlen. Zweitens ist sie der Träger für die
+Leerlauf-Regel aus Architektur §6 — ein vorgewürfelter Auftragsvorrat ist genau
+das, was offline nie ausgeht.

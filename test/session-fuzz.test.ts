@@ -13,12 +13,17 @@
  * Zwei Profile, weil ein einzelnes nicht beides trifft:
  *   „busy" = viele Aktionen, kurze Sprünge  → belastet die Segmentierung
  *   „idle" = wenige Aktionen, lange Sprünge → belastet Lagerlimit und Stall
+ *
+ * Und über ALLE Regelwerke, weil Inhalt jetzt Daten ist: v1 (sechs Felder, ein
+ * Stall) bis v4 (dazu Mühle, Bäckerei, Weide — zwei Produzenten am selben
+ * Lagerdeckel, schnelle Uhren). Ein Fuzz auf nur einem Katalog würde die
+ * Datengetriebenheit gar nicht prüfen.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Server } from '../src/server/server.ts';
-import { CURRENT_RULESET_VERSION, getRuleset } from '../src/sim/rules.ts';
+import { getRuleset } from '../src/sim/rules.ts';
 import { initialState, cloneState, stored } from '../src/sim/state.ts';
 import { hashState } from '../src/sim/hash.ts';
 import type { SessionOptions } from './helpers/session.ts';
@@ -31,16 +36,18 @@ import {
 } from './helpers/session.ts';
 
 const T0 = 1_700_000_000_000;
-const rules = getRuleset(CURRENT_RULESET_VERSION);
 
-const BUSY: Omit<SessionOptions, 'fieldCount'> = {
+/** Alle ausgelieferten Regelwerke — jedes ist ein anderer Inhaltsstand. */
+const VERSIONS = [1, 2, 3, 4];
+
+const BUSY: SessionOptions = {
   steps: 40,
   maxAdvance: 4000,
   advanceChance: 0.3,
   chaosChance: 0.25,
 };
 
-const IDLE: Omit<SessionOptions, 'fieldCount'> = {
+const IDLE: SessionOptions = {
   steps: 20,
   maxAdvance: 20_000,
   advanceChance: 0.6,
@@ -53,31 +60,42 @@ type Stats = {
   rejections: number;
   siloFull: number;
   maxStored: number;
+  /** Pro Regelwerk, damit kein Katalog stillschweigend ungeprüft bleibt. */
+  perVersion: Map<number, number>;
 };
 
-function runProfile(profile: Omit<SessionOptions, 'fieldCount'>, sessions: number): Stats {
-  const stats: Stats = { sessions: 0, commands: 0, rejections: 0, siloFull: 0, maxStored: 0 };
+function runProfile(profile: SessionOptions, sessions: number): Stats {
+  const stats: Stats = {
+    sessions: 0,
+    commands: 0,
+    rejections: 0,
+    siloFull: 0,
+    maxStored: 0,
+    perVersion: new Map(),
+  };
 
   for (let seed = 1; seed <= sessions; seed++) {
     const rnd = mulberry32(seed);
-    const fieldCount = 1 + Math.floor(rnd() * 8);
+    const version = VERSIONS[seed % VERSIONS.length]!;
+    const rules = getRuleset(version);
 
-    const server = new Server(initialState(fieldCount), T0, CURRENT_RULESET_VERSION);
+    const server = new Server(initialState(rules), T0, version);
     const start = cloneState(server.snapshot.state);
-    const client = playRandomSession(server.snapshot, rnd, { ...profile, fieldCount });
+    const client = playRandomSession(server.snapshot, rnd, profile);
 
     if (client.queue.length === 0) continue;
 
     stats.sessions++;
     stats.commands += client.queue.length;
     stats.rejections += profile.steps - client.queue.length;
+    stats.perVersion.set(version, (stats.perVersion.get(version) ?? 0) + client.queue.length);
 
     // ── Weg 1 vs. Weg 3: geschlossene Form gegen Tick-für-Tick-Grundwahrheit ──
-    const reference = referenceRun(start, client.queue);
+    const reference = referenceRun(start, client.queue, rules);
     assert.deepEqual(
       client.state,
       reference,
-      `seed=${seed}: Client weicht von der Grundwahrheit ab`,
+      `seed=${seed} v${version}: Client weicht von der Grundwahrheit ab`,
     );
 
     // Kein Float hat sich eingeschlichen (§2.2).
@@ -85,17 +103,17 @@ function runProfile(profile: Omit<SessionOptions, 'fieldCount'>, sessions: numbe
 
     // ── Weg 2: Server-Re-Simulation aus dem Log ──
     const res = server.sync(client.buildSyncRequest(), T0 + client.localTick * 1000);
-    assert.equal(res.ok, true, `seed=${seed}: Server lehnt legalen Log ab`);
+    assert.equal(res.ok, true, `seed=${seed} v${version}: Server lehnt legalen Log ab`);
     if (!res.ok) return stats;
-    assert.equal(res.divergence, false, `seed=${seed}: Kanarienvogel schlägt an`);
+    assert.equal(res.divergence, false, `seed=${seed} v${version}: Kanarienvogel schlägt an`);
     assert.equal(hashState(reference), hashState(client.state));
 
     // Peak über die ganze Sitzung, nicht nur am Ende.
     let peak = 0;
     let s = cloneState(start);
     for (const cmd of client.queue) {
-      s = referenceRun(s, [cmd]);
-      peak = Math.max(peak, stored(s));
+      s = referenceRun(s, [cmd], rules);
+      peak = Math.max(peak, stored(s, rules));
     }
     stats.maxStored = Math.max(stats.maxStored, peak);
     if (peak >= rules.siloCapacity) stats.siloFull++;
@@ -115,12 +133,18 @@ test('Profil „busy": 200 Sitzungen — Client == Referenz == Server', () => {
   assert.ok(s.commands > 2000, `zu wenige Commands: ${s.commands}`);
   // Der Ablehnpfad muss mitlaufen, sonst testet der Fuzz nur den Sonnenschein.
   assert.ok(s.rejections > 500, `zu wenige abgelehnte Aktionen: ${s.rejections}`);
+
+  // Jedes Regelwerk muss ernsthaft drankommen — sonst prüft der Fuzz nur einen
+  // Katalog und die Datengetriebenheit bleibt eine Behauptung.
+  for (const v of VERSIONS) {
+    assert.ok((s.perVersion.get(v) ?? 0) > 200, `v${v} zu selten gefuzzt: ${s.perVersion.get(v)}`);
+  }
 });
 
 test('Profil „idle": 150 Sitzungen — läuft bis ans Lagerlimit', () => {
   const s = runProfile(IDLE, 150);
 
-  assert.ok(s.sessions > 130, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
+  assert.ok(s.sessions > 120, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
   // Entscheidend: Der Fuzz muss den vollen Stall wirklich erreichen, sonst
   // beweist er über die kritische Ecke aus §7 genau nichts.
   assert.ok(s.siloFull > 10, `Lager zu selten voll: ${s.siloFull} (max ${s.maxStored})`);

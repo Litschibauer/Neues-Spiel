@@ -39,14 +39,52 @@ Jede Spieleraktion wird als kompaktes, unveränderliches **Command** aufgezeichn
 {
   "seq": 1043,              // fortlaufende Nummer pro Spieler (lückenlos, geordnet)
   "tick": 92718,            // Spielzeit-Tick, an dem die Aktion passiert (nicht Wanduhr!)
-  "type": "PLANT",
-  "args": { "field": 3, "crop": "wheat" },
+  "type": "START",
+  "plot": 3,                // Index in die Platzliste des Regelwerks
+  "recipe": 0,              // Index in den Rezeptkatalog
   "clientTs": 1734350400   // Client-Zeitstempel, NUR informativ, nie vertrauenswürdig
 }
 ```
 
 Offline sammelt der Client diese Commands einfach in einer lokalen Queue. Es ist ein
 append-only Log — nie editieren, nie löschen.
+
+### 2.1.1 Warum dort Zahlen stehen und keine Namen
+
+`"crop": "wheat"` wäre lesbarer — und wäre ein Fehler. Der Sim-Kern kennt keine
+Gegenstände, nur **Indizes in den Katalog des Regelwerks**. Zustand und Commands
+sind reine Zahlen; was eine 3 bedeutet, sagt allein die Regelversion.
+
+Das hat zwei Gründe, und beide sind hart:
+
+- **Kanonische Form ohne Sortierfrage.** Ein Inventar als Zahlenarray in
+  Katalogreihenfolge serialisiert sich eindeutig. Eine Map von Namen auf Mengen
+  bräuchte erst eine festgelegte Reihenfolge — eine weitere Stelle, an der zwei
+  Plattformen abweichen können (R1).
+- **Inhalt bleibt billig.** Ein neuer Gegenstand hängt eine Zeile an den Katalog
+  und einen Eintrag ans Inventar. Kein Code, kein neues Feld, keine Änderung an
+  `simulate()`.
+
+Der Preis ist eine Regel, die nie gebrochen werden darf: **Kataloge sind
+append-only.** Wer einen Eintrag einschiebt oder entfernt, verschiebt die
+Bedeutung *aller* gespeicherten Spielstände — aus Weizen wird stillschweigend
+Mehl. Anhängen ist gratis (die Migration füllt mit Nullen auf), Umsortieren
+braucht eine echte Umschlüsselungs-Migration.
+
+### 2.1.2 Ein Commandpaar für Feld, Werkstatt und Tier
+
+`START` und `COLLECT` decken den gesamten Kernkreislauf ab — säen und ernten,
+mahlen und abholen, Teig ansetzen und Brot herausnehmen. Der Unterschied steckt
+im Rezept, und Rezepte sind Daten:
+
+```
+Eingaben verbrauchen  →  Zeit vergeht  →  Ausgabe liegt bereit  →  abholen
+```
+
+Produktionsketten muss deshalb niemand bauen: Sie entstehen, sobald die Ausgabe
+des einen Rezepts die Eingabe eines anderen ist. Das Command-Set bleibt klein,
+während der Inhalt beliebig wächst — genau die Trennung, auf der die ganze
+Roadmap steht: *Inhalt skaliert als Daten, Risiko skaliert mit Mechaniken.*
 
 ### 2.2 Deterministische Simulation
 
@@ -779,8 +817,9 @@ Balancing-Arbeit, kein Blocker.
 ## 13. Offene Fragen / nächste Schritte
 
 - [ ] Tick-Auflösung festlegen (1s? 1min?) — Trade-off Präzision vs. Log-Größe.
-- [ ] Command-Set definieren (die vollständige Liste erlaubter Aktionen ist die eigentliche
-      „Regel" des Spiels).
+- [ ] Command-Set vervollständigen: Aufträge erfüllen, Ausbauten, Level (M6-M8 der
+      Konzept-Map). Der datengetriebene Kern steht — `START`/`COLLECT` tragen Feld,
+      Werkstatt und Tier gemeinsam.
 - [ ] Konkrete Sim-Sprache/Portabilität wählen (§11).
 - [ ] Verhalten am Lagerlimit festlegen (hard block / waste / soft-cap, §7).
 - [ ] Postfach: Kapazität, Ablauffrist, UI fürs Abholen (§7).
@@ -789,6 +828,9 @@ Balancing-Arbeit, kein Blocker.
 - [ ] Snapshot-Format + Signaturschema.
 - [ ] Offline-Deckel (§4) und Balancing-Regeln.
 - [ ] Konfliktdarstellung im UI (Sync-Animation statt hartem Rollback).
+- [x] ~~Inhalt als Daten: Katalog, Rezepte und Plätze im Regelwerk statt im Code~~ →
+      erledigt. Die Kette Weizen -> Mehl -> Brot kostete null Zeilen Sim-Code, und
+      v2 -> v3 ist die erste *strukturelle* Migration (siehe roadmap.md, Phase 1).
 - [x] ~~Prototyp: „Feld pflanzen → wachsen → ernten" end-to-end mit vollem Sync-Zyklus~~ →
       erledigt, siehe [prototype.md](prototype.md). Determinismus, Zeitautorität und
       Lagerlimit sind am laufenden Code geprüft.

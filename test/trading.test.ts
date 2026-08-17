@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
-import { initialState, stored, totalGoods } from '../src/sim/state.ts';
+import { EMPTY_PLOT, initialState, count, stored, totalGoods } from '../src/sim/state.ts';
 import { advanceTo, simulate } from '../src/sim/sim.ts';
 import { assertInvariants } from '../src/sim/migrate.ts';
 import { mulberry32 } from './helpers/session.ts';
@@ -23,27 +23,58 @@ import { mulberry32 } from './helpers/session.ts';
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 
+const GOLD = 0;
+const WHEAT = 1;
+const EGGS = 2;
+const R_WHEAT = 0;
+const EGG_PRICE = rules.items[EGGS]!.npcPrice;
+const GROW = rules.recipes[R_WHEAT]!.durationTicks;
+const YIELD = rules.recipes[R_WHEAT]!.output.amount;
+
 /** Spielstand mit vollem Lager, um am Limit zu testen. */
 function fullSilo() {
-  return advanceTo(initialState(3), 60_000, rules);
+  return advanceTo(initialState(rules), 60_000, rules);
 }
 
 test('Verkaufen ist einseitig und funktioniert offline', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
   client.advanceClock(6000); // 10 Eier
-  const res = client.sellNpc('eggs', 1);
+  const res = client.sellNpc(EGGS, 1);
   assert.equal(res.ok, true);
 
-  assert.equal(client.listOrder('eggs', 5, rules.npcPrices.eggs).ok, true);
+  assert.equal(client.listOrder(EGGS, 5, EGG_PRICE).ok, true);
 
   // Escrow: Die Ware hat das Lager verlassen, ist aber noch nicht verkauft.
-  assert.equal(client.state.eggs, 4);
+  assert.equal(count(client.state, EGGS), 4);
   assert.equal(client.state.orders.length, 1);
   assert.equal(client.state.orders[0]!.amount, 5);
   // Nichts entstanden, nichts verschwunden.
-  assert.equal(totalGoods(client.state), 9);
+  assert.equal(totalGoods(client.state, rules), 9);
+});
+
+test('Münzen sind ein Gegenstand, aber kein Lagerplatz', () => {
+  // Gold liegt im selben Inventar wie alles andere — es ist nur nicht
+  // lagerpflichtig. Damit braucht das Postfach keinen Sonderfall für Geld.
+  const client = new Client({
+    state: fullSilo(),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: CURRENT_RULESET_VERSION,
+  });
+
+  assert.equal(stored(client.state, rules), rules.siloCapacity);
+  assert.equal(client.sellNpc(EGGS, 10).ok, true);
+  assert.equal(count(client.state, GOLD), 10 * EGG_PRICE);
+  // Das Gold zählt nicht mit — sonst wäre das Lager sofort wieder voll.
+  assert.equal(stored(client.state, rules), rules.siloCapacity - 10);
+
+  // Und Münzen selbst kann man weder verkaufen noch einstellen.
+  const sellGold = client.sellNpc(GOLD, 1);
+  assert.equal(sellGold.ok, false);
+  if (sellGold.ok) return;
+  assert.equal(sellGold.code, 'NOT_SELLABLE');
 });
 
 /** Der Angriff: einstellen, Lager leert sich, nachproduzieren, wiederholen. */
@@ -57,7 +88,8 @@ function runStashAttack(rounds: number) {
 
   for (let round = 0; round < rounds; round++) {
     const s = client.preview();
-    if (s.eggs > 0) client.listOrder('eggs', Math.min(s.eggs, 20), rules.npcPrices.eggs);
+    const have = count(s, EGGS);
+    if (have > 0) client.listOrder(EGGS, Math.min(have, 20), EGG_PRICE);
     client.advanceClock(60_000);
   }
   return client.preview();
@@ -74,24 +106,27 @@ test('DER EXPLOIT: Escrow lässt sich nicht als unendliches Lager missbrauchen',
   const long = runStashAttack(200);
   const absurd = runStashAttack(2000);
 
-  assert.ok(totalGoods(long) > totalGoods(short), 'die Testkulisse läuft überhaupt voll');
+  assert.ok(
+    totalGoods(long, rules) > totalGoods(short, rules),
+    'die Testkulisse läuft überhaupt voll',
+  );
   assert.equal(
-    totalGoods(absurd),
-    totalGoods(long),
+    totalGoods(absurd, rules),
+    totalGoods(long, rules),
     'Gesamtmenge wächst weiter — Escrow ist ein Leck',
   );
 
   // Alle Behälter stehen am Anschlag, keiner darüber.
   assert.equal(absurd.orders.length, rules.orderSlots);
   assert.equal(absurd.mail.length, rules.mailCapacity);
-  assert.equal(stored(absurd), rules.siloCapacity);
+  assert.equal(stored(absurd, rules), rules.siloCapacity);
   assertInvariants(absurd, rules);
 
   // Und die Obergrenze ist die, die aus den Limits folgt — keine Überraschung.
   const ceiling = rules.siloCapacity + (rules.orderSlots + rules.mailCapacity) * 20;
   assert.ok(
-    totalGoods(absurd) <= ceiling,
-    `über der rechnerischen Grenze: ${totalGoods(absurd)} > ${ceiling}`,
+    totalGoods(absurd, rules) <= ceiling,
+    `über der rechnerischen Grenze: ${totalGoods(absurd, rules)} > ${ceiling}`,
   );
 });
 
@@ -104,7 +139,7 @@ test('bei vollen Behältern ist auch kein neuer Auftrag mehr möglich', () => {
     rulesetVersion: CURRENT_RULESET_VERSION,
   });
 
-  const blocked = client.listOrder('eggs', 1, rules.npcPrices.eggs);
+  const blocked = client.listOrder(EGGS, 1, EGG_PRICE);
   assert.equal(blocked.ok, false);
   if (blocked.ok) return;
   assert.equal(blocked.code, 'NO_ORDER_SLOTS');
@@ -118,32 +153,35 @@ test('Preisband verhindert das Parken zu Fantasiepreisen', () => {
     rulesetVersion: CURRENT_RULESET_VERSION,
   });
 
-  const ref = rules.npcPrices.eggs;
-  const tooHigh = client.listOrder('eggs', 5, ref * 10);
+  const tooHigh = client.listOrder(EGGS, 5, EGG_PRICE * 10);
   assert.equal(tooHigh.ok, false);
   if (tooHigh.ok) return;
   assert.equal(tooHigh.code, 'PRICE_OUT_OF_BAND');
 
-  assert.equal(client.listOrder('eggs', 5, 0).ok, false);
+  assert.equal(client.listOrder(EGGS, 5, 0).ok, false);
   // Innerhalb des Bandes geht es.
-  assert.equal(client.listOrder('eggs', 5, ref).ok, true);
+  assert.equal(client.listOrder(EGGS, 5, EGG_PRICE).ok, true);
 });
 
 test('Auftrag zurückziehen gibt die Ware zurück — aber nicht über das Limit', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
   client.advanceClock(6000);
-  assert.equal(client.listOrder('eggs', 8, 5).ok, true);
+  assert.equal(client.listOrder(EGGS, 8, 5).ok, true);
   const id = client.state.orders[0]!.id;
 
   assert.equal(client.cancelOrder(id).ok, true);
-  assert.equal(client.state.eggs, 10);
+  assert.equal(count(client.state, EGGS), 10);
   assert.equal(client.state.orders.length, 0);
 
   // Bei vollem Lager blockiert die Rücknahme, statt das Limit zu umgehen.
   const full = new Client({
-    state: { ...fullSilo(), orders: [{ id: 1, item: 'eggs', amount: 10, price: 5, listedAt: 0 }], nextOrderId: 2 },
+    state: {
+      ...fullSilo(),
+      orders: [{ id: 1, item: EGGS, amount: 10, price: 5, listedAt: 0 }],
+      nextOrderId: 2,
+    },
     seq: 0,
     serverTs: T0,
     rulesetVersion: CURRENT_RULESET_VERSION,
@@ -155,9 +193,9 @@ test('Auftrag zurückziehen gibt die Ware zurück — aber nicht über das Limit
 });
 
 test('verfallene Aufträge landen im Postfach statt im Nichts', () => {
-  let s = initialState(3);
+  let s = initialState(rules);
   s = advanceTo(s, 6000, rules);
-  s = simulate(s, { seq: 1, tick: 6000, type: 'LIST_ORDER', item: 'eggs', amount: 6, price: 5 }, rules);
+  s = simulate(s, { seq: 1, tick: 6000, type: 'LIST_ORDER', item: EGGS, amount: 6, price: 5 }, rules);
   assert.equal(s.orders.length, 1);
 
   // Über die Ablauffrist hinaus warten.
@@ -170,13 +208,13 @@ test('verfallene Aufträge landen im Postfach statt im Nichts', () => {
 });
 
 test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () => {
-  const mail = Array.from({ length: rules.mailCapacity }, (_, i) => ({
-    item: 'wheat' as const,
+  const mail = Array.from({ length: rules.mailCapacity }, () => ({
+    item: WHEAT,
     amount: 1,
     arrivedAt: 0,
   }));
-  let s = { ...initialState(3), tick: 1000, mail, eggs: 10 };
-  s = simulate(s, { seq: 1, tick: 1000, type: 'LIST_ORDER', item: 'eggs', amount: 5, price: 5 }, rules);
+  let s = { ...initialState(rules), tick: 1000, mail, items: [0, 0, 10] };
+  s = simulate(s, { seq: 1, tick: 1000, type: 'LIST_ORDER', item: EGGS, amount: 5, price: 5 }, rules);
 
   s = advanceTo(s, 1000 + rules.orderTtlTicks + 100, rules);
 
@@ -187,38 +225,38 @@ test('ist das Postfach voll, bleibt der Auftrag stehen statt zu verfallen', () =
 });
 
 test('Postfach abholen nimmt mit, was ins Lager passt — der Rest bleibt liegen', () => {
-  let s = advanceTo(initialState(3), 59_000, rules); // fast voll
-  const space = rules.siloCapacity - stored(s);
+  let s = advanceTo(initialState(rules), 59_000, rules); // fast voll
+  const space = rules.siloCapacity - stored(s, rules);
 
   s = {
     ...s,
     mail: [
-      { item: 'gold', amount: 50, arrivedAt: 0 },
-      { item: 'eggs', amount: space, arrivedAt: 0 },
-      { item: 'eggs', amount: 10, arrivedAt: 0 }, // passt nicht mehr
+      { item: GOLD, amount: 50, arrivedAt: 0 },
+      { item: EGGS, amount: space, arrivedAt: 0 },
+      { item: EGGS, amount: 10, arrivedAt: 0 }, // passt nicht mehr
     ],
   };
 
   s = simulate(s, { seq: 1, tick: 59_000, type: 'COLLECT_MAIL' }, rules);
 
-  assert.equal(s.gold, 50, 'Gold passt immer');
-  assert.equal(stored(s), rules.siloCapacity);
+  assert.equal(count(s, GOLD), 50, 'Gold passt immer');
+  assert.equal(stored(s, rules), rules.siloCapacity);
   assert.equal(s.mail.length, 1, 'der Rest wartet weiter');
   assertInvariants(s, rules);
 });
 
 test('externe Zustellung landet im Postfach — und löst keinen Fehlalarm aus', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.plant(0);
-  client.advanceClock(7200);
-  client.harvest(0);
+  client.start(0, R_WHEAT);
+  client.advanceClock(GROW);
+  client.collect(0);
 
   // Während der Spieler offline war, schickt ein Nachbar ein Geschenk.
-  server.deliver({ item: 'eggs', amount: 5, arrivedAt: T0 });
+  server.deliver({ item: EGGS, amount: 5, arrivedAt: T0 });
 
-  const res = server.sync(client.buildSyncRequest(), T0 + 7200 * 1000);
+  const res = server.sync(client.buildSyncRequest(), T0 + GROW * 1000);
 
   assert.equal(res.ok, true);
   if (!res.ok) return;
@@ -230,17 +268,17 @@ test('externe Zustellung landet im Postfach — und löst keinen Fehlalarm aus',
   assert.equal(res.snapshot.state.mail.length, 1);
   assert.equal(res.snapshot.state.mail[0]!.amount, 5);
   // Und es liegt im Postfach, nicht im Lager.
-  assert.equal(res.snapshot.state.eggs, 12);
+  assert.equal(count(res.snapshot.state, EGGS), 12);
 });
 
 test('Zustellungen bei vollem Postfach gehen nicht verloren', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   for (let i = 0; i < rules.mailCapacity + 5; i++) {
-    server.deliver({ item: 'wheat', amount: 1, arrivedAt: T0 });
+    server.deliver({ item: WHEAT, amount: 1, arrivedAt: T0 });
   }
 
   const client = new Client(server.snapshot);
-  client.plant(0);
+  client.start(0, R_WHEAT);
   client.advanceClock(10);
   const res = server.sync(client.buildSyncRequest(), T0 + 10_000);
 
@@ -256,7 +294,7 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
   for (let seed = 1; seed <= 150; seed++) {
     const rnd = mulberry32(seed);
     const pick = (n: number) => Math.floor(rnd() * n);
-    const server = new Server(initialState(4), T0, CURRENT_RULESET_VERSION);
+    const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     const client = new Client(server.snapshot);
 
     for (let step = 0; step < 40; step++) {
@@ -266,15 +304,18 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
           client.advanceClock(1 + pick(30_000));
           break;
         case 1:
-          client.plant(pick(4));
+          client.start(pick(4), R_WHEAT);
           break;
         case 2:
-          client.harvest(pick(4));
+          client.collect(pick(4));
           break;
-        case 3:
-          if (s.eggs > 0) client.listOrder('eggs', 1 + pick(s.eggs), 1 + pick(7));
-          else if (s.wheat > 0) client.listOrder('wheat', 1 + pick(s.wheat), 1 + pick(4));
+        case 3: {
+          const eggs = count(s, EGGS);
+          const wheat = count(s, WHEAT);
+          if (eggs > 0) client.listOrder(EGGS, 1 + pick(eggs), 1 + pick(7));
+          else if (wheat > 0) client.listOrder(WHEAT, 1 + pick(wheat), 1 + pick(4));
           break;
+        }
         case 4:
           if (s.orders.length > 0) client.cancelOrder(s.orders[pick(s.orders.length)]!.id);
           break;
@@ -286,7 +327,7 @@ test('Behälter-Invariante hält über zufällige Handelssitzungen', () => {
       const now = client.preview();
       assert.ok(now.orders.length <= rules.orderSlots, `seed=${seed}: Slots überschritten`);
       assert.ok(now.mail.length <= rules.mailCapacity, `seed=${seed}: Postfach überschritten`);
-      assert.ok(stored(now) <= rules.siloCapacity, `seed=${seed}: Lager überschritten`);
+      assert.ok(stored(now, rules) <= rules.siloCapacity, `seed=${seed}: Lager überschritten`);
       assertInvariants(now, rules);
     }
 
@@ -303,48 +344,48 @@ test('Admin-Zeitgutschrift löst keinen Divergenz-Fehlalarm aus', () => {
   // Ein Eingriff, der den ZUSTAND anfasst, würde beim nächsten Sync den
   // Kanarienvogel auslösen — der Client hätte ja anders gerechnet. Die
   // Zeitgutschrift verstellt deshalb nur die Uhr aus §4, nicht den Zustand.
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
-  client.plant(0);
+  client.start(0, R_WHEAT);
   const first = server.sync(client.buildSyncRequest(), T0 + 1000);
   assert.equal(first.ok, true);
   if (!first.ok) return;
   client.adopt(first.snapshot);
 
   // Werkbank: die volle Wachstumszeit gutschreiben.
-  server.grantTime(rules.wheatGrowTicks);
+  server.grantTime(GROW);
   client.adopt(server.snapshot);
 
   // Der Client darf jetzt so weit vorspulen — und ernten.
-  client.advanceClock(rules.wheatGrowTicks);
-  assert.equal(client.harvest(0).ok, true, 'Feld muss durch die Zeitgutschrift reif sein');
+  client.advanceClock(GROW);
+  assert.equal(client.collect(0).ok, true, 'Platz muss durch die Zeitgutschrift fertig sein');
 
   const res = server.sync(client.buildSyncRequest(), T0 + 1000);
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.divergence, false, 'Kanarienvogel darf nicht anschlagen');
   assert.deepEqual(server.divergenceAlerts, []);
-  assert.equal(res.snapshot.state.wheat, rules.wheatYield);
+  assert.equal(count(res.snapshot.state, WHEAT), YIELD);
 });
 
 test('Zurücksetzen hinterlässt einen sauberen, leeren Hof', () => {
-  const server = new Server(initialState(3), T0, CURRENT_RULESET_VERSION);
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
-  client.plant(0);
+  client.start(0, R_WHEAT);
   server.sync(client.buildSyncRequest(), T0 + 1000);
-  server.deliver({ item: 'eggs', amount: 5, arrivedAt: T0 });
+  server.deliver({ item: EGGS, amount: 5, arrivedAt: T0 });
 
-  server.reset(initialState(3), T0 + 5000, CURRENT_RULESET_VERSION);
+  server.reset(initialState(rules), T0 + 5000, CURRENT_RULESET_VERSION);
 
   assert.equal(server.snapshot.seq, 0);
   assert.equal(server.appliedLog.length, 0);
   assert.equal(server.pendingDeliveries.length, 0);
-  assert.equal(server.snapshot.state.fields[0]!.crop, null);
+  assert.equal(server.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
   assertInvariants(server.snapshot.state, rules);
 
   // Und ein frischer Client kann sofort weiterspielen.
   const fresh = new Client(server.snapshot);
-  assert.equal(fresh.plant(0).ok, true);
+  assert.equal(fresh.start(0, R_WHEAT).ok, true);
   assert.equal(server.sync(fresh.buildSyncRequest(), T0 + 6000).ok, true);
 });

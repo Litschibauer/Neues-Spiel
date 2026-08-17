@@ -4,7 +4,7 @@ Lauffähiger Mini-Sim-Kern, der die riskanteste Annahme des Konzepts prüft:
 **Rechnen Client und Server wirklich bit-für-bit dasselbe?** (Risiko R1)
 
 ```bash
-npm test        # 80 Tests, keine Dependencies, kein Build-Step
+npm test        # 96 Tests, keine Dependencies, kein Build-Step
 npm run bench   # Lastmessung der Server-Re-Simulation (R4)
 npm run golden  # Golden Vectors neu erzeugen (bewusste Handlung, siehe unten)
 npm run conformance  # Prüfstand- und Feldtest-Seite bauen
@@ -19,8 +19,8 @@ Läuft direkt mit Node ≥ 22.6 über natives Type-Stripping.
 
 ```
 src/sim/          Der Sim-Kern — läuft IDENTISCH auf Client und Server
-  rules.ts        Regelwerk als versionierte Daten (R2)
-  state.ts        Zustand, ausschließlich Integer
+  rules.ts        Regelwerk UND Inhalt als versionierte Daten (R2)
+  state.ts        Zustand, ausschließlich Integer, Inventar als Zahlenarray
   produce.ts      Gedeckelte passive Produktion, geschlossene Form (§7)
   commands.ts     Das Command-Set = das Regelwerk des Spiels (§2.1)
   migrate.ts      Ruleset-Migration + Invariantenprüfung (R2)
@@ -41,11 +41,27 @@ web/              Vorlagen für Prüfstand, Feldtest und Werkbank
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 
-Modelliert ist das Nötigste, um die Mechanik echt zu belasten: Felder mit
-Wachstumszeit, ein Hühnerstall mit *gedeckelter passiver Produktion*, ein
+Modelliert ist das Nötigste, um die Mechanik echt zu belasten: Produktionsplätze
+mit Rezept und Wartezeit, passive Produzenten mit *gedeckelter Produktion*, ein
 Lagerlimit über alle Waren, NPC-Verkauf sowie Verkaufsaufträge mit Escrow,
 Preisband und Ablauffrist — plus ein Postfach für verfallene Aufträge und
 externe Zustellungen.
+
+### Inhalt ist eine Tabelle
+
+Der Sim-Kern kennt **keinen Weizen und keine Eier**. Er kennt Katalogindizes,
+Rezepte und Plätze — alles aus dem Regelwerk. Der Zustand hält ein Inventar als
+Zahlenarray in Katalogreihenfolge, ein Platz merkt sich eine Rezeptnummer.
+
+Der Gewinn zeigt sich an Mühle und Bäckerei: Die Kette Weizen → Mehl → Brot
+hat **keine Zeile Sim-Code gekostet**. Eine Werkstatt ist ein Platz mit
+Eingaben; die Kette entsteht daraus, dass die Ausgabe des einen die Eingabe
+des anderen ist. Dieselbe Mechanik trägt Feld, Tier und Maschine
+(Konzept-Map, M1).
+
+Der Preis dafür steht in `rules.ts` und wird von `rules.test.ts` erzwungen:
+**Kataloge sind append-only.** Zustände speichern Indizes; wer einen Eintrag
+einschiebt, macht aus gespeichertem Weizen stillschweigend Mehl.
 
 ---
 
@@ -57,15 +73,16 @@ Schicht 5 ist im Server angelegt:
 | Schicht | Test | Aussage |
 | --- | --- | --- |
 | **1 Verhindern** | `sim-purity.test.ts` | Ein CI-Wächter liest den Sim-Quelltext und blockiert Floats, Systemzeit, Locale, `for…in` und ungeschützte Division. Ein zweiter Test prüft, dass der Wächter selbst noch beißt. |
-| **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **20.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein. |
-| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge), jede über drei unabhängige Rechenwege — inklusive Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
-| **4 Beweisen (Plattform)** | `golden.test.ts` | **30 Golden Vectors, 218 Commands** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
+| **2 Beweisen (Einheit)** | `produce.test.ts` | Die geschlossene Produktionsformel stimmt für **40.000 Zufallsfälle** exakt mit einer Tick-für-Tick-Grundwahrheit überein — die Hälfte davon mit *mehreren* Produzenten am selben Lagerdeckel. |
+| **3 Beweisen (Sitzung)** | `session-fuzz.test.ts` | **350 zufällige Offline-Sitzungen** in zwei Profilen (viele Aktionen / lange Sprünge) über **alle vier Kataloge**, jede über drei unabhängige Rechenwege — inklusive Aufträgen, Verfall und Postfach. Fängt Segmentierungsfehler, die Einzelfunktionen nie zeigen. |
+| **4 Beweisen (Plattform)** | `golden.test.ts` | **119 Golden Vectors, 1436 Commands** über **alle vier Regelversionen** mit festgeschriebenen Endzuständen — der Korpus, den der Mobile-Port an Tag eins abspielt. |
 | **5 Erkennen** | `sync.test.ts` | Der Kanarienvogel-Hash schlägt bei Divergenz an — und blockiert den Sync **nicht**. |
 | — | `determinism.test.ts` | Eine handgeschriebene Sitzung über drei Wege, als lesbares Beispiel des Gesamtflusses. |
 | — | `time-authority.test.ts` | Vorgestellte Geräteuhr → Rollback. Ehrliches Warten → übernommen. Idle und Offline-Spiel sind nachweislich gleichwertig. |
 | — | `capacity.test.ts` | Das Lagerlimit ist offline nicht überschreitbar; der Stall stallt und bunkert keine Zeit. |
 | — | `sync.test.ts` | Präfix-Commit, Idempotenz, Fork-Erkennung, veraltete Regelversion. |
-| — | `migration.test.ts` | Ein echter Balance-Patch quer durch eine Offline-Phase: Log unter alter Version validiert, Zustand danach gehoben, laufendes Wachstum fair umgerechnet, Version nicht frei wählbar. |
+| — | `migration.test.ts` | Zwei Sorten Patch quer durch eine Offline-Phase: ein Zahlen-Patch (v1→v2) und ein **Inhalts-Patch (v2→v3), bei dem der Zustand wächst** — Log unter alter Version validiert, Zustand danach gehoben, laufende Produktion fair umgerechnet, Version nicht frei wählbar. |
+| — | `rules.test.ts` | Jeder Katalog ist widerspruchsfrei, und **Kataloge wachsen nur hinten** — die Invariante, ohne die gespeicherte Indizes ihre Bedeutung verlieren. |
 | — | `trading.test.ts` | Escrow, Auftrags-Slots, Preisbänder, Verfall ins Postfach, externe Zustellungen — und der Stash-Exploit als Sättigungstest. |
 | — | `connectivity.test.ts` | Der Tunnel-Test: Verbindungsverlust, **verlorene Antwort mit Weiterspielen**, Fork über die Engine, und 500 Clients, die gleichzeitig den Tunnel verlassen. |
 
@@ -125,10 +142,19 @@ echte Regeländerung gehört in eine neue Ruleset-Version (R2) — nicht in übe
 | Messung | Ergebnis |
 | --- | --- |
 | Kosten vs. Offline-**Dauer**, Log konstant | **flach** — 1 Stunde ≈ 1 Jahr ≈ ~15 µs |
-| Kosten vs. Command-**Anzahl** | linear, ~0,07 µs pro Command |
-| Kosten vs. **Spielgröße** | 600 Objekte ≈ 43 µs, 3000 ≈ 185 µs |
-| Gegenüber Tick-für-Tick bei 30 Tagen offline | ~900× schneller |
-| Typischer Sync (60 Commands) | ~4 µs, also ~220.000 Syncs/s pro Kern |
+| Kosten vs. Command-**Anzahl** | linear, ~0,1 µs pro Command |
+| Kosten vs. **Spielgröße** | 600 Objekte ≈ 42 µs, 3000 ≈ 182 µs |
+| Gegenüber Tick-für-Tick bei 30 Tagen offline | ~22.000× schneller |
+| Typischer Sync (60 Commands) | ~6 µs, also ~160.000 Syncs/s pro Kern |
+
+> **Ehrlich zur Vorher-Messung:** Vor dem Umbau auf datengetriebenen Inhalt lag
+> der typische Sync bei ~4 µs (~220.000/s). Der Katalog kostet also rund die
+> Hälfte obendrauf: Ein Inventar-Array muss durchlaufen werden, wo vorher zwei
+> Zahlen addiert wurden, und jedes Command legt kleine Arrays an. Ein
+> Zwischenspeicher für die abgeleiteten Katalogtabellen holte einen Teil zurück
+> (7,1 → 6,1 µs). Die *Form* der Kurven ist unverändert — flach in der Dauer,
+> linear in den Commands —, und 160.000 Syncs pro Sekunde und Kern sind für
+> jede realistische Spielerzahl weit jenseits des Bedarfs.
 
 Damit ist die Behauptung aus §7 belegt: **O(Commands), nicht O(Offline-Dauer).** Die
 Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Größenordnungen.
@@ -136,8 +162,8 @@ Re-Simulation ist nicht der Engpass — Netzwerk und Persistenz dominieren um Gr
 ### Skaliert das auch für ein großes Spiel?
 
 Die Frage ist nicht „wie viele Features", sondern **wie viel Zustand ein einzelnes Command
-anfasst**. Ein Feld reift nicht „mit": Ob es reif ist, ergibt sich beim Lesen aus
-`(plantedAt, jetzt)`. Nur echte Fließproduktion wird fortgeschrieben, und die in
+anfasst**. Ein Feld reift nicht „mit": Ob es fertig ist, ergibt sich beim Lesen aus
+`(startedAt, jetzt)`. Nur echte Fließproduktion wird fortgeschrieben, und die in
 geschlossener Form.
 
 Die Messung deckte dabei einen Engpass auf, den die Theorie nicht hatte: Der Sync war
@@ -168,9 +194,13 @@ Die geschlossene Form prüfte `wanted <= space` als „passt locker". Im Gleichs
 `wanted === space` füllt aber das letzte Ei das Lager exakt auf — die restliche
 Zeit muss verfallen, nicht angespart werden.
 
-Der Fuzz fand den Fall `elapsed=7604, progress=313, space=8, ticksPerEgg=932`:
+Der Fuzz fand den Fall `elapsed=7604, progress=313, space=8, interval=932`:
 461 Ticks Fortschritt aus dem Nichts. Ein Client mit dieser Version und ein
 Server ohne sie hätten sich lautlos auseinanderentwickelt.
+
+Nachtrag aus Phase 1: Beim Verallgemeinern auf **mehrere** passive Produzenten
+stand exakt dieselbe Grenze noch einmal zur Wahl — und war im ersten Wurf wieder
+falsch gesetzt. Der Regressionstest mit denselben Zahlen hat sie sofort gemeldet.
 
 ### 2. `seq` allein unterscheidet Replay nicht von Fork
 
@@ -217,6 +247,12 @@ Arbeit doppelt geschickt, nur den Rest anwenden (*resume*). Abweichend ⇒ echte
 > sichtbar. Zwei fand der Fuzz, einen das Durchdenken eines realen Szenarios, und einen erst
 > der Betrieb über echtes HTTP. Jede Methode fand etwas, das die anderen übersahen — deshalb
 > gehören alle drei von Tag eins in die Routine, nicht ans Ende.
+>
+> Der Umbau auf datengetriebenen Inhalt (Phase 1) hat das bestätigt: Er berührte
+> jede Datei des Sim-Kerns, und die einzige Stelle, an der dabei wirklich etwas
+> kaputtging, war genau der Off-by-one von oben — sofort gemeldet vom
+> Regressionstest mit denselben vier Zahlen. Deshalb sind alte Bugs als Test
+> mehr wert als in einem Changelog.
 
 ---
 
@@ -235,6 +271,10 @@ Server auf einem 1-GB-VPS, Client auf iPhone und iPad über Mobilfunk. Alle Fäl
 | **Neustart** | Spielstand unverändert. |
 | **Balance-Patch live** | v1 → v3 an einem laufenden Spielstand, laufende Felder fair umgerechnet. |
 
+> Zu den Versionsnummern: Der Feldtest lief mit dem damaligen v3 (schnelle Uhren).
+> Seit Phase 1 ist das v4 — v3 ist jetzt der Inhalts-Patch. Der Feldtest-Ruleset
+> trägt den vollen Inhalt inklusive Mühle und Bäckerei.
+
 Der wichtigste Eindruck lässt sich nicht als Zahl festhalten: **Während des Funklochs fühlt
 sich nichts anders an.** Kein Dialog, kein Reload, kein Hänger — nur ein Statuspunkt, der die
 Farbe wechselt.
@@ -248,6 +288,11 @@ Ehrlichkeitshalber, damit niemand mehr hineinliest, als drinsteht:
 - **Der geteilte Markt selbst.** Aufträge, Escrow und Postfach existieren, aber
   das *Füllen* eines Auftrags ist online-only und hier nur als serverseitige
   Zustellung modelliert. Kein Orderbuch, keine Nachbarn, kein Zufall (§5).
+- **Dass Inhalt jetzt wirklich billig ist**, gilt für die *Mechaniken, die es
+  gibt*. Eine neue Feldfrucht, ein neues Rezept, eine neue Werkstatt, ein
+  weiteres Feld: Tabellenzeile. Aufträge erfüllen, Ausbauten, Level und Zufall
+  (M6–M9 der Konzept-Map) sind dagegen neue **Mechaniken** — die kosten weiter
+  Regel, Referenzimplementierung und Golden Vectors.
 - **Die App-Hülle offline.** Der Feldtest lädt die Seite vom Server, ein Reload
   im Funkloch schlägt deshalb fehl. Ein Artefakt des Testaufbaus, kein
   Architekturproblem — eine installierte App trägt ihre Hülle lokal. Im Browser

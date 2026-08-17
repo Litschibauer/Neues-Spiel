@@ -8,12 +8,26 @@
  *   neuerZustand = simulate(alterZustand, command)
  *
  * Reine Funktion: gleicher Input → bit-für-bit gleicher Output.
+ *
+ * Der Kern kennt **keinen Weizen und keine Eier**. Er kennt Katalogindizes,
+ * Rezepte und Plätze — alles aus dem Regelwerk. Eine neue Feldfrucht ändert
+ * hier keine einzige Zeile.
  */
 
 import type { Ruleset } from './rules.ts';
+import { derivedTables, isTradable } from './rules.ts';
 import type { State } from './state.ts';
-import { cloneState, replaceAt, spaceLeft } from './state.ts';
-import { advanceCoop } from './produce.ts';
+import {
+  EMPTY_PLOT,
+  addItem,
+  addItems,
+  cloneState,
+  count,
+  replaceAt,
+  spaceLeft,
+  storedIn,
+} from './state.ts';
+import { advancePassives } from './produce.ts';
 import type { Command } from './commands.ts';
 import { SimError } from './commands.ts';
 
@@ -31,15 +45,20 @@ export function advanceTo(state: State, toTick: number, rules: Ruleset): State {
   const next = cloneState(state);
 
   if (elapsed > 0) {
-    const { eggs, coopProgress } = advanceCoop(
-      elapsed,
-      state.coopProgress,
-      spaceLeft(state, rules.siloCapacity),
-      rules.coopTicksPerEgg,
-    );
     next.tick = toTick;
-    next.eggs += eggs;
-    next.coopProgress = coopProgress;
+
+    if (rules.passives.length > 0) {
+      const { passiveIntervals, passiveOutputs } = derivedTables(rules);
+      const space = spaceLeft(state, rules);
+      const result = advancePassives(elapsed, state.passives, space, passiveIntervals);
+
+      const gains: [number, number][] = [];
+      for (let i = 0; i < result.produced.length; i++) {
+        if (result.produced[i]! > 0) gains.push([passiveOutputs[i]!, result.produced[i]!]);
+      }
+      if (gains.length > 0) next.items = addItems(state.items, gains);
+      next.passives = result.progress;
+    }
   }
 
   // Auch bei `elapsed === 0` prüfen. Sonst hinge das Ergebnis davon ab, WIE die
@@ -91,62 +110,85 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
   const s = advanceTo(state, cmd.tick, rules);
 
   switch (cmd.type) {
-    case 'PLANT': {
-      const field = s.fields[cmd.field];
-      if (!field) throw new SimError('NO_SUCH_FIELD');
-      if (field.crop !== null) throw new SimError('FIELD_OCCUPIED');
+    // Feld bestellen, Mühle beschicken, Teig ansetzen — eine Regel.
+    case 'START': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
+      if (!def.recipes.includes(cmd.recipe)) throw new SimError('RECIPE_NOT_ALLOWED');
+
+      const recipe = rules.recipes[cmd.recipe];
+      if (!recipe) throw new SimError('RECIPE_NOT_ALLOWED');
+      for (const input of recipe.inputs) {
+        if (count(s, input.item) < input.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      }
 
       const next = cloneState(s);
-      next.fields = replaceAt(s.fields, cmd.field, { crop: 'wheat', plantedAt: s.tick });
+      if (recipe.inputs.length > 0) {
+        const spend: [number, number][] = recipe.inputs.map((i) => [i.item, -i.amount]);
+        next.items = addItems(s.items, spend);
+      }
+      next.plots = replaceAt(s.plots, cmd.plot, { recipe: cmd.recipe, startedAt: s.tick });
       return next;
     }
 
-    case 'HARVEST': {
-      const field = s.fields[cmd.field];
-      if (!field) throw new SimError('NO_SUCH_FIELD');
-      if (field.crop === null) throw new SimError('FIELD_EMPTY');
-      if (s.tick - field.plantedAt < rules.wheatGrowTicks) throw new SimError('NOT_RIPE');
-      // Hard block statt stillem Verlust (§7): das Feld bleibt reif stehen.
-      if (spaceLeft(s, rules.siloCapacity) < rules.wheatYield) throw new SimError('SILO_FULL');
+    case 'COLLECT': {
+      const plot = s.plots[cmd.plot];
+      if (!plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.recipe === EMPTY_PLOT) throw new SimError('PLOT_EMPTY');
+
+      const recipe = rules.recipes[plot.recipe];
+      if (!recipe) throw new SimError('RECIPE_NOT_ALLOWED');
+      if (s.tick - plot.startedAt < recipe.durationTicks) throw new SimError('NOT_DONE');
+
+      // Hard block statt stillem Verlust (§7): Die Ware bleibt fertig liegen.
+      const output = rules.items[recipe.output.item];
+      if (output?.storable && spaceLeft(s, rules) < recipe.output.amount) {
+        throw new SimError('SILO_FULL');
+      }
 
       const next = cloneState(s);
-      next.fields = replaceAt(s.fields, cmd.field, { crop: null, plantedAt: 0 });
-      next.wheat += rules.wheatYield;
+      next.plots = replaceAt(s.plots, cmd.plot, { recipe: EMPTY_PLOT, startedAt: 0 });
+      next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
       return next;
     }
 
     case 'SELL_NPC': {
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
-      const have = cmd.item === 'wheat' ? s.wheat : s.eggs;
-      if (have < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      const def = rules.items[cmd.item];
+      if (!def) throw new SimError('NO_SUCH_ITEM');
+      if (def.npcPrice <= 0) throw new SimError('NOT_SELLABLE');
+      if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
 
       const next = cloneState(s);
-      if (cmd.item === 'wheat') next.wheat -= cmd.amount;
-      else next.eggs -= cmd.amount;
-      next.gold += cmd.amount * rules.npcPrices[cmd.item];
+      next.items = addItems(s.items, [
+        [cmd.item, -cmd.amount],
+        [rules.currency, cmd.amount * def.npcPrice],
+      ]);
       return next;
     }
 
     case 'LIST_ORDER': {
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
       if (!Number.isInteger(cmd.price) || cmd.price <= 0) throw new SimError('BAD_AMOUNT');
+      const def = rules.items[cmd.item];
+      if (!def) throw new SimError('NO_SUCH_ITEM');
+      if (!isTradable(rules, cmd.item)) throw new SimError('NOT_TRADABLE');
 
       // Der strukturelle Riegel gegen Escrow-als-Lager (§8).
       if (s.orders.length >= rules.orderSlots) throw new SimError('NO_ORDER_SLOTS');
 
       // Preisband: Was eingestellt wird, muss plausibel verkäuflich sein —
       // sonst wäre der Auftrag nur ein Parkplatz für Ware.
-      const reference = rules.npcPrices[cmd.item];
-      const min = Math.floor((reference * rules.priceBandMinPct) / 100);
-      const max = Math.floor((reference * rules.priceBandMaxPct) / 100);
+      const min = Math.floor((def.npcPrice * rules.priceBandMinPct) / 100);
+      const max = Math.floor((def.npcPrice * rules.priceBandMaxPct) / 100);
       if (cmd.price < min || cmd.price > max) throw new SimError('PRICE_OUT_OF_BAND');
 
-      const have = cmd.item === 'wheat' ? s.wheat : s.eggs;
-      if (have < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
 
       const next = cloneState(s);
-      if (cmd.item === 'wheat') next.wheat -= cmd.amount;
-      else next.eggs -= cmd.amount;
+      next.items = addItem(s.items, cmd.item, -cmd.amount);
       next.orders = s.orders.concat({
         id: s.nextOrderId,
         item: cmd.item,
@@ -163,12 +205,13 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!order) throw new SimError('NO_SUCH_ORDER');
       // Zurücknehmen darf das Lager nicht sprengen — sonst wäre der Auftrag
       // ein Weg, das Limit zu umgehen.
-      if (spaceLeft(s, rules.siloCapacity) < order.amount) throw new SimError('SILO_FULL');
+      if (rules.items[order.item]?.storable && spaceLeft(s, rules) < order.amount) {
+        throw new SimError('SILO_FULL');
+      }
 
       const next = cloneState(s);
       next.orders = s.orders.filter((o) => o.id !== cmd.orderId);
-      if (order.item === 'wheat') next.wheat += order.amount;
-      else next.eggs += order.amount;
+      next.items = addItem(s.items, order.item, order.amount);
       return next;
     }
 
@@ -178,26 +221,25 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       const remaining: typeof next.mail = [];
       let collected = 0;
-      const inbox = s.mail;
+      let items = s.items;
 
       // In Ankunftsreihenfolge, damit das Ergebnis bei knappem Platz eindeutig
       // ist. Was nicht passt, bleibt liegen — nichts verfällt hier.
-      for (const item of inbox) {
-        if (item.item === 'gold') {
-          next.gold += item.amount;
-          collected++;
-          continue;
-        }
-        if (spaceLeft(next, rules.siloCapacity) >= item.amount) {
-          if (item.item === 'wheat') next.wheat += item.amount;
-          else next.eggs += item.amount;
+      for (const entry of s.mail) {
+        const def = rules.items[entry.item];
+        // Nicht lagerpflichtig (Münzen) → passt immer.
+        const fits =
+          !def?.storable || rules.siloCapacity - storedIn(items, rules) >= entry.amount;
+        if (fits) {
+          items = addItem(items, entry.item, entry.amount);
           collected++;
         } else {
-          remaining.push(item);
+          remaining.push(entry);
         }
       }
 
       if (collected === 0) throw new SimError('SILO_FULL');
+      next.items = items;
       next.mail = remaining;
       return next;
     }

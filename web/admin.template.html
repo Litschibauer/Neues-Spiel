@@ -92,9 +92,7 @@
         <div class="stat"><dt>seq</dt><dd id="s-seq">—</dd></div>
         <div class="stat"><dt>Tick</dt><dd id="s-tick">—</dd></div>
         <div class="stat"><dt>Regelwerk</dt><dd id="s-rules">—</dd></div>
-        <div class="stat"><dt>Weizen</dt><dd id="s-wheat">—</dd></div>
-        <div class="stat"><dt>Eier</dt><dd id="s-eggs">—</dd></div>
-        <div class="stat"><dt>Gold</dt><dd id="s-gold">—</dd></div>
+        <div class="stat"><dt>Bestände</dt><dd id="s-items">—</dd></div>
         <div class="stat"><dt>Postfach</dt><dd id="s-mail">—</dd></div>
         <div class="stat"><dt>Wartet</dt><dd id="s-pending">—</dd></div>
         <div class="stat"><dt>Divergenz</dt><dd id="s-div">—</dd></div>
@@ -111,7 +109,7 @@
       </div>
       <p class="hint">
         Verstellt nur die Uhr, gegen die das Zeitbudget gemessen wird (§4) — kein
-        Griff in den Zustand. Felder reifen, der Stall legt nach. Im Spiel danach
+        Griff in den Zustand. Plätze werden fertig, der Stall legt nach. Im Spiel danach
         einmal syncen.
       </p>
     </div>
@@ -122,6 +120,7 @@
         <button data-grant="eggs">10 Eier</button>
         <button data-grant="wheat">10 Weizen</button>
         <button data-grant="gold">100 Gold</button>
+        <button data-grant="bread">10 Brot</button>
       </div>
       <p class="hint">
         Landet im <strong>Postfach</strong>, nie direkt im Lager — nichts darf
@@ -135,11 +134,12 @@
       <div class="row">
         <button data-rules="1">v1 normal</button>
         <button data-rules="2">v2 gepatcht</button>
-        <button data-rules="3">v3 Feldtest-Tempo</button>
+        <button data-rules="3">v3 Inhalt</button>
+        <button data-rules="4">v4 Feldtest-Tempo</button>
       </div>
       <p class="hint">
         Greift beim nächsten Sync als echter Balance-Patch, inklusive fairer
-        Umrechnung laufender Felder (R2). Zurück geht es nicht.
+        Umrechnung laufender Plätze (R2). Zurück geht es nicht.
       </p>
     </div>
 
@@ -198,9 +198,13 @@
       $('s-tick').textContent = s.tick;
       $('s-rules').textContent = 'v' + s.rulesetVersion +
         (s.targetRulesetVersion !== s.rulesetVersion ? ' → v' + s.targetRulesetVersion : '');
-      $('s-wheat').textContent = s.state.wheat;
-      $('s-eggs').textContent = s.state.eggs;
-      $('s-gold').textContent = s.state.gold;
+      // Der Zustand hält ein Inventar in Katalogreihenfolge; welche
+      // Reihenfolge das ist, sagt der Server mit (`itemIds`). Die Werkbank
+      // hat damit keine eingebaute Gegenstandsliste mehr.
+      var names = { gold: 'Gold', wheat: 'Weizen', eggs: 'Eier', milk: 'Milch', flour: 'Mehl', bread: 'Brot' };
+      $('s-items').textContent = (s.itemIds || [])
+        .map(function (id, i) { return (names[id] || id) + ' ' + ((s.state.items || [])[i] || 0); })
+        .join(' · ');
       $('s-mail').textContent = s.state.mail.length;
       $('s-pending').textContent = s.pendingDeliveries;
       $('s-div').textContent = s.divergenceAlerts;

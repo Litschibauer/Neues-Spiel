@@ -130,10 +130,9 @@
 
     <div class="card">
       <h2>Hof</h2>
-      <dl class="stats">
-        <div class="stat"><dt>Weizen</dt><dd id="s-wheat">0</dd></div>
-        <div class="stat"><dt>Eier</dt><dd id="s-eggs">0</dd></div>
-        <div class="stat"><dt>Gold</dt><dd id="s-gold">0</dd></div>
+      <!-- Bestände kommen aus dem Katalog des Regelwerks, nicht aus dem HTML. -->
+      <dl class="stats" id="inventory"></dl>
+      <dl class="stats" style="margin-top:.5rem">
         <div class="stat"><dt>Lager</dt><dd id="s-silo">0</dd></div>
         <div class="stat"><dt>Aufträge</dt><dd id="s-orders">0</dd></div>
         <div class="stat"><dt>Postfach</dt><dd id="s-mail">0</dd></div>
@@ -141,15 +140,14 @@
     </div>
 
     <div>
-      <h2>Felder — tippen zum Pflanzen und Ernten</h2>
+      <h2>Plätze — tippen zum Starten und Abholen</h2>
       <div class="fields" id="fields"></div>
     </div>
 
     <div>
       <h2>Aktionen</h2>
       <div class="row" id="actions">
-        <button id="sell-wheat">Weizen verkaufen</button>
-        <button id="sell-eggs">Eier verkaufen</button>
+        <span id="sell-buttons" style="display:contents"></span>
         <button id="list">Auftrag einstellen</button>
         <button id="collect">Postfach leeren</button>
       </div>
@@ -310,14 +308,55 @@
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
   }
 
+  /**
+   * Anzeigenamen. Bewusst NUR hier — der Sim-Kern kennt keine Namen, und die
+   * Oberfläche kennt keine Regeln. Fehlt einer, steht die Katalog-Kennung da;
+   * ein neuer Gegenstand macht die Seite also nicht kaputt.
+   */
+  var NAMES = {
+    gold: 'Gold', wheat: 'Weizen', eggs: 'Eier',
+    milk: 'Milch', flour: 'Mehl', bread: 'Brot',
+    coop: 'Stall', pasture: 'Weide', mill: 'Mühle', bakery: 'Bäckerei'
+  };
+  function nameOf(id) { return NAMES[id] || id; }
+  function itemName(i) { return nameOf(rules.items[i].id); }
+  function plotName(i) {
+    var id = rules.plots[i].id;
+    return id.indexOf('field-') === 0 ? 'Feld ' + id.slice(6) : nameOf(id);
+  }
+
+  /** Erstes auf diesem Platz erlaubtes Rezept, dessen Zutaten vorhanden sind. */
+  function startableRecipe(s, plot) {
+    var allowed = rules.plots[plot].recipes;
+    for (var k = 0; k < allowed.length; k++) {
+      var recipe = rules.recipes[allowed[k]];
+      var ok = true;
+      for (var j = 0; j < recipe.inputs.length; j++) {
+        if ((s.items[recipe.inputs[j].item] || 0) < recipe.inputs[j].amount) ok = false;
+      }
+      if (ok) return allowed[k];
+    }
+    return -1;
+  }
+
   function render() {
     client.localTick = tickNow();
     var s = client.preview();
 
-    $('s-wheat').textContent = s.wheat;
-    $('s-eggs').textContent = s.eggs;
-    $('s-gold').textContent = s.gold;
-    $('s-silo').textContent = NS.stored(s) + '/' + rules.siloCapacity;
+    var inv = $('inventory');
+    inv.textContent = '';
+    rules.items.forEach(function (item, i) {
+      var box = document.createElement('div');
+      box.className = 'stat';
+      var dt = document.createElement('dt');
+      dt.textContent = nameOf(item.id);
+      var dd = document.createElement('dd');
+      dd.textContent = s.items[i] || 0;
+      box.appendChild(dt); box.appendChild(dd);
+      inv.appendChild(box);
+    });
+
+    $('s-silo').textContent = NS.stored(s, rules) + '/' + rules.siloCapacity;
     $('s-orders').textContent = s.orders.length + '/' + rules.orderSlots;
     $('s-mail').textContent = s.mail.length + '/' + rules.mailCapacity;
     $('s-queue').textContent = client.queue.length;
@@ -327,22 +366,48 @@
 
     var box = $('fields');
     box.textContent = '';
-    s.fields.forEach(function (f, i) {
+    s.plots.forEach(function (p, i) {
       var btn = document.createElement('button');
-      var ripe = f.crop !== null && s.tick - f.plantedAt >= rules.wheatGrowTicks;
-      btn.className = 'field' + (ripe ? ' ripe' : f.crop ? ' growing' : '');
+      var busy = p.recipe !== NS.EMPTY_PLOT;
+      var duration = busy ? rules.recipes[p.recipe].durationTicks : 0;
+      var done = busy && s.tick - p.startedAt >= duration;
+      btn.className = 'field' + (done ? ' ripe' : busy ? ' growing' : '');
 
       var label = document.createElement('span');
       label.className = 'label';
-      label.textContent = 'Feld ' + (i + 1);
+      label.textContent = plotName(i);
       var value = document.createElement('span');
-      if (f.crop === null) value.textContent = 'leer';
-      else if (ripe) value.textContent = 'reif';
-      else value.textContent = Math.ceil((rules.wheatGrowTicks - (s.tick - f.plantedAt)) / 60) + ' min';
+      if (!busy) value.textContent = 'leer';
+      else if (done) value.textContent = nameOf(rules.recipes[p.recipe].id) + ' fertig';
+      else {
+        var left = duration - (s.tick - p.startedAt);
+        value.textContent = left < 90 ? left + ' s' : Math.ceil(left / 60) + ' min';
+      }
 
       btn.appendChild(label); btn.appendChild(value);
-      btn.addEventListener('click', function () { tapField(i); });
+      btn.addEventListener('click', function () { tapPlot(i); });
       box.appendChild(btn);
+    });
+
+    renderSellButtons(s);
+  }
+
+  function renderSellButtons(s) {
+    var row = $('sell-buttons');
+    row.textContent = '';
+    rules.items.forEach(function (item, i) {
+      if (!item.storable || item.npcPrice <= 0) return;
+      var have = s.items[i] || 0;
+      var btn = document.createElement('button');
+      btn.textContent = nameOf(item.id) + ' verkaufen' + (have > 0 ? ' (' + have + ')' : '');
+      btn.disabled = have <= 0;
+      btn.addEventListener('click', function () {
+        if (!isActive) return;
+        var now = client.preview();
+        var amount = now.items[i] || 0;
+        if (amount > 0) act(nameOf(item.id) + ' verkauft (' + amount + ')', client.sellNpc(i, amount));
+      });
+      row.appendChild(btn);
     });
   }
 
@@ -353,12 +418,21 @@
     render();
   }
 
-  function tapField(i) {
+  function tapPlot(i) {
     if (!isActive) return;
     client.localTick = tickNow();
-    var f = client.preview().fields[i];
-    if (f.crop === null) act('Feld ' + (i + 1) + ' bepflanzt', client.plant(i));
-    else act('Feld ' + (i + 1) + ' geerntet', client.harvest(i));
+    var s = client.preview();
+    var p = s.plots[i];
+    if (p.recipe !== NS.EMPTY_PLOT) {
+      act(plotName(i) + ' abgeholt', client.collect(i));
+      return;
+    }
+    var recipe = startableRecipe(s, i);
+    if (recipe < 0) {
+      log(plotName(i) + ': Zutaten fehlen');
+      return;
+    }
+    act(plotName(i) + ': ' + nameOf(rules.recipes[recipe].id) + ' gestartet', client.start(i, recipe));
   }
 
   function attempt(reason, force) {
@@ -447,23 +521,23 @@
     location.reload();
   });
 
-  $('sell-wheat').addEventListener('click', function () {
-    if (!isActive) return;
-    var s = client.preview();
-    if (s.wheat > 0) act('Weizen verkauft (' + s.wheat + ')', client.sellNpc('wheat', s.wheat));
-  });
-  $('sell-eggs').addEventListener('click', function () {
-    if (!isActive) return;
-    var s = client.preview();
-    if (s.eggs > 0) act('Eier verkauft (' + s.eggs + ')', client.sellNpc('eggs', s.eggs));
-  });
   $('list').addEventListener('click', function () {
     if (!isActive) return;
     var s = client.preview();
-    var item = s.eggs > 0 ? 'eggs' : 'wheat';
-    var have = item === 'eggs' ? s.eggs : s.wheat;
-    if (have <= 0) { log('Nichts zum Einstellen da'); return; }
-    act('Auftrag: ' + have + ' ' + item, client.listOrder(item, have, rules.npcPrices[item]));
+
+    // Die größte handelbare Menge einstellen — was genau das ist, sagt der
+    // Katalog, nicht diese Seite.
+    var best = -1;
+    var have = 0;
+    rules.items.forEach(function (item, i) {
+      if (!item.storable || item.npcPrice <= 0) return;
+      if ((s.items[i] || 0) > have) { best = i; have = s.items[i]; }
+    });
+    if (best < 0) { log('Nichts zum Einstellen da'); return; }
+    act(
+      'Auftrag: ' + have + ' ' + itemName(best),
+      client.listOrder(best, have, rules.items[best].npcPrice),
+    );
   });
   $('collect').addEventListener('click', function () {
     if (!isActive) return;

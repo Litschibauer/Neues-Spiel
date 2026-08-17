@@ -22,7 +22,7 @@
 import type { Ruleset } from './rules.ts';
 import { getRuleset } from './rules.ts';
 import type { State } from './state.ts';
-import { cloneState, stored } from './state.ts';
+import { EMPTY_PLOT, cloneState, stored } from './state.ts';
 
 export class MigrationError extends Error {
   constructor(message: string) {
@@ -34,53 +34,120 @@ export class MigrationError extends Error {
 export type MigrationStep = (state: State, from: Ruleset, to: Ruleset) => State;
 
 /**
- * Rechnet laufende Wachstumszeiten um, wenn sich die Wachstumsdauer ändert.
+ * Rechnet laufende Produktionszeiten um, wenn sich eine Rezeptdauer ändert.
  *
  * Regel: Die verbleibende Zeit bleibt erhalten — gedeckelt auf die neue
  * Gesamtdauer. Konkret:
  *
- *   - halb gewachsen  → behält seine Restzeit
- *   - frisch gepflanzt → startet neu mit der (kürzeren) neuen Dauer, profitiert
+ *   - halb fertig     → behält seine Restzeit
+ *   - frisch gestartet → startet neu mit der (kürzeren) neuen Dauer, profitiert
  *                        also vom Buff statt darauf sitzen zu bleiben
- *   - reif             → bleibt reif
+ *   - fertig           → bleibt fertig
  *
  * So verliert niemand Fortschritt, und niemand bekommt etwas geschenkt, das
- * über einen frischen Start hinausgeht.
+ * über einen frischen Start hinausgeht. Gilt für Felder, Mühlen und Backöfen
+ * gleichermaßen — es ist derselbe Platz mit demselben Timer.
  */
-function rescaleGrowth(state: State, from: Ruleset, to: Ruleset): State {
-  if (from.wheatGrowTicks === to.wheatGrowTicks) return state;
+function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
+  let changed = false;
+  const plots = state.plots.map((p) => {
+    if (p.recipe === EMPTY_PLOT) return p;
 
-  const next = cloneState(state);
-  next.fields = state.fields.map((f) => {
-    if (f.crop === null) return { crop: null, plantedAt: 0 };
+    const before = from.recipes[p.recipe]?.durationTicks;
+    const after = to.recipes[p.recipe]?.durationTicks;
+    if (before === undefined || after === undefined || before === after) return p;
 
-    const elapsed = state.tick - f.plantedAt;
-    const remaining = Math.max(0, from.wheatGrowTicks - elapsed);
-    const newRemaining = Math.min(remaining, to.wheatGrowTicks);
-    return { crop: f.crop, plantedAt: state.tick - (to.wheatGrowTicks - newRemaining) };
+    changed = true;
+    const elapsed = state.tick - p.startedAt;
+    const remaining = Math.max(0, before - elapsed);
+    const newRemaining = Math.min(remaining, after);
+    return { recipe: p.recipe, startedAt: state.tick - (after - newRemaining) };
   });
+
+  if (!changed) return state;
+  const next = cloneState(state);
+  next.plots = plots;
   return next;
 }
 
-/** Hält den Stall-Fortschritt im gültigen Bereich, wenn sich das Intervall ändert. */
-function clampCoopProgress(state: State, _from: Ruleset, to: Ruleset): State {
-  if (state.coopProgress < to.coopTicksPerEgg) return state;
+/** Hält den Fortschritt passiver Plätze im gültigen Bereich, wenn sich die Taktung ändert. */
+function clampPassives(state: State, _from: Ruleset, to: Ruleset): State {
+  let changed = false;
+  const passives = state.passives.map((progress, i) => {
+    const passive = to.passives[i];
+    if (!passive) return progress;
+    const interval = to.recipes[passive.recipe]!.durationTicks;
+    if (progress < interval) return progress;
+    changed = true;
+    return interval - 1;
+  });
+
+  if (!changed) return state;
   const next = cloneState(state);
-  next.coopProgress = to.coopTicksPerEgg - 1;
+  next.passives = passives;
   return next;
 }
 
 /**
- * Beide bisherigen Sprünge ändern nur Zeiten, nicht die Form des Zustands —
- * derselbe Schritt trägt sie also beide.
+ * Der reine Zahlen-Patch: Zeiten ändern sich, die Form des Zustands nicht.
  */
-const RETIME: MigrationStep = (state, from, to) =>
-  clampCoopProgress(rescaleGrowth(state, from, to), from, to);
+export const RETIME: MigrationStep = (state, from, to) =>
+  clampPassives(rescaleDurations(state, from, to), from, to);
+
+/**
+ * Der Inhalts-Patch: Der Zustand WÄCHST.
+ *
+ * Ein neuer Gegenstand verlängert das Inventar, ein neues Feld die Platzliste,
+ * eine neue Weide die Fortschrittsliste. Weil Kataloge append-only sind
+ * (`rules.ts`), genügt Auffüllen mit Nullen: Bestehende Indizes behalten ihre
+ * Bedeutung, alles Neue startet leer.
+ *
+ * Das ist der ehrlichere Test für R2 als jeder Zahlen-Patch — hier ändert sich
+ * die *Form* des Zustands, nicht nur sein Inhalt.
+ */
+export const GROW: MigrationStep = (state, from, to) => {
+  if (
+    to.items.length === state.items.length &&
+    to.plots.length === state.plots.length &&
+    to.passives.length === state.passives.length
+  ) {
+    return state;
+  }
+  if (
+    to.items.length < state.items.length ||
+    to.plots.length < state.plots.length ||
+    to.passives.length < state.passives.length
+  ) {
+    // Schrumpfen ist keine Auffüll-Migration: Wohin mit den Beständen, wohin
+    // mit der laufenden Produktion? Das braucht einen bewussten Plan.
+    throw new MigrationError(`v${from.version} → v${to.version}: Katalog schrumpft`);
+  }
+
+  const next = cloneState(state);
+
+  const items = state.items.slice();
+  while (items.length < to.items.length) items.push(0);
+  next.items = items;
+
+  const plots = state.plots.slice();
+  while (plots.length < to.plots.length) plots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+  next.plots = plots;
+
+  const passives = state.passives.slice();
+  while (passives.length < to.passives.length) passives.push(0);
+  next.passives = passives;
+
+  return next;
+};
+
+/** Inhalt dazu UND Zeiten anpassen — die beiden Bausteine hintereinander. */
+const GROW_AND_RETIME: MigrationStep = (state, from, to) => RETIME(GROW(state, from, to), from, to);
 
 /** Ein Schritt pro Versionssprung. Migrationen werden der Reihe nach angewandt. */
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['1->2', RETIME],
-  ['2->3', RETIME],
+  ['2->3', GROW_AND_RETIME],
+  ['3->4', RETIME],
 ]);
 
 /**
@@ -93,8 +160,23 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
 export function assertInvariants(state: State, rules: Ruleset): void {
   const problems: string[] = [];
 
-  if (stored(state) > rules.siloCapacity) {
-    problems.push(`Lager über Limit: ${stored(state)} > ${rules.siloCapacity}`);
+  // ── Form: Zustand und Katalog müssen zusammenpassen ──────────────────
+  //
+  // Seit Inhalt Daten ist, ist DAS die erste Bruchstelle: Ein Inventar mit
+  // fünf Einträgen unter einem Katalog mit sechs bedeutet, dass ein Index
+  // stillschweigend fehlt — und dann wandert die Bedeutung aller Zahlen.
+  if (state.items.length !== rules.items.length) {
+    problems.push(`Inventar ${state.items.length} != Katalog ${rules.items.length}`);
+  }
+  if (state.plots.length !== rules.plots.length) {
+    problems.push(`Plätze ${state.plots.length} != Regelwerk ${rules.plots.length}`);
+  }
+  if (state.passives.length !== rules.passives.length) {
+    problems.push(`Passive ${state.passives.length} != Regelwerk ${rules.passives.length}`);
+  }
+
+  if (stored(state, rules) > rules.siloCapacity) {
+    problems.push(`Lager über Limit: ${stored(state, rules)} > ${rules.siloCapacity}`);
   }
 
   // Die Behälter-Invariante aus §7: JEDER Ort, an dem Ware liegen kann, ist
@@ -110,29 +192,39 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (o.amount <= 0) problems.push(`Auftrag ${o.id} ohne Ware`);
     if (o.listedAt > state.tick) problems.push(`Auftrag ${o.id} aus der Zukunft`);
     if (o.id >= state.nextOrderId) problems.push(`Auftrags-ID ${o.id} nicht vergeben`);
+    if (!rules.items[o.item]) problems.push(`Auftrag ${o.id}: Gegenstand ${o.item} unbekannt`);
   }
   for (const m of state.mail) {
     if (m.amount <= 0) problems.push('Postfach-Eintrag ohne Inhalt');
-  }
-  if (state.coopProgress < 0 || state.coopProgress >= rules.coopTicksPerEgg) {
-    problems.push(`coopProgress außerhalb [0, ${rules.coopTicksPerEgg}): ${state.coopProgress}`);
-  }
-  if (state.wheat < 0 || state.eggs < 0 || state.gold < 0) {
-    problems.push('negative Bestände');
+    if (!rules.items[m.item]) problems.push(`Postfach: Gegenstand ${m.item} unbekannt`);
   }
 
-  for (const [i, f] of state.fields.entries()) {
-    if (f.crop !== null && f.plantedAt > state.tick) {
-      problems.push(`Feld ${i} in der Zukunft gepflanzt: ${f.plantedAt} > ${state.tick}`);
+  for (const [i, progress] of state.passives.entries()) {
+    const passive = rules.passives[i];
+    if (!passive) continue;
+    const interval = rules.recipes[passive.recipe]!.durationTicks;
+    if (progress < 0 || progress >= interval) {
+      problems.push(`Fortschritt ${passive.id} außerhalb [0, ${interval}): ${progress}`);
     }
   }
 
-  const numbers = [state.tick, state.wheat, state.eggs, state.gold, state.coopProgress];
-  for (const n of numbers) {
-    if (!Number.isSafeInteger(n)) problems.push(`kein sicherer Integer: ${n}`);
+  for (const [i, value] of state.items.entries()) {
+    if (value < 0) problems.push(`negativer Bestand bei ${rules.items[i]?.id ?? i}`);
+    if (!Number.isSafeInteger(value)) problems.push(`kein sicherer Integer: ${value}`);
   }
-  for (const f of state.fields) {
-    if (!Number.isSafeInteger(f.plantedAt)) problems.push(`plantedAt kein Integer: ${f.plantedAt}`);
+  if (!Number.isSafeInteger(state.tick)) problems.push(`tick kein sicherer Integer: ${state.tick}`);
+
+  for (const [i, p] of state.plots.entries()) {
+    if (p.recipe === EMPTY_PLOT) continue;
+    if (!rules.recipes[p.recipe]) {
+      problems.push(`Platz ${i}: Rezept ${p.recipe} gibt es nicht`);
+    } else if (!rules.plots[i]?.recipes.includes(p.recipe)) {
+      problems.push(`Platz ${i}: Rezept ${p.recipe} ist hier nicht erlaubt`);
+    }
+    if (p.startedAt > state.tick) {
+      problems.push(`Platz ${i} in der Zukunft gestartet: ${p.startedAt} > ${state.tick}`);
+    }
+    if (!Number.isSafeInteger(p.startedAt)) problems.push(`startedAt kein Integer: ${p.startedAt}`);
   }
 
   if (problems.length > 0) {

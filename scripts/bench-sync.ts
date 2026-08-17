@@ -15,24 +15,42 @@
 import { performance } from 'node:perf_hooks';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
-import { initialState } from '../src/sim/state.ts';
-import { advanceTo, simulate } from '../src/sim/sim.ts';
+import type { Ruleset } from '../src/sim/rules.ts';
+import { initialState, count, stored } from '../src/sim/state.ts';
+import { advanceTo, simulate, simulateAll } from '../src/sim/sim.ts';
 import { referenceRun } from '../test/helpers/session.ts';
 import type { Command } from '../src/sim/commands.ts';
 
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
+const WHEAT = 1;
+const EGGS = 2;
+const R_WHEAT = 0;
+
+/**
+ * Ein Regelwerk mit beliebig vielen Feldern.
+ *
+ * Früher war die Feldzahl ein Parameter von `initialState`. Jetzt steht sie im
+ * Regelwerk — die Spielgröße zu variieren heißt also, eine Tabelle zu bauen.
+ * Genau das ist der Punkt von Phase 1.
+ */
+function withFields(count: number): Ruleset {
+  const plots = [];
+  for (let i = 0; i < count; i++) plots.push({ id: `field-${i + 1}`, recipes: [R_WHEAT] });
+  return { ...rules, plots };
+}
 
 /** Baut einen garantiert legalen Log, indem beim Bauen mitsimuliert wird. */
-function makeLog(target: number, fieldCount: number): Command[] {
-  let state = initialState(fieldCount);
+function makeLog(target: number, r: Ruleset): Command[] {
+  let state = initialState(r);
   const cmds: Command[] = [];
   let seq = 0;
   let tick = 0;
+  const plotCount = r.plots.length;
 
   const tryPush = (c: Command): void => {
     try {
-      state = simulate(state, c, rules);
+      state = simulate(state, c, r);
       cmds.push(c);
       seq++;
     } catch {
@@ -41,23 +59,22 @@ function makeLog(target: number, fieldCount: number): Command[] {
   };
 
   while (cmds.length < target) {
-    for (let f = 0; f < fieldCount && cmds.length < target; f++) {
-      tryPush({ seq: seq + 1, tick, type: 'PLANT', field: f });
+    for (let f = 0; f < plotCount && cmds.length < target; f++) {
+      tryPush({ seq: seq + 1, tick, type: 'START', plot: f, recipe: R_WHEAT });
     }
-    tick += rules.wheatGrowTicks;
+    tick += r.recipes[R_WHEAT]!.durationTicks;
 
-    for (let f = 0; f < fieldCount && cmds.length < target; f++) {
-      tryPush({ seq: seq + 1, tick, type: 'HARVEST', field: f });
+    for (let f = 0; f < plotCount && cmds.length < target; f++) {
+      tryPush({ seq: seq + 1, tick, type: 'COLLECT', plot: f });
     }
 
     // Lager leeren, damit die Ernte nicht am Limit hängen bleibt.
-    const peek = advanceTo(state, tick, rules);
-    if (peek.wheat > 0 && cmds.length < target) {
-      tryPush({ seq: seq + 1, tick, type: 'SELL_NPC', item: 'wheat', amount: peek.wheat });
-    }
-    const peek2 = advanceTo(state, tick, rules);
-    if (peek2.eggs > 0 && cmds.length < target) {
-      tryPush({ seq: seq + 1, tick, type: 'SELL_NPC', item: 'eggs', amount: peek2.eggs });
+    for (const item of [WHEAT, EGGS]) {
+      const peek = advanceTo(state, tick, r);
+      const have = count(peek, item);
+      if (have > 0 && cmds.length < target) {
+        tryPush({ seq: seq + 1, tick, type: 'SELL_NPC', item, amount: have });
+      }
     }
   }
 
@@ -67,13 +84,13 @@ function makeLog(target: number, fieldCount: number): Command[] {
 function timeSyncs(cmds: Command[], nowMs: number, runs: number): number {
   // Aufwärmen, damit die JIT-Kompilierung nicht mitgemessen wird.
   for (let i = 0; i < 20; i++) {
-    const s = new Server(initialState(6), T0, CURRENT_RULESET_VERSION);
+    const s = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     s.sync({ baseSeq: 0, rulesetVersion: CURRENT_RULESET_VERSION, commands: cmds }, nowMs);
   }
 
   const servers = Array.from(
     { length: runs },
-    () => new Server(initialState(6), T0, CURRENT_RULESET_VERSION),
+    () => new Server(initialState(rules), T0, CURRENT_RULESET_VERSION),
   );
   const req = { baseSeq: 0, rulesetVersion: CURRENT_RULESET_VERSION, commands: cmds };
 
@@ -87,7 +104,7 @@ const DAY_MS = 86_400_000;
 console.log('\n=== A) Kosten vs. Offline-DAUER (Log konstant: 100 Commands) ===');
 console.log('Erwartung: flach. Die Dauer wird in geschlossener Form verrechnet.\n');
 
-const fixedLog = makeLog(100, 6);
+const fixedLog = makeLog(100, rules);
 const lastTick = fixedLog[fixedLog.length - 1]!.tick;
 const minMs = T0 + lastTick * 1000;
 
@@ -106,7 +123,7 @@ console.log('\n=== B) Kosten vs. Command-ANZAHL (Dauer konstant) ===');
 console.log('Erwartung: linear.\n');
 
 for (const n of [10, 50, 100, 500, 1000, 2000]) {
-  const log = makeLog(n, 6);
+  const log = makeLog(n, rules);
   const now = Math.max(T0 + log[log.length - 1]!.tick * 1000, T0 + DAY_MS);
   const ms = timeSyncs(log, now, n > 500 ? 300 : 2000);
   console.log(
@@ -118,25 +135,27 @@ for (const n of [10, 50, 100, 500, 1000, 2000]) {
 console.log('\n=== C) Was die geschlossene Form spart ===');
 console.log('Derselbe Log, einmal segmentweise und einmal Tick für Tick.\n');
 
-const cmp = makeLog(100, 6);
+const cmp = makeLog(100, rules);
 const cmpNow = T0 + 30 * DAY_MS;
 const closed = timeSyncs(cmp, cmpNow, 2000);
 
 // Nur die Command-Spanne, Tick für Tick.
 const refStart = performance.now();
-referenceRun(initialState(6), cmp);
+referenceRun(initialState(rules), cmp, rules);
 const naiveSpan = performance.now() - refStart;
 
 // Und das, was ein O(Zeit)-Server für 30 Tage Abwesenheit zusätzlich täte.
 const naiveAdvanceStart = performance.now();
-let st = initialState(6);
-const ticks30d = (30 * DAY_MS) / 1000;
+const items = initialState(rules).items.slice();
+let progress = 0;
+const interval = rules.recipes[1]!.durationTicks;
+const ticks30d = Math.floor((30 * DAY_MS) / 1000);
 for (let i = 0; i < ticks30d; i++) {
-  if (st.wheat + st.eggs < rules.siloCapacity) {
-    st.coopProgress++;
-    if (st.coopProgress >= rules.coopTicksPerEgg) {
-      st.eggs++;
-      st.coopProgress = 0;
+  if (stored({ ...initialState(rules), items }, rules) < rules.siloCapacity) {
+    progress++;
+    if (progress >= interval) {
+      items[EGGS]!++;
+      progress = 0;
     }
   }
 }
@@ -152,26 +171,23 @@ console.log('\n  Und der Abstand WÄCHST mit der Abwesenheit: die geschlossene F
 console.log('  bleibt bei denselben Mikrosekunden, die naive Variante nicht.');
 
 console.log('\n=== D) Kosten vs. SPIELGRÖSSE ===');
-console.log('Wächst der Sync mit, wenn das Spiel mehr Inhalt hat?\n');
+console.log('Wächst der Sync mit, wenn das Spiel mehr Inhalt hat?');
+console.log('(Reine Re-Simulation, ohne Sync-Rahmen — der ist von der Größe unabhängig.)\n');
 
-for (const fields of [6, 60, 600, 3000]) {
-  const log = makeLog(100, fields);
-  const now = Math.max(T0 + log[log.length - 1]!.tick * 1000, T0 + DAY_MS);
+for (const fieldCount of [6, 60, 600, 3000]) {
+  const big = withFields(fieldCount);
+  const log = makeLog(100, big);
+  const start0 = initialState(big);
 
-  // Aufwärmen + messen mit passender Feldzahl.
-  const servers = Array.from(
-    { length: 500 },
-    () => new Server(initialState(fields), T0, CURRENT_RULESET_VERSION),
-  );
-  const req = { baseSeq: 0, rulesetVersion: CURRENT_RULESET_VERSION, commands: log };
-  for (let i = 0; i < 20; i++) {
-    new Server(initialState(fields), T0, CURRENT_RULESET_VERSION).sync(req, now);
-  }
+  for (let i = 0; i < 20; i++) simulateAll(start0, log, big);
+  const runs = 500;
   const start = performance.now();
-  for (const srv of servers) srv.sync(req, now);
-  const ms = (performance.now() - start) / servers.length;
+  for (let i = 0; i < runs; i++) simulateAll(start0, log, big);
+  const ms = (performance.now() - start) / runs;
 
-  console.log(`  ${String(fields).padStart(5)} Felder, 100 Commands  ${(ms * 1000).toFixed(1).padStart(8)} µs`);
+  console.log(
+    `  ${String(fieldCount).padStart(5)} Felder, 100 Commands  ${(ms * 1000).toFixed(1).padStart(8)} µs`,
+  );
 }
 
 console.log('\n  Anfangs war das hier LINEAR und rund 11x teurer: Jeder einzelne');
@@ -187,7 +203,7 @@ console.log('  lohnt sich, wenn ein Spielstand mal Zehntausende Objekte trägt.'
 
 console.log('\n=== E) Durchsatz-Abschätzung ===\n');
 
-const typical = makeLog(60, 6);
+const typical = makeLog(60, rules);
 const typicalMs = timeSyncs(typical, T0 + 2 * DAY_MS, 3000);
 const perCore = Math.round(1000 / typicalMs);
 const playersPerCore = Math.round((perCore * 300) / 1_000_000);

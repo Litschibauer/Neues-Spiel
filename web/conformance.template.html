@@ -324,7 +324,7 @@
     <dl>
       <div class="cell"><dt>Engine</dt><dd id="engine">—</dd></div>
       <div class="cell"><dt>Plattform</dt><dd id="platform">—</dd></div>
-      <div class="cell"><dt>Regelversion</dt><dd id="ruleset">—</dd></div>
+      <div class="cell"><dt>Regelversionen</dt><dd id="ruleset">—</dd></div>
       <div class="cell"><dt>Rechenzeit</dt><dd id="duration">—</dd></div>
     </dl>
   </div>
@@ -416,7 +416,7 @@
     $('tally').textContent = report.passed + ' / ' + report.total + ' Vektoren';
     $('engine').textContent = engineName();
     $('platform').textContent = platformName();
-    $('ruleset').textContent = 'v' + report.rulesetVersion;
+    $('ruleset').textContent = report.rulesetVersions.map(function (v) { return 'v' + v; }).join(' ');
     $('duration').textContent = ms.toFixed(1) + ' ms';
 
     var grid = $('grid');
@@ -470,7 +470,7 @@
       'Vektoren:      ' + report.passed + ' / ' + report.total,
       'Engine:        ' + engineName(),
       'Plattform:     ' + platformName(),
-      'Regelversion:  v' + report.rulesetVersion,
+      'Regelversionen: ' + report.rulesetVersions.map(function (v) { return 'v' + v; }).join(' '),
       'Rechenzeit:    ' + ms.toFixed(1) + ' ms',
       'User-Agent:    ' + navigator.userAgent,
     ];

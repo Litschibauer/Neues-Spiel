@@ -20,19 +20,18 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState } from '../sim/state.ts';
-import { CURRENT_RULESET_VERSION, RULESETS } from '../sim/rules.ts';
+import { CURRENT_RULESET_VERSION, RULESETS, getRuleset } from '../sim/rules.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 const PORT = Number(process.env.PORT ?? 8787);
 const SAVE_PATH = process.env.NEUES_SPIEL_SAVE ?? join(ROOT, 'data', 'save.json');
-const FIELD_COUNT = 6;
 
 /**
  * Zielversion des Regelwerks, per Umgebungsvariable umschaltbar.
  *
- * `NEUES_SPIEL_RULESET=3` schaltet auf Feldtest-Tempo (Weizen 60 s, Ei 20 s).
+ * `NEUES_SPIEL_RULESET=4` schaltet auf Feldtest-Tempo (Weizen 60 s, Ei 20 s).
  * Bei einem bestehenden Spielstand ist das ein echter Balance-Patch: Der Server
- * migriert ihn beim nächsten Sync und rechnet laufende Felder fair um (R2).
+ * migriert ihn beim nächsten Sync und rechnet laufende Plätze fair um (R2).
  */
 const TARGET_RULESET = Number(process.env.NEUES_SPIEL_RULESET ?? CURRENT_RULESET_VERSION);
 
@@ -84,7 +83,7 @@ const TOKEN = resolveToken();
 // ── Zustand laden oder neu anlegen ─────────────────────────────────────
 const persisted = load(SAVE_PATH);
 const game = new Server(
-  initialState(FIELD_COUNT),
+  initialState(getRuleset(TARGET_RULESET)),
   Date.now(),
   persisted ? persisted.snapshot.rulesetVersion : TARGET_RULESET,
   TARGET_RULESET,
@@ -146,6 +145,19 @@ function readBody(req: IncomingMessage, limitBytes: number): Promise<string> {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
+}
+
+/**
+ * Gegenstandsname → Katalogindex, unter dem Regelwerk des aktuellen Snapshots.
+ *
+ * Die Admin-Schnittstelle spricht Namen, der Zustand spricht Indizes. Die
+ * Übersetzung gehört genau hierhin — der Sim-Kern kennt keine Namen (§2.2),
+ * und ein Mensch tippt keine Indizes.
+ */
+function resolveItem(name: string): number | null {
+  const rules = getRuleset(game.snapshot.rulesetVersion);
+  const index = rules.items.findIndex((i) => i.id === name);
+  return index >= 0 ? index : null;
 }
 
 function loadPage(name: string): string | null {
@@ -246,6 +258,10 @@ const server = createServer(async (req, res) => {
 
       if (url.pathname === '/api/admin/status') {
         return json(res, 200, {
+          // Der Katalog gehört mit in die Antwort: Der Zustand hält nur
+          // Zahlen in Katalogreihenfolge, und welche Reihenfolge das ist,
+          // hängt an der Regelversion.
+          itemIds: getRuleset(game.snapshot.rulesetVersion).items.map((i) => i.id),
           seq: game.snapshot.seq,
           tick: game.snapshot.state.tick,
           serverTs: game.snapshot.serverTs,
@@ -274,14 +290,15 @@ const server = createServer(async (req, res) => {
       }
 
       if (url.pathname === '/api/admin/grant') {
-        const item = url.searchParams.get('item') ?? 'eggs';
+        const name = url.searchParams.get('item') ?? 'eggs';
         const amount = Number(url.searchParams.get('amount') ?? '10');
-        if (!['wheat', 'eggs', 'gold'].includes(item) || !Number.isInteger(amount) || amount <= 0) {
+        const item = resolveItem(name);
+        if (item === null || !Number.isInteger(amount) || amount <= 0) {
           return json(res, 400, { error: 'BAD_GRANT' });
         }
-        game.deliver({ item: item as 'wheat' | 'eggs' | 'gold', amount, arrivedAt: Date.now() });
+        game.deliver({ item, amount, arrivedAt: Date.now() });
         persist();
-        console.log(`[admin] ${amount} ${item} ins Postfach`);
+        console.log(`[admin] ${amount} ${name} ins Postfach`);
         return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
       }
 
@@ -299,7 +316,7 @@ const server = createServer(async (req, res) => {
       }
 
       if (url.pathname === '/api/admin/reset') {
-        game.reset(initialState(FIELD_COUNT), Date.now(), TARGET_RULESET);
+        game.reset(initialState(getRuleset(TARGET_RULESET)), Date.now(), TARGET_RULESET);
         persist();
         console.log('[admin] Spielstand zurückgesetzt');
         return json(res, 200, { ok: true });
@@ -310,12 +327,13 @@ const server = createServer(async (req, res) => {
 
     // Alter Pfad, bleibt für Skripte erhalten.
     if (url.pathname === '/api/deliver' && req.method === 'POST') {
-      const item = url.searchParams.get('item') ?? 'eggs';
+      const name = url.searchParams.get('item') ?? 'eggs';
       const amount = Number(url.searchParams.get('amount') ?? '5');
-      if (!['wheat', 'eggs', 'gold'].includes(item) || !Number.isInteger(amount) || amount <= 0) {
+      const item = resolveItem(name);
+      if (item === null || !Number.isInteger(amount) || amount <= 0) {
         return json(res, 400, { error: 'BAD_DELIVERY' });
       }
-      game.deliver({ item: item as 'wheat' | 'eggs' | 'gold', amount, arrivedAt: Date.now() });
+      game.deliver({ item, amount, arrivedAt: Date.now() });
       persist();
       return json(res, 200, { queued: game.pendingDeliveries.length });
     }

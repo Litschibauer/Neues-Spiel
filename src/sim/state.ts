@@ -2,18 +2,37 @@
  * Der Spielzustand. Ausschließlich Integer — keine Floats, keine Systemzeit,
  * keine Plattform-APIs (Architektur §2.2). Nur so rechnen Handy und Server
  * bit-für-bit dasselbe.
+ *
+ * Der Zustand kennt keine Gegenstandsnamen. Er speichert **Indizes in den
+ * Katalog** des Regelwerks: Das Inventar ist ein Zahlenarray in
+ * Katalogreihenfolge, ein Platz merkt sich eine Rezeptnummer.
+ *
+ * Zwei Gründe dafür, und beide sind hart:
+ *
+ *  1. **Deterministisch serialisierbar ohne Sortierfrage.** Eine Map von Namen
+ *     auf Mengen müsste erst in eine kanonische Reihenfolge gebracht werden —
+ *     eine zusätzliche Stelle, an der zwei Plattformen abweichen können (R1).
+ *  2. **Inhalt bleibt billig.** Ein neuer Gegenstand hängt eine Zeile an den
+ *     Katalog und einen Eintrag ans Inventar. Kein Code, kein neues Feld.
+ *
+ * Der Preis steht in `rules.ts`: Kataloge sind append-only.
  */
 
-export type Crop = 'wheat';
+import type { Ruleset } from './rules.ts';
+import { derivedTables } from './rules.ts';
 
-export type Field = {
-  /** null = leer */
-  crop: Crop | null;
-  /** Tick, zu dem gepflanzt wurde. Nur gültig wenn crop != null. */
-  plantedAt: number;
+/**
+ * Ein Produktionsplatz im Zustand.
+ *
+ * `recipe === EMPTY_PLOT` heißt leer; dann ist `startedAt` bedeutungslos und
+ * per Konvention 0, damit der kanonische String eindeutig bleibt.
+ */
+export type Plot = {
+  recipe: number;
+  startedAt: number;
 };
 
-export type Good = 'wheat' | 'eggs';
+export const EMPTY_PLOT = -1;
 
 /**
  * Ein offener Verkaufsauftrag. Die Ware liegt hier — nicht mehr im Lager,
@@ -21,15 +40,22 @@ export type Good = 'wheat' | 'eggs';
  */
 export type Order = {
   id: number;
-  item: Good;
+  /** Katalogindex. */
+  item: number;
   amount: number;
   price: number;
   listedAt: number;
 };
 
-/** Ein Eintrag im Postfach. Gold zählt nicht gegen das Lagerlimit. */
+/**
+ * Ein Eintrag im Postfach.
+ *
+ * Auch Münzen sind ein Katalog-Gegenstand — sie sind nur nicht lagerpflichtig.
+ * Damit braucht das Postfach keinen Sonderfall für Geld, und die Regel „was
+ * nicht ins Lager passt, bleibt liegen" gilt uniform (§7).
+ */
 export type MailItem = {
-  item: Good | 'gold';
+  item: number;
   amount: number;
   arrivedAt: number;
 };
@@ -37,60 +63,78 @@ export type MailItem = {
 export type State = {
   /** Spielzeit in Ticks. NIE die Geräteuhr (§4). */
   tick: number;
-  fields: Field[];
-  wheat: number;
-  eggs: number;
-  gold: number;
+  /** Bestände in Katalogreihenfolge. Länge == `rules.items.length`. */
+  items: readonly number[];
+  /** Produktionsplätze in Ruleset-Reihenfolge. Länge == `rules.plots.length`. */
+  plots: readonly Plot[];
   /**
-   * Zum nächsten Ei angesparte Ticks. Immer < coopTicksPerEgg.
-   * Muss Teil des Zustands sein, sonst ist die Produktion über
-   * Segmentgrenzen hinweg nicht reproduzierbar (§7).
+   * Angesparte Ticks je passivem Produzenten. Immer < Taktung.
+   *
+   * Muss Teil des Zustands sein, sonst ist die Produktion über Segmentgrenzen
+   * hinweg nicht reproduzierbar (§7).
    */
-  coopProgress: number;
+  passives: readonly number[];
   /** Offene Verkaufsaufträge (Escrow). Durch `orderSlots` hart begrenzt (§8). */
-  orders: Order[];
+  orders: readonly Order[];
   /** Postfach: was von außen kam oder aus verfallenen Aufträgen zurückfiel (§7). */
-  mail: MailItem[];
+  mail: readonly MailItem[];
   nextOrderId: number;
 };
 
-/** Belegter Lagerplatz. Das Limit gilt über alle Warenarten zusammen (§7). */
-export function stored(s: State): number {
-  return s.wheat + s.eggs;
+/** Bestand eines Gegenstands. Unbekannter Index → 0, nie `undefined`. */
+export function count(s: State, item: number): number {
+  return s.items[item] ?? 0;
+}
+
+/** Belegter Lagerplatz. Das Limit gilt über alle lagerpflichtigen Waren zusammen (§7). */
+export function stored(s: State, rules: Ruleset): number {
+  return storedIn(s.items, rules);
 }
 
 /**
- * Alle Waren, die dem Spieler gehören — über ALLE Behälter hinweg.
+ * Dasselbe für ein Inventar, das noch nicht in einem Zustand steckt.
+ *
+ * Wird beim Postfach-Abholen gebraucht: Dort wächst das Inventar Eintrag für
+ * Eintrag, und jeder muss gegen den freien Platz geprüft werden.
+ */
+export function storedIn(items: readonly number[], rules: Ruleset): number {
+  const { storable } = derivedTables(rules);
+  let total = 0;
+  for (const i of storable) total += items[i] ?? 0;
+  return total;
+}
+
+export function spaceLeft(s: State, rules: Ruleset): number {
+  return rules.siloCapacity - stored(s, rules);
+}
+
+/**
+ * Alle lagerpflichtigen Waren, die dem Spieler gehören — über ALLE Behälter.
  *
  * Die Invariante aus §7 lautet: Jeder Ort, an dem ein Gut liegen kann, ist
  * begrenzt. Damit ist auch diese Summe beschränkt, und das Lagerlimit bleibt
  * als Inflationsbremse wirksam.
  */
-export function totalGoods(s: State): number {
-  let total = s.wheat + s.eggs;
+export function totalGoods(s: State, rules: Ruleset): number {
+  let total = stored(s, rules);
   for (const o of s.orders) total += o.amount;
-  for (const m of s.mail) if (m.item !== 'gold') total += m.amount;
+  for (const m of s.mail) {
+    if (rules.items[m.item]?.storable) total += m.amount;
+  }
   return total;
 }
 
-export function spaceLeft(s: State, capacity: number): number {
-  return capacity - stored(s);
-}
+export function initialState(rules: Ruleset): State {
+  const items: number[] = [];
+  for (let i = 0; i < rules.items.length; i++) items.push(0);
 
-export function initialState(fieldCount: number): State {
-  const fields: Field[] = [];
-  for (let i = 0; i < fieldCount; i++) fields.push({ crop: null, plantedAt: 0 });
-  return {
-    tick: 0,
-    fields,
-    wheat: 0,
-    eggs: 0,
-    gold: 0,
-    coopProgress: 0,
-    orders: [],
-    mail: [],
-    nextOrderId: 1,
-  };
+  const plots: Plot[] = [];
+  for (let i = 0; i < rules.plots.length; i++) plots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+
+  const passives: number[] = [];
+  for (let i = 0; i < rules.passives.length; i++) passives.push(0);
+
+  return { tick: 0, items, plots, passives, orders: [], mail: [], nextOrderId: 1 };
 }
 
 /**
@@ -110,11 +154,9 @@ export function initialState(fieldCount: number): State {
 export function cloneState(s: State): State {
   return {
     tick: s.tick,
-    fields: s.fields,
-    wheat: s.wheat,
-    eggs: s.eggs,
-    gold: s.gold,
-    coopProgress: s.coopProgress,
+    items: s.items,
+    plots: s.plots,
+    passives: s.passives,
     orders: s.orders,
     mail: s.mail,
     nextOrderId: s.nextOrderId,
@@ -128,12 +170,21 @@ export function replaceAt<T>(list: readonly T[], index: number, value: T): T[] {
   return next;
 }
 
-/** Tiefkopie — nur dort, wo wirklich alles unabhängig sein muss (Tests, Migration). */
-export function deepCloneState(s: State): State {
-  return {
-    ...cloneState(s),
-    fields: s.fields.map((f) => ({ crop: f.crop, plantedAt: f.plantedAt })),
-    orders: s.orders.map((o) => ({ ...o })),
-    mail: s.mail.map((m) => ({ ...m })),
-  };
+/**
+ * Bestand ändern und das neue Inventar zurückgeben.
+ *
+ * Gibt bewusst ein Array zurück statt den Zustand zu verändern — dieselbe
+ * Copy-on-Write-Disziplin wie überall sonst.
+ */
+export function addItem(items: readonly number[], item: number, delta: number): number[] {
+  const next = items.slice();
+  next[item] = (next[item] ?? 0) + delta;
+  return next;
+}
+
+/** Mehrere Bestände auf einmal ändern — eine Kopie statt einer pro Zutat. */
+export function addItems(items: readonly number[], changes: readonly [number, number][]): number[] {
+  const next = items.slice();
+  for (const [item, delta] of changes) next[item] = (next[item] ?? 0) + delta;
+  return next;
 }
