@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { getRuleset, listingFee } from '../src/sim/rules.ts';
 
 const CHROME_CANDIDATES = [
   process.env.CHROMIUM_PATH,
@@ -132,6 +133,52 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Einen freien Platz bestellen — und dabei den Rezeptwähler bedienen, falls er
+ * aufgeht.
+ *
+ * Seit ein Feld zwei Früchte kann, ist „auf die Kachel tippen" nicht mehr
+ * gleichbedeutend mit „etwas startet". Genau deshalb steht das hier als
+ * Helfer: Jede Prüfung, die etwas anbauen will, soll denselben Weg gehen wie
+ * ein Spieler.
+ *
+ * Gibt zurück, ob wirklich etwas gestartet wurde.
+ */
+async function plantSomething(cdp: Cdp): Promise<boolean> {
+  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await sleep(200);
+
+  const clicked = await evaluate<boolean>(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+         var s = p.querySelector('.status').textContent;
+         return /→/.test(s) || / oder /.test(s);
+       });
+       if (!tile) return false;
+       tile.click();
+       return true;
+     })()`,
+  );
+  if (!clicked) return false;
+
+  await sleep(200);
+  // Wähler offen? Dann die erste Möglichkeit nehmen, die wirklich geht.
+  return await evaluate<boolean>(
+    cdp,
+    `(function () {
+       var sheet = document.getElementById('pick-bg');
+       if (sheet.hidden) return true;
+       var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return !o.disabled;
+       });
+       if (!opt) { document.getElementById('pick-close').click(); return false; }
+       opt.click();
+       return true;
+     })()`,
+  );
+}
 
 // ── Der eigentliche Test ─────────────────────────────────────────────────
 
@@ -632,8 +679,13 @@ try {
       headers: { authorization: `Bearer ${second.key}` },
     })
   ).json()) as { snapshot: { state: { items: number[] } } };
-  // 5 Weizen an den Händler (15) − Einstellgebühr (3) + Verkaufserlös (60).
-  const expectedCoins = 15 - 3 + 60;
+  // Aus dem Regelwerk gerechnet, nicht abgeschrieben: 5 Weizen an den Händler,
+  // minus Einstellgebühr auf 20 Weizen, plus 20 × 3 Verkaufserlös. Feste Zahlen
+  // hier wären bei jedem Balancing-Patch rot — und zwar zu Recht rot, aber aus
+  // dem falschen Grund.
+  const devRules = getRuleset(1001);
+  const wheatPrice = devRules.items[1]!.npcPrice;
+  const expectedCoins = 5 * wheatPrice - listingFee(devRules, 1, 20) + 20 * 3;
   check(
     `Der Verkäufer hat sein Geld — 20 × 3 = 60, abzüglich Gebühr`,
     paid.ok && sellerAfter.snapshot.state.items[0] === expectedCoins,
@@ -951,20 +1003,11 @@ try {
   // Orderbuch, Anstoß an die anderen), kam entsprechend später. Die Schranke
   // hier ist bewusst großzügig: Sie soll nicht die Maschine messen, sondern
   // auffallen, wenn wieder auf den Takt gewartet wird.
-  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
-  await sleep(300);
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
     .seq;
   const tapped = Date.now();
-  await evaluate(
-    cdp,
-    `(function () {
-       var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
-         return /→/.test(p.querySelector('.status').textContent);
-       });
-       if (tile) tile.click();
-     })()`,
-  );
+  const planted = await plantSomething(cdp);
+  check('Der Rezeptwähler lässt eine Frucht auswählen', planted);
   let arrived = -1;
   for (let i = 0; i < 120; i++) {
     const now = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number }).seq;
@@ -1036,17 +1079,24 @@ try {
   check('SIGTERM beendet den Server zügig', stopMs < 3000, `${stopMs} ms`);
 
   // Der Spieler tippt weiter, während gar nichts da ist.
-  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  // Bewusst ein Kauf beim Händler und keine Aussaat: An dieser Stelle im Lauf
+  // sind die Felder womöglich alle bestellt und das Saatgut verkauft. Der
+  // Händler geht immer, solange Gold da ist — und darum geht es hier auch
+  // nicht, sondern darum, dass IRGENDETWAS ohne Server in der Warteschlange
+  // landet.
+  await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
+  await sleep(300);
   const beforeQueue = (await savedState()).queue;
   await evaluate(
     cdp,
     `(function () {
-       var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
-         return !p.disabled;
+       var card = [...document.querySelectorAll('#buy .card')].find(function (c) {
+         return !c.disabled;
        });
-       if (tile) tile.click();
+       if (card) card.click();
      })()`,
   );
+  await sleep(300);
   const queuedWhileDown = (await savedState()).queue;
   check(
     'Ohne Server geht das Spielen weiter — die Aktion wartet in der Warteschlange',
@@ -1171,8 +1221,16 @@ try {
   cdp?.close();
   browser.kill('SIGKILL');
   server.kill('SIGKILL');
-  rmSync(dataDir, { recursive: true, force: true });
-  rmSync(profileDir, { recursive: true, force: true });
+  // Chromium räumt seinen Profilordner asynchron auf; ein `rmSync` mitten
+  // hinein wirft `ENOTEMPTY`. Das ist Aufräumen, kein Prüfergebnis — und darf
+  // deshalb den Bericht nicht verschlucken, wie es eine Zeit lang tat.
+  for (const path of [dataDir, profileDir]) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+    } catch {
+      /* Reste im /tmp sind kein Grund, rot zu werden */
+    }
+  }
 }
 
 const passed = checks.filter((c) => c.ok).length;

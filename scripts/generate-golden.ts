@@ -179,10 +179,26 @@ function coreLoopVector(version: number) {
 
   push({ type: 'BUY', plot: MILL });
 
-  // Mahlgut sicherstellen: Die Aufträge oben haben den Weizen unter Umständen
+  // Mahlgut sicherstellen: Die Aufträge oben haben den Vorrat unter Umständen
   // komplett abgenommen.
-  const needWheat = rules.recipes[R_FEED]!.inputs[0]!.amount;
-  while (state.items[WHEAT]! < needWheat) sowThreeFields();
+  //
+  // Bewusst über ALLE Zutaten des Rezepts statt über „Weizen": Seit v3 braucht
+  // Futter Mais **und** Weizen. Ein Generator, der nur Weizen nachzieht, liefe
+  // dort endlos — und genau das ist der Unterschied zwischen „Inhalt ist eine
+  // Tabelle" als Behauptung und als Eigenschaft.
+  const haveAll = () =>
+    rules.recipes[R_FEED]!.inputs.every((i) => (state.items[i.item] ?? 0) >= i.amount);
+  for (let guard = 0; guard < 50 && !haveAll(); guard++) {
+    for (const input of rules.recipes[R_FEED]!.inputs) {
+      const missing = input.amount - (state.items[input.item] ?? 0);
+      if (missing <= 0) continue;
+      // Was das Feld hergibt, wird angebaut; alles andere beim Händler geholt.
+      if (input.item === WHEAT) sowThreeFields();
+      else if (rules.items[input.item]!.npcBuyPrice > 0) {
+        push({ type: 'BUY_NPC', item: input.item, amount: missing });
+      }
+    }
+  }
 
   push({ type: 'START', plot: MILL, recipe: R_FEED });
   wait(R_FEED);

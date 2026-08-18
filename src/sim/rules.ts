@@ -511,6 +511,216 @@ const V2: Ruleset = {
   orderSlots: 6,
 };
 
+
+// ── Katalog-Indizes von V3 ─────────────────────────────────────────────────
+//
+// Angehängt, nie eingeschoben: Weizen bleibt 1, Futter 2, Eier 3. Ein
+// gespeicherter Hof, der unter V2 zwei Futter hatte, hat sie auch unter V3 —
+// die Zahl an Position 2 bedeutet weiterhin dasselbe.
+
+const CORN = 4;
+const MILK = 5;
+const CREAM = 6;
+const BUTTER = 7;
+
+const R_CORN = 3;
+const R_MILK = 4;
+const R_CREAM = 5;
+const R_BUTTER = 6;
+
+/**
+ * Der erste echte Inhalts-Patch: Mais, Kühe und eine Molkerei.
+ *
+ * Interessant daran ist weniger, was dazukommt, als was sich ÄNDERT: Futter
+ * braucht jetzt Mais **und** Weizen statt drei Weizen. Das ist eine
+ * Regeländerung an einem bestehenden Rezept — und genau deshalb steht sie in
+ * einer neuen Version und nicht als Korrektur in V2.
+ *
+ * Der Grund ist nicht Ordnungsliebe: Wer offline unter V2 seine Mühle
+ * beschickt hat, hat dafür drei Weizen bezahlt. Rechnete der Server das unter
+ * den neuen Zutaten nach, käme `NOT_ENOUGH_ITEMS` heraus und sein Abend wäre
+ * abgeschnitten (siehe deploy.md, „Änderungen, die Offline-Spieler treffen
+ * können"). Mit einer eigenen Version rechnet sein Log unter V2 zu Ende und
+ * wechselt erst danach.
+ *
+ * Die Kette wird damit zum ersten Mal ein Netz statt einer Linie:
+ *
+ *   Feld → Weizen ┐
+ *                 ├→ Mühle → Futter ┬→ Gehege → Eier
+ *   Feld → Mais   ┘                 └→ Kuhgehege → Milch → Molkerei → Sahne/Butter
+ *
+ * Ein Feld kann jetzt zwei Dinge. Das ist die eigentliche Neuerung im
+ * Spielgefühl — vorher war „Feld bestellen" ohne Entscheidung.
+ */
+const V3: Ruleset = {
+  ...V2,
+  version: 3,
+
+  items: [
+    { id: 'gold', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'wheat', storable: true, npcPrice: 4, npcBuyPrice: 6 },
+    { id: 'feed', storable: true, npcPrice: 9, npcBuyPrice: 0 },
+    { id: 'eggs', storable: true, npcPrice: 28, npcBuyPrice: 0 },
+    // Mais wächst langsamer als Weizen und bringt mehr — sonst wäre die Wahl
+    // auf dem Feld keine, sondern nur eine andere Farbe.
+    { id: 'corn', storable: true, npcPrice: 7, npcBuyPrice: 10 },
+    // Die Milchkette ist die teuerste Freischaltung im Spiel (Kuhgehege 2100 +
+    // Molkerei 2000). Sie MUSS deshalb besser zahlen als das Hühnergehege für
+    // 500 — sonst baut man sie einmal und rührt sie nie wieder an. Gerechnet in
+    // Gold je Minute: Milch 3,4 · Sahne 5,5 · Butter 8,0 gegen Eier 6,3.
+    { id: 'milk', storable: true, npcPrice: 30, npcBuyPrice: 0 },
+    { id: 'cream', storable: true, npcPrice: 85, npcBuyPrice: 0 },
+    { id: 'butter', storable: true, npcPrice: 260, npcBuyPrice: 0 },
+  ],
+
+  recipes: [
+    {
+      id: 'wheat',
+      inputs: [{ item: WHEAT, amount: 1 }],
+      output: { item: WHEAT, amount: 2 },
+      durationTicks: 100,
+      xp: 2,
+    },
+    // Futter braucht jetzt beides. DAS ist die Änderung, die die neue Version
+    // nötig macht — ein bestehendes Rezept bekommt andere Zutaten.
+    {
+      id: 'feed',
+      inputs: [
+        { item: CORN, amount: 1 },
+        { item: WHEAT, amount: 1 },
+      ],
+      output: { item: FEED, amount: 2 },
+      durationTicks: 240,
+      xp: 5,
+    },
+    {
+      id: 'eggs',
+      inputs: [{ item: FEED, amount: 1 }],
+      output: { item: EGGS, amount: 3 },
+      durationTicks: 720,
+      xp: 14,
+    },
+    {
+      id: 'corn',
+      inputs: [{ item: CORN, amount: 1 }],
+      output: { item: CORN, amount: 2 },
+      durationTicks: 260,
+      xp: 5,
+    },
+    {
+      id: 'milk',
+      inputs: [{ item: FEED, amount: 1 }],
+      output: { item: MILK, amount: 2 },
+      durationTicks: 900,
+      xp: 16,
+    },
+    {
+      id: 'cream',
+      inputs: [{ item: MILK, amount: 1 }],
+      output: { item: CREAM, amount: 1 },
+      durationTicks: 600,
+      xp: 20,
+    },
+    {
+      id: 'butter',
+      inputs: [{ item: MILK, amount: 2 }],
+      output: { item: BUTTER, amount: 1 },
+      durationTicks: 1500,
+      xp: 45,
+    },
+  ],
+
+  plots: [
+    // Die Startfelder können ab jetzt beides. Welche Frucht, entscheidet der
+    // Spieler beim Bestellen — der Sim-Kern sieht nur zwei erlaubte Rezepte.
+    { id: 'field-1', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
+    { id: 'field-2', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
+    { id: 'field-3', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
+    {
+      id: 'field-4',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 2 }],
+    },
+    {
+      id: 'field-5',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 4 }],
+    },
+    {
+      id: 'field-6',
+      startLevel: 0,
+      levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 6 }],
+    },
+    {
+      id: 'mill',
+      startLevel: 0,
+      levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED], minPlayerLevel: 2 }],
+    },
+    {
+      id: 'coop-1',
+      startLevel: 0,
+      levels: [
+        { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
+        { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
+      ],
+    },
+    {
+      id: 'coop-2',
+      startLevel: 0,
+      levels: [
+        { label: 'Gehege', cost: gold(800), recipes: [], minPlayerLevel: 5 },
+        { label: 'Hühner', cost: gold(400), recipes: [R_EGGS] },
+      ],
+    },
+    // Dieselbe Zwei-Stufen-Mechanik wie beim Hühnergehege: Bau und Tiere. Kein
+    // neuer Code — eine Tabellenzeile mehr.
+    {
+      id: 'pasture-1',
+      startLevel: 0,
+      levels: [
+        { label: 'Kuhgehege', cost: gold(1200), recipes: [], minPlayerLevel: 6 },
+        { label: 'Kühe', cost: gold(900), recipes: [R_MILK] },
+      ],
+    },
+    // Die Molkerei kann zwei Dinge — wie ein Feld. Damit ist der Wähler nicht
+    // nur eine Feld-Sache, sondern die allgemeine Antwort auf „ein Platz, der
+    // mehrere Rezepte kann".
+    {
+      id: 'dairy',
+      startLevel: 0,
+      levels: [{ label: 'Molkerei', cost: gold(2000), recipes: [R_CREAM, R_BUTTER], minPlayerLevel: 7 }],
+    },
+  ],
+
+  requestTemplates: [
+    { id: 'wheat-small', wants: [want(WHEAT, 5)], reward: gold(25), xp: 6 },
+    { id: 'wheat-big', wants: [want(WHEAT, 15)], reward: gold(80), xp: 18 },
+    { id: 'corn-small', wants: [want(CORN, 4)], reward: gold(42), xp: 12 },
+    { id: 'corn-big', wants: [want(CORN, 12)], reward: gold(135), xp: 36 },
+    { id: 'feed-small', wants: [want(FEED, 2)], reward: gold(28), xp: 10 },
+    { id: 'feed-big', wants: [want(FEED, 6)], reward: gold(90), xp: 30 },
+    { id: 'eggs-small', wants: [want(EGGS, 3)], reward: gold(125), xp: 35 },
+    { id: 'eggs-big', wants: [want(EGGS, 9)], reward: gold(390), xp: 100 },
+    { id: 'milk-small', wants: [want(MILK, 2)], reward: gold(90), xp: 26 },
+    { id: 'milk-big', wants: [want(MILK, 6)], reward: gold(270), xp: 78 },
+    { id: 'cream-order', wants: [want(CREAM, 2)], reward: gold(255), xp: 60 },
+    { id: 'butter-order', wants: [want(BUTTER, 1)], reward: gold(390), xp: 85 },
+    { id: 'mixed-farm', wants: [want(WHEAT, 8), want(CORN, 4)], reward: gold(95), xp: 28 },
+    { id: 'mixed-market', wants: [want(EGGS, 3), want(MILK, 2)], reward: gold(216), xp: 65 },
+    { id: 'mixed-dairy', wants: [want(CREAM, 1), want(BUTTER, 1)], reward: gold(520), xp: 130 },
+  ],
+
+  // Zwei Startgüter statt einem: Ohne ein Maiskorn wäre die zweite Frucht
+  // hinter dem Händler versteckt, und die Wahl auf dem Feld gäbe es am ersten
+  // Tag noch nicht.
+  startingItems: [
+    { item: WHEAT, amount: 6 },
+    { item: CORN, amount: 3 },
+  ],
+
+  siloCapacity: 150,
+};
+
 /**
  * Entwicklungs-Tempo: derselbe Inhalt wie V1, Uhren zehnmal schneller.
  *
@@ -520,44 +730,28 @@ const V2: Ruleset = {
  * hinein und keinen hinaus; ein Dev-Spielstand ist Wegwerfware.
  */
 const DEV: Ruleset = {
-  ...V1,
+  ...V3,
   version: 1001,
   // Die Uhren laufen hier zehnmal schneller, also auch diese. Sonst wartete man
   // beim Ausprobieren eine halbe Stunde auf etwas, das im Spiel Sekunden dauert.
   requestSkipCooldownTicks: 180,
-  recipes: [
-    {
-      id: 'wheat',
-      inputs: [{ item: WHEAT, amount: 1 }],
-      output: { item: WHEAT, amount: 2 },
-      durationTicks: 12,
-      xp: 2,
-    },
-    {
-      id: 'feed',
-      inputs: [{ item: WHEAT, amount: 3 }],
-      output: { item: FEED, amount: 2 },
-      durationTicks: 30,
-      xp: 5,
-    },
-    {
-      id: 'eggs',
-      inputs: [{ item: FEED, amount: 1 }],
-      output: { item: EGGS, amount: 3 },
-      durationTicks: 90,
-      xp: 14,
-    },
-  ],
+  // Genau ein Zehntel der Produktionszeiten aus V3. Der Inhalt ist derselbe —
+  // sonst entwickelte und testete man gegen ein Spiel, das es nicht gibt.
+  //
+  // Abgerundet und mindestens 1, beides ausgeschrieben: Eine nackte Division
+  // kann einen Float erzeugen, und ein Float in einer Regelzahl wandert durch
+  // jede Rechnung, die daran hängt (§2.2). Der Purity-Wächter hat genau das
+  // hier abgefangen — er liest diese Datei mit.
+  recipes: V3.recipes.map((r) => {
+    const tenth = Math.floor(r.durationTicks / 10);
+    return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
+  }),
 };
 
-/**
- * Der Server hält bewusst mehrere Versionen vor (R2). Ein Client, dessen Version
- * hier nicht mehr steht, muss vor dem Sync updaten — sauberer, angekündigter
- * Bruch statt stiller Divergenz.
- */
 export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
   [2, V2],
+  [3, V3],
   [1001, DEV],
 ]);
 
@@ -567,13 +761,13 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
  * Nur entlang dieser Kette wird migriert. Das Dev-Regelwerk steht bewusst nicht
  * drin — siehe `DEV`.
  */
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3];
 
 /** Womit ein frischer Hof in Produktion startet. */
 export const CURRENT_RULESET_VERSION = 1;
 
 /** Die Version, auf die der Server neue Snapshots hebt. */
-export const LATEST_RULESET_VERSION = 2;
+export const LATEST_RULESET_VERSION = 3;
 
 /** Schnelle Uhren fürs Entwickeln und für Feldtests von Hand. */
 export const DEV_RULESET_VERSION = 1001;

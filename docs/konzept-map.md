@@ -65,6 +65,52 @@ Regelwerk muss jede verbrauchte Zutat eines Startplatzes nachkaufbar sein **und*
 der Ertrag den Einkauf überzahlen. Ein Katalog, der das verletzt, kommt gar
 nicht erst durch.
 
+#### v3: aus der Linie wird ein Netz
+
+Der erste echte Inhalts-Patch — und der Beweis, dass „Inhalt ist eine Tabelle"
+keine Behauptung ist. Dazugekommen sind Mais, Kühe und eine Molkerei; geändert
+hat sich **eine** Zeile Code (der Golden-Generator, der vorher annahm, Futter
+brauche nur Weizen).
+
+```
+Feld → Weizen ┐
+              ├→ Mühle → Futter ┬→ Gehege     → Eier
+Feld → Mais   ┘                 └→ Kuhgehege  → Milch → Molkerei → Sahne
+                                                                 → Butter
+```
+
+Zwei Dinge daran sind mehr als Inhalt:
+
+1. **Ein Platz kann jetzt mehreres.** Ein Feld trägt Weizen *oder* Mais, die
+   Molkerei macht Sahne *oder* Butter. Vorher war „Feld bestellen" eine Geste
+   ohne Entscheidung. Die Auswahl steht als `options` im Anzeigemodell — welche
+   Rezepte eine Stufe erlaubt, ist eine Spielregel und gehört nicht in die
+   Oberfläche.
+2. **Futter braucht jetzt Mais UND Weizen** — eine Änderung an einem
+   *bestehenden* Rezept. Genau deshalb ist v3 eine neue Version und keine
+   Korrektur in v2: Wer offline unter v2 seine Mühle beschickt hat, hat dafür
+   drei Weizen bezahlt. Unter den neuen Zutaten nachgerechnet käme
+   `NOT_ENOUGH_ITEMS` heraus und sein Abend wäre abgeschnitten.
+
+**Die Balance-Regel, die dabei fast schiefging:** Die Milchkette ist die
+teuerste Freischaltung im Spiel — Kuhgehege 2100, Molkerei 2000. Beim ersten
+Durchrechnen zahlte sie *schlechter* als das Hühnergehege für 500. Das wäre
+eine Falle gewesen: einmal gebaut, nie wieder angefasst. Was jetzt gilt:
+
+| Stufe | Gold je Minute | freigeschaltet ab |
+| --- | --- | --- |
+| Weizen | 2,4 | Anfang |
+| Mais | 1,6 | Anfang |
+| Futter | 1,8 | Stufe 2 |
+| Milch | 3,4 | Stufe 6 |
+| Sahne | 5,5 | Stufe 7 |
+| Eier | 6,3 | Stufe 3 |
+| **Butter** | **8,0** | Stufe 7 |
+
+Tiefer heißt besser — aber Eier bleiben stark genug, dass die günstige Kette
+nicht wertlos wird. Kundenaufträge zahlen durchweg das Anderthalbfache des
+Händlerpreises, auch für die neuen Waren.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

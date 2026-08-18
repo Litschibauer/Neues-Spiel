@@ -150,11 +150,14 @@ export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
 
 /** Ein Schritt pro Versionssprung. Migrationen werden der Reihe nach angewandt. */
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
-  // Der Basis-Kreislauf hat bisher genau einen Patch: einen reinen Zahlen-Patch.
-  // `GROW_AND_RETIME` steht bereit, sobald der erste Inhalts-Patch kommt — und
-  // ist über synthetische Kataloge in `migration.test.ts` geprüft, damit der
-  // Pfad nicht ungetestet verrottet.
+  // v1 → v2 war ein reiner Zahlen-Patch: andere Preise, andere Zeiten, gleicher
+  // Katalog. Da wächst nichts, es muss nur die laufende Produktion umgerechnet
+  // werden.
   ['1->2', RETIME],
+  // v2 → v3 ist der erste echte INHALTS-Patch: Mais, Kühe, Molkerei. Der
+  // Zustand wächst — Inventar, Plätze — und gleichzeitig ändern sich Zeiten.
+  // Genau dafür lag `GROW_AND_RETIME` bereit.
+  ['2->3', GROW_AND_RETIME],
 ]);
 
 /**

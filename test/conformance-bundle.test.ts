@@ -13,6 +13,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { RULESETS } from '../src/sim/rules.ts';
 import vm from 'node:vm';
 import { buildConformanceBundle } from '../scripts/build-conformance.ts';
 
@@ -46,7 +47,15 @@ test('der Bundle lässt sich bauen und besteht alle Golden Vectors', () => {
 
   assert.ok(report.total >= 100, `zu wenige Vektoren im Bundle: ${report.total}`);
   // Umkopieren: Arrays aus dem VM-Kontext haben einen fremden Prototyp.
-  assert.deepEqual([...report.rulesetVersions], [1, 2, 1001], 'Bundle deckt nicht alle Kataloge ab');
+  //
+  // Gegen die Registrierung geprüft statt gegen eine abgeschriebene Liste: Eine
+  // neue Regelversion soll hier nicht rot werden, weil jemand vergessen hat,
+  // eine Zahl nachzutragen — sie soll rot werden, wenn sie im Bundle FEHLT.
+  assert.deepEqual(
+    [...report.rulesetVersions].sort((a, b) => a - b),
+    [...RULESETS.keys()].sort((a, b) => a - b),
+    'Bundle deckt nicht alle Kataloge ab',
+  );
 
   const failures = report.results.filter((r) => !r.pass);
   const detail = failures

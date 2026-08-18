@@ -302,3 +302,64 @@ test('das Modell liefert die Grenzen, die eine Mengen- und Preiswahl braucht', (
     { code: 'PRICE_OUT_OF_BAND' },
   );
 });
+
+// ── Mehrere Rezepte je Platz (v3) ──────────────────────────────────────────
+
+test('ein Feld mit zwei Früchten bietet BEIDE an — auch die, die gerade nicht geht', () => {
+  // Der Punkt des Wählers: Ein Mais, den man nicht säen kann, ist eine
+  // Information. Ein Mais, der gar nicht dasteht, ist ein Rätsel.
+  const v3 = getRuleset(3);
+  const CORN = v3.items.findIndex((i) => i.id === 'corn');
+  const base = initialState(v3);
+  const items = base.items.slice();
+  items[CORN] = 0; // Weizen ja, Mais nein.
+
+  const field = farmView({ ...base, items }, v3).plots[0]!;
+  assert.equal(field.options.length, 2, 'das Feld bietet nicht beide Früchte an');
+  assert.deepEqual(
+    field.options.map((o) => o.id),
+    ['wheat', 'corn'],
+  );
+  assert.equal(field.options[0]!.affordable, true);
+  assert.equal(field.options[1]!.affordable, false, 'Mais ohne Saatgut gilt als machbar');
+
+  // Und `next` bleibt das erste, das wirklich geht — daran hängt der Ein-Tipp-Fall.
+  assert.equal(field.next?.id, 'wheat');
+  assert.equal(field.tap, 'start');
+});
+
+test('ein Platz mit genau einem Rezept braucht keine Auswahl', () => {
+  // Sonst bekäme die Mühle einen Wähler mit einem einzigen Eintrag.
+  const v3 = getRuleset(3);
+  const MILL = v3.plots.findIndex((p) => p.id === 'mill');
+  const base = initialState(v3);
+  const plots = base.plots.slice();
+  plots[MILL] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+
+  const mill = farmView({ ...base, plots }, v3).plots[MILL]!;
+  assert.equal(mill.options.length, 1);
+  assert.equal(mill.options[0]!.id, 'feed');
+});
+
+test('ein laufender Platz bietet nichts an — er ist beschäftigt', () => {
+  const v3 = getRuleset(3);
+  const running = simulate(
+    initialState(v3),
+    { seq: 1, tick: 0, type: 'START', plot: 0, recipe: 0 },
+    v3,
+  );
+  assert.deepEqual(farmView(running, v3).plots[0]!.options, []);
+});
+
+test('die Auswahl nennt Kosten, Dauer und Ertrag — alles aus dem Regelwerk', () => {
+  const v3 = getRuleset(3);
+  const corn = farmView(initialState(v3), v3).plots[0]!.options.find((o) => o.id === 'corn')!;
+  const def = v3.recipes.find((r) => r.id === 'corn')!;
+
+  assert.deepEqual(corn.inputs, def.inputs);
+  assert.deepEqual(corn.output, def.output);
+  assert.equal(corn.durationTicks, def.durationTicks);
+  // Und die Frucht sät sich selbst — kein zweiter Katalogeintrag fürs Saatgut.
+  assert.equal(corn.inputs[0]!.item, corn.output.item);
+  assert.ok(corn.output.amount > corn.inputs[0]!.amount);
+});

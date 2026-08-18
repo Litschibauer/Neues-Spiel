@@ -29,6 +29,8 @@
     --sky: #cfe4ec;
     --wood: #a5764a; --wood-dark: #7d5735;
     --on-accent: #ffffff; --feather: #f4f1ea; --feather-2: #e9e4d8; --egg: #fdf8ec;
+    --corn: #e5c045; --corn-leaf: #6ea34a; --hide: #efeae2; --hide-spot: #4a4039;
+    --milk: #fbfaf6;
     --on-ripe: #3a2a06;
     --shadow: 0 1px 2px rgba(43, 37, 33, .06), 0 4px 14px rgba(43, 37, 33, .05);
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
@@ -219,6 +221,31 @@
   .trade .done:disabled { background: var(--line); color: var(--muted); }
   .trade .note { font-size: .68rem; color: var(--muted); margin-top: .35rem; text-align: center; }
 
+  /* ── Der Rezeptwähler ────────────────────────────────────────────────
+     Von unten hereinfahrend statt mittig: Auf einem Handy ist der untere
+     Bildschirmrand die einzige Stelle, die der Daumen sicher erreicht. */
+  .sheet-bg {
+    position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet {
+    width: 100%; max-width: 30rem; background: var(--surface);
+    border-radius: 18px 18px 0 0; padding: 1rem .9rem calc(1rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 32px rgba(0,0,0,.28);
+    animation: rise .18s ease-out;
+  }
+  @keyframes rise { from { transform: translateY(14px); opacity: .6; } }
+  @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+  .sheet h3 { font-size: .95rem; margin: 0 0 .7rem; }
+  .sheet-close {
+    width: 100%; height: 2.4rem; margin-top: .6rem; border-radius: 12px;
+    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    font-size: .8rem; font-weight: 600;
+  }
+  .opt { width: 100%; text-align: left; }
+  .opt .yield { font-weight: 700; color: var(--leaf-dark); font-variant-numeric: tabular-nums; }
+  .opt:disabled { opacity: .5; }
+
   /* Wegschicken: klein und unauffällig — es ist ein Verzicht, keine Belohnung. */
   .skip {
     margin-top: .4rem; width: 100%; height: 2rem; border-radius: 10px;
@@ -404,6 +431,18 @@
       <b id="silo-num">0/0</b>
     </div>
   </header>
+
+  <!--
+    Der Rezeptwähler. Liegt außerhalb von <main>, weil er über allem liegt und
+    nicht zu einer der vier Ansichten gehört.
+  -->
+  <div class="sheet-bg" id="pick-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+      <h3 id="pick-title"></h3>
+      <div id="pick-list"></div>
+      <button class="sheet-close" id="pick-close">Abbrechen</button>
+    </div>
+  </div>
 
   <main>
     <div class="banner" id="lease" hidden>
@@ -708,13 +747,18 @@
    * Katalog-Kennung da: Ein neuer Gegenstand macht die Seite nicht kaputt, er
    * sieht nur eine Version lang technisch aus.
    */
-  var NAMES = { gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier', mill: 'Mühle' };
+  var NAMES = {
+    gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
+    corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter',
+    mill: 'Mühle', dairy: 'Molkerei',
+  };
   function nameOf(id) { return NAMES[id] || id; }
   function itemName(i) { return nameOf(rules.items[i].id); }
   function plotName(i) {
     var id = rules.plots[i].id;
     if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
     if (id.indexOf('coop-') === 0) return 'Gehege ' + id.slice(5);
+    if (id.indexOf('pasture-') === 0) return 'Kuhgehege ' + id.slice(8);
     return nameOf(id);
   }
   function stacks(list) {
@@ -745,22 +789,46 @@
   // unbekannte Kennung bekommt das Feld; ein neues Gebäude ist damit sofort
   // spielbar und sieht nur eine Version lang generisch aus.
 
-  function artField(stage) {
+  /**
+   * Das Feld — und seit v3 zwei Früchte darauf.
+   *
+   * `crop` ist die Katalog-Kennung des laufenden Rezepts, nicht eine Zahl:
+   * Kommt eine dritte Frucht dazu, ist das hier eine Zeile mehr und sonst
+   * nichts. Unbekannte Kennungen zeichnen Weizen — eine Frucht ohne eigenes
+   * Bild soll aussehen wie irgendetwas, nicht wie ein leeres Feld.
+   */
+  function artField(stage, crop) {
     var soil = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
       '<path d="M0 34h100v46H0z" fill="var(--soil)"/>' +
       '<path d="M0 34h100v4H0zM0 46h100v3H0zM0 57h100v3H0zM0 68h100v3H0z" fill="var(--soil-dark)" opacity=".45"/>';
     if (stage <= 0) return soil;
 
     var out = soil, x, i;
-    // Stufe 1: Keimlinge, 2: Halme, 3: reife Ähren.
-    for (i = 0; i < 5; i++) {
-      x = 14 + i * 18;
+    var isCorn = crop === 'corn';
+    // Mais steht weiter auseinander und wird höher — man soll auf einen Blick
+    // sehen, was auf dem Feld steht, ohne den Text zu lesen.
+    var count = isCorn ? 4 : 5;
+    var gap = isCorn ? 22 : 18;
+    var left = isCorn ? 18 : 14;
+
+    for (i = 0; i < count; i++) {
+      x = left + i * gap;
       if (stage === 1) {
         out += '<path d="M' + x + ' 62v-7" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
           '<path d="M' + x + ' 57c-3-2-4-5-4-5s4 0 4 3" fill="var(--leaf)"/>';
       } else if (stage === 2) {
-        out += '<path d="M' + x + ' 66V42" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
-          '<path d="M' + x + ' 52c-5-2-6-7-6-7s6 1 6 5zM' + x + ' 46c5-2 6-7 6-7s-6 1-6 5z" fill="var(--leaf-dark)"/>';
+        out += isCorn
+          ? '<path d="M' + x + ' 66V38" stroke="var(--corn-leaf)" stroke-width="3" stroke-linecap="round"/>' +
+            '<path d="M' + x + ' 50c-7-3-8-9-8-9s8 1 8 6zM' + x + ' 43c7-3 8-9 8-9s-8 1-8 6z" fill="var(--corn-leaf)"/>'
+          : '<path d="M' + x + ' 66V42" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
+            '<path d="M' + x + ' 52c-5-2-6-7-6-7s6 1 6 5zM' + x + ' 46c5-2 6-7 6-7s-6 1-6 5z" fill="var(--leaf-dark)"/>';
+      } else if (isCorn) {
+        // Reifer Mais: hoher Halm, ein Kolben seitlich, Fahne obenauf.
+        out += '<path d="M' + x + ' 70V26" stroke="var(--corn-leaf)" stroke-width="3" stroke-linecap="round"/>' +
+          '<path d="M' + x + ' 44c-9-3-10-10-10-10s10 1 10 7zM' + x + ' 36c9-3 10-10 10-10s-10 1-10 7z" fill="var(--corn-leaf)"/>' +
+          '<ellipse cx="' + (x + 5) + '" cy="48" rx="4" ry="8" fill="var(--corn)"/>' +
+          '<path d="M' + (x + 5) + ' 41v14" stroke="var(--soil-dark)" stroke-width="1" opacity=".35"/>' +
+          '<path d="M' + x + ' 26l-3-6M' + x + ' 26l3-6" stroke="var(--ripe)" stroke-width="1.6" stroke-linecap="round"/>';
       } else {
         out += '<path d="M' + x + ' 68V44" stroke="var(--leaf-dark)" stroke-width="2.5" stroke-linecap="round"/>' +
           '<ellipse cx="' + x + '" cy="36" rx="5" ry="10" fill="var(--ripe)"/>' +
@@ -768,6 +836,58 @@
       }
     }
     return out;
+  }
+
+  /** Kuhgehege: Stufe 1 ist die leere Weide, ab Stufe 2 steht eine Kuh darauf. */
+  function artPasture(level, ready) {
+    var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
+      '<path d="M0 54h100v26H0z" fill="var(--leaf)" opacity=".5"/>' +
+      // Zaun — er macht aus einer Wiese ein Gehege.
+      '<path d="M6 44v22M28 44v22M72 44v22M94 44v22" stroke="var(--wood)" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M2 50h96M2 60h96" stroke="var(--wood)" stroke-width="2.5" stroke-linecap="round"/>';
+
+    if (level >= 2) {
+      out += '<g transform="translate(50 58)">' +
+        '<ellipse cx="0" cy="0" rx="18" ry="11" fill="var(--hide)"/>' +
+        '<ellipse cx="-7" cy="-3" rx="6" ry="4" fill="var(--hide-spot)" opacity=".8"/>' +
+        '<ellipse cx="8" cy="3" rx="4.5" ry="3" fill="var(--hide-spot)" opacity=".8"/>' +
+        '<path d="M-14 9v6M-5 10v5M5 10v5M14 9v6" stroke="var(--hide-spot)" stroke-width="2.5" stroke-linecap="round"/>' +
+        '<circle cx="19" cy="-7" r="7" fill="var(--hide)"/>' +
+        '<path d="M13 -12c-3-3-2-6-2-6s4 1 5 4z" fill="var(--hide-spot)"/>' +
+        '<circle cx="21" cy="-9" r="1" fill="var(--ink)"/>' +
+        '<ellipse cx="24" cy="-4" rx="3.5" ry="2.5" fill="var(--corn)" opacity=".55"/>' +
+        '</g>';
+    }
+    if (ready) {
+      // Der volle Eimer steht daneben, sobald abgeholt werden kann.
+      out += '<g transform="translate(20 66)">' +
+        '<path d="M-6 -7h12l-2 9h-8z" fill="var(--milk)" stroke="var(--soil-dark)" stroke-width="1"/>' +
+        '<path d="M-6 -7h12" stroke="var(--soil-dark)" stroke-width="1.4"/>' +
+        '</g>';
+    }
+    return out;
+  }
+
+  /** Molkerei: ein Haus mit Kanne. Dampft, solange etwas läuft. */
+  function artDairy(working) {
+    var steam = working
+      ? '<g opacity=".7"><circle cx="70" cy="26" r="3" fill="var(--milk)">' +
+        '<animate attributeName="cy" values="26;14" dur="2.4s" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values=".7;0" dur="2.4s" repeatCount="indefinite"/>' +
+        '</circle></g>'
+      : '';
+    return '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
+      '<path d="M0 62h100v18H0z" fill="var(--soil)"/>' +
+      '<path d="M22 62V38h50v24z" fill="var(--milk)"/>' +
+      '<path d="M47 26 16 40h62z" fill="var(--wood-dark)"/>' +
+      '<rect x="64" y="30" width="8" height="12" fill="var(--wood)"/>' +
+      steam +
+      '<rect x="30" y="48" width="12" height="14" rx="1" fill="var(--soil-dark)" opacity=".5"/>' +
+      // Milchkanne davor, damit man das Haus von der Mühle unterscheidet.
+      '<g transform="translate(84 56)">' +
+      '<path d="M-6 6h12l-1-12h-10z" fill="var(--feather-2)" stroke="var(--soil-dark)" stroke-width="1"/>' +
+      '<rect x="-3" y="-9" width="6" height="4" rx="1" fill="var(--soil-dark)" opacity=".7"/>' +
+      '</g>';
   }
 
   function artMill(working) {
@@ -834,12 +954,14 @@
    */
   var ART = {
     'field-': function (p) {
-      if (!p.busy && !p.done) return artField(0);
-      return artField(p.done ? 3 : p.progress < .4 ? 1 : 2);
+      if (!p.busy && !p.done) return artField(0, null);
+      return artField(p.done ? 3 : p.progress < .4 ? 1 : 2, p.producing);
     },
     'mill': function (p) { return artMill(p.busy); },
     'coop-': function (p) { return artCoop(p.level, p.done); },
-    fallback: function () { return artField(0); },
+    'pasture-': function (p) { return artPasture(p.level, p.done); },
+    'dairy': function (p) { return artDairy(p.busy); },
+    fallback: function () { return artField(0, null); },
   };
 
   function artFor(p) {
@@ -913,6 +1035,12 @@
     if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
     if (p.blocked === 'inputs') return 'Zutaten fehlen';
     if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
+    // Kann der Platz mehreres, steht das drauf statt einer der Möglichkeiten.
+    // Eine von zwei Zeilen anzuzeigen wäre schlechter als keine: Man hielte
+    // sie für die einzige.
+    if (p.options.length > 1) {
+      return p.options.map(function (o) { return nameOf(o.id); }).join(' oder ');
+    }
     if (p.tap === 'start') {
       // Was das Starten KOSTET, gehört auf die Kachel. Ein Feld, das ein Korn
       // frisst und zwei zurückgibt, ist ein gutes Geschäft — aber nur, wenn
@@ -1524,6 +1652,16 @@
       return;
     }
     if (p.tap === 'buy') { tapBuy(i); return; }
+    // Kann der Platz mehr als eins, wird gefragt statt geraten.
+    //
+    // Auch dann, wenn gerade nur ein Rezept startbar wäre: Sonst hinge das
+    // Verhalten eines Tipps am Lagerbestand — mal öffnet sich etwas, mal
+    // passiert direkt etwas. Ein Knopf, der zweierlei tut, ist ein Knopf, dem
+    // man nicht mehr traut.
+    if (p.options.length > 1 && (p.tap === 'start' || p.blocked === 'inputs')) {
+      openPicker(p);
+      return;
+    }
     if (p.tap === 'start') {
       // Welches Rezept, sagt das Anzeigemodell — dasselbe, das eben schon die
       // Kachel beschriftet hat. Die Suche danach stand hier früher ein zweites
@@ -1537,6 +1675,65 @@
     else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
     else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
   }
+
+  /**
+   * Der Rezeptwähler.
+   *
+   * Er zeigt ALLES, was der Platz auf seiner Stufe kann — auch das, wofür die
+   * Zutaten fehlen. Ein Mais, den man gerade nicht säen kann, ist eine
+   * Information („kauf Saatgut"); ein Mais, der einfach nicht dasteht, ist ein
+   * Rätsel.
+   *
+   * Welche Rezepte das sind, sagt das Anzeigemodell. Diese Funktion sucht
+   * nichts zusammen und prüft keine Regel — sie beschriftet.
+   */
+  var pickerPlot = null;
+
+  function openPicker(p) {
+    pickerPlot = p.index;
+    $('pick-title').textContent = plotName(p.index) + ' — was soll laufen?';
+
+    var box = $('pick-list');
+    box.textContent = '';
+    p.options.forEach(function (o) {
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'card opt';
+      card.disabled = !o.affordable;
+      card.innerHTML =
+        '<div class="body">' +
+        '<div class="top">' + nameOf(o.id) + '</div>' +
+        '<div class="sub">' +
+        (o.inputs.length > 0 ? costText(o.inputs) + ' · ' : '') +
+        timeText(o.durationTicks) +
+        (o.affordable ? '' : ' · Zutaten fehlen') +
+        '</div></div>' +
+        '<span class="yield">+' + o.output.amount + ' ' + itemName(o.output.item) + '</span>';
+      card.addEventListener('click', function () {
+        closePicker();
+        act('Gestartet · ' + nameOf(o.id) +
+              (o.inputs.length > 0 ? ' · −' + costText(o.inputs) : ''),
+            client.start(p.index, o.recipe));
+      });
+      box.appendChild(card);
+    });
+
+    $('pick-bg').hidden = false;
+  }
+
+  function closePicker() {
+    pickerPlot = null;
+    $('pick-bg').hidden = true;
+  }
+
+  $('pick-close').addEventListener('click', closePicker);
+  // Neben den Kasten tippen schließt ihn — auf dem Handy die erwartete Geste.
+  $('pick-bg').addEventListener('click', function (e) {
+    if (e.target === $('pick-bg')) closePicker();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && pickerPlot !== null) closePicker();
+  });
 
   function tapBuy(i) {
     if (!isActive) return;

@@ -66,13 +66,24 @@ export type PlotView = {
    * zählt Verluste statt Erträge. Die Oberfläche soll den Preis nennen können,
    * bevor getippt wird — und ihn nicht selbst ausrechnen müssen.
    */
-  next: {
-    recipe: number;
-    id: string;
-    inputs: readonly Stack[];
-    output: Stack;
-    durationTicks: number;
-  } | null;
+  next: RecipeOption | null;
+  /**
+   * ALLE Rezepte, die dieser Platz auf seiner Stufe fahren könnte.
+   *
+   * Ein Feld kann seit v3 Weizen **oder** Mais, eine Molkerei Sahne **oder**
+   * Butter. Damit ist „was startet ein Tipp" keine Frage mehr, die das Modell
+   * allein beantworten kann — der Spieler muss wählen.
+   *
+   * Warum die Liste hier steht und nicht in der Oberfläche zusammengesucht
+   * wird: Welche Rezepte auf welcher Stufe erlaubt sind, ist eine Spielregel.
+   * Eine Oberfläche, die sie selbst ausrechnet, ist eine zweite Wahrheit — und
+   * die erste, die einen Ausbau vergisst, zeigt einem Spieler ein Rezept, das
+   * die Sim ablehnt.
+   *
+   * Enthält auch, was gerade NICHT geht (`affordable: false`). Ein fehlendes
+   * Maiskorn soll man sehen, nicht raten.
+   */
+  options: readonly RecipeOption[];
   /**
    * Was ein Tipp auf diesen Platz auslöst. Genau eine Antwort, damit nicht
    * jede Oberfläche ihre eigene Reihenfolge erfindet.
@@ -88,6 +99,17 @@ export type PlotView = {
     /** Stufe reicht UND bezahlbar. */
     affordable: boolean;
   } | null;
+};
+
+/** Ein Rezept, wie es zur Auswahl steht — mit dem, was es kostet und bringt. */
+export type RecipeOption = {
+  recipe: number;
+  id: string;
+  inputs: readonly Stack[];
+  output: Stack;
+  durationTicks: number;
+  /** Zutaten sind da. `false` heißt: sichtbar, aber nicht startbar. */
+  affordable: boolean;
 };
 
 export type RequestView = {
@@ -237,6 +259,26 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
 
   const nextRecipe = busy ? -1 : startable(state, rules, i);
 
+  // Alle Rezepte dieser Stufe, nicht nur das erste mögliche. Ein Platz mit
+  // zwei Rezepten braucht eine Auswahl, und die Auswahl braucht auch das,
+  // was gerade nicht geht.
+  const options: RecipeOption[] = busy
+    ? []
+    : recipesAt(rules, i, plot.level).flatMap((index) => {
+        const def = rules.recipes[index];
+        if (!def) return [];
+        return [
+          {
+            recipe: index,
+            id: def.id,
+            inputs: def.inputs.map((x) => ({ item: x.item, amount: x.amount })),
+            output: { item: def.output.item, amount: def.output.amount },
+            durationTicks: def.durationTicks,
+            affordable: def.inputs.every((x) => count(state, x.item) >= x.amount),
+          },
+        ];
+      });
+
   let tap: PlotView['tap'] = 'none';
   let blocked: Blocker = null;
 
@@ -266,15 +308,8 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     remaining: busy && !done ? Math.max(0, duration - elapsed) : 0,
     producing: recipe ? recipe.id : null,
     output: recipe ? { item: recipe.output.item, amount: recipe.output.amount } : null,
-    next: startDef
-      ? {
-          recipe: nextRecipe,
-          id: startDef.id,
-          inputs: startDef.inputs.map((x) => ({ item: x.item, amount: x.amount })),
-          output: { item: startDef.output.item, amount: startDef.output.amount },
-          durationTicks: startDef.durationTicks,
-        }
-      : null,
+    next: startDef ? options.find((o) => o.recipe === nextRecipe) ?? null : null,
+    options,
     tap,
     blocked,
     upgrade,
