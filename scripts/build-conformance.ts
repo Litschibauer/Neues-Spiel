@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
 
@@ -151,11 +151,27 @@ export function buildFieldTestPage(): string {
 }
 
 export function buildFarmPage(): string {
-  return buildPageWithBundle('farm.template.html');
+  return buildPageWithBundle('farm/page.html');
+}
+
+function resolveIncludes(template: string, depth = 0): string {
+  if (depth > 5) throw new Error('INCLUDE zu tief verschachtelt');
+  return template.replace(/^([ \t]*)<!--INCLUDE:([^>]+?)-->[ \t]*$/gm, (_all, indent, file) => {
+    const path = join(ROOT, 'web', String(file).trim());
+    if (!existsSync(path)) throw new Error(`INCLUDE nicht gefunden: ${file}`);
+    const body = readFileSync(path, 'utf8').replace(/\n+$/, '');
+    return resolveIncludes(
+      body
+        .split('\n')
+        .map((line) => (line === '' ? '' : indent + line))
+        .join('\n'),
+      depth + 1,
+    );
+  });
 }
 
 function buildPageWithBundle(name: string): string {
-  const template = readFileSync(join(ROOT, 'web', name), 'utf8');
+  const template = resolveIncludes(readFileSync(join(ROOT, 'web', name), 'utf8'));
   if (!template.includes('<!--BUNDLE-->')) {
     throw new Error(`Platzhalter <!--BUNDLE--> fehlt in ${name}`);
   }

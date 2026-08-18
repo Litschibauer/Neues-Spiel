@@ -44,6 +44,7 @@ src/server/
 
 scripts/          Golden-Vector-Generator, Lastmessung, Seiten-Build
 web/              Vorlagen für Prüfstand, Feldtest und Werkbank
+  farm/           Die Spielseite in Teilen — Build fügt sie zu einer Datei
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```
 

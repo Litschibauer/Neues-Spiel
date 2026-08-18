@@ -991,7 +991,7 @@ try {
     shellBefore,
   );
 
-  const template = join(ROOT, 'web', 'farm.template.html');
+  const template = join(ROOT, 'web', 'farm', 'page.html');
   const originalTemplate = readFileSync(template, 'utf8');
   const MARKER = 'NEUE-VERSION-PRUEFUNG';
   try {

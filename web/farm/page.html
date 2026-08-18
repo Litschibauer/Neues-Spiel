@@ -1,0 +1,170 @@
+<title>Hof</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2f7d5d">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+<!--INCLUDE:farm/style.css-->
+</style>
+
+<div class="gate" id="gate">
+  <div>
+    <h1>Dein Hof</h1>
+    <p>Säen, mahlen, füttern, ernten. Läuft auch ohne Netz weiter.</p>
+  </div>
+  <button class="big" id="create">Neuen Hof anlegen</button>
+  <hr>
+  <p>Schon einen Hof? Schlüssel eintragen:</p>
+  <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
+         placeholder="hof_XXXXXX-XXXXXX-XXXXXX-XXXXXX">
+  <button class="ghost" id="connect">Weiterspielen</button>
+  <p class="tiny"><a href="/feldtest">Feldtest-Ansicht</a></p>
+</div>
+
+<div class="gate" id="keygate" hidden>
+  <div class="keybox">
+    <strong>Das ist dein Schlüssel</strong>
+    <code id="keyvalue"></code>
+    <p class="why">
+      Er ist Passwort und Benutzername in einem. Notiere ihn — ohne ihn ist der
+      Hof weg, und auch der Betreiber kann ihn nicht nachschlagen.
+    </p>
+    <div class="row">
+      <button class="ghost" id="keycopy">Kopieren</button>
+      <button class="big" id="keydone">Hab ich notiert</button>
+    </div>
+  </div>
+</div>
+
+<div id="shell" hidden>
+  <header class="topbar">
+    <div class="purse">
+      <div class="ring">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" fill="none" stroke="var(--sunk)" stroke-width="4"></circle>
+          <circle id="ring-fill" cx="20" cy="20" r="17" fill="none" stroke="var(--accent)"
+                  stroke-width="4" stroke-linecap="round" stroke-dasharray="107" stroke-dashoffset="107"></circle>
+        </svg>
+        <b id="lvl">1</b>
+      </div>
+      <div class="purse-main">
+        <div class="who">Dein Hof</div>
+        <div class="xp" id="xp">0 / 0 XP</div>
+      </div>
+      <span class="coins">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" fill="currentColor" opacity=".25"></circle>
+          <circle cx="8" cy="8" r="4.5" fill="currentColor"></circle>
+        </svg>
+        <span id="gold">0</span>
+      </span>
+    </div>
+    <div class="silo" id="silo">
+      <span>Lager</span>
+      <span class="silo-track"><i class="silo-fill" id="silo-fill"></i></span>
+      <b id="silo-num">0/0</b>
+    </div>
+  </header>
+
+  <div class="sheet-bg" id="pick-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+      <h3 id="pick-title"></h3>
+      <div id="pick-list"></div>
+      <button class="sheet-close" id="pick-close">Abbrechen</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="banner" id="lease" hidden>
+      <p id="lease-text"></p>
+      <button id="takeover">Hier weiterspielen</button>
+    </div>
+
+    <section class="view" id="view-farm">
+      <div class="plots" id="plots"></div>
+      <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
+    </section>
+
+    <section class="view" id="view-orders" hidden>
+      <h2>Kunden warten</h2>
+      <div id="requests"></div>
+      <h2>Postfach</h2>
+      <div id="mail"></div>
+    </section>
+
+    <section class="view" id="view-market" hidden>
+      <p class="note" id="market-note" hidden>
+        Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich
+        nicht auf diesem Gerät. Anschauen geht trotzdem.
+      </p>
+      <h2>Andere Höfe bieten an</h2>
+      <div id="market-list"></div>
+      <h2>Deine Auslage</h2>
+      <div id="my-orders"></div>
+    </section>
+
+    <section class="view" id="view-store" hidden>
+      <h2>Vorräte</h2>
+      <div class="chips" id="stock"></div>
+      <h2>Beim Händler kaufen</h2>
+      <div id="buy"></div>
+      <h2>An den Händler verkaufen</h2>
+      <div id="sell"></div>
+      <h2>Selbst anbieten</h2>
+      <div id="list"></div>
+      <h2>Gerät</h2>
+      <button class="card" id="forget">
+        <div class="body">
+          <div class="top">Von diesem Gerät abmelden</div>
+          <div class="sub">Schlüssel und lokaler Stand werden gelöscht</div>
+        </div>
+      </button>
+      <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
+    </section>
+  </main>
+
+  <nav>
+    <button data-view="farm" aria-current="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+      Hof
+    </button>
+    <button data-view="orders">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg>
+      Aufträge
+      <span class="dot" id="dot-orders" hidden>0</span>
+    </button>
+    <button data-view="market">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.2 10H5.2z"/><path d="M9 9V6a3 3 0 016 0v3"/></svg>
+      Markt
+      <span class="dot" id="dot-market" hidden>0</span>
+    </button>
+    <button data-view="store">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>
+      Lager
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+<!--BUNDLE-->
+</script>
+
+<script>
+(function () {
+  'use strict';
+
+  <!--INCLUDE:farm/verbindung.js-->
+
+  <!--INCLUDE:farm/texte.js-->
+
+  <!--INCLUDE:farm/bilder.js-->
+
+  <!--INCLUDE:farm/anzeige.js-->
+
+  <!--INCLUDE:farm/tippen.js-->
+
+  <!--INCLUDE:farm/start.js-->
+})();
+</script>

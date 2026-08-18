@@ -22,13 +22,32 @@ lässt den Rest unberührt.
 
 ---
 
+## Wo was liegt
+
+Die Spielseite ist in Teile zerlegt, die der Build wieder zu **einer** Datei
+zusammensetzt (`<!--INCLUDE:…-->`). Der Offline-Start bleibt damit unverändert
+— im Cache liegt weiterhin eine einzige Datei —, aber wer die Gestaltung
+anfasst, öffnet eine CSS-Datei statt zweitausend Zeilen HTML.
+
+| Datei | Was drinsteht | Zeilen |
+| --- | --- | --- |
+| `web/farm/style.css` | **Farben, Maße, alles Optische** | 328 |
+| `web/farm/page.html` | Das Gerüst und die Include-Liste | 171 |
+| `web/farm/bilder.js` | Die SVG-Zeichnungen der Plätze | 154 |
+| `web/farm/texte.js` | Jedes deutsche Wort | 30 |
+| `web/farm/anzeige.js` | Zeichnen aus dem Anzeigemodell | 527 |
+| `web/farm/tippen.js` | Was ein Tipp auslöst | 97 |
+| `web/farm/verbindung.js` | Speichern, API, Live-Leitung | 142 |
+| `web/farm/start.js` | Startreihenfolge, Lease, Sync | 207 |
+
+Für eigene Gestaltung reichen die ersten drei.
+
 ## Die drei Stellen, an denen Design stattfindet
 
-### 1. Die Farben und Maße — `:root` in `web/farm.template.html`
+### 1. Die Farben und Maße — `web/farm/style.css`
 
 Ganz oben in der Datei stehen die Gestaltungswerte, und **nur dort**. Kein
-Farbwert steht sonst irgendwo im Dokument; ein Test wäre übertrieben, ein
-`grep` nach `#` reicht.
+Farbwert steht sonst irgendwo; ein `grep` nach `#` in `web/farm/` zeigt es.
 
 ```css
 :root {
@@ -45,7 +64,7 @@ Drei Blöcke, und alle drei müssen mit: `:root` (hell), der
 ist kein Duplikat — er lässt eine spätere Umschaltung im Spiel gewinnen,
 unabhängig von der Systemeinstellung.
 
-### 2. Die Zeichnungen — die Tabelle `ART`
+### 2. Die Zeichnungen — die Tabelle `ART` in `web/farm/bilder.js`
 
 ```js
 var ART = {
@@ -79,7 +98,7 @@ Version lang generisch aus.
 > Offline-Start wieder kaputt macht. Als Data-URI in der Vorlage ist es Teil
 > der Datei — und der Service Worker hat es damit automatisch mit.
 
-### 3. Die Texte — die Renderer
+### 3. Die Texte — `web/farm/texte.js` und die Renderer
 
 Anzeigenamen stehen in `NAMES`, alles andere direkt in der jeweiligen
 `render…`-Funktion; `plotStatus()` etwa erzeugt jeden Statussatz einer Kachel.
