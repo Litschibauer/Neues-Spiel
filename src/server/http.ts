@@ -231,6 +231,43 @@ function publish(accountId: string, game: Server): void {
   if (publishOrders(market, accountId, game)) events.broadcast('market', accountId);
 }
 
+/**
+ * Mitzählen, warum Batches abgelehnt oder abgeschnitten wurden.
+ *
+ * Der Grund für diesen Zähler ist eine Frage, die sich sonst nicht beantworten
+ * lässt: **Frisst der Deploy von eben gerade die Arbeit von Leuten, die offline
+ * waren?** Ein einzelner abgeschnittener Batch sieht im Protokoll aus wie jeder
+ * andere; erst die Häufung nach einem Ausrollen ist das Signal.
+ *
+ * Die Gründe sind sehr verschieden zu lesen:
+ *
+ *  - `OFFER_GONE` ist **normal** — jemand war beim Kauf schneller. Das ist die
+ *    geteilte Welt, kein Fehler.
+ *  - `UNKNOWN_COMMAND` heißt: Der Client kennt eine Aktion, die dieser Server
+ *    nicht kennt. Das kann nur an einem Versionsunterschied liegen, und der
+ *    ist immer unsere Schuld, nie die des Spielers.
+ *  - Alles andere ist eine Regel, die beim Nachrechnen nicht mehr galt. Nach
+ *    einem Ausrollen ist auch das ein Versionsverdacht.
+ */
+const rejections = new Map<string, number>();
+
+function noteTruncation(result: { ok: boolean; reason?: string }, sent: number, id: string): void {
+  const reason = result.reason;
+  if (!reason) return;
+
+  const key = reason.replace(/^ILLEGAL_COMMAND:/, '');
+  rejections.set(key, (rejections.get(key) ?? 0) + 1);
+
+  // Der eine Fall, der laut sein muss: Er bedeutet, dass Client und Server
+  // nicht denselben Befehlssatz haben.
+  if (key === 'UNKNOWN_COMMAND') {
+    console.warn(
+      `[version] ${id} schickte eine Aktion, die dieser Server nicht kennt — ` +
+        `${sent} Commands eingereicht. Läuft dort eine neuere App als hier ein Server?`,
+    );
+  }
+}
+
 function persist(account: AccountRecord, game: Server): void {
   accounts.save({ ...account, lastSeenMs: Date.now() }, snapshotOf(game));
 }
@@ -554,6 +591,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       // Offene Live-Leitungen. Jede kostet Speicher, auch wenn nichts passiert
       // — auf einem kleinen Server die Zahl, die man im Auge behält.
       streams: events.size,
+      // Warum Offline-Arbeit abgelehnt oder abgeschnitten wurde, seit dem
+      // Start. Nach einem Ausrollen die erste Zahl, die man ansieht:
+      // `OFFER_GONE` ist normal, `UNKNOWN_COMMAND` bedeutet Versionsbruch.
+      rejections: Object.fromEntries(rejections),
       // Damit sich von außen prüfen lässt, ob wirklich verschlüsselt ankommt,
       // was man sich beim Aufsetzen vorgenommen hat.
       secure: isSecureTransport(CONFIG),
@@ -746,6 +787,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       // ausrichten kann. Ohne das müsste er seiner eigenen vertrauen — und die
       // ist genau das, was der Server nicht akzeptiert (§4).
       Object.assign(result as object, { serverTime: Date.now() });
+
+      noteTruncation(result, parsed.commands.length, account.id);
 
       const label = result.ok ? result.kind : `abgelehnt: ${result.reason}`;
       console.log(

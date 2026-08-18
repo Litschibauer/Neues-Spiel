@@ -668,7 +668,7 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | `GET /` | — | **Das Spiel** |
 | `GET /feldtest` | — | Messgerät: dieselbe Sim mit `seq`, Tick, Warteschlange und Protokoll |
 | `GET /admin` | — | Werkbank (Aktionen brauchen das Admin-Token) |
-| `GET /health` | — | Umgebung, Stand, Regelwerk, `secure` |
+| `GET /health` | — | Umgebung, Stand, Regelwerk, `secure`, `shell`, `streams`, `rejections` |
 | `GET /sw.js`, `GET /manifest.webmanifest` | — | App-Hülle für den Funkloch-Start |
 | `POST /api/account` | — | Neuen Hof anlegen (mit Bremse, R4) |
 | `GET /api/state` | Hof-Schlüssel | Snapshot + Serverzeit |
@@ -690,6 +690,98 @@ Grenzen: 512 kB pro Request, höchstens 5000 Commands — ein Angreifer wählt d
 Log-Länge sonst frei (R4).
 
 ---
+
+## Änderungen, die Offline-Spieler treffen können
+
+Der Neustart selbst ist harmlos (oben gemessen). Gefährlich ist etwas anderes:
+**Was passiert mit jemandem, der offline war, während sich die Regeln geändert
+haben?** Sein Gerät hat unter den alten Regeln gerechnet, der Server rechnet
+unter den neuen nach — und wenn beide zu verschiedenen Ergebnissen kommen, wird
+sein Abend abgeschnitten.
+
+### Was schon sicher ist
+
+| Änderung | Warum sie niemanden trifft |
+| --- | --- |
+| Balance, Preise, Zeiten, neue Gegenstände | Regelwerk-Versionierung (R2): Der Log wird unter der Version validiert, unter der er entstanden ist, und **erst danach** migriert |
+| Ein neues Command (z. B. `SKIP_REQUEST`) | Rein additiv. Eine alte App schickt es nie |
+| Ein neues Zustandsfeld | `normalizeState()` füllt es beim Laden auf |
+| Markt, Speicher, Live-Leitungen, Oberfläche | Steht nicht im Command-Log — für die Nachrechnung unsichtbar |
+
+Das deckt fast alles ab, was man im Alltag tut.
+
+### Der eine gefährliche Fall
+
+**Die Bedeutung eines bestehenden Commands ändert sich im CODE.** Nicht in den
+Daten — im Code. Beispiel: Eine Prüfung wird strenger, eine Reihenfolge dreht
+sich um, eine Rundung wird korrigiert.
+
+Warum genau das die Lücke ist: `rulesetVersion` versioniert die **Daten**, nicht
+den Code. Einen alten Log rechnet der Server immer mit dem Code nach, der gerade
+läuft.
+
+Nachgestellt — ein Spieler mit vier Offline-Aktionen, von denen die dritte unter
+dem neuen Code nicht mehr gilt:
+
+```
+Offline gespielt: 4 Commands
+Ergebnis: partial · übernommen bis seq 2
+Grund: ILLEGAL_COMMAND:UNKNOWN_COMMAND ab seq 3
+VERLOREN: 2 Commands
+```
+
+Die gute Nachricht zuerst: **Es zerschießt sich nicht.** Der Präfix-Commit hält
+den Zustand konsistent — der Hof bleibt heil, nichts wird doppelt oder
+widersprüchlich. Die schlechte: Zwei Aktionen sind weg, und der Spieler bekommt
+dafür ein „Teil verworfen" zu sehen, für einen Fehler, den er nicht gemacht hat.
+
+### Die Regel, die das verhindert
+
+**Verhaltensänderungen gehören ins Regelwerk als Daten, nicht in den Code als
+`if`.** Das ist keine neue Erfindung, sondern das Prinzip, auf dem das Projekt
+ohnehin steht — man muss es nur auch dann einhalten, wenn eine Codezeile
+schneller wäre.
+
+Braucht es eine Preisuntergrenze, ist die richtige Umsetzung ein Feld im
+Regelwerk und eine **neue Regelversion**, nicht ein `Math.max(1, …)` im Kern.
+Dann rechnet der alte Log unter v1 weiter richtig, und der Spieler wechselt beim
+Sync sauber auf v2.
+
+**Die Golden Vectors sind dabei der Alarm.** Ändert sich Sim-Verhalten, werden
+sie rot — jedes Mal. Ein rotes `npm test` nach einer Kernänderung heißt deshalb
+nicht „Vektoren neu erzeugen", sondern: *Du hast gerade geändert, was die
+Offline-Logs von tausend Leuten bedeuten.* Erst wenn diese Frage beantwortet
+ist, wird regeneriert.
+
+### Wenn es sich wirklich nicht vermeiden lässt
+
+Für den seltenen Fall, dass eine Änderung weder als Daten noch additiv geht,
+wird aus **einem brechenden Deploy zwei nicht brechende:**
+
+1. **Deploy A — beides annehmen.** Der neue Server versteht die alte *und* die
+   neue Form. Niemand verliert etwas, egal wie alt seine App ist.
+2. **Warten.** Länger als die längste realistische Offline-Strecke; eine Woche
+   ist großzügig. In dieser Zeit `rejections` in `/health` beobachten.
+3. **Deploy B — alte Form entfernen.** Erst wenn der Zähler bei null steht.
+
+Zwei Ausrollungen statt einer, und dafür kein einziger abgeschnittener Abend.
+
+### Woran man es merkt
+
+`/health` zählt mit, warum Offline-Arbeit abgeschnitten wurde:
+
+```bash
+curl -s localhost:8787/health | grep -o '"rejections":{[^}]*}'
+```
+
+| Grund | Lesart |
+| --- | --- |
+| `OFFER_GONE` | **Normal.** Jemand war beim Kauf schneller — das ist die geteilte Welt |
+| `UNKNOWN_COMMAND` | **Alarm.** Client und Server haben nicht denselben Befehlssatz. Steht auch als `[version]`-Warnung im Journal |
+| alles andere | Eine Regel galt beim Nachrechnen nicht mehr. Kurz nach einem Ausrollen ist das ein Versionsverdacht |
+
+Steigt nach einem Deploy irgendetwas außer `OFFER_GONE` an, frisst das Ausrollen
+gerade Offline-Arbeit. Dann zurückrollen, nicht weiterschauen.
 
 ## „Ich sehe immer noch die alte Version"
 

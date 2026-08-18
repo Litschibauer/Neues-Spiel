@@ -319,7 +319,10 @@ Obergrenze, `bandMin`/`bandMax` fürs Preisband. Was der Wähler zulässt, muss 
 Sim annehmen — deshalb rechnet `priceBand()` beide Grenzen an genau einer Stelle
 für Sim und Oberfläche.
 
-Dabei fiel ein echter Fehler auf: Bei billiger Ware rundete das Prozentband nach
-unten auf **0** ab (3 × 25 % = 0,75 → 0). Ein Angebot zu 0 war also erlaubt —
-Ware verschenken und dafür Gebühr zahlen. `priceBand()` zieht jetzt eine
-Untergrenze von 1.
+Dabei fiel eine Unstimmigkeit auf: Bei billiger Ware rundete das Prozentband
+nach unten auf **0** ab (3 × 25 % = 0,75 → 0). Verkaufen konnte man zu 0 nie —
+die Sim lehnt jeden Preis ≤ 0 ohnehin ab. Aber der Preiswähler hätte 0 angeboten
+und die Sim hätte mit „Ungültige Menge" geantwortet: ein Wert, den die
+Oberfläche erlaubt und die Regel verbietet, plus eine Fehlermeldung über die
+falsche Sache. `priceBand()` zieht deshalb eine Untergrenze von 1 — was der
+Wähler zulässt, muss die Sim annehmen.
