@@ -337,6 +337,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     }
     game.grantTime(seconds);
     persist(target, game);
+    events.nudge(target.id, 'farm');
     console.log(`[admin] ${target.id}: ${seconds}s Zeit gutgeschrieben`);
     return json(res, 200, { ok: true, serverTs: game.snapshot.serverTs });
   }
@@ -350,6 +351,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     }
     game.deliver({ item, amount, arrivedAt: Date.now() });
     persist(target, game);
+    events.nudge(target.id, 'farm');
     console.log(`[admin] ${target.id}: ${amount} ${name} ins Postfach`);
     return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
   }

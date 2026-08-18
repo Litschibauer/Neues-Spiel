@@ -16,6 +16,7 @@ function render() {
     && $('view-store').contains(document.activeElement);
   if (!typing) renderStore(v);
   renderBadges(v);
+  renderSheet(v);
 }
 
 function renderPurse(v) {
@@ -38,6 +39,18 @@ function renderPurse(v) {
 }
 
 function plotStatus(p) {
+  if (p.capacity > 1) {
+    var tier = animalOf(p.index);
+    var ready = 0;
+    var busy = 0;
+    p.slots.forEach(function (s) { if (s.done) ready++; else if (s.busy) busy++; });
+    var hungry = p.capacity - ready - busy;
+    var parts = [];
+    if (ready > 0) parts.push(ready + ' fertig');
+    if (busy > 0) parts.push(busy + ' beschäftigt · ' + timeText(p.remaining));
+    if (hungry > 0) parts.push(hungry + ' hungrig');
+    return p.capacity + ' ' + tier.many + ' · ' + parts.join(' · ');
+  }
   if (p.done) return 'fertig · ' + nameOf(p.producing);
   if (p.busy) return timeText(p.remaining);
   if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
@@ -105,7 +118,7 @@ function renderPlots(v) {
     tile.addEventListener('click', function () { tapPlot(p.index); });
     box.appendChild(tile);
 
-    if (p.upgrade && !p.idle && !p.busy && !p.done) {
+    if (p.upgrade && !p.idle) {
       var up = document.createElement('button');
       up.className = 'upgrade';
       up.textContent = p.upgrade.unlocked

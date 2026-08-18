@@ -1,11 +1,23 @@
 import type { Ruleset } from './rules.ts';
-import { derivedTables } from './rules.ts';
+import { derivedTables, slotsAt } from './rules.ts';
 
-export type Plot = {
-  level: number;
+export type Slot = {
   recipe: number;
   startedAt: number;
 };
+
+export type Plot = {
+  level: number;
+  slots: readonly Slot[];
+};
+
+export const EMPTY_SLOT: Slot = { recipe: -1, startedAt: 0 };
+
+export function emptySlots(n: number): Slot[] {
+  const out: Slot[] = [];
+  for (let i = 0; i < n; i++) out.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+  return out;
+}
 
 export const EMPTY_PLOT = -1;
 
@@ -89,7 +101,7 @@ export function initialState(rules: Ruleset): State {
 
   const plots: Plot[] = [];
   for (const def of rules.plots) {
-    plots.push({ level: def.startLevel, recipe: EMPTY_PLOT, startedAt: 0 });
+    plots.push({ level: def.startLevel, slots: emptySlots(slotsAt(rules, plots.length, def.startLevel)) });
   }
 
   const passives: number[] = [];
@@ -111,8 +123,19 @@ export function initialState(rules: Ruleset): State {
 }
 
 export function normalizeState(s: State): State {
+  const plots = s.plots.map((p) => {
+    if (Array.isArray((p as { slots?: unknown }).slots)) return p;
+    const alt = p as unknown as { level: number; recipe?: number; startedAt?: number };
+    if (alt.level <= 0) return { level: alt.level, slots: [] };
+    return {
+      level: alt.level,
+      slots: [{ recipe: alt.recipe ?? EMPTY_PLOT, startedAt: alt.startedAt ?? 0 }],
+    };
+  });
+
   return {
     ...s,
+    plots,
     xp: s.xp ?? 0,
     offers: s.offers ?? [],
     mail: s.mail ?? [],

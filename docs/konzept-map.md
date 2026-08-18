@@ -158,6 +158,68 @@ erlaubt — bestehende Schwellen dürfen nur *sinken*, und keine tut das.
 Stufe 8", ausgegraut. Dieselbe Regel wie beim fehlenden Maiskorn: Was man nicht
 kann, ist eine Information; was fehlt, ist ein Rätsel.
 
+#### v5: drei Tiere pro Stall, jedes mit eigener Uhr
+
+Bis v4 war ein Gehege *ein* Produzent: ein Timer, ein Klick, fertig. Ein Stall
+mit drei Hühnern, die man einzeln füttert und einzeln aberntet, passt da nicht
+hinein — und ist genau das, was ein Hofspiel ausmacht.
+
+**Die Zustandsform bekommt eine Ebene.** Aus
+
+```
+Plot { level, recipe, startedAt }
+```
+
+wird
+
+```
+Plot { level, slots: [{ recipe, startedAt }, …] }
+```
+
+Wie viele Plätze eine Stufe hat, steht als `LevelDef.slots` im Katalog und
+fehlt überall dort, wo es eins ist: `slotsAt()` liefert `slots ?? (Rezepte
+vorhanden ? 1 : 0)`. Alle vier alten Regelwerke bleiben damit unverändert
+gültig. `START` und `COLLECT` tragen ein `slot`, das ohne Angabe 0 ist — ein
+Kommandolog aus v1 spielt Zeichen für Zeichen wie vorher ab.
+
+**Ein Tier ist eine Ausbaustufe.** Kein neuer Command, kein Tierinventar:
+`BUY` kauft die nächste Stufe, und die nächste Stufe hat einen Platz mehr.
+„Jedes Tier kostet gleich viel" ist damit eine Zeile im Katalog und ein Test,
+der es festhält. Drei Stufen, drei Tiere — mehr fasst ein Stall nicht.
+
+**`BUY` darf jetzt während laufender Produktion.** Vorher hätte das das erste
+Huhn zurückgesetzt, deshalb war es gesperrt. Jetzt bleiben die belegten Plätze
+stehen und der neue kommt hinten dran — aber nur, wenn jedes laufende Rezept
+auf der neuen Stufe erlaubt bleibt. Sonst weiterhin `PLOT_BUSY`.
+
+**Jede Tierart frisst ihr eigenes Futter.** Die Mühle mahlt beides:
+
+```
+3 Weizen            → 2 Hühnerfutter   → Huhn → 3 Eier
+1 Mais + 2 Weizen   → 2 Kuhfutter      → Kuh  → 2 Milch
+```
+
+Ein Tier frisst eine Portion. Das Kuhfutter ist ab Stufe 6 freigeschaltet —
+derselben Stufe, auf der Kuhweide und Molkerei aufgehen.
+
+| Rezept | Gold/min | ab Stufe |
+| --- | --- | --- |
+| Hühnerfutter | 1,8 | 2 |
+| Kuhfutter | 1,8 | 6 |
+| Milch | 3,2 | 6 |
+
+**Was der Patch mit alten Höfen macht:** `GROW` füllt fehlende Plätze auf.
+Ein leeres Gehege aus v4 (Stufe 1 hatte dort noch kein Rezept) wird in v5 zu
+einem Stall mit einem Huhn — der Hof bekommt das erste Tier geschenkt statt
+einen Platz zu verlieren. Zwei Hühner bleiben zwei Hühner, laufende Produktion
+läuft weiter. Kühe fressen ab dem Patch Kuhfutter; wer Hühnerfutter im Lager
+hatte, behält es für die Hühner.
+
+**Die Oberfläche:** Ein Stall mit mehr als einem Platz öffnet beim Antippen ein
+Blatt mit einer Zeile pro Tier — eigener Status, eigene Uhr, eigener Knopf —
+plus „Alle ernten" und „Alle füttern", solange sich das lohnt. Die Kachel
+selbst fasst zusammen: „3 Hühner · 1 fertig · 2 hungrig".
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

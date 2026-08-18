@@ -1,15 +1,27 @@
 var NAMES = {
   gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
   corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
-  mill: 'Mühle', dairy: 'Molkerei',
+  mill: 'Mühle', dairy: 'Molkerei', 'cow-feed': 'Kuhfutter',
 };
-function nameOf(id) { return NAMES[id] || id; }
+function hasCowFeed() {
+  return rules.items.some(function (x) { return x.id === 'cow-feed'; });
+}
+function nameOf(id) {
+  if (id === 'feed' && hasCowFeed()) return 'Hühnerfutter';
+  return NAMES[id] || id;
+}
 function itemName(i) { return nameOf(rules.items[i].id); }
+function animalOf(i) {
+  var id = rules.plots[i].id;
+  if (id.indexOf('coop-') === 0) return { one: 'Huhn', many: 'Hühner' };
+  if (id.indexOf('pasture-') === 0) return { one: 'Kuh', many: 'Kühe' };
+  return { one: 'Platz', many: 'Plätze' };
+}
 function plotName(i) {
   var id = rules.plots[i].id;
   if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
   if (id.indexOf('coop-') === 0) return 'Gehege ' + id.slice(5);
-  if (id.indexOf('pasture-') === 0) return 'Kuhgehege ' + id.slice(8);
+  if (id.indexOf('pasture-') === 0) return 'Kuhweide ' + id.slice(8);
   return nameOf(id);
 }
 function stacks(list) {

@@ -314,7 +314,7 @@ Server auf einem 1-GB-VPS, Client auf iPhone und iPad über Mobilfunk. Alle Fäl
 | **Balance-Patch live** | v1 → v3 an einem laufenden Spielstand, laufende Felder fair umgerechnet. |
 
 > Zu den Versionsnummern: Der Feldtest lief mit dem damaligen v3 (schnelle Uhren).
-> Seit Phase 1 ist das v4 — v3 ist jetzt der Inhalts-Patch. Der Feldtest-Ruleset
+> Seit Phase 1 ist das v5 — v3 ist jetzt der Inhalts-Patch. Der Feldtest-Ruleset
 > trägt den vollen Inhalt inklusive Mühle und Bäckerei.
 
 Der wichtigste Eindruck lässt sich nicht als Zahl festhalten: **Während des Funklochs fühlt

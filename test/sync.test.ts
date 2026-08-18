@@ -33,9 +33,9 @@ test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor'
   assert.equal(res.reason, 'ILLEGAL_COMMAND:PLOT_BUSY');
 
   assert.equal(server.snapshot.seq, 1);
-  assert.equal(server.snapshot.state.plots[0]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[0]!.slots[0]!.recipe, R_WHEAT);
 
-  assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
+  assert.equal(server.snapshot.state.plots[1]!.slots[0]!.recipe, EMPTY_PLOT);
 });
 
 test('ist schon das erste neue Command illegal, wird gar nichts übernommen', () => {
@@ -107,8 +107,8 @@ test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
   assert.equal(r2.reason, 'FORK_DETECTED');
 
   tablet.adopt(r2.snapshot, DISCARD_QUEUE);
-  assert.equal(tablet.state.plots[0]!.recipe, R_WHEAT);
-  assert.equal(tablet.state.plots[1]!.recipe, EMPTY_PLOT);
+  assert.equal(tablet.state.plots[0]!.slots[0]!.recipe, R_WHEAT);
+  assert.equal(tablet.state.plots[1]!.slots[0]!.recipe, EMPTY_PLOT);
 });
 
 test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entscheidet', () => {
@@ -212,7 +212,7 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   assert.equal(res.reason, 'NOT_ACTIVE_DEVICE');
 
   assert.equal(server.snapshot.seq, 1);
-  assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
+  assert.equal(server.snapshot.state.plots[1]!.slots[0]!.recipe, EMPTY_PLOT);
 });
 
 test('R3 — ausdrückliche Übernahme geht durch', () => {
@@ -230,7 +230,7 @@ test('R3 — ausdrückliche Übernahme geht durch', () => {
   const res = server.sync(tablet.buildSyncRequest(), T0 + 20_000);
   assert.equal(res.ok, true);
   assert.equal(server.activeDevice?.id, 'tablet');
-  assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[1]!.slots[0]!.recipe, R_WHEAT);
 
   const back = server.sync(
     { baseSeq: 2, rulesetVersion: CURRENT_RULESET_VERSION, commands: [], deviceId: 'handy' },
@@ -292,8 +292,8 @@ test('Aktionen während eines laufenden Syncs überleben die Antwort', async () 
 
   const second = server.sync(client.buildSyncRequest(), T0 + 60_000);
   assert.equal(second.ok, true);
-  assert.notEqual(second.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
-  assert.notEqual(second.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
+  assert.notEqual(second.snapshot.state.plots[0]!.slots[0]!.recipe, EMPTY_PLOT);
+  assert.notEqual(second.snapshot.state.plots[1]!.slots[0]!.recipe, EMPTY_PLOT);
 });
 
 test('vom Server abgelehnte Commands wandern nicht zurück in die Warteschlange', async () => {

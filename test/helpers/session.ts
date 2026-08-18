@@ -136,7 +136,7 @@ function affordableRecipes(s: State, rules: Ruleset, plot: number): number[] {
 function affordableUpgrades(s: State, rules: Ruleset): number[] {
   const out: number[] = [];
   s.plots.forEach((plot, i) => {
-    if (plot.recipe !== EMPTY_PLOT) return;
+    if (plot.slots.some((x) => x.recipe !== EMPTY_PLOT)) return;
     const level = nextLevel(rules, i, plot.level);
     if (!level) return;
     if (levelOf(rules, s.xp) < (level.minPlayerLevel ?? 1)) return;
@@ -203,12 +203,14 @@ export function playRandomSession(
     const moves: Array<() => void> = [];
 
     s.plots.forEach((plot, idx) => {
-      if (plot.recipe === EMPTY_PLOT) {
-        const options = affordableRecipes(s, rules, idx);
-        for (const recipe of options) moves.push(() => client.start(idx, recipe));
-      } else if (s.tick - plot.startedAt >= rules.recipes[plot.recipe]!.durationTicks) {
-        moves.push(() => client.collect(idx));
-      }
+      plot.slots.forEach((slot, j) => {
+        if (slot.recipe === EMPTY_PLOT) {
+          const options = affordableRecipes(s, rules, idx);
+          for (const recipe of options) moves.push(() => client.start(idx, recipe, j));
+        } else if (s.tick - slot.startedAt >= rules.recipes[slot.recipe]!.durationTicks) {
+          moves.push(() => client.collect(idx, j));
+        }
+      });
     });
 
     for (const plot of affordableUpgrades(s, rules)) {
@@ -273,8 +275,12 @@ export function assertAllIntegers(s: State): void {
     ['xp', s.xp],
     ...s.items.map((v, i): [string, number] => [`items[${i}]`, v]),
     ...s.passives.map((v, i): [string, number] => [`passives[${i}]`, v]),
-    ...s.plots.map((p, i): [string, number] => [`plots[${i}].startedAt`, p.startedAt]),
-    ...s.plots.map((p, i): [string, number] => [`plots[${i}].recipe`, p.recipe]),
+    ...s.plots.flatMap((p, i): Array<[string, number]> =>
+      p.slots.flatMap((slot, j): Array<[string, number]> => [
+        [`plots[${i}].slots[${j}].startedAt`, slot.startedAt],
+        [`plots[${i}].slots[${j}].recipe`, slot.recipe],
+      ]),
+    ),
     ...s.plots.map((p, i): [string, number] => [`plots[${i}].level`, p.level]),
   ];
 

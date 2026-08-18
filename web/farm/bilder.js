@@ -37,25 +37,30 @@ function artField(stage, crop) {
   return out;
 }
 
-function artPasture(level, ready) {
+function cow(x, y, scale) {
+  return '<g transform="translate(' + x + ' ' + y + ') scale(' + scale + ')">' +
+    '<ellipse cx="0" cy="0" rx="18" ry="11" fill="var(--hide)"/>' +
+    '<ellipse cx="-7" cy="-3" rx="6" ry="4" fill="var(--hide-spot)" opacity=".8"/>' +
+    '<ellipse cx="8" cy="3" rx="4.5" ry="3" fill="var(--hide-spot)" opacity=".8"/>' +
+    '<path d="M-14 9v6M-5 10v5M5 10v5M14 9v6" stroke="var(--hide-spot)" stroke-width="2.5" stroke-linecap="round"/>' +
+    '<circle cx="19" cy="-7" r="7" fill="var(--hide)"/>' +
+    '<path d="M13 -12c-3-3-2-6-2-6s4 1 5 4z" fill="var(--hide-spot)"/>' +
+    '<circle cx="21" cy="-9" r="1" fill="var(--ink)"/>' +
+    '<ellipse cx="24" cy="-4" rx="3.5" ry="2.5" fill="var(--corn)" opacity=".55"/>' +
+    '</g>';
+}
+
+function artPasture(animals, ready) {
   var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
     '<path d="M0 54h100v26H0z" fill="var(--leaf)" opacity=".5"/>' +
 
     '<path d="M6 44v22M28 44v22M72 44v22M94 44v22" stroke="var(--wood)" stroke-width="3" stroke-linecap="round"/>' +
     '<path d="M2 50h96M2 60h96" stroke="var(--wood)" stroke-width="2.5" stroke-linecap="round"/>';
 
-  if (level >= 2) {
-    out += '<g transform="translate(50 58)">' +
-      '<ellipse cx="0" cy="0" rx="18" ry="11" fill="var(--hide)"/>' +
-      '<ellipse cx="-7" cy="-3" rx="6" ry="4" fill="var(--hide-spot)" opacity=".8"/>' +
-      '<ellipse cx="8" cy="3" rx="4.5" ry="3" fill="var(--hide-spot)" opacity=".8"/>' +
-      '<path d="M-14 9v6M-5 10v5M5 10v5M14 9v6" stroke="var(--hide-spot)" stroke-width="2.5" stroke-linecap="round"/>' +
-      '<circle cx="19" cy="-7" r="7" fill="var(--hide)"/>' +
-      '<path d="M13 -12c-3-3-2-6-2-6s4 1 5 4z" fill="var(--hide-spot)"/>' +
-      '<circle cx="21" cy="-9" r="1" fill="var(--ink)"/>' +
-      '<ellipse cx="24" cy="-4" rx="3.5" ry="2.5" fill="var(--corn)" opacity=".55"/>' +
-      '</g>';
-  }
+  if (animals === 1) out += cow(50, 58, 1);
+  if (animals === 2) out += cow(30, 54, .7) + cow(62, 64, .7);
+  if (animals >= 3) out += cow(24, 52, .58) + cow(56, 60, .58) + cow(34, 70, .58);
+
   if (ready) {
     out += '<g transform="translate(20 66)">' +
       '<path d="M-6 -7h12l-2 9h-8z" fill="var(--milk)" stroke="var(--soil-dark)" stroke-width="1"/>' +
@@ -102,27 +107,27 @@ function artMill(working) {
     '</g></g>';
 }
 
-function artCoop(level, ready) {
+function chicken(x, y, flip, tone) {
+  return '<g transform="translate(' + x + ' ' + y + ')' + (flip ? ' scale(-1 1)' : '') + '">' +
+    '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="var(' + tone + ')"/>' +
+    '<circle cx="5" cy="-5" r="3.6" fill="var(' + tone + ')"/>' +
+    '<path d="M8 -5l3 1-3 1z" fill="var(--ripe)"/>' +
+    '<circle cx="6" cy="-6" r=".8" fill="var(--ink)"/>' +
+    '<path d="M4-8c1-2 3-1 2 1" fill="var(--bad)"/>' +
+    '</g>';
+}
+
+function artCoop(animals, ready) {
   var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
     '<path d="M0 62h100v18H0z" fill="var(--leaf)" opacity=".45"/>' +
     '<path d="M28 62V40h44v22z" fill="var(--wood)"/>' +
     '<path d="M50 28 22 42h56z" fill="var(--wood-dark)"/>' +
     '<rect x="44" y="50" width="12" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>';
 
-  if (level >= 2) {
-    out += '<g transform="translate(16 56)">' +
-      '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="var(--feather)"/>' +
-      '<circle cx="5" cy="-5" r="3.6" fill="var(--feather)"/>' +
-      '<path d="M8 -5l3 1-3 1z" fill="var(--ripe)"/>' +
-      '<circle cx="6" cy="-6" r=".8" fill="var(--ink)"/>' +
-      '<path d="M4-8c1-2 3-1 2 1" fill="var(--bad)"/>' +
-      '</g>' +
-      '<g transform="translate(84 58) scale(-1 1)">' +
-      '<ellipse cx="0" cy="0" rx="6" ry="5" fill="var(--feather-2)"/>' +
-      '<circle cx="4.5" cy="-4.5" r="3.2" fill="var(--feather-2)"/>' +
-      '<path d="M7 -4.5l2.6 1-2.6 1z" fill="var(--ripe)"/>' +
-      '</g>';
-  }
+  if (animals >= 1) out += chicken(16, 56, false, '--feather');
+  if (animals >= 2) out += chicken(84, 58, true, '--feather-2');
+  if (animals >= 3) out += chicken(64, 70, true, '--feather');
+
   if (ready) {
     out += '<g transform="translate(50 70)">' +
       '<ellipse cx="-8" cy="0" rx="4" ry="5" fill="var(--egg)"/>' +
@@ -139,8 +144,8 @@ var ART = {
     return artField(p.done ? 3 : p.progress < .4 ? 1 : 2, p.producing);
   },
   'mill': function (p) { return artMill(p.busy); },
-  'coop-': function (p) { return artCoop(p.level, p.done); },
-  'pasture-': function (p) { return artPasture(p.level, p.done); },
+  'coop-': function (p) { return artCoop(p.capacity, p.done); },
+  'pasture-': function (p) { return artPasture(p.capacity, p.done); },
   'dairy': function (p) { return artDairy(p.busy); },
   fallback: function () { return artField(0, null); },
 };

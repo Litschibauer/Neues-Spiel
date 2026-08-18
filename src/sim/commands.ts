@@ -3,9 +3,14 @@ export type CommandBase = {
   tick: number;
 };
 
-export type StartCommand = CommandBase & { type: 'START'; plot: number; recipe: number };
+export type StartCommand = CommandBase & {
+  type: 'START';
+  plot: number;
+  recipe: number;
+  slot?: number;
+};
 
-export type CollectCommand = CommandBase & { type: 'COLLECT'; plot: number };
+export type CollectCommand = CommandBase & { type: 'COLLECT'; plot: number; slot?: number };
 
 export type BuyCommand = CommandBase & { type: 'BUY'; plot: number };
 
@@ -45,6 +50,7 @@ export type Command =
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
+  | 'NO_SUCH_SLOT'
   | 'PLOT_LOCKED'
   | 'PLOT_BUSY'
   | 'PLOT_EMPTY'

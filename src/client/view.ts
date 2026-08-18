@@ -15,6 +15,18 @@ export type Stack = { item: number; amount: number };
 
 export type Blocker = 'level' | 'cost' | 'inputs' | 'space' | 'slots' | 'offline' | null;
 
+export type SlotView = {
+  index: number;
+  busy: boolean;
+  done: boolean;
+  progress: number;
+  remaining: number;
+  producing: string | null;
+  output: Stack | null;
+  next: RecipeOption | null;
+  tap: 'collect' | 'start' | 'none';
+};
+
 export type PlotView = {
   index: number;
   id: string;
@@ -28,6 +40,9 @@ export type PlotView = {
   output: Stack | null;
   next: RecipeOption | null;
   options: readonly RecipeOption[];
+  slots: readonly SlotView[];
+  capacity: number;
+  free: number;
   tap: 'collect' | 'start' | 'buy' | 'none';
   blocked: Blocker;
   upgrade: {
@@ -146,66 +161,94 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
       }
     : null;
 
-  const busy = plot.recipe !== EMPTY_PLOT;
-  const recipe = busy ? rules.recipes[plot.recipe] : undefined;
-  const duration = recipe?.durationTicks ?? 0;
-  const elapsed = busy ? state.tick - plot.startedAt : 0;
-  const done = busy && elapsed >= duration;
   const canRun = recipesAt(rules, i, plot.level).length > 0;
+  const nextRecipe = startable(state, rules, i);
 
-  const nextRecipe = busy ? -1 : startable(state, rules, i);
+  const options: RecipeOption[] = recipesAt(rules, i, plot.level).flatMap((index) => {
+    const rdef = rules.recipes[index];
+    if (!rdef) return [];
+    return [
+      {
+        recipe: index,
+        id: rdef.id,
+        inputs: rdef.inputs.map((x) => ({ item: x.item, amount: x.amount })),
+        output: { item: rdef.output.item, amount: rdef.output.amount },
+        durationTicks: rdef.durationTicks,
+        affordable:
+          recipeUnlocked(rules, index, playerLevel) &&
+          rdef.inputs.every((x) => count(state, x.item) >= x.amount),
+        unlocked: recipeUnlocked(rules, index, playerLevel),
+        minPlayerLevel: recipeMinLevel(rules, index),
+      },
+    ];
+  });
 
-  const options: RecipeOption[] = busy
-    ? []
-    : recipesAt(rules, i, plot.level).flatMap((index) => {
-        const def = rules.recipes[index];
-        if (!def) return [];
-        return [
-          {
-            recipe: index,
-            id: def.id,
-            inputs: def.inputs.map((x) => ({ item: x.item, amount: x.amount })),
-            output: { item: def.output.item, amount: def.output.amount },
-            durationTicks: def.durationTicks,
-            affordable:
-              recipeUnlocked(rules, index, playerLevel) &&
-              def.inputs.every((x) => count(state, x.item) >= x.amount),
-            unlocked: recipeUnlocked(rules, index, playerLevel),
-            minPlayerLevel: recipeMinLevel(rules, index),
-          },
-        ];
-      });
+  const startOption = nextRecipe >= 0 ? options.find((o) => o.recipe === nextRecipe) ?? null : null;
+
+  const slots: SlotView[] = plot.slots.map((slot, j) => {
+    const running = slot.recipe !== EMPTY_PLOT;
+    const recipe = running ? rules.recipes[slot.recipe] : undefined;
+    const duration = recipe?.durationTicks ?? 0;
+    const elapsed = running ? state.tick - slot.startedAt : 0;
+    const ready = running && elapsed >= duration;
+    return {
+      index: j,
+      busy: running && !ready,
+      done: ready,
+      progress: running ? (ready ? 1 : duration > 0 ? Math.min(1, elapsed / duration) : 0) : 0,
+      remaining: running && !ready ? Math.max(0, duration - elapsed) : 0,
+      producing: recipe ? recipe.id : null,
+      output: recipe ? { item: recipe.output.item, amount: recipe.output.amount } : null,
+      next: running ? null : startOption,
+      tap: ready ? 'collect' : running ? 'none' : startOption ? 'start' : 'none',
+    };
+  });
+
+  const free = slots.filter((s) => !s.busy && !s.done).length;
+  const lead =
+    slots.find((s) => s.done) ??
+    slots
+      .filter((s) => s.busy)
+      .sort((a, b) => a.remaining - b.remaining)[0] ??
+    slots[0] ??
+    null;
+
+  const anyDone = slots.some((s) => s.done);
+  const running = lead !== null && (lead.busy || lead.done);
 
   let tap: PlotView['tap'] = 'none';
   let blocked: Blocker = null;
 
-  if (done || busy) {
-    tap = done ? 'collect' : 'none';
+  if (anyDone) {
+    tap = 'collect';
   } else if (!canRun) {
     tap = upgrade ? 'buy' : 'none';
     if (upgrade && !upgrade.unlocked) blocked = 'level';
     else if (upgrade && !upgrade.affordable) blocked = 'cost';
+  } else if (free === 0) {
+    blocked = 'slots';
   } else if (nextRecipe < 0) {
     blocked = options.some((o) => o.unlocked) ? 'inputs' : 'level';
   } else {
     tap = 'start';
   }
 
-  const startDef = nextRecipe >= 0 ? rules.recipes[nextRecipe] : undefined;
-
   return {
     index: i,
     id: def.id,
     level: plot.level,
-    idle: !busy && !canRun,
-    busy: busy && !done,
-    done,
-    progress: busy ? (done ? 1 : duration > 0 ? Math.min(1, elapsed / duration) : 0) : 0,
-    remaining: busy && !done ? Math.max(0, duration - elapsed) : 0,
-    producing: recipe ? recipe.id : null,
-    output: recipe ? { item: recipe.output.item, amount: recipe.output.amount } : null,
-    next: startDef ? options.find((o) => o.recipe === nextRecipe) ?? null : null,
-    options,
+    idle: !running && !canRun,
+    busy: lead !== null && lead.busy,
+    done: anyDone,
+    progress: lead?.progress ?? 0,
+    remaining: lead?.remaining ?? 0,
+    producing: lead?.producing ?? null,
+    output: lead?.output ?? null,
+    next: free > 0 ? startOption : null,
+    options: free > 0 ? options : [],
+    slots,
+    capacity: slots.length,
+    free,
     tap,
     blocked,
     upgrade,

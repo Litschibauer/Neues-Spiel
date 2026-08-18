@@ -33,7 +33,7 @@ test('vorgestellte Geräteuhr wird abgelehnt — Ernte findet nicht statt', () =
 
   assert.equal(res.snapshot.seq, 0);
   assert.equal(count(res.snapshot.state, WHEAT), START_WHEAT);
-  assert.equal(res.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
+  assert.equal(res.snapshot.state.plots[0]!.slots[0]!.recipe, EMPTY_PLOT);
 
   client.adopt(res.snapshot, DISCARD_QUEUE);
   assert.equal(count(client.state, WHEAT), START_WHEAT);

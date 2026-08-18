@@ -224,8 +224,8 @@ test('geteilte Arrays: ein neuer Zustand verändert den alten nie', () => {
     assert.equal(hashState(state), snapshots[i], `Zustand ${i} wurde nachträglich verändert`);
   });
 
-  assert.equal(history[0]!.plots[0]!.recipe, EMPTY_PLOT, 'Startzustand hat einen Platz bekommen');
-  assert.equal(history[1]!.plots[1]!.recipe, EMPTY_PLOT, 'Zustand 1 hat Platz 2 zu früh');
+  assert.equal(history[0]!.plots[0]!.slots[0]!.recipe, EMPTY_PLOT, 'Startzustand hat einen Platz bekommen');
+  assert.equal(history[1]!.plots[1]!.slots[0]!.recipe, EMPTY_PLOT, 'Zustand 1 hat Platz 2 zu früh');
   assert.equal(history[0]!.plots[MILL]!.level, 0, 'Mühle rückwirkend gekauft');
   assert.equal(history[0]!.items[WHEAT], START_WHEAT, 'Inventar rückwirkend verändert');
   assert.equal(history[3]!.orders.length, 0, 'Auftrag rückwirkend eingefügt');

@@ -694,7 +694,7 @@ try {
       JSON.stringify({
         seq: truth2.seq,
         weizen: truth2.state.items[1],
-        belegteFelder: truth2.state.plots.filter((p) => p.recipe !== -1).length,
+        belegteFelder: truth2.state.plots.filter((p) => p.slots.some((x) => x.recipe !== -1)).length,
       }),
     );
   }
@@ -981,6 +981,219 @@ try {
     }).streams;
   }
   check('Die Live-Leitung kommt von allein zurück', streamsBack >= 1, `${streamsBack} offen`);
+
+
+  console.log('\n9b. Ein Stall mit drei Tieren — jedes einzeln');
+
+  const farmTab = `document.querySelector('nav button[data-view="farm"]').click()`;
+  const ordersTab = `document.querySelector('nav button[data-view="orders"]').click()`;
+
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=6000`, 'POST');
+  await evaluate(cdp, ordersTab);
+  try {
+    await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Post da', 20_000);
+  } catch (e) {
+    console.error(
+      '  Diagnose Post:',
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify({
+           mail: document.getElementById('mail').innerHTML.slice(0, 200),
+           sichtbar: !document.getElementById('view-orders').hidden,
+           gold: document.getElementById('gold').textContent,
+         })`,
+      ).catch((x) => String(x)),
+      '| Server:',
+      JSON.stringify(await api(`/api/admin/status?account=${status.accountId}`)).slice(0, 400),
+    );
+    throw e;
+  }
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(300);
+
+  const plantAll = `(function () {
+       var n = 0;
+       for (var k = 0; k < 12; k++) {
+         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+           var s = t.querySelector('.status').textContent;
+           return /→/.test(s) || / oder /.test(s);
+         });
+         if (!tile) break;
+         tile.click();
+         var sheet = document.getElementById('pick-bg');
+         if (sheet.hidden) { n++; continue; }
+         var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+           return !o.disabled && o.querySelector('.top').textContent === 'Weizen';
+         });
+         if (!opt) { document.getElementById('pick-close').click(); break; }
+         opt.click();
+         n++;
+       }
+       return n;
+     })()`;
+
+  const harvestAll = `(function () {
+       var n = 0;
+       for (var k = 0; k < 12; k++) {
+         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+           return t.querySelector('.status').textContent.indexOf('fertig') === 0;
+         });
+         if (!tile) break;
+         tile.click();
+         n++;
+       }
+       return n;
+     })()`;
+
+  const levelNow = async () =>
+    Number(await evaluate<string>(cdp, `document.getElementById('lvl').textContent`));
+
+  await evaluate(cdp, farmTab);
+  for (let round = 0; round < 30 && (await levelNow()) < 3; round++) {
+    await evaluate<number>(cdp, plantAll);
+    await sleep(150);
+    await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
+    await sleep(400);
+    await evaluate<number>(cdp, harvestAll);
+    await sleep(250);
+  }
+  check('Mit Weizen allein kommt man auf Stufe 3', (await levelNow()) >= 3, `Stufe ${await levelNow()}`);
+
+  const buyUpgrade = (name: string) =>
+    evaluate<boolean>(
+      cdp,
+      `(function () {
+         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+           return t.querySelector('.name').textContent.indexOf(${JSON.stringify(name)}) === 0;
+         });
+         if (!tile) return false;
+         var up = tile.querySelector('.upgrade');
+         if (up && !up.disabled) { up.click(); return true; }
+         if (tile.disabled) return false;
+         tile.click();
+         var sheet = document.getElementById('pick-bg');
+         if (!sheet.hidden) { document.getElementById('pick-close').click(); return false; }
+         return true;
+       })()`,
+    );
+
+  await buyUpgrade('Mühle');
+  await sleep(300);
+  await buyUpgrade('Gehege 1');
+  await sleep(300);
+  await buyUpgrade('Gehege 1');
+  await sleep(300);
+
+  const stallStatus = await evaluate<string>(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return t.querySelector('.name').textContent.indexOf('Gehege 1') === 0;
+       });
+       return tile ? tile.querySelector('.status').textContent : '';
+     })()`,
+  );
+  check(
+    'Ein Tier nach dem anderen: aus einem Stall mit einem Huhn wird einer mit zweien',
+    /2 Hühner/.test(stallStatus),
+    stallStatus,
+  );
+
+  await evaluate(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return t.querySelector('.name').textContent.indexOf('Mühle') === 0;
+       });
+       tile.click();
+       var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return o.textContent.indexOf('Hühnerfutter') >= 0 && !o.disabled;
+       });
+       if (opt) opt.click(); else document.getElementById('pick-close').click();
+     })()`,
+  );
+  await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
+  await sleep(500);
+  await evaluate(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return t.querySelector('.name').textContent.indexOf('Mühle') === 0;
+       });
+       if (tile.querySelector('.status').textContent.indexOf('fertig') === 0) tile.click();
+     })()`,
+  );
+  await sleep(300);
+
+  await evaluate(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return t.querySelector('.name').textContent.indexOf('Gehege 1') === 0;
+       });
+       tile.click();
+     })()`,
+  );
+  await sleep(250);
+
+  const stallRows = await evaluate<string>(
+    cdp,
+    `(function () {
+       if (document.getElementById('pick-bg').hidden) return 'zu';
+       return JSON.stringify({
+         titel: document.getElementById('pick-title').textContent,
+         zeilen: [...document.querySelectorAll('#pick-list .opt')].map(function (o) {
+           return o.querySelector('.top').textContent;
+         }),
+       });
+     })()`,
+  );
+  check(
+    'Ein Tipp auf den Stall öffnet ein GUI mit einer Zeile pro Tier',
+    /Huhn 1/.test(stallRows) && /Huhn 2/.test(stallRows),
+    stallRows,
+  );
+
+  await evaluate(
+    cdp,
+    `(function () {
+       var row = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return o.querySelector('.top').textContent === 'Huhn 1' && !o.disabled;
+       });
+       if (row) row.click();
+     })()`,
+  );
+  await sleep(400);
+
+  const einzeln = await evaluate<string>(
+    cdp,
+    `(function () {
+       return JSON.stringify([...document.querySelectorAll('#pick-list .opt')].map(function (o) {
+         return o.querySelector('.top').textContent + ': ' + o.querySelector('.sub').textContent;
+       }));
+     })()`,
+  );
+  check(
+    'Nur das gefütterte Tier läuft — das andere bleibt hungrig',
+    /Huhn 1: noch/.test(einzeln) && !/Huhn 2: noch/.test(einzeln),
+    einzeln,
+  );
+
+  await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
+  await sleep(600);
+  const geerntet = await evaluate<string>(
+    cdp,
+    `(function () {
+       var row = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return o.querySelector('.top').textContent === 'Huhn 1';
+       });
+       return row ? row.querySelector('.sub').textContent : 'weg';
+     })()`,
+  );
+  check('Jedes Tier wird einzeln fertig und einzeln abgeerntet', /fertig/.test(geerntet), geerntet);
+
+  await evaluate(cdp, `document.getElementById('pick-close').click()`);
+  await sleep(200);
 
   console.log('\n10. Eine neue Version erreicht den Browser');
 

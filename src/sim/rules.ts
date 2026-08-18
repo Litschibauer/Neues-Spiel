@@ -24,6 +24,7 @@ export type LevelDef = {
   cost: readonly ItemStack[];
   recipes: readonly number[];
   minPlayerLevel?: number;
+  slots?: number;
 };
 
 export type PlotDef = {
@@ -429,11 +430,112 @@ const V4: Ruleset = {
   siloCapacity: 180,
 };
 
-const DEV: Ruleset = {
+const COW_FEED = 9;
+const R_COW_FEED = 8;
+
+const CHICKEN = gold(250);
+const COW = gold(900);
+
+const V5: Ruleset = {
   ...V4,
+  version: 5,
+
+  items: [
+    ...V4.items.slice(0, 2),
+    { id: 'feed', storable: true, npcPrice: 9, npcBuyPrice: 0 },
+    ...V4.items.slice(3),
+    { id: 'cow-feed', storable: true, npcPrice: 12, npcBuyPrice: 0 },
+  ],
+
+  recipes: [
+    V4.recipes[0]!,
+    {
+      id: 'feed',
+      inputs: [{ item: WHEAT, amount: 3 }],
+      output: { item: FEED, amount: 2 },
+      durationTicks: 200,
+      xp: 5,
+    },
+    ...V4.recipes.slice(2, 4),
+    {
+      ...V4.recipes[4]!,
+      inputs: [{ item: COW_FEED, amount: 1 }],
+    },
+    ...V4.recipes.slice(5),
+    {
+      id: 'cow-feed',
+      inputs: [
+        { item: CORN, amount: 1 },
+        { item: WHEAT, amount: 2 },
+      ],
+      output: { item: COW_FEED, amount: 2 },
+      durationTicks: 300,
+      xp: 7,
+      minPlayerLevel: 6,
+    },
+  ],
+
+  plots: V4.plots.map((p) => {
+    if (p.id === 'mill') {
+      return {
+        ...p,
+        levels: [
+          {
+            label: 'Mühle',
+            cost: gold(150),
+            recipes: [R_FEED, R_COW_FEED],
+            minPlayerLevel: 2,
+          },
+        ],
+      };
+    }
+    if (p.id === 'coop-1') {
+      return {
+        ...p,
+        levels: [
+          { label: 'Hühnerstall', cost: gold(550), recipes: [R_EGGS], minPlayerLevel: 3, slots: 1 },
+          { label: 'Zweites Huhn', cost: CHICKEN, recipes: [R_EGGS], slots: 2 },
+          { label: 'Drittes Huhn', cost: CHICKEN, recipes: [R_EGGS], slots: 3 },
+        ],
+      };
+    }
+    if (p.id === 'coop-2') {
+      return {
+        ...p,
+        levels: [
+          { label: 'Hühnerstall', cost: gold(1050), recipes: [R_EGGS], minPlayerLevel: 5, slots: 1 },
+          { label: 'Zweites Huhn', cost: CHICKEN, recipes: [R_EGGS], slots: 2 },
+          { label: 'Drittes Huhn', cost: CHICKEN, recipes: [R_EGGS], slots: 3 },
+        ],
+      };
+    }
+    if (p.id === 'pasture-1') {
+      return {
+        ...p,
+        levels: [
+          { label: 'Kuhweide', cost: gold(2100), recipes: [R_MILK], minPlayerLevel: 6, slots: 1 },
+          { label: 'Zweite Kuh', cost: COW, recipes: [R_MILK], slots: 2 },
+          { label: 'Dritte Kuh', cost: COW, recipes: [R_MILK], slots: 3 },
+        ],
+      };
+    }
+    return p;
+  }),
+
+  requestTemplates: [
+    ...V4.requestTemplates,
+    { id: 'cow-feed-small', wants: [want(COW_FEED, 2)], reward: gold(38), xp: 12 },
+    { id: 'cow-feed-big', wants: [want(COW_FEED, 6)], reward: gold(120), xp: 38 },
+  ],
+
+  siloCapacity: 200,
+};
+
+const DEV: Ruleset = {
+  ...V5,
   version: 1001,
   requestSkipCooldownTicks: 180,
-  recipes: V4.recipes.map((r) => {
+  recipes: V5.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -444,14 +546,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [2, V2],
   [3, V3],
   [4, V4],
+  [5, V5],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 4;
+export const LATEST_RULESET_VERSION = 5;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -464,6 +567,13 @@ export function getRuleset(version: number): Ruleset {
 export function levelRecipes(rules: Ruleset, plot: number, level: number): readonly number[] {
   if (level <= 0) return [];
   return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
+}
+
+export function slotsAt(rules: Ruleset, plot: number, level: number): number {
+  if (level <= 0) return 0;
+  const def = rules.plots[plot]?.levels[level - 1];
+  if (!def) return 0;
+  return def.slots ?? (def.recipes.length > 0 ? 1 : 0);
 }
 
 export function recipeMinLevel(rules: Ruleset, recipe: number): number {

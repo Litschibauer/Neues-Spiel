@@ -3,7 +3,9 @@ import type { Command } from './commands.ts';
 
 export function canonicalize(state: State): string {
   const items = state.items.join(',');
-  const plots = state.plots.map((p) => `${p.level}:${p.recipe}:${p.startedAt}`).join(',');
+  const plots = state.plots
+    .map((p) => `${p.level}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}`)
+    .join(',');
   const passives = state.passives.join(',');
   const orders = state.orders
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
@@ -33,9 +35,9 @@ export function canonicalize(state: State): string {
 export function canonicalizeCommand(c: Command): string {
   switch (c.type) {
     case 'START':
-      return `${c.seq}|${c.tick}|START|${c.plot}|${c.recipe}`;
+      return `${c.seq}|${c.tick}|START|${c.plot}|${c.slot ?? 0}|${c.recipe}`;
     case 'COLLECT':
-      return `${c.seq}|${c.tick}|COLLECT|${c.plot}`;
+      return `${c.seq}|${c.tick}|COLLECT|${c.plot}|${c.slot ?? 0}`;
     case 'BUY':
       return `${c.seq}|${c.tick}|BUY|${c.plot}`;
     case 'SELL_NPC':

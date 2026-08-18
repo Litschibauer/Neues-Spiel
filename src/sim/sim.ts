@@ -8,10 +8,12 @@ import {
   nextLevel,
   priceBand,
   recipeUnlocked,
+  slotsAt,
 } from './rules.ts';
 import type { State } from './state.ts';
 import {
   EMPTY_PLOT,
+  emptySlots,
   addItem,
   addItems,
   cloneState,
@@ -81,11 +83,16 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const plot = s.plots[cmd.plot];
       if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
       if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
-      if (plot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
 
       if (!levelRecipes(rules, cmd.plot, plot.level).includes(cmd.recipe)) {
         throw new SimError('RECIPE_NOT_ALLOWED');
       }
+
+      const slotIndex = cmd.slot ?? 0;
+      const slot = plot.slots[slotIndex];
+      if (!slot) throw new SimError('NO_SUCH_SLOT');
+      if (slot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
+
       if (!recipeUnlocked(rules, cmd.recipe, levelOf(rules, s.xp))) {
         throw new SimError('PLAYER_LEVEL_TOO_LOW');
       }
@@ -103,8 +110,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       }
       next.plots = replaceAt(s.plots, cmd.plot, {
         level: plot.level,
-        recipe: cmd.recipe,
-        startedAt: s.tick,
+        slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick }),
       });
       return next;
     }
@@ -113,9 +119,15 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const def = rules.plots[cmd.plot];
       const plot = s.plots[cmd.plot];
       if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
-      if (plot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
 
       const level = nextLevel(rules, cmd.plot, plot.level);
+      const capacity = level ? slotsAt(rules, cmd.plot, plot.level + 1) : 0;
+      const running = plot.slots.filter((x) => x.recipe !== EMPTY_PLOT);
+      const keepsRunning =
+        level !== null &&
+        capacity >= plot.slots.length &&
+        running.every((x) => level.recipes.includes(x.recipe));
+      if (running.length > 0 && !keepsRunning) throw new SimError('PLOT_BUSY');
       if (!level) throw new SimError('MAX_LEVEL');
 
       if (levelOf(rules, s.xp) < (level.minPlayerLevel ?? 1)) {
@@ -134,8 +146,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       }
       next.plots = replaceAt(s.plots, cmd.plot, {
         level: plot.level + 1,
-        recipe: EMPTY_PLOT,
-        startedAt: 0,
+        slots:
+          running.length > 0
+            ? [...plot.slots, ...emptySlots(capacity - plot.slots.length)]
+            : emptySlots(capacity),
       });
       return next;
     }
@@ -143,11 +157,15 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
     case 'COLLECT': {
       const plot = s.plots[cmd.plot];
       if (!plot) throw new SimError('NO_SUCH_PLOT');
-      if (plot.recipe === EMPTY_PLOT) throw new SimError('PLOT_EMPTY');
 
-      const recipe = rules.recipes[plot.recipe];
+      const slotIndex = cmd.slot ?? 0;
+      const slot = plot.slots[slotIndex];
+      if (!slot) throw new SimError('NO_SUCH_SLOT');
+      if (slot.recipe === EMPTY_PLOT) throw new SimError('PLOT_EMPTY');
+
+      const recipe = rules.recipes[slot.recipe];
       if (!recipe) throw new SimError('RECIPE_NOT_ALLOWED');
-      if (s.tick - plot.startedAt < recipe.durationTicks) throw new SimError('NOT_DONE');
+      if (s.tick - slot.startedAt < recipe.durationTicks) throw new SimError('NOT_DONE');
 
       const output = rules.items[recipe.output.item];
       if (output?.storable && spaceLeft(s, rules) < recipe.output.amount) {
@@ -157,8 +175,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       next.plots = replaceAt(s.plots, cmd.plot, {
         level: plot.level,
-        recipe: EMPTY_PLOT,
-        startedAt: 0,
+        slots: replaceAt(plot.slots, slotIndex, { recipe: EMPTY_PLOT, startedAt: 0 }),
       });
       next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
 

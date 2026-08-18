@@ -93,7 +93,9 @@ test('Eingaben verbrauchen macht Platz — die Mühle entlastet das Lager', () =
   const base = nearlyFull(0);
   const withMill = {
     ...base,
-    plots: base.plots.map((p, i) => (i === MILL ? { ...p, level: 1 } : p)),
+    plots: base.plots.map((p, i) =>
+      i === MILL ? { ...p, level: 1, slots: [{ recipe: -1, startedAt: 0 }] } : p,
+    ),
   };
   const client = new Client({ state: withMill, seq: 0, serverTs: T0, rulesetVersion: 1 });
 

@@ -437,14 +437,14 @@ test('Zurücksetzen hinterlässt einen sauberen, leeren Hof', () => {
   client.start(0, R_WHEAT);
   server.sync(client.buildSyncRequest(), T0 + 1000);
   server.deliver({ item: EGGS, amount: 5, arrivedAt: T0 });
-  assert.equal(server.snapshot.state.plots[0]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[0]!.slots[0]!.recipe, R_WHEAT);
 
   server.reset(initialState(rules), T0 + 5000, CURRENT_RULESET_VERSION);
 
   assert.equal(server.snapshot.seq, 0);
   assert.equal(server.appliedLog.length, 0);
   assert.equal(server.pendingDeliveries.length, 0);
-  assert.equal(server.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
+  assert.equal(server.snapshot.state.plots[0]!.slots[0]!.recipe, EMPTY_PLOT);
   assertInvariants(server.snapshot.state, rules);
 
   const fresh = new Client(server.snapshot);

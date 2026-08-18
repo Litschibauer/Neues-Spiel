@@ -418,6 +418,29 @@
     return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
   }
 
+  function readySlot(s, p) {
+    for (var j = 0; j < p.slots.length; j++) {
+      var x = p.slots[j];
+      if (x.recipe === NS.EMPTY_PLOT) continue;
+      if (s.tick - x.startedAt >= rules.recipes[x.recipe].durationTicks) return j;
+    }
+    return -1;
+  }
+
+  function busySlot(p) {
+    for (var j = 0; j < p.slots.length; j++) {
+      if (p.slots[j].recipe !== NS.EMPTY_PLOT) return j;
+    }
+    return -1;
+  }
+
+  function freeSlot(p) {
+    for (var j = 0; j < p.slots.length; j++) {
+      if (p.slots[j].recipe === NS.EMPTY_PLOT) return j;
+    }
+    return -1;
+  }
+
   function startableRecipe(s, plot) {
     var allowed = recipesAt(plot, s.plots[plot].level);
     for (var k = 0; k < allowed.length; k++) {
@@ -460,9 +483,12 @@
     box.textContent = '';
     s.plots.forEach(function (p, i) {
       var btn = document.createElement('button');
-      var busy = p.recipe !== NS.EMPTY_PLOT;
-      var duration = busy ? rules.recipes[p.recipe].durationTicks : 0;
-      var done = busy && s.tick - p.startedAt >= duration;
+      var ready = readySlot(s, p);
+      var lead = ready >= 0 ? ready : busySlot(p);
+      var slot = lead >= 0 ? p.slots[lead] : null;
+      var busy = slot !== null;
+      var duration = busy ? rules.recipes[slot.recipe].durationTicks : 0;
+      var done = ready >= 0;
       var upgrade = nextLevelOf(i, p.level);
       btn.className = 'field' + (done ? ' ripe' : busy ? ' growing' : p.level <= 0 ? ' locked-plot' : '');
 
@@ -472,9 +498,9 @@
       var value = document.createElement('span');
 
       if (busy) {
-        if (done) value.textContent = nameOf(rules.recipes[p.recipe].id) + ' fertig';
+        if (done) value.textContent = nameOf(rules.recipes[slot.recipe].id) + ' fertig';
         else {
-          var left = duration - (s.tick - p.startedAt);
+          var left = duration - (s.tick - slot.startedAt);
           value.textContent = left < 90 ? left + ' s' : Math.ceil(left / 60) + ' min';
         }
       } else if (recipesAt(i, p.level).length === 0 && upgrade) {
@@ -490,7 +516,7 @@
           if (!affordable) btn.disabled = true;
         }
       } else {
-        value.textContent = 'leer';
+        value.textContent = p.slots.length > 1 ? p.slots.length + ' leer' : 'leer';
       }
 
       btn.appendChild(label); btn.appendChild(value);
@@ -662,8 +688,9 @@
     var s = client.preview();
     var p = s.plots[i];
 
-    if (p.recipe !== NS.EMPTY_PLOT) {
-      act(plotName(i) + ' abgeholt', client.collect(i));
+    var ready = readySlot(s, p);
+    if (ready >= 0) {
+      act(plotName(i) + ' abgeholt', client.collect(i, ready));
       return;
     }
 
@@ -672,12 +699,21 @@
       return;
     }
 
+    var free = freeSlot(p);
+    if (free < 0) {
+      log(plotName(i) + ': alles läuft noch');
+      return;
+    }
+
     var recipe = startableRecipe(s, i);
     if (recipe < 0) {
       log(plotName(i) + ': Zutaten fehlen');
       return;
     }
-    act(plotName(i) + ': ' + nameOf(rules.recipes[recipe].id) + ' gestartet', client.start(i, recipe));
+    act(
+      plotName(i) + ': ' + nameOf(rules.recipes[recipe].id) + ' gestartet',
+      client.start(i, recipe, free),
+    );
   }
 
   function tapBuy(i) {

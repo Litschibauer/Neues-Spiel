@@ -244,7 +244,7 @@ function withDairy(xp: number) {
   items[V4.currency] = 100_000;
   items[MILK_ITEM] = 20;
   const plots = base.plots.slice();
-  plots[DAIRY] = { level: 1, recipe: -1, startedAt: 0 };
+  plots[DAIRY] = { level: 1, slots: [{ recipe: -1, startedAt: 0 }] };
   return { ...base, xp, items, plots };
 }
 

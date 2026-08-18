@@ -84,7 +84,8 @@ Was die Funktion an Information hat, reicht für jede Darstellung:
 | Feld | Bedeutung |
 | --- | --- |
 | `p.id` | Katalog-Kennung des Platzes |
-| `p.level` | Ausbaustufe — leeres Gehege oder eines mit Hühnern |
+| `p.level` | Ausbaustufe — bei Ställen zugleich die Zahl der Tiere |
+| `p.capacity` / `p.free` | wie viele Tiere darin Platz haben, wie viele davon hungrig sind |
 | `p.busy` / `p.done` | läuft gerade / kann abgeholt werden |
 | `p.progress` | 0…1, für Wachstumsstufen oder einen Ring |
 | `p.producing` | Katalog-Kennung dessen, was gerade entsteht |
@@ -121,7 +122,10 @@ var v = NS.farmView(client.preview(), rules, navigator.onLine);
 v.level, v.xp {into, span, atMax}   v.currency {item, amount}
 v.silo {used, capacity, full, free}
 v.plots[]      {id, level, idle, busy, done, progress, remaining,
-                producing, output, tap, blocked, upgrade}
+                producing, output, tap, blocked, upgrade,
+                capacity, free, slots[]}
+v.plots[].slots[] {index, busy, done, progress, remaining,
+                producing, output, next, tap}
 v.requests[]   {wants, reward, xp, waiting, deliverable}
 v.offers[]     {item, amount, price, total, affordable, fits}
 v.orders[]     {item, amount, price, expiresIn}
@@ -135,6 +139,12 @@ Zwei Eigenschaften machen den Unterschied:
 ein Test erzwingt das. Ein Statussatz an dieser Stelle wäre bequem und würde
 genau verhindern, worum es geht: dass eine zweite Oberfläche, ein anderes
 Design oder eine andere Sprache billig bleibt.
+
+**Ein Platz kann mehrere Produktionen gleichzeitig haben.** `p.slots[]` ist die
+Liste — jedes Tier eines Stalls steht dort mit eigener Uhr. Die Felder auf `p`
+selbst beschreiben weiterhin die Kachel: `p.done`, sobald *irgendein* Tier
+fertig ist, `p.remaining` die kürzeste laufende Uhr. Ein Platz mit genau einem
+Platz verhält sich damit exakt wie vorher.
 
 **Es beantwortet jede Frage genau einmal.** `p.tap` sagt, was ein Tipp auslöst
 — dieselbe Antwort, die auch die Kachel beschriftet. Vorher stand diese

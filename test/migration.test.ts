@@ -84,16 +84,16 @@ test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Gesche
     ...base,
     tick,
     plots: base.plots.map((p, i) => {
-      if (i === 0) return { ...p, recipe: R_WHEAT, startedAt: 0 };
-      if (i === 1) return { ...p, recipe: R_WHEAT, startedAt: tick };
-      if (i === 2) return { ...p, recipe: R_WHEAT, startedAt: -500 };
+      if (i === 0) return { ...p, slots: [{ recipe: R_WHEAT, startedAt: 0 }] };
+      if (i === 1) return { ...p, slots: [{ recipe: R_WHEAT, startedAt: tick }] };
+      if (i === 2) return { ...p, slots: [{ recipe: R_WHEAT, startedAt: -500 }] };
       return p;
     }),
   };
 
   const migrated = migrateState(halfGrown, 1, 2);
   const remaining = (i: number) =>
-    Math.max(0, migrated.plots[i]!.startedAt + wheatTicks(V2) - migrated.tick);
+    Math.max(0, migrated.plots[i]!.slots[0]!.startedAt + wheatTicks(V2) - migrated.tick);
 
   assert.equal(remaining(0), 60);
 
@@ -113,13 +113,13 @@ test('kein Platz wird durch die Migration schlechter gestellt als ein Neuanfang'
       ...base,
       tick,
       plots: base.plots.map((p, i) =>
-        i === 0 ? { ...p, recipe: R_WHEAT, startedAt: tick - elapsed } : p,
+        i === 0 ? { ...p, slots: [{ recipe: R_WHEAT, startedAt: tick - elapsed }] } : p,
       ),
     };
 
     const before = Math.max(0, wheatTicks(V1) - elapsed);
     const m = migrateState(state, 1, 2);
-    const after = Math.max(0, m.plots[0]!.startedAt + wheatTicks(V2) - m.tick);
+    const after = Math.max(0, m.plots[0]!.slots[0]!.startedAt + wheatTicks(V2) - m.tick);
 
     assert.ok(after <= wheatTicks(V2), `nie schlechter als frisch: ${after}`);
     assert.ok(after <= before, `nie länger als vorher: ${after} > ${before}`);
@@ -131,7 +131,9 @@ test('Ausbaustufen überstehen den Patch unverändert', () => {
   const base = fuzzStart(V1, 500);
   const built = {
     ...base,
-    plots: base.plots.map((p, i) => (i === MILL ? { ...p, level: 1 } : p)),
+    plots: base.plots.map((p, i) =>
+      i === MILL ? { ...p, level: 1, slots: [{ recipe: EMPTY_PLOT, startedAt: 0 }] } : p,
+    ),
   };
 
   const migrated = migrateState(built, 1, 2);
@@ -160,7 +162,7 @@ test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
     ...fuzzStart(V1, 500),
     tick: 900,
     plots: initialState(V1).plots.map((p, i) =>
-      i === 0 ? { ...p, recipe: R_WHEAT, startedAt: 800 } : p,
+      i === 0 ? { ...p, slots: [{ recipe: R_WHEAT, startedAt: 800 }] } : p,
     ),
     orders: [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 850 }],
     mail: [{ item: EGGS, amount: 3, arrivedAt: 870 }],
@@ -182,7 +184,7 @@ test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
   assert.equal(after.passives.length, 1);
   assert.equal(after.passives[0], 0);
 
-  assert.equal(after.plots[0]!.recipe, R_WHEAT);
+  assert.equal(after.plots[0]!.slots[0]!.recipe, R_WHEAT);
   assert.equal(after.orders.length, 1);
   assert.equal(after.mail.length, 1);
 });
@@ -262,7 +264,7 @@ test('unbekannte Zielversion beschädigt keinen Spielstand', () => {
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.snapshot.rulesetVersion, 1);
-  assert.equal(res.snapshot.state.plots[0]!.recipe, R_WHEAT);
+  assert.equal(res.snapshot.state.plots[0]!.slots[0]!.recipe, R_WHEAT);
   assert.equal(server.migrationFailures.length, 1);
 });
 
@@ -283,7 +285,9 @@ test('die Invariantenprüfung hat Zähne', () => {
   const future = {
     ...base,
     tick: 10,
-    plots: base.plots.map((p, i) => (i === 0 ? { ...p, recipe: R_WHEAT, startedAt: 500 } : p)),
+    plots: base.plots.map((p, i) =>
+      i === 0 ? { ...p, slots: [{ recipe: R_WHEAT, startedAt: 500 }] } : p,
+    ),
   };
   assert.throws(() => assertInvariants(future, V2), MigrationError);
 
@@ -296,7 +300,7 @@ test('die Invariantenprüfung hat Zähne', () => {
   const wrongLevel = {
     ...base,
     plots: base.plots.map((p, i) =>
-      i === MILL ? { level: 0, recipe: 1, startedAt: 0 } : p,
+      i === MILL ? { level: 0, slots: [{ recipe: 1, startedAt: 0 }] } : p,
     ),
   };
   assert.throws(() => assertInvariants(wrongLevel, V2), MigrationError, 'Rezept auf Stufe 0');

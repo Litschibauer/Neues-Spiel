@@ -81,7 +81,7 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
     count(server.snapshot.state, WHEAT),
     START_WHEAT - 3 * SEED_COST + 2 * rules.recipes[R_WHEAT]!.output.amount,
   );
-  assert.equal(server.snapshot.state.plots[2]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[2]!.slots[0]!.recipe, R_WHEAT);
 });
 
 test('verlorene Antwort: Server hat den Batch, der Client weiß es nicht', async () => {
@@ -113,7 +113,7 @@ test('verlorene Antwort: Server hat den Batch, der Client weiß es nicht', async
   assert.equal(res.kind, 'synced');
 
   assert.equal(server.snapshot.seq, 3);
-  assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[1]!.slots[0]!.recipe, R_WHEAT);
 
   assert.equal(count(server.snapshot.state, WHEAT), AFTER_ONE - SEED_COST);
   assert.equal(client.queue.length, 0);
@@ -142,7 +142,7 @@ test('Regression: Wiederaufsetzen ohne Zeitsprung dazwischen', async () => {
   if (res.kind !== 'synced') return;
   assert.equal(res.result.ok, true, 'Wiederaufsetzen darf nicht abgelehnt werden');
   assert.equal(server.snapshot.seq, 2);
-  assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
+  assert.equal(server.snapshot.state.plots[1]!.slots[0]!.recipe, R_WHEAT);
   assert.equal(client.queue.length, 0);
 });
 
@@ -212,7 +212,7 @@ test('Fork wird auch über die Engine sauber aufgelöst — Server gewinnt', asy
   assert.equal(res.result.ok, false);
 
   assert.equal(client.queue.length, 0);
-  assert.equal(client.state.plots[2]!.recipe, R_WHEAT);
+  assert.equal(client.state.plots[2]!.slots[0]!.recipe, R_WHEAT);
   assert.equal(engine.view, 'live');
 });
 
@@ -233,7 +233,7 @@ test('Präfix-Commit über die Engine: legale Arbeit bleibt, Rest wird gemeldet'
   if (res.kind !== 'dropped') return;
   assert.equal(res.rejectedFrom, 2);
   assert.equal(server.snapshot.seq, 1);
-  assert.equal(client.state.plots[0]!.recipe, R_WHEAT);
+  assert.equal(client.state.plots[0]!.slots[0]!.recipe, R_WHEAT);
   assert.equal(client.queue.length, 0);
 });
 

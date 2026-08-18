@@ -1,7 +1,7 @@
 import type { Ruleset } from './rules.ts';
-import { getRuleset, levelRecipes } from './rules.ts';
-import type { State } from './state.ts';
-import { EMPTY_PLOT, cloneState, stored } from './state.ts';
+import { getRuleset, levelRecipes, slotsAt } from './rules.ts';
+import type { Slot, State } from './state.ts';
+import { EMPTY_PLOT, cloneState, emptySlots, stored } from './state.ts';
 
 export class MigrationError extends Error {
   constructor(message: string) {
@@ -15,17 +15,23 @@ export type MigrationStep = (state: State, from: Ruleset, to: Ruleset) => State;
 function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
   let changed = false;
   const plots = state.plots.map((p) => {
-    if (p.recipe === EMPTY_PLOT) return p;
+    let slotChanged = false;
+    const slots = p.slots.map((slot) => {
+      if (slot.recipe === EMPTY_PLOT) return slot;
 
-    const before = from.recipes[p.recipe]?.durationTicks;
-    const after = to.recipes[p.recipe]?.durationTicks;
-    if (before === undefined || after === undefined || before === after) return p;
+      const before = from.recipes[slot.recipe]?.durationTicks;
+      const after = to.recipes[slot.recipe]?.durationTicks;
+      if (before === undefined || after === undefined || before === after) return slot;
 
+      slotChanged = true;
+      const elapsed = state.tick - slot.startedAt;
+      const remaining = Math.max(0, before - elapsed);
+      const newRemaining = Math.min(remaining, after);
+      return { recipe: slot.recipe, startedAt: state.tick - (after - newRemaining) };
+    });
+    if (!slotChanged) return p;
     changed = true;
-    const elapsed = state.tick - p.startedAt;
-    const remaining = Math.max(0, before - elapsed);
-    const newRemaining = Math.min(remaining, after);
-    return { level: p.level, recipe: p.recipe, startedAt: state.tick - (after - newRemaining) };
+    return { level: p.level, slots };
   });
 
   if (!changed) return state;
@@ -55,10 +61,14 @@ export const RETIME: MigrationStep = (state, from, to) =>
   clampPassives(rescaleDurations(state, from, to), from, to);
 
 export const GROW: MigrationStep = (state, from, to) => {
+  const wanted = state.plots.map((p, i) => slotsAt(to, i, p.level));
+  const slotsGrew = state.plots.some((p, i) => p.slots.length !== wanted[i]!);
+
   if (
     to.items.length === state.items.length &&
     to.plots.length === state.plots.length &&
-    to.passives.length === state.passives.length
+    to.passives.length === state.passives.length &&
+    !slotsGrew
   ) {
     return state;
   }
@@ -69,6 +79,11 @@ export const GROW: MigrationStep = (state, from, to) => {
   ) {
     throw new MigrationError(`v${from.version} → v${to.version}: Katalog schrumpft`);
   }
+  for (const [i, p] of state.plots.entries()) {
+    if (wanted[i]! < p.slots.length) {
+      throw new MigrationError(`v${from.version} → v${to.version}: Platz ${i} verliert Plätze`);
+    }
+  }
 
   const next = cloneState(state);
 
@@ -76,10 +91,17 @@ export const GROW: MigrationStep = (state, from, to) => {
   while (items.length < to.items.length) items.push(0);
   next.items = items;
 
-  const plots = state.plots.slice();
+  const plots = state.plots.map((p, i) => {
+    if (p.slots.length === wanted[i]!) return p;
+    const slots: Slot[] = p.slots.slice();
+    while (slots.length < wanted[i]!) slots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
+    return { level: p.level, slots };
+  });
 
   while (plots.length < to.plots.length) {
-    plots.push({ level: to.plots[plots.length]!.startLevel, recipe: EMPTY_PLOT, startedAt: 0 });
+    const i = plots.length;
+    const level = to.plots[i]!.startLevel;
+    plots.push({ level, slots: emptySlots(slotsAt(to, i, level)) });
   }
   next.plots = plots;
 
@@ -98,6 +120,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
 
   ['2->3', GROW_AND_RETIME],
   ['3->4', GROW_AND_RETIME],
+  ['4->5', GROW_AND_RETIME],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -185,18 +208,29 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!def) continue;
     if (!Number.isInteger(p.level) || p.level < 0 || p.level > def.levels.length) {
       problems.push(`Platz ${i}: Stufe ${p.level} außerhalb von [0, ${def.levels.length}]`);
+      continue;
+    }
+    const capacity = slotsAt(rules, i, p.level);
+    if (p.slots.length !== capacity) {
+      problems.push(`Platz ${i}: ${p.slots.length} Plätze, Stufe ${p.level} hat ${capacity}`);
     }
 
-    if (p.recipe === EMPTY_PLOT) continue;
-    if (!rules.recipes[p.recipe]) {
-      problems.push(`Platz ${i}: Rezept ${p.recipe} gibt es nicht`);
-    } else if (!levelRecipes(rules, i, p.level).includes(p.recipe)) {
-      problems.push(`Platz ${i}: Rezept ${p.recipe} ist auf Stufe ${p.level} nicht erlaubt`);
+    for (const [j, slot] of p.slots.entries()) {
+      if (slot.recipe === EMPTY_PLOT) continue;
+      if (!rules.recipes[slot.recipe]) {
+        problems.push(`Platz ${i}/${j}: Rezept ${slot.recipe} gibt es nicht`);
+      } else if (!levelRecipes(rules, i, p.level).includes(slot.recipe)) {
+        problems.push(
+          `Platz ${i}/${j}: Rezept ${slot.recipe} ist auf Stufe ${p.level} nicht erlaubt`,
+        );
+      }
+      if (slot.startedAt > state.tick) {
+        problems.push(`Platz ${i}/${j} in der Zukunft gestartet: ${slot.startedAt} > ${state.tick}`);
+      }
+      if (!Number.isSafeInteger(slot.startedAt)) {
+        problems.push(`startedAt kein Integer: ${slot.startedAt}`);
+      }
     }
-    if (p.startedAt > state.tick) {
-      problems.push(`Platz ${i} in der Zukunft gestartet: ${p.startedAt} > ${state.tick}`);
-    }
-    if (!Number.isSafeInteger(p.startedAt)) problems.push(`startedAt kein Integer: ${p.startedAt}`);
   }
 
   if (problems.length > 0) {

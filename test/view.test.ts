@@ -82,7 +82,7 @@ test('„zu teuer" und „Stufe fehlt" werden nicht verwechselt', () => {
 test('fehlende Zutaten sperren die Mühle, ohne sie zu verstecken', () => {
   const base = withItems({ [GOLD]: 0, [WHEAT]: 0 });
   const plots = base.plots.slice();
-  plots[MILL] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+  plots[MILL] = { level: 1, slots: [{ recipe: EMPTY_PLOT, startedAt: 0 }] };
   const view = farmView({ ...base, plots }, rules);
 
   const mill = view.plots[MILL]!;
@@ -289,7 +289,7 @@ test('ein Platz mit genau einem Rezept braucht keine Auswahl', () => {
   const MILL = v3.plots.findIndex((p) => p.id === 'mill');
   const base = initialState(v3);
   const plots = base.plots.slice();
-  plots[MILL] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+  plots[MILL] = { level: 1, slots: [{ recipe: EMPTY_PLOT, startedAt: 0 }] };
 
   const mill = farmView({ ...base, plots }, v3).plots[MILL]!;
   assert.equal(mill.options.length, 1);
@@ -326,7 +326,7 @@ test('ein gesperrtes Rezept steht sichtbar in der Auswahl, statt zu fehlen', () 
   const DAIRY = v4.plots.findIndex((p) => p.id === 'dairy');
   const base = initialState(v4);
   const plots = base.plots.slice();
-  plots[DAIRY] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+  plots[DAIRY] = { level: 1, slots: [{ recipe: EMPTY_PLOT, startedAt: 0 }] };
 
   const jung = farmView({ ...base, xp: v4.levelThresholds[4]!, plots }, v4).plots[DAIRY]!;
   assert.equal(jung.options.length, 3, 'die Molkerei zeigt nicht alle drei Rezepte');
@@ -360,7 +360,7 @@ test('ein Platz, dessen Rezepte alle noch gesperrt sind, sagt „Stufe" statt �
   };
   const base = initialState(v4);
   const plots = base.plots.slice();
-  plots[DAIRY] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+  plots[DAIRY] = { level: 1, slots: [{ recipe: EMPTY_PLOT, startedAt: 0 }] };
 
   const v = farmView({ ...base, xp: v4.levelThresholds[4]!, plots }, gesperrt).plots[DAIRY]!;
   assert.equal(v.blocked, 'level');

@@ -61,12 +61,12 @@ export class Client {
     return getRuleset(this.rulesetVersion);
   }
 
-  start(plot: number, recipe: number): ActionResult {
-    return this.apply({ type: 'START', plot, recipe } as Omit<Command, 'seq' | 'tick'>);
+  start(plot: number, recipe: number, slot = 0): ActionResult {
+    return this.apply({ type: 'START', plot, slot, recipe } as Omit<Command, 'seq' | 'tick'>);
   }
 
-  collect(plot: number): ActionResult {
-    return this.apply({ type: 'COLLECT', plot } as Omit<Command, 'seq' | 'tick'>);
+  collect(plot: number, slot = 0): ActionResult {
+    return this.apply({ type: 'COLLECT', plot, slot } as Omit<Command, 'seq' | 'tick'>);
   }
 
   buy(plot: number): ActionResult {
