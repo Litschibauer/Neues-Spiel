@@ -946,6 +946,40 @@ try {
     `runter auf ${band.dip}, hoch bis höchstens ${band.max} → ${band.value}`,
   );
 
+  // Wie schnell ist eine Aktion beim Server? Lange hing das ausschließlich am
+  // Vier-Sekunden-Takt — gemessen ~3 s, und alles, was daran hängt (Erlös,
+  // Orderbuch, Anstoß an die anderen), kam entsprechend später. Die Schranke
+  // hier ist bewusst großzügig: Sie soll nicht die Maschine messen, sondern
+  // auffallen, wenn wieder auf den Takt gewartet wird.
+  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await sleep(300);
+  const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
+    .seq;
+  const tapped = Date.now();
+  await evaluate(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+         return /→/.test(p.querySelector('.status').textContent);
+       });
+       if (tile) tile.click();
+     })()`,
+  );
+  let arrived = -1;
+  for (let i = 0; i < 120; i++) {
+    const now = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number }).seq;
+    if (now > seqBeforeTap) {
+      arrived = Date.now() - tapped;
+      break;
+    }
+    await sleep(50);
+  }
+  check(
+    'Eine Aktion ist in unter zwei Sekunden beim Server — nicht erst im nächsten Takt',
+    arrived >= 0 && arrived < 2000,
+    arrived < 0 ? 'gar nicht angekommen' : `${arrived} ms`,
+  );
+
   // Und Wegschicken: einmal geht, sofort danach nicht mehr.
   await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
   const requestsBefore = await evaluate<number>(cdp, `document.querySelectorAll('#requests .card').length`);

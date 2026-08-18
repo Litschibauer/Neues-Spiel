@@ -1474,9 +1474,34 @@
     MAX_LEVEL: 'Voll ausgebaut',
   };
 
+  /**
+   * Kurz nach einer Aktion syncen, statt auf den Takt zu warten.
+   *
+   * Vorher lief das ausschließlich über den Vier-Sekunden-Timer: Eine Ernte
+   * lag im Schnitt zwei, schlimmstenfalls vier Sekunden herum, bevor der
+   * Server sie überhaupt zu sehen bekam. Gemessen im Browser waren es ~3 s —
+   * und alles, was daran hängt (Erlös beim Verkäufer, Angebot im Buch, der
+   * Anstoß an die anderen), kam entsprechend später.
+   *
+   * Die 250 ms Verzögerung sind Absicht und kein Kompromiss: Wer sechs Felder
+   * hintereinander abklickt, soll EINEN Sync auslösen und nicht sechs.
+   *
+   * Bewusst ohne `force`: Die Warteschlange ist nach einer Aktion ohnehin
+   * nicht leer, es wird also gesendet — aber das Backoff bleibt wirksam. Sonst
+   * hämmerte ein Spieler im Funkloch mit jedem Tipp gegen eine tote Leitung.
+   */
+  var syncSoon = null;
+  function scheduleSync() {
+    if (syncSoon) return;
+    syncSoon = setTimeout(function () {
+      syncSoon = null;
+      attempt(false);
+    }, 250);
+  }
+
   function act(name, result) {
     if (!isActive) return;
-    if (result.ok) { toast(name); save(); }
+    if (result.ok) { toast(name); save(); scheduleSync(); }
     else toast(CODES[result.code] || result.code, true);
     render();
   }
