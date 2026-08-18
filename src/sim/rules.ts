@@ -27,10 +27,18 @@ export type LevelDef = {
   slots?: number;
 };
 
+export type PlotPlace = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type PlotDef = {
   id: string;
   startLevel: number;
   levels: readonly LevelDef[];
+  place?: PlotPlace;
 };
 
 export type RequestTemplate = {
@@ -79,6 +87,7 @@ const R_EGGS = 2;
 
 const gold = (amount: number): ItemStack[] => [{ item: GOLD, amount }];
 const want = (item: number, amount: number): ItemStack => ({ item, amount });
+const at = (x: number, y: number, w: number, h: number): PlotPlace => ({ x, y, w, h });
 
 const REQUESTS: readonly RequestTemplate[] = [
   { id: 'wheat-small', wants: [want(WHEAT, 5)], reward: gold(25), xp: 6 },
@@ -126,32 +135,52 @@ const V1: Ruleset = {
     },
   ],
   plots: [
-    { id: 'field-1', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
-    { id: 'field-2', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
-    { id: 'field-3', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }] },
+    {
+      id: 'field-1',
+      startLevel: 1,
+      place: at(3, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
+    },
+    {
+      id: 'field-2',
+      startLevel: 1,
+      place: at(35, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
+    },
+    {
+      id: 'field-3',
+      startLevel: 1,
+      place: at(67, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
+    },
     {
       id: 'field-4',
       startLevel: 0,
+      place: at(3, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT], minPlayerLevel: 2 }],
     },
     {
       id: 'field-5',
       startLevel: 0,
+      place: at(35, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT], minPlayerLevel: 4 }],
     },
     {
       id: 'field-6',
       startLevel: 0,
+      place: at(67, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT], minPlayerLevel: 6 }],
     },
     {
       id: 'mill',
       startLevel: 0,
+      place: at(4, 9, 26, 17),
       levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED], minPlayerLevel: 2 }],
     },
     {
       id: 'coop-1',
       startLevel: 0,
+      place: at(47, 30, 26, 18),
       levels: [
         { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
         { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
@@ -160,6 +189,7 @@ const V1: Ruleset = {
     {
       id: 'coop-2',
       startLevel: 0,
+      place: at(70, 10, 26, 16),
       levels: [
         { label: 'Gehege', cost: gold(800), recipes: [], minPlayerLevel: 5 },
         { label: 'Hühner', cost: gold(400), recipes: [R_EGGS] },
@@ -297,32 +327,52 @@ const V3: Ruleset = {
     },
   ],
   plots: [
-    { id: 'field-1', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
-    { id: 'field-2', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
-    { id: 'field-3', startLevel: 1, levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }] },
+    {
+      id: 'field-1',
+      startLevel: 1,
+      place: at(3, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
+    },
+    {
+      id: 'field-2',
+      startLevel: 1,
+      place: at(35, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
+    },
+    {
+      id: 'field-3',
+      startLevel: 1,
+      place: at(67, 53, 30, 20),
+      levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
+    },
     {
       id: 'field-4',
       startLevel: 0,
+      place: at(3, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 2 }],
     },
     {
       id: 'field-5',
       startLevel: 0,
+      place: at(35, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 4 }],
     },
     {
       id: 'field-6',
       startLevel: 0,
+      place: at(67, 76, 30, 20),
       levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 6 }],
     },
     {
       id: 'mill',
       startLevel: 0,
+      place: at(4, 9, 26, 17),
       levels: [{ label: 'Mühle', cost: gold(150), recipes: [R_FEED], minPlayerLevel: 2 }],
     },
     {
       id: 'coop-1',
       startLevel: 0,
+      place: at(47, 30, 26, 18),
       levels: [
         { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
         { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
@@ -331,6 +381,7 @@ const V3: Ruleset = {
     {
       id: 'coop-2',
       startLevel: 0,
+      place: at(70, 10, 26, 16),
       levels: [
         { label: 'Gehege', cost: gold(800), recipes: [], minPlayerLevel: 5 },
         { label: 'Hühner', cost: gold(400), recipes: [R_EGGS] },
@@ -339,6 +390,7 @@ const V3: Ruleset = {
     {
       id: 'pasture-1',
       startLevel: 0,
+      place: at(3, 29, 38, 20),
       levels: [
         { label: 'Kuhgehege', cost: gold(1200), recipes: [], minPlayerLevel: 6 },
         { label: 'Kühe', cost: gold(900), recipes: [R_MILK] },
@@ -347,6 +399,7 @@ const V3: Ruleset = {
     {
       id: 'dairy',
       startLevel: 0,
+      place: at(36, 8, 30, 18),
       levels: [{ label: 'Molkerei', cost: gold(2000), recipes: [R_CREAM, R_BUTTER], minPlayerLevel: 7 }],
     },
   ],
@@ -759,6 +812,41 @@ export function validateRuleset(rules: Ruleset): string[] {
       if ((level.minPlayerLevel ?? 1) > rules.levelThresholds.length + 1) {
         problems.push(
           `Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre über dem Maximum — nie erreichbar`,
+        );
+      }
+    }
+  }
+
+  const placed = rules.plots.filter((p) => p.place);
+  if (placed.length > 0 && placed.length < rules.plots.length) {
+    const ohne = rules.plots.filter((p) => !p.place).map((p) => p.id);
+    problems.push(`Plätze ohne Ort, während andere einen haben: ${ohne.join(', ')}`);
+  }
+  for (const [i, p] of rules.plots.entries()) {
+    const place = p.place;
+    if (!place) continue;
+    const numbers = [place.x, place.y, place.w, place.h];
+    if (numbers.some((n) => !Number.isInteger(n))) {
+      problems.push(`Platz ${i} (${p.id}): Ort ist nicht in ganzen Prozent angegeben`);
+      continue;
+    }
+    if (place.w < 1 || place.h < 1) {
+      problems.push(`Platz ${i} (${p.id}): Ort ohne Fläche`);
+    }
+    if (place.x < 0 || place.y < 0 || place.x + place.w > 100 || place.y + place.h > 100) {
+      problems.push(`Platz ${i} (${p.id}): Ort liegt außerhalb des Hofs`);
+    }
+  }
+  for (let i = 0; i < rules.plots.length; i++) {
+    for (let j = i + 1; j < rules.plots.length; j++) {
+      const a = rules.plots[i]!.place;
+      const b = rules.plots[j]!.place;
+      if (!a || !b) continue;
+      const apart =
+        a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+      if (!apart) {
+        problems.push(
+          `Platz ${rules.plots[i]!.id} und ${rules.plots[j]!.id} stehen übereinander`,
         );
       }
     }

@@ -189,6 +189,12 @@ Erst wenn die Mechaniken stehen, sonst baut man die Oberfläche zweimal.
   unverändert daneben laufen — nie nachbauen.
 - **Sim-Kern portieren.** Der Golden-Vector-Korpus ist die Abnahme: Läuft er durch, rechnet
   die neue Plattform bit-für-bit gleich. Dank der Vektoren ein Nachmittag, kein Projekt.
+- [x] ~~**Der Hof als Ort statt als Kachelraster.**~~ Erledigt, Schritt 1: Die
+      Plätze stehen an festen Stellen (`PlotDef.place`, vier Zahlen in Prozent),
+      dahinter eine durchgehende Landschaft. Reine Oberfläche — der Sim-Kern
+      weiß nichts davon. Offen bleibt: Deko, Tag/Nacht, und Umbauen durch den
+      Spieler (das erst wäre ein Command).
+
 - [x] ~~**App-Hülle lokal.**~~ Erledigt: Der Spielstand (bestätigter Snapshot UND
       Warteschlange) liegt nach jeder Aktion auf dem Gerät, ein Service Worker cacht
       die Hülle, `/api/*` nie. Damit startet die App ohne Netz und ein Neuladen im

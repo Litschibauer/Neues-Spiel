@@ -597,7 +597,14 @@ try {
     `${sellerAfter.snapshot.state.items[0]} statt ${expectedCoins} Münzen`,
   );
 
-  console.log('\n7. Die Spieloberfläche auf /');
+  console.log('\n7. Die Spieloberfläche auf / (Telefonformat 390 × 844)');
+
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
 
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 
@@ -631,6 +638,55 @@ try {
     'Jeder Platz hat ein Bild',
     (await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot svg.art').length`)) ===
       shown.plots,
+  );
+
+  const hof = await evaluate<{
+    landschaft: boolean;
+    verteilt: number;
+    imBild: boolean;
+    ueberlappt: number;
+  }>(
+    cdp,
+    `(function () {
+       var rahmen = document.getElementById('hof').getBoundingClientRect();
+       var kacheln = [...document.querySelectorAll('#plots .plot')].map(function (t) {
+         return t.getBoundingClientRect();
+       });
+       var stellen = {};
+       kacheln.forEach(function (r) { stellen[Math.round(r.left) + 'x' + Math.round(r.top)] = 1; });
+       var ueberlappt = 0;
+       for (var i = 0; i < kacheln.length; i++) {
+         for (var j = i + 1; j < kacheln.length; j++) {
+           var a = kacheln[i], b = kacheln[j];
+           if (!(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top)) {
+             ueberlappt++;
+           }
+         }
+       }
+       return {
+         landschaft: document.getElementById('scene').children.length > 0,
+         verteilt: Object.keys(stellen).length,
+         imBild: kacheln.every(function (r) {
+           return r.left >= rahmen.left - 1 && r.right <= rahmen.right + 1
+             && r.top >= rahmen.top - 1 && r.bottom <= rahmen.bottom + 1;
+         }),
+         ueberlappt: ueberlappt,
+       };
+     })()`,
+  );
+  check(
+    'Der Hof ist ein Ort: Landschaft dahinter, jeder Platz an seiner eigenen Stelle',
+    hof.landschaft && hof.verteilt === shown.plots && hof.imBild && hof.ueberlappt === 0,
+    `Landschaft ${hof.landschaft}, ${hof.verteilt} Stellen, im Bild ${hof.imBild}, ` +
+      `${hof.ueberlappt} Überschneidungen`,
+  );
+
+  check(
+    'Der ganze Hof passt aufs Bild — ohne Scrollen',
+    await evaluate<boolean>(
+      cdp,
+      `document.getElementById('hof').getBoundingClientRect().bottom <= window.innerHeight`,
+    ),
   );
 
   await api('/api/admin/time?seconds=4000', 'POST');

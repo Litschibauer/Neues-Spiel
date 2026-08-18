@@ -85,6 +85,7 @@ Was die Funktion an Information hat, reicht für jede Darstellung:
 | --- | --- |
 | `p.id` | Katalog-Kennung des Platzes |
 | `p.level` | Ausbaustufe — bei Ställen zugleich die Zahl der Tiere |
+| `rules.plots[i].place` | wo der Platz auf dem Hof steht: `x, y, w, h` in Prozent |
 | `p.capacity` / `p.free` | wie viele Tiere darin Platz haben, wie viele davon hungrig sind |
 | `p.busy` / `p.done` | läuft gerade / kann abgeholt werden |
 | `p.progress` | 0…1, für Wachstumsstufen oder einen Ring |
@@ -93,6 +94,28 @@ Was die Funktion an Information hat, reicht für jede Darstellung:
 Trägt man nichts ein, geht nichts kaputt: Eine unbekannte Kennung bekommt
 `fallback`. **Ein neues Gebäude ist sofort spielbar** und sieht nur eine
 Version lang generisch aus.
+
+### Der Hof ist eine Fläche, kein Raster
+
+Die Plätze liegen nicht in einem CSS-Grid, sondern an festen Stellen: `place`
+im Katalog, vier Zahlen in Prozent. Dahinter liegt **eine** gezeichnete
+Landschaft (`artScene()` — Himmel, Hügel, Wiese, Weg, Hofhaus, Bäume), darüber
+dieselben `<button>` wie vorher, nur absolut positioniert und nach `y`
+sortiert, damit Vordergrund Hintergrund überdeckt.
+
+Warum die Knöpfe HTML bleiben und nicht in die SVG wandern: Antippen, Fokus,
+Sperr-Zustände und der Ausbau-Knopf funktionieren so von allein. Ein `<g>`
+könnte das auch — bezahlt mit handgeschriebener Tastatur- und Fokuslogik, für
+genau null Gewinn.
+
+Zwei Dinge macht `validateRuleset` unmöglich: zwei Plätze am selben Ort und ein
+Platz, der aus dem Bild fällt. Dieselbe Sorte Riegel wie „kein Gebäude, das
+man kaufen und nicht benutzen kann".
+
+**Der Ort ist Katalogdaten, nicht Spielzustand.** Der Sim-Kern weiß nichts
+davon, es gibt kein Command dafür und keine Migration. Erst wenn Spieler ihren
+Hof *umbauen* dürfen, wird daraus Zustand — dann aber bewusst, mit `MOVE` als
+Command und allem, was daran hängt.
 
 > Warum eingebettet und nicht als Bilddatei: Die Seite muss im Funkloch
 > vollständig sein. Ein nachzuladendes PNG wäre genau die Lücke, die den

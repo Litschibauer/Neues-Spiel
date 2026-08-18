@@ -326,3 +326,41 @@ test('v6 macht das Spiel schneller, ohne die Leiter umzustellen', () => {
   assert.deepEqual(v6.plots, v5.plots, 'v6 soll nur an der Uhr drehen, nicht an den Kosten');
   assert.deepEqual(v6.levelThresholds, v5.levelThresholds, 'Stufenschwellen sollen bleiben');
 });
+
+test('jeder Platz hat einen Ort auf dem Hof, und keiner steht auf einem anderen', () => {
+  for (const version of [...RULESETS.keys()]) {
+    const rules = getRuleset(version);
+    for (const plot of rules.plots) {
+      assert.ok(plot.place, `v${version}: ${plot.id} steht nirgends`);
+    }
+    assert.deepEqual(validateRuleset(rules), [], `v${version}: Regelwerk beanstandet`);
+  }
+
+  const rules = getRuleset(LATEST_RULESET_VERSION);
+  const doppelt = {
+    ...rules,
+    plots: rules.plots.map((p, i) => (i === 1 ? { ...p, place: rules.plots[0]!.place } : p)),
+  };
+  assert.ok(
+    validateRuleset(doppelt).some((x) => x.includes('übereinander')),
+    'zwei Plätze am selben Ort werden nicht erkannt',
+  );
+
+  const daneben = {
+    ...rules,
+    plots: rules.plots.map((p, i) => (i === 0 ? { ...p, place: { x: 90, y: 90, w: 30, h: 20 } } : p)),
+  };
+  assert.ok(
+    validateRuleset(daneben).some((x) => x.includes('außerhalb')),
+    'ein Platz außerhalb des Hofs wird nicht erkannt',
+  );
+
+  const halb = {
+    ...rules,
+    plots: rules.plots.map((p, i) => (i === 0 ? { id: p.id, startLevel: p.startLevel, levels: p.levels } : p)),
+  };
+  assert.ok(
+    validateRuleset(halb).some((x) => x.includes('ohne Ort')),
+    'ein Platz ohne Ort neben platzierten wird nicht erkannt',
+  );
+});

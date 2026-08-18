@@ -17,11 +17,18 @@ function animalOf(i) {
   if (id.indexOf('pasture-') === 0) return { one: 'Kuh', many: 'Kühe' };
   return { one: 'Platz', many: 'Plätze' };
 }
+function einzeln(prefix) {
+  var n = 0;
+  rules.plots.forEach(function (p) { if (p.id.indexOf(prefix) === 0) n++; });
+  return n === 1;
+}
 function plotName(i) {
   var id = rules.plots[i].id;
   if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
-  if (id.indexOf('coop-') === 0) return 'Gehege ' + id.slice(5);
-  if (id.indexOf('pasture-') === 0) return 'Kuhweide ' + id.slice(8);
+  if (id.indexOf('coop-') === 0) return einzeln('coop-') ? 'Gehege' : 'Gehege ' + id.slice(5);
+  if (id.indexOf('pasture-') === 0) {
+    return einzeln('pasture-') ? 'Kuhweide' : 'Kuhweide ' + id.slice(8);
+  }
   return nameOf(id);
 }
 function stacks(list) {

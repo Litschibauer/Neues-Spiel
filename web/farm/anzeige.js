@@ -73,15 +73,34 @@ function plotStatus(p) {
   return 'nichts zu tun';
 }
 
+function placeOf(i) {
+  var p = rules.plots[i].place;
+  return p || { x: 2 + (i % 3) * 32, y: 4 + Math.floor(i / 3) * 24, w: 30, h: 20 };
+}
+
 function renderPlots(v) {
+  var scene = $('scene');
+  if (!scene.firstChild) scene.innerHTML = artScene();
+
   var box = $('plots');
   box.textContent = '';
 
-  v.plots.forEach(function (p) {
+  var reihenfolge = v.plots.slice().sort(function (a, b) {
+    return placeOf(a.index).y - placeOf(b.index).y;
+  });
+
+  reihenfolge.forEach(function (p) {
+    var ort = placeOf(p.index);
     var tile = document.createElement('button');
     tile.className = 'plot' + (p.done ? ' ripe' : '') + (p.idle ? ' locked' : '') +
       (p.blocked === 'level' ? ' gated' : '');
     tile.disabled = p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false;
+    tile.style.left = ort.x + '%';
+    tile.style.top = ort.y + '%';
+    tile.style.width = ort.w + '%';
+    tile.style.height = ort.h + '%';
+    tile.style.zIndex = String(10 + ort.y);
+    tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 
     var art = document.createElement('div');
     art.innerHTML =
@@ -92,6 +111,9 @@ function renderPlots(v) {
     if (p.done) {
       var badge = document.createElement('span');
       badge.className = 'badge';
+      badge.textContent = p.capacity > 1
+        ? String(p.slots.filter(function (s) { return s.done; }).length)
+        : '!';
       tile.appendChild(badge);
     }
 
@@ -122,8 +144,15 @@ function renderPlots(v) {
       var up = document.createElement('button');
       up.className = 'upgrade';
       up.textContent = p.upgrade.unlocked
-        ? p.upgrade.label + ' · ' + costText(p.upgrade.cost)
-        : p.upgrade.label + ' ab Stufe ' + p.upgrade.minPlayerLevel;
+        ? '+ ' + p.upgrade.cost.map(function (c) { return c.amount; }).join(' ')
+        : '+ Stufe ' + p.upgrade.minPlayerLevel;
+      up.setAttribute(
+        'aria-label',
+        p.upgrade.unlocked
+          ? p.upgrade.label + ' kaufen für ' + costText(p.upgrade.cost)
+          : p.upgrade.label + ' ab Stufe ' + p.upgrade.minPlayerLevel,
+      );
+      up.title = up.getAttribute('aria-label');
       up.disabled = !p.upgrade.affordable;
       up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(p.index); });
       tile.appendChild(up);

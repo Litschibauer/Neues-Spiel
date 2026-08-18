@@ -1,7 +1,40 @@
+function artScene() {
+  var out = '<rect x="0" y="0" width="100" height="130" fill="var(--meadow)"/>' +
+    '<rect x="0" y="0" width="100" height="13" fill="var(--sky)"/>' +
+    '<path d="M0 13V9c8-5 16-5 24 0 7-4 14-4 21 1 9-6 18-6 27 0 9-5 19-5 28 1v2z"' +
+    ' fill="var(--hill)"/>' +
+
+    '<path d="M0 26h100v3H0zM0 52h100v2H0z" fill="var(--meadow-dark)" opacity=".5"/>' +
+
+    '<path d="M0 63h100v5H0z" fill="var(--path)"/>' +
+    '<path d="M82 63V58h6v5z" fill="var(--path)"/>' +
+
+    '<g opacity=".92">' +
+    '<path d="M74 58V45h20v13z" fill="var(--surface)"/>' +
+    '<path d="M84 37 70 46h28z" fill="var(--roof)"/>' +
+    '<rect x="82" y="50" width="6" height="8" rx="1" fill="var(--wood-dark)"/>' +
+    '<rect x="76" y="49" width="4" height="4" rx="1" fill="var(--sky)" opacity=".85"/>' +
+    '<rect x="90" y="49" width="4" height="4" rx="1" fill="var(--sky)" opacity=".85"/>' +
+    '<rect x="90" y="39" width="3" height="6" fill="var(--roof)"/>' +
+    '</g>';
+
+  var trees = [[33, 36, .7], [44, 61, .75], [98, 61, .7], [2, 61, .6], [67, 36, .55]];
+  for (var i = 0; i < trees.length; i++) {
+    out += '<g transform="translate(' + trees[i][0] + ' ' + trees[i][1] +
+      ') scale(' + trees[i][2] + ')">' +
+      '<rect x="-1" y="-3" width="2" height="6" fill="var(--wood-dark)"/>' +
+      '<circle cy="-7" r="5" fill="var(--leaf-dark)"/>' +
+      '<circle cx="-3" cy="-5" r="3.4" fill="var(--leaf)"/>' +
+      '<circle cx="3" cy="-5" r="3" fill="var(--leaf)"/>' +
+      '</g>';
+  }
+
+  return out;
+}
+
 function artField(stage, crop) {
-  var soil = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
-    '<path d="M0 34h100v46H0z" fill="var(--soil)"/>' +
-    '<path d="M0 34h100v4H0zM0 46h100v3H0zM0 57h100v3H0zM0 68h100v3H0z" fill="var(--soil-dark)" opacity=".45"/>';
+  var soil = '<rect x="2" y="6" width="96" height="70" rx="7" fill="var(--soil)"/>' +
+    '<path d="M6 16h88v4H6zM6 30h88v3H6zM6 44h88v3H6zM6 58h88v3H6z" fill="var(--soil-dark)" opacity=".4"/>';
   if (stage <= 0) return soil;
 
   var out = soil, x, i;
@@ -51,9 +84,7 @@ function cow(x, y, scale) {
 }
 
 function artPasture(animals, ready) {
-  var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
-    '<path d="M0 54h100v26H0z" fill="var(--leaf)" opacity=".5"/>' +
-
+  var out = '<rect x="2" y="40" width="96" height="34" rx="6" fill="var(--leaf)" opacity=".35"/>' +
     '<path d="M6 44v22M28 44v22M72 44v22M94 44v22" stroke="var(--wood)" stroke-width="3" stroke-linecap="round"/>' +
     '<path d="M2 50h96M2 60h96" stroke="var(--wood)" stroke-width="2.5" stroke-linecap="round"/>';
 
@@ -77,8 +108,7 @@ function artDairy(working) {
       '<animate attributeName="opacity" values=".7;0" dur="2.4s" repeatCount="indefinite"/>' +
       '</circle></g>'
     : '';
-  return '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
-    '<path d="M0 62h100v18H0z" fill="var(--soil)"/>' +
+  return '<ellipse cx="48" cy="66" rx="42" ry="8" fill="var(--soil)" opacity=".25"/>' +
     '<path d="M22 62V38h50v24z" fill="var(--milk)"/>' +
     '<path d="M47 26 16 40h62z" fill="var(--wood-dark)"/>' +
     '<rect x="64" y="30" width="8" height="12" fill="var(--wood)"/>' +
@@ -96,8 +126,7 @@ function artMill(working) {
     ? '<animateTransform attributeName="transform" type="rotate" from="0" to="360"' +
       ' dur="7s" repeatCount="indefinite"/>'
     : '';
-  return '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
-    '<path d="M0 62h100v18H0z" fill="var(--soil)"/>' +
+  return '<ellipse cx="50" cy="66" rx="40" ry="8" fill="var(--soil)" opacity=".25"/>' +
     '<path d="M36 62V36h28v26z" fill="var(--wood)"/>' +
     '<path d="M50 24 32 38h36z" fill="var(--wood-dark)"/>' +
     '<rect x="45" y="50" width="10" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>' +
@@ -118,8 +147,7 @@ function chicken(x, y, flip, tone) {
 }
 
 function artCoop(animals, ready) {
-  var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
-    '<path d="M0 62h100v18H0z" fill="var(--leaf)" opacity=".45"/>' +
+  var out = '<ellipse cx="50" cy="68" rx="46" ry="9" fill="var(--soil)" opacity=".25"/>' +
     '<path d="M28 62V40h44v22z" fill="var(--wood)"/>' +
     '<path d="M50 28 22 42h56z" fill="var(--wood-dark)"/>' +
     '<rect x="44" y="50" width="12" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>';
