@@ -122,6 +122,26 @@ Command und allem, was daran hängt.
 > Offline-Start wieder kaputt macht. Als Data-URI in der Vorlage ist es Teil
 > der Datei — und der Service Worker hat es damit automatisch mit.
 
+### 2a. Wo was steht
+
+Es gibt eine Ansicht — den Hof. Alles andere sind Blätter, die sich darüber
+schieben, und jedes hängt an einem Ding, das man sieht:
+
+| Ding auf dem Hof | Blatt |
+| --- | --- |
+| Brett | die vier Zettel |
+| Wagen | dasselbe Brett — er fährt ja, was dort hängt |
+| Lager | Vorräte, Postfach, Ausbau — **nur Lager** |
+| Stand | anbieten, eigene Auslage, fremde Angebote |
+| Kiste | öffnet sich sofort, kein Blatt |
+| Zahnrad (Ecke) | Hofdaten, Gerät abmelden, Feldtest-Ansicht |
+
+**Der Saat-Nachkauf steht nicht im Lager.** Er taucht dort auf, wo er gebraucht
+wird: im Anpflanz-Menü, direkt unter dem Rezept, das gerade nicht geht, und nur
+solange die Zutat wirklich ausgegangen ist. Ein Vorrat, den man kaufen kann,
+wäre ein Händler; ein Korn, das man sich holt, wenn nichts mehr da ist, ist ein
+Notausgang. Der Unterschied ist die Platzierung.
+
 ### 2b. Waren-Icons — `web/farm/icons/`
 
 Für jede Ware kann eine Bilddatei danebengelegt werden. Der Dateiname ist die

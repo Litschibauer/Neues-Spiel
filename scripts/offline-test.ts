@@ -1533,6 +1533,118 @@ try {
   await evaluate(cdp, `document.getElementById('lager-close').click()`);
   await sleep(200);
 
+
+  console.log('\n9e. Leergespielt — der Weg zurück steht am Feld, nicht im Lager');
+
+  await evaluate(cdp, farmTab);
+  await sleep(300);
+  await evaluate(cdp, harvestAll);
+  await sleep(400);
+
+  for (let runde = 0; runde < 4; runde++) {
+    await evaluate(
+      cdp,
+      `(function () {
+         document.getElementById('stand').click();
+         var karten = [...document.querySelectorAll('#list .trade')];
+         karten.forEach(function (k) {
+           var alle = [...k.querySelectorAll('.pick button')].find(function (b) {
+             return b.textContent === 'alle';
+           });
+           if (alle) alle.click();
+         });
+       })()`,
+    );
+    await sleep(350);
+    await evaluate(
+      cdp,
+      `(function () {
+         var los = [...document.querySelectorAll('#list .done')].filter(function (b) {
+           return !b.disabled;
+         });
+         if (los[0]) los[0].click();
+       })()`,
+    );
+    await sleep(350);
+  }
+  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  await sleep(300);
+
+  const imLager = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('lagerhaus').click();
+       var hat = {
+         nachschub: !!document.getElementById('buy'),
+         abmelden: !!document.getElementById('lager-bg').querySelector('#forget'),
+         vorraete: document.querySelectorAll('#stock .chip').length > 0,
+         ausbau: !!document.querySelector('#ausbau .card'),
+       };
+       document.getElementById('lager-close').click();
+       return JSON.stringify(hat);
+     })()`,
+  );
+  check(
+    'Im Lager steht nur noch Lager',
+    imLager === '{"nachschub":false,"abmelden":false,"vorraete":true,"ausbau":true}',
+    imLager,
+  );
+
+  const hinterZahnrad = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('zahnrad').click();
+       var offen = document.getElementById('rest-bg').hidden === false;
+       var abmelden = !!document.getElementById('rest-bg').querySelector('#forget');
+       document.getElementById('rest-close').click();
+       return offen + '/' + abmelden;
+     })()`,
+  );
+  check('Der Rest sitzt hinterm Zahnrad', hinterZahnrad === 'true/true', hinterZahnrad);
+
+  const leeresFeld = await evaluate<string>(
+    cdp,
+    `(function () {
+       var t = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+         return /Zutaten/.test(x.querySelector('.status').textContent)
+           && /^Feld /.test(x.querySelector('.name').textContent);
+       });
+       if (!t) return 'kein leeres Feld';
+       t.click();
+       var zeilen = [...document.querySelectorAll('#pick-list .nachkauf')];
+       return zeilen.length + ':' + (zeilen[0] ? zeilen[0].textContent.slice(0, 40) : '') +
+         ' (' + document.getElementById('pick-title').textContent + ')';
+     })()`,
+  );
+  check(
+    'Ist die Saat aus, steht der Nachkauf im Anpflanz-Menü',
+    /^[1-9]/.test(leeresFeld) && /ausgegangen/.test(leeresFeld),
+    leeresFeld,
+  );
+
+  const nachDemKauf = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = document.querySelector('#pick-list .nachkauf .kaufen');
+       if (!k) return 'kein Kaufknopf';
+       if (k.disabled) return 'Kaufknopf gesperrt: ' + k.textContent;
+       k.click();
+
+       var zeilen = document.querySelectorAll('#pick-list .nachkauf').length;
+       var startbar = [...document.querySelectorAll('#pick-list .opt')].filter(function (o) {
+         return !o.disabled;
+       }).length;
+       var titel = document.getElementById('pick-title').textContent;
+       document.getElementById('pick-close').click();
+       return zeilen + '/' + startbar + ' (' + titel + ')';
+     })()`,
+  );
+  check(
+    'Ein Korn reicht: der Hinweis geht weg, das Rezept wird startbar',
+    /^1\/1 /.test(nachDemKauf),
+    nachDemKauf,
+  );
+
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);

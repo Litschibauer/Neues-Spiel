@@ -87,6 +87,13 @@
         <div id="plots"></div>
         <button class="moebel" id="wagen" hidden></button>
         <button class="moebel" id="brett"></button>
+        <button class="zahnrad" id="zahnrad" aria-label="Einstellungen">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7 5.4 5.4"/>
+          </svg>
+        </button>
         <button class="moebel" id="kiste" hidden></button>
         <button class="moebel" id="lagerhaus"></button>
         <button class="moebel" id="stand"></button>
@@ -111,8 +118,14 @@
       <div class="chips" id="stock"></div>
       <h2>Postfach</h2>
       <div id="mail"></div>
-      <h2>Nachschub</h2>
-      <div id="buy"></div>
+      <button class="sheet-close" id="lager-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="rest-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rest-titel">
+      <h3 id="rest-titel">Einstellungen</h3>
+      <div id="hofinfo"></div>
       <h2>Gerät</h2>
       <button class="card" id="forget">
         <div class="body">
@@ -121,7 +134,7 @@
         </div>
       </button>
       <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
-      <button class="sheet-close" id="lager-close">Schließen</button>
+      <button class="sheet-close" id="rest-close">Schließen</button>
     </div>
   </div>
 

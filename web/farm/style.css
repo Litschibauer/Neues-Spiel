@@ -187,6 +187,15 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
   }
 
+  .zahnrad {
+    position: absolute; top: .45rem; right: .45rem; z-index: 70;
+    width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 999px;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    color: var(--muted); box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+  }
+  .zahnrad:active { transform: scale(.94); }
+
   #wagen { left: 3%; top: 48%; width: 28%; height: 10%; z-index: 60; }
   #wagen.unterwegs { transform: translateX(-190%); transition: transform 2.2s ease-in; }
   #wagen:not(.unterwegs) { transition: transform 2.2s ease-out; }
@@ -222,6 +231,18 @@
     width: auto; flex: 1; min-width: 0; padding: .45rem; font-size: .8rem;
   }
   .zettel .reihe .skip { flex: 0 0 5.5rem; }
+
+  .nachkauf {
+    margin-top: .5rem; padding: .5rem .6rem; border-radius: 12px;
+    background: var(--warn-soft); color: var(--warn);
+    font-size: .75rem; display: flex; flex-direction: column; gap: .4rem;
+  }
+  .nachkauf b { font-weight: 700; }
+  .nachkauf .kaufen {
+    border: 0; border-radius: 9px; padding: .4rem .6rem;
+    background: var(--warn); color: var(--on-accent); font-weight: 700; font-size: .78rem;
+  }
+  .nachkauf .kaufen[disabled] { background: var(--sunk); color: var(--muted); }
 
   .abfahrt {
     width: 100%; padding: .7rem; border-radius: 12px; border: 0;

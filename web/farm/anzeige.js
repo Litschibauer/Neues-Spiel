@@ -18,6 +18,7 @@ function render() {
     && $('stand-bg').contains(document.activeElement);
   if (!typing) renderStore(v);
   renderAusbau(v);
+  renderHofinfo(v);
   renderBadges(v);
   renderSheet(v);
 }
@@ -545,48 +546,23 @@ function renderStore(v) {
     listBox.appendChild(offer);
   });
 
-  renderNotkauf(v);
-
   if (!any) listBox.innerHTML = '<p class="empty">Nichts anzubieten — erst ernten.</p>';
 }
 
-function renderNotkauf(v) {
-  var box = $('buy');
-  box.textContent = '';
-  var any = false;
-
-  v.stock.forEach(function (entry) {
-    if (entry.npcBuyPrice <= 0) return;
-    if (v.notkauf && entry.amount > 0) return;
-    any = true;
-
-    var karte = document.createElement('button');
-    karte.className = 'card';
-    karte.disabled = v.currency.amount < entry.npcBuyPrice || v.silo.free < 1;
-    karte.innerHTML =
-      '<div class="body"><div class="top">' + iconTag(entry.id) + '1 ' +
-        nameOf(entry.id) + ' nachkaufen</div>' +
-      '<div class="sub">' + (v.currency.amount < entry.npcBuyPrice
-        ? 'zu wenig ' + itemName(v.currency.item)
-        : v.silo.free < 1
-        ? 'kein Platz im Lager'
-        : entry.npcBuyPrice + ' ' + itemName(v.currency.item) +
-          (v.notkauf ? ' · nur wenn nichts mehr da ist' : '')) + '</div></div>' +
-      '<span class="go">+1</span>';
-    karte.addEventListener('click', function () {
-      act('Nachgekauft · 1 ' + nameOf(entry.id), client.buyNpc(entry.item, 1));
-    });
-    box.appendChild(karte);
-  });
-
-  if (!any) {
-    box.innerHTML = v.notkauf
-      ? '<p class="empty">Nachkaufen geht nur, wenn eine Saat ganz ausgegangen ist.</p>'
-      : '<p class="empty">Nichts nachzukaufen.</p>';
-  }
-}
-
 function renderBadges() {}
+
+function renderHofinfo(v) {
+  var box = $('hofinfo');
+  box.textContent = '';
+
+  var karte = document.createElement('div');
+  karte.className = 'note';
+  karte.innerHTML =
+    'Stufe ' + v.level + ' · ' + v.xp.total + ' XP<br>' +
+    'Lager ' + v.silo.used + '/' + v.silo.capacity +
+    ' · Auslage ' + (v.orders.length) + '/' + (v.orders.length + v.orderSlotsFree);
+  box.appendChild(karte);
+}
 
 var CODES = {
   TRUCK_AWAY: 'Der Wagen ist unterwegs',

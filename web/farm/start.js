@@ -55,13 +55,13 @@ function attempt(force) {
 
 function show(next) {
   view = next;
-  ['brett', 'lager', 'stand'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest'].forEach(function (name) {
   $(name + '-close').addEventListener('click', function () { show('farm'); });
   $(name + '-bg').addEventListener('click', function (e) {
     if (e.target === $(name + '-bg')) show('farm');
@@ -70,6 +70,7 @@ function show(next) {
 $('brett').addEventListener('click', function () { show('brett'); });
 $('lagerhaus').addEventListener('click', function () { show('lager'); });
 $('stand').addEventListener('click', function () { show('stand'); });
+$('zahnrad').addEventListener('click', function () { show('rest'); });
 
 function begin(restored) {
   client = restored;

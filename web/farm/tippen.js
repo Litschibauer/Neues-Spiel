@@ -144,7 +144,9 @@ function renderStall(p) {
 function renderSheet(v) {
   if (sheet.mode === null || sheet.plot === null) return;
   var p = v.plots[sheet.plot];
+  if (!p) return;
   if (sheet.mode === 'stall') renderStall(p);
+  else if (sheet.mode === 'recipes') zeichnePicker(p);
 }
 
 $('wagen').addEventListener('click', function () { show('brett'); });
@@ -159,8 +161,14 @@ $('kiste').addEventListener('click', function () {
 });
 
 function openPicker(p, slot) {
-  sheet = { plot: p.index, mode: 'recipes', slot: slot || 0 };
+  sheet = { plot: p.index, mode: 'recipes', slot: slot === undefined ? sheet.slot : slot };
   pickerPlot = p.index;
+  zeichnePicker(p);
+  $('pick-bg').hidden = false;
+}
+
+function zeichnePicker(p) {
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
   $('pick-title').textContent = plotName(p.index) + ' — was soll laufen?';
 
   var box = $('pick-list');
@@ -189,9 +197,46 @@ function openPicker(p, slot) {
           client.start(p.index, o.recipe, slot));
     });
     box.appendChild(card);
-  });
 
-  $('pick-bg').hidden = false;
+    if (o.unlocked && !o.affordable) nachkaufZeile(v, o, box);
+  });
+}
+
+function nachkaufZeile(v, o, box) {
+  o.inputs.forEach(function (zutat) {
+    var lager = null;
+    v.stock.forEach(function (e) { if (e.item === zutat.item) lager = e; });
+    if (!lager || lager.npcBuyPrice <= 0) return;
+    if (v.notkauf && lager.amount > 0) return;
+    if (lager.amount >= zutat.amount) return;
+
+    var kasten = document.createElement('div');
+    kasten.className = 'nachkauf';
+
+    var text = document.createElement('div');
+    text.innerHTML = itemIcon(zutat.item) +
+      (lager.amount === 0
+        ? '<b>' + itemName(zutat.item) + ' ist ausgegangen.</b> Ein Korn zum Weitermachen:'
+        : '<b>' + itemName(zutat.item) + '</b> reicht nicht — nachlegen:');
+    kasten.appendChild(text);
+
+    var knopf = document.createElement('button');
+    knopf.type = 'button';
+    knopf.className = 'kaufen';
+    knopf.disabled = v.currency.amount < lager.npcBuyPrice || v.silo.free < 1;
+    knopf.textContent = v.currency.amount < lager.npcBuyPrice
+      ? 'zu wenig ' + itemName(v.currency.item)
+      : v.silo.free < 1
+      ? 'Lager voll'
+      : '1 ' + itemName(zutat.item) + ' kaufen · ' + lager.npcBuyPrice + ' ' +
+        itemName(v.currency.item);
+    knopf.addEventListener('click', function () {
+      act('Nachgekauft · 1 ' + itemName(zutat.item), client.buyNpc(zutat.item, 1));
+    });
+    kasten.appendChild(knopf);
+
+    box.appendChild(kasten);
+  });
 }
 
 function closePicker() {
