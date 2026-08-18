@@ -10,6 +10,7 @@
     --leaf: #4f9159; --leaf-dark: #33693d;
     --sky: #cfe4ec;
     --meadow: #a8c98a; --meadow-dark: #8fb372; --hill: #b7d59b;
+    --acker: #9dc07f; --acker-hell: #a9cb89; --raster: rgba(255,255,255,.28);
     --path: #d8c9a6; --roof: #9c5b46;
     --truck: #d9d3c6; --truck-cab: #3f7f8c;
     --wood: #a5764a; --wood-dark: #7d5735;
@@ -34,6 +35,7 @@
       --leaf: #55a05f; --leaf-dark: #2f6238;
       --sky: #2b3d45;
       --meadow: #3c5138; --meadow-dark: #33472f; --hill: #455c3f;
+      --acker: #384c34; --acker-hell: #3f5539; --raster: rgba(255,255,255,.16);
       --path: #574c39; --roof: #6d3f31;
       --truck: #6f6a5f; --truck-cab: #2d5b66;
       --wood: #8b6440; --wood-dark: #63472c;
@@ -54,6 +56,7 @@
     --leaf: #55a05f; --leaf-dark: #2f6238;
     --sky: #2b3d45;
     --meadow: #3c5138; --meadow-dark: #33472f; --hill: #455c3f;
+    --acker: #384c34; --acker-hell: #3f5539; --raster: rgba(255,255,255,.16);
     --path: #574c39; --roof: #6d3f31;
     --truck: #6f6a5f; --truck-cab: #2d5b66;
     --wood: #8b6440; --wood-dark: #63472c;
@@ -195,12 +198,29 @@
     color: var(--muted); box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
   }
   .zahnrad:active { transform: scale(.94); }
+  .hammer { right: 3rem; }
 
-  #wagen { left: 3%; top: 48%; width: 28%; height: 10%; z-index: 60; }
+  .setzen {
+    position: absolute; left: 50%; top: .5rem; transform: translateX(-50%); z-index: 75;
+    display: flex; align-items: center; gap: .5rem; white-space: nowrap;
+    background: var(--accent); color: var(--on-accent);
+    border-radius: 999px; padding: .3rem .4rem .3rem .8rem;
+    font-size: .78rem; font-weight: 650; box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  }
+  .setzen button {
+    border: 0; border-radius: 999px; padding: .25rem .6rem;
+    background: color-mix(in srgb, var(--on-accent) 22%, transparent);
+    color: var(--on-accent); font-size: .72rem; font-weight: 650;
+  }
+
+  .hof.setzt .plot { pointer-events: none; }
+  .hof.setzt .moebel, .hof.setzt .zahnrad { opacity: .35; pointer-events: none; }
+
+  #wagen { left: 3%; top: 15%; width: 26%; height: 8%; z-index: 60; }
   #wagen.unterwegs { transform: translateX(-190%); transition: transform 2.2s ease-in; }
   #wagen:not(.unterwegs) { transition: transform 2.2s ease-out; }
-  #brett { left: 34%; top: 46%; width: 16%; height: 13%; z-index: 61; }
-  #kiste { left: 52%; top: 50%; width: 9%; height: 9%; z-index: 64; }
+  #brett { left: 33%; top: 11%; width: 15%; height: 11%; z-index: 61; }
+  #kiste { left: 50%; top: 14%; width: 8%; height: 8%; z-index: 64; }
   #kiste .art { animation: wackeln 2.2s ease-in-out infinite; }
   @keyframes wackeln {
     0%, 88%, 100% { transform: rotate(0deg); }
@@ -208,8 +228,8 @@
     96% { transform: rotate(6deg); }
   }
   @media (prefers-reduced-motion: reduce) { #kiste .art { animation: none; } }
-  #lagerhaus { left: 62%; top: 46%; width: 16%; height: 13%; z-index: 62; }
-  #stand { left: 80%; top: 47%; width: 16%; height: 12%; z-index: 63; }
+  #lagerhaus { left: 60%; top: 11%; width: 15%; height: 11%; z-index: 62; }
+  #stand { left: 78%; top: 12%; width: 15%; height: 10%; z-index: 63; }
 
   .zettel {
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px;

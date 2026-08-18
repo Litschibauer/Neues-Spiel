@@ -108,6 +108,47 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+async function tippeBisGesetzt(cdp: Cdp): Promise<boolean> {
+  for (const x of [0.5, 0.25, 0.75, 0.35, 0.65, 0.15]) {
+    for (const y of [0.5, 0.6, 0.7, 0.45, 0.8, 0.9]) {
+      await evaluate(
+        cdp,
+        `(function () {
+           var hof = document.getElementById('hof');
+           var r = hof.getBoundingClientRect();
+           hof.dispatchEvent(new MouseEvent('click', {
+             clientX: r.left + r.width * ${x},
+             clientY: r.top + r.height * ${y},
+             bubbles: true,
+           }));
+         })()`,
+      );
+      await sleep(280);
+      if (await evaluate<boolean>(cdp, `document.getElementById('setzen').hidden`)) return true;
+    }
+  }
+  return false;
+}
+
+async function baueUndStelle(cdp: Cdp, name: string): Promise<boolean> {
+  await evaluate(cdp, `document.getElementById('bauen').click()`);
+  await sleep(350);
+  const gekauft = await evaluate<boolean>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#bauliste .card')].find(function (c) {
+         return !c.disabled && c.querySelector('.top').textContent.indexOf(${JSON.stringify(name)}) === 0;
+       });
+       if (!k) { document.getElementById('bau-close').click(); return false; }
+       k.click();
+       return true;
+     })()`,
+  );
+  if (!gekauft) return false;
+  await sleep(500);
+  return tippeBisGesetzt(cdp);
+}
+
 const plantAll = `(function () {
      var n = 0;
      for (var k = 0; k < 12; k++) {
@@ -666,11 +707,12 @@ try {
   );
 
   const truth = (await api(`/api/admin/status?account=${status.accountId}`)) as {
-    state: { items: number[]; plots: unknown[] };
+    state: { items: number[]; plots: Array<{ gx: number }> };
   };
   check(
     'Es zeigt dieselben Zahlen wie der Server',
-    Number(shown.gold) === truth.state.items[0] && shown.plots === truth.state.plots.length,
+    Number(shown.gold) === truth.state.items[0] &&
+      shown.plots === truth.state.plots.filter((p) => (p as { gx: number }).gx >= 0).length,
     `${shown.gold} Gold, ${shown.plots} Plätze, Stufe ${shown.lvl}`,
   );
 
@@ -1054,8 +1096,8 @@ try {
   );
 
   await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
-  const frachtText = `[...document.querySelectorAll('#requests .posten')]
-       .map(function (p) { return p.textContent; }).join(' | ')`;
+  const frachtText = `[...document.querySelectorAll('#requests .zettel')]
+       .map(function (z) { return z.dataset.zettel; }).join(',')`;
   const vorherFracht = await evaluate<string>(cdp, frachtText);
   const skipLabel = await evaluate<string>(cdp, `document.querySelector('#requests .skip').textContent`);
   await evaluate(cdp, `document.querySelector('#requests .skip').click()`);
@@ -1212,9 +1254,9 @@ try {
        })()`,
     );
 
-  await buyUpgrade('Mühle');
+  await baueUndStelle(cdp, 'Mühle');
   await sleep(300);
-  await buyUpgrade('Gehege 1');
+  await baueUndStelle(cdp, 'Gehege 1');
   await sleep(300);
   await buyUpgrade('Gehege 1');
   await sleep(300);
@@ -1643,6 +1685,129 @@ try {
     'Ein Korn reicht: der Hinweis geht weg, das Rezept wird startbar',
     /^1\/1 /.test(nachDemKauf),
     nachDemKauf,
+  );
+
+
+  console.log('\n9f. Bauen und frei hinstellen');
+
+  await evaluate(cdp, farmTab);
+  await sleep(300);
+
+  const startbild = await evaluate<{ plots: number; raster: boolean }>(
+    cdp,
+    `(function () {
+       return {
+         plots: document.querySelectorAll('#plots .plot').length,
+         raster: !!document.getElementById('scene').innerHTML.match(/acker/),
+       };
+     })()`,
+  );
+  check(
+    'Auf dem Hof steht nur, was schon gebaut ist',
+    startbild.raster && startbild.plots > 0 && startbild.plots < 11,
+    `${startbild.plots} Gebäude auf dem Raster`,
+  );
+
+  const gebautVorher = startbild.plots;
+  await evaluate(cdp, `document.getElementById('bauen').click()`);
+  await sleep(400);
+
+  const gekauft = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#bauliste .card')].find(function (c) {
+         return !c.disabled;
+       });
+       if (!k) return 'nichts bezahlbar';
+       var name = k.querySelector('.top').textContent;
+       k.click();
+       return name;
+     })()`,
+  );
+  await sleep(600);
+
+  const imSetzen = await evaluate<{ banner: boolean; text: string }>(
+    cdp,
+    `(function () {
+       return {
+         banner: !document.getElementById('setzen').hidden,
+         text: document.getElementById('setzen-text').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Nach dem Kauf fragt der Hof, wohin',
+    imSetzen.banner && /wohin/.test(imSetzen.text),
+    `${gekauft} → ${imSetzen.text}`,
+  );
+
+  await tippeBisGesetzt(cdp);
+  await sleep(500);
+
+  const nachSetzen = await evaluate<{ plots: number; banner: boolean }>(
+    cdp,
+    `(function () {
+       return {
+         plots: document.querySelectorAll('#plots .plot').length,
+         banner: !document.getElementById('setzen').hidden,
+       };
+     })()`,
+  );
+  check(
+    'Ein Tipp aufs Raster setzt das Gebäude hin',
+    nachSetzen.plots === gebautVorher + 1 && !nachSetzen.banner,
+    `${gebautVorher} → ${nachSetzen.plots} Gebäude`,
+  );
+
+  const serverWeiss = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { plots: Array<{ gx: number; gy: number; level: number }> };
+  };
+  check(
+    'Der Server kennt die Stelle — sie ist Spielzustand, keine Ansichtssache',
+    serverWeiss.state.plots.filter((p) => p.gx >= 0).length === nachSetzen.plots,
+    `${serverWeiss.state.plots.filter((p) => p.gx >= 0).length} platziert beim Server`,
+  );
+
+  const vorherStellen = await evaluate<string>(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].map(function (t) {
+       return t.style.left + ',' + t.style.top;
+     }).join(' ')`,
+  );
+  await evaluate(
+    cdp,
+    `(function () {
+       var t = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+         return /^Feld 1/.test(x.querySelector('.name').textContent);
+       });
+       t.click();
+     })()`,
+  );
+  await sleep(400);
+  const konnteSchieben = await evaluate<boolean>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#pick-list button')].find(function (b) {
+         return b.textContent === 'Verschieben';
+       });
+       if (!k) return false;
+       k.click();
+       return true;
+     })()`,
+  );
+  await sleep(400);
+  await tippeBisGesetzt(cdp);
+  await sleep(500);
+  const nachherStellen = await evaluate<string>(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].map(function (t) {
+       return t.style.left + ',' + t.style.top;
+     }).join(' ')`,
+  );
+  check(
+    'Ein gebautes Feld lässt sich verschieben',
+    konnteSchieben && nachherStellen !== vorherStellen,
+    konnteSchieben ? 'Stellen haben sich geändert' : 'kein Verschieben-Knopf',
   );
 
   console.log('\n10. Eine neue Version erreicht den Browser');

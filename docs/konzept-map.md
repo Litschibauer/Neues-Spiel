@@ -410,6 +410,51 @@ nächste Stufe:
 Ältere Regelwerke haben keine `siloLevels` — dort fällt `capacityOf` auf
 `siloCapacity` zurück, und alte Logs rechnen unverändert.
 
+#### v10: ein Raster, auf dem man selbst baut
+
+Bis v9 stand jedes Gebäude dort, wo der Katalog es hinschrieb — schön, aber
+nicht deiner. Seit v10 ist der Hof ein **Raster von 8 × 10 Feldern**, und wo
+etwas steht, ist **Spielzustand**.
+
+Genau diese Grenze hatte ich beim „Hof als Ort" bewusst offengelassen: Solange
+die Position Katalogdaten sind, kostet sie nichts. Sobald der Spieler umbauen
+darf, wird sie Zustand — mit allem, was daranhängt: ein Command, eine
+Migration, Invarianten, Golden Vectors.
+
+```
+Plot { level, slots, gx, gy }        gx < 0 = gekauft, aber noch nicht hingestellt
+PlotDef { …, size: {w, h} }          wie viele Felder das Gebäude braucht
+Ruleset { …, grid: {w: 8, h: 10} }
+```
+
+**Ein Command reicht für beides.** `PLACE {plot, gx, gy}` stellt hin *und*
+verschiebt — der Unterschied ist nur, ob vorher schon eine Stelle da war. Die
+Sim prüft Rand, Überlappung mit jedem anderen Gebäude und dass der Platz
+überhaupt gekauft ist. Ein Umzug behält Stufe, Ladung und laufende Uhren; ein
+Test hält fest, dass die Saat den Umzug übersteht.
+
+**Gekauft heißt noch nicht hingestellt.** `BUY` verändert nur die Stufe, die
+Stelle bleibt leer, und `START` weist ein Gebäude im Nirgendwo mit `NOT_PLACED`
+ab. Die Oberfläche macht daraus eine Geste: kaufen → „wohin?" → tippen.
+
+**Was am Anfang steht:** Lager, Wagen, Brett, Stand und das Hofhaus stehen fest
+am oberen Rand — sie sind kein Platz im Katalog und wandern nicht. Auf dem
+Raster liegen anfangs nur die drei Startfelder. Alles andere kauft man im
+Bauen-Menü und stellt es selbst hin.
+
+**Die Aufsicht ist eine Projektion, keine neue Grafik.** Der Boden wird als
+Trapez gezeichnet — die hintere Reihe ist 66 % so breit wie die vordere —, und
+jedes Gebäude steht aufrecht auf seiner Zelle, nach Tiefe sortiert. Felder
+liegen flach (`flat: true` im Katalog), Gebäude stehen 1,55-mal so hoch wie
+ihre Grundfläche tief ist. Kein einziges Bild musste dafür neu gezeichnet
+werden.
+
+**Der Riegel dazu:** `validateRuleset` rechnet nach, dass alle Gebäude zusammen
+aufs Raster passen; ein Test verlangt zusätzlich 50 % Luft, sonst wäre „frei
+platzieren" eine Lüge. Die Migration 9 → 10 setzt bestehende Höfe an die
+Stellen, die ihren alten Prozentkoordinaten am nächsten kommen, und packt
+Kollisionen deterministisch in die erste freie Lücke.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

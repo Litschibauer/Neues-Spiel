@@ -1,7 +1,7 @@
 import type { Ruleset } from './rules.ts';
-import { getRuleset, levelRecipes, slotsAt } from './rules.ts';
+import { getRuleset, levelRecipes, sizeOf, slotsAt } from './rules.ts';
 import type { Slot, State } from './state.ts';
-import { EMPTY_PLOT, capacityOf, cloneState, emptySlots, stored } from './state.ts';
+import { EMPTY_PLOT, capacityOf, cloneState, emptySlots, startPlatz, stored } from './state.ts';
 
 export class MigrationError extends Error {
   constructor(message: string) {
@@ -115,6 +115,57 @@ export const GROW: MigrationStep = (state, from, to) => {
 export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
   RETIME(GROW(state, from, to), from, to);
 
+export const AUFS_RASTER: MigrationStep = (state, from, to) => {
+  const gewachsen = GROW_AND_RETIME(state, from, to);
+  const raster = to.grid;
+  if (!raster) return gewachsen;
+  if (gewachsen.plots.every((p) => p.level <= 0 || p.gx >= 0)) return gewachsen;
+
+  const belegt: boolean[][] = [];
+  for (let y = 0; y < raster.h; y++) belegt.push(new Array<boolean>(raster.w).fill(false));
+
+  const passt = (gx: number, gy: number, w: number, h: number): boolean => {
+    if (gx < 0 || gy < 0 || gx + w > raster.w || gy + h > raster.h) return false;
+    for (let y = gy; y < gy + h; y++) {
+      for (let x = gx; x < gx + w; x++) if (belegt[y]![x]) return false;
+    }
+    return true;
+  };
+  const merken = (gx: number, gy: number, w: number, h: number): void => {
+    for (let y = gy; y < gy + h; y++) {
+      for (let x = gx; x < gx + w; x++) belegt[y]![x] = true;
+    }
+  };
+
+  const plots = gewachsen.plots.map((p, i) => {
+    if (p.level <= 0) return { ...p, gx: -1, gy: -1 };
+    const groesse = sizeOf(to, i);
+    if (p.gx >= 0 && passt(p.gx, p.gy, groesse.w, groesse.h)) {
+      merken(p.gx, p.gy, groesse.w, groesse.h);
+      return p;
+    }
+
+    const wunsch = startPlatz(to, i);
+    if (passt(wunsch.gx, wunsch.gy, groesse.w, groesse.h)) {
+      merken(wunsch.gx, wunsch.gy, groesse.w, groesse.h);
+      return { ...p, gx: wunsch.gx, gy: wunsch.gy };
+    }
+
+    for (let y = 0; y <= raster.h - groesse.h; y++) {
+      for (let x = 0; x <= raster.w - groesse.w; x++) {
+        if (!passt(x, y, groesse.w, groesse.h)) continue;
+        merken(x, y, groesse.w, groesse.h);
+        return { ...p, gx: x, gy: y };
+      }
+    }
+    throw new MigrationError(`kein Platz auf dem Raster für ${to.plots[i]?.id ?? i}`);
+  });
+
+  const next = cloneState(gewachsen);
+  next.plots = plots;
+  return next;
+};
+
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['1->2', RETIME],
 
@@ -125,6 +176,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['6->7', GROW_AND_RETIME],
   ['7->8', GROW_AND_RETIME],
   ['8->9', GROW_AND_RETIME],
+  ['9->10', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -246,6 +298,24 @@ export function assertInvariants(state: State, rules: Ruleset): void {
       problems.push(`Platz ${i}: Stufe ${p.level} außerhalb von [0, ${def.levels.length}]`);
       continue;
     }
+    const raster = rules.grid;
+    if (raster && p.gx >= 0) {
+      const groesse = sizeOf(rules, i);
+      if (p.gx + groesse.w > raster.w || p.gy + groesse.h > raster.h || p.gy < 0) {
+        problems.push(`Platz ${i} steht außerhalb des Rasters: ${p.gx},${p.gy}`);
+      }
+      for (const [j, other] of state.plots.entries()) {
+        if (j <= i || other.gx < 0) continue;
+        const andere = sizeOf(rules, j);
+        const frei =
+          p.gx + groesse.w <= other.gx ||
+          other.gx + andere.w <= p.gx ||
+          p.gy + groesse.h <= other.gy ||
+          other.gy + andere.h <= p.gy;
+        if (!frei) problems.push(`Platz ${i} und ${j} stehen auf demselben Feld`);
+      }
+    }
+
     const capacity = slotsAt(rules, i, p.level);
     if (p.slots.length !== capacity) {
       problems.push(`Platz ${i}: ${p.slots.length} Plätze, Stufe ${p.level} hat ${capacity}`);

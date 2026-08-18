@@ -210,6 +210,17 @@ function coreLoopBrett(version: number) {
     }
   };
 
+  const platziere = (plot: number): void => {
+    const raster = rules.grid;
+    if (!raster || state.plots[plot]!.gx >= 0) return;
+    const groesse = rules.plots[plot]!.size ?? { w: 1, h: 1 };
+    for (let gy = 0; gy <= raster.h - groesse.h; gy++) {
+      for (let gx = 0; gx <= raster.w - groesse.w; gx++) {
+        if (versuche({ type: 'PLACE', plot, gx, gy })) return;
+      }
+    }
+  };
+
   const saat = () => state.items[WHEAT] ?? 0;
   const felder = rules.plots
     .map((p, i) => i)
@@ -252,7 +263,7 @@ function coreLoopBrett(version: number) {
     runde();
   }
 
-  versuche({ type: 'BUY', plot: MILL });
+  if (versuche({ type: 'BUY', plot: MILL })) platziere(MILL);
   for (let i = 0; i < 30; i++) {
     if (rules.recipes[R_FEED]!.inputs.every((x) => (state.items[x.item] ?? 0) >= x.amount)) break;
     runde();
@@ -267,6 +278,7 @@ function coreLoopBrett(version: number) {
     runde();
   }
   if (versuche({ type: 'BUY', plot: COOP })) {
+    platziere(COOP);
     if (versuche({ type: 'START', plot: COOP, slot: 0, recipe: R_EGGS })) {
       tick += rules.recipes[R_EGGS]!.durationTicks;
       versuche({ type: 'COLLECT', plot: COOP, slot: 0 });

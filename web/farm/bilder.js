@@ -4,24 +4,20 @@ function artScene() {
     '<path d="M0 13V9c8-5 16-5 24 0 7-4 14-4 21 1 9-6 18-6 27 0 9-5 19-5 28 1v2z"' +
     ' fill="var(--hill)"/>' +
 
-    '<path d="M0 26h100v3H0zM0 52h100v2H0z" fill="var(--meadow-dark)" opacity=".5"/>' +
-
-    '<path d="M0 62h100v11H0z" fill="var(--path)"/>' +
-    '<path d="M82 62V58h6v4z" fill="var(--path)"/>' +
+    '<path d="M0 22h100v6H0z" fill="var(--path)"/>' +
 
     '<g opacity=".92">' +
-    '<path d="M74 58V45h20v13z" fill="var(--surface)"/>' +
-    '<path d="M84 37 70 46h28z" fill="var(--roof)"/>' +
-    '<rect x="82" y="50" width="6" height="8" rx="1" fill="var(--wood-dark)"/>' +
-    '<rect x="76" y="49" width="4" height="4" rx="1" fill="var(--sky)" opacity=".85"/>' +
-    '<rect x="90" y="49" width="4" height="4" rx="1" fill="var(--sky)" opacity=".85"/>' +
-    '<rect x="90" y="39" width="3" height="6" fill="var(--roof)"/>' +
+    '<path d="M6 22V11h18v11z" fill="var(--surface)"/>' +
+    '<path d="M15 5 3 12h24z" fill="var(--roof)"/>' +
+    '<rect x="12" y="16" width="6" height="6" rx="1" fill="var(--wood-dark)"/>' +
+    '<rect x="21" y="14" width="4" height="4" rx="1" fill="var(--sky)" opacity=".85"/>' +
+    '<rect x="21" y="6" width="3" height="6" fill="var(--roof)"/>' +
     '</g>';
 
-  var trees = [[33, 36, .7], [44, 61, .75], [98, 61, .7], [2, 61, .6], [67, 36, .55]];
-  for (var i = 0; i < trees.length; i++) {
-    out += '<g transform="translate(' + trees[i][0] + ' ' + trees[i][1] +
-      ') scale(' + trees[i][2] + ')">' +
+  var baeume = [[34, 20, .55], [62, 20, .5], [95, 20, .5]];
+  for (var i = 0; i < baeume.length; i++) {
+    out += '<g transform="translate(' + baeume[i][0] + ' ' + baeume[i][1] +
+      ') scale(' + baeume[i][2] + ')">' +
       '<rect x="-1" y="-3" width="2" height="6" fill="var(--wood-dark)"/>' +
       '<circle cy="-7" r="5" fill="var(--leaf-dark)"/>' +
       '<circle cx="-3" cy="-5" r="3.4" fill="var(--leaf)"/>' +
@@ -29,7 +25,7 @@ function artScene() {
       '</g>';
   }
 
-  return out;
+  return out + artBoden(bauModus);
 }
 
 function artTruck(unterwegs, voll) {

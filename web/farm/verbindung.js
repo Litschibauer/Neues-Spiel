@@ -14,6 +14,7 @@ var isActive = true;
 var client = null, engine = null, rules = null, accountId = null;
 var clockOffsetMs = 0;
 var view = 'farm';
+var bauModus = false;
 var SAVE_KEY = NS.storageKeyFor(location.origin);
 
 function save() {

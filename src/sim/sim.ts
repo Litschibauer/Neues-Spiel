@@ -7,6 +7,7 @@ import {
   listingFee,
   nextLevel,
   priceBand,
+  sizeOf,
   recipeUnlocked,
   slotsAt,
 } from './rules.ts';
@@ -111,6 +112,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
       if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
 
+      if (rules.grid && plot.gx < 0) throw new SimError('NOT_PLACED');
       if (!levelRecipes(rules, cmd.plot, plot.level).includes(cmd.recipe)) {
         throw new SimError('RECIPE_NOT_ALLOWED');
       }
@@ -136,7 +138,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         next.items = addItems(s.items, spend);
       }
       next.plots = replaceAt(s.plots, cmd.plot, {
-        level: plot.level,
+        ...plot,
         slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick }),
       });
       return next;
@@ -172,6 +174,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         );
       }
       next.plots = replaceAt(s.plots, cmd.plot, {
+        ...plot,
         level: plot.level + 1,
         slots:
           running.length > 0
@@ -201,7 +204,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       const next = cloneState(s);
       next.plots = replaceAt(s.plots, cmd.plot, {
-        level: plot.level,
+        ...plot,
         slots: replaceAt(plot.slots, slotIndex, { recipe: EMPTY_PLOT, startedAt: 0 }),
       });
       next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
@@ -469,6 +472,39 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       next.requests = s.requests.slice(1);
       next.xp = s.xp + waybill.xp;
       next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.tick + away };
+      return next;
+    }
+
+    case 'PLACE': {
+      const raster = rules.grid;
+      if (!raster) throw new SimError('NO_GRID');
+
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
+      if (def.fixed) throw new SimError('OFF_GRID');
+
+      const groesse = sizeOf(rules, cmd.plot);
+      if (!Number.isInteger(cmd.gx) || !Number.isInteger(cmd.gy)) throw new SimError('OFF_GRID');
+      if (cmd.gx < 0 || cmd.gy < 0) throw new SimError('OFF_GRID');
+      if (cmd.gx + groesse.w > raster.w || cmd.gy + groesse.h > raster.h) {
+        throw new SimError('OFF_GRID');
+      }
+
+      for (const [i, other] of s.plots.entries()) {
+        if (i === cmd.plot || other.gx < 0) continue;
+        const andere = sizeOf(rules, i);
+        const frei =
+          cmd.gx + groesse.w <= other.gx ||
+          other.gx + andere.w <= cmd.gx ||
+          cmd.gy + groesse.h <= other.gy ||
+          other.gy + andere.h <= cmd.gy;
+        if (!frei) throw new SimError('CELL_TAKEN');
+      }
+
+      const next = cloneState(s);
+      next.plots = replaceAt(s.plots, cmd.plot, { ...plot, gx: cmd.gx, gy: cmd.gy });
       return next;
     }
 

@@ -203,8 +203,10 @@ Erst wenn die Mechaniken stehen, sonst baut man die Oberfläche zweimal.
 - [x] ~~**Der Hof als Ort statt als Kachelraster.**~~ Erledigt, Schritt 1: Die
       Plätze stehen an festen Stellen (`PlotDef.place`, vier Zahlen in Prozent),
       dahinter eine durchgehende Landschaft. Reine Oberfläche — der Sim-Kern
-      weiß nichts davon. Offen bleibt: Deko, Tag/Nacht, und Umbauen durch den
-      Spieler (das erst wäre ein Command).
+      weiß nichts davon. **Seit v10 darf der Spieler umbauen** — damit ist die
+      Stelle Spielzustand geworden: 8 × 10 Raster, `PLACE` als Command, Aufsicht
+      als Projektion. Offen bleibt: Deko, Tag/Nacht, Land dazukaufen und Ziehen
+      statt Tippen beim Platzieren.
 
 - [x] ~~**App-Hülle lokal.**~~ Erledigt: Der Spielstand (bestätigter Snapshot UND
       Warteschlange) liegt nach jeder Aktion auf dem Gerät, ein Service Worker cacht

@@ -96,6 +96,16 @@ function openStall(p) {
   $('pick-bg').hidden = false;
 }
 
+function verschiebeKnopf(p, box) {
+  if (!rules.grid || (rules.plots[p.index] && rules.plots[p.index].fixed)) return;
+  var knopf = document.createElement('button');
+  knopf.type = 'button';
+  knopf.className = 'abfahrt skip';
+  knopf.textContent = 'Verschieben';
+  knopf.addEventListener('click', function () { verschiebe(p.index); });
+  box.appendChild(knopf);
+}
+
 function renderStall(p) {
   var tier = animalOf(p.index);
   $('pick-title').textContent = plotName(p.index) + ' — ' + p.capacity + ' ' +
@@ -139,6 +149,7 @@ function renderStall(p) {
   }
 
   p.slots.forEach(function (s) { box.appendChild(stallRow(p, s)); });
+  verschiebeKnopf(p, box);
 }
 
 function renderSheet(v) {
@@ -150,6 +161,75 @@ function renderSheet(v) {
 }
 
 $('wagen').addEventListener('click', function () { show('brett'); });
+$('bauen').addEventListener('click', function () { show('bau'); });
+
+var setzePlot = -1;
+
+function starteSetzen(plot, text) {
+  setzePlot = plot;
+  bauModus = true;
+  $('hof').classList.add('setzt');
+  $('setzen').hidden = false;
+  $('setzen-text').textContent = text;
+  render();
+}
+
+function endeSetzen() {
+  setzePlot = -1;
+  bauModus = false;
+  $('hof').classList.remove('setzt');
+  $('setzen').hidden = true;
+  render();
+}
+
+function baueUndSetze(plot) {
+  if (!isActive) return;
+  client.localTick = tickNow();
+  var vorher = client.preview().plots[plot].level;
+  if (vorher <= 0) {
+    var res = client.buy(plot);
+    if (!res.ok) { toast(CODES[res.code] || res.code, true); return; }
+    toast('Gekauft · ' + plotName(plot));
+    save();
+    scheduleSync();
+  }
+  show('farm');
+  starteSetzen(plot, plotName(plot) + ' — wohin?');
+}
+
+function verschiebe(plot) {
+  closePicker();
+  show('farm');
+  starteSetzen(plot, plotName(plot) + ' verschieben');
+}
+
+$('setzen-ab').addEventListener('click', function () {
+  if (setzePlot >= 0 && client.preview().plots[setzePlot].gx < 0) {
+    toast('Der Platz muss noch hingestellt werden', true);
+    return;
+  }
+  endeSetzen();
+});
+
+$('hof').addEventListener('click', function (e) {
+  if (setzePlot < 0) return;
+  var feld = zeigerAufFeld(e);
+  if (!feld) return;
+
+  client.localTick = tickNow();
+  var groesse = rules.plots[setzePlot].size || { w: 1, h: 1 };
+  var g = rules.grid;
+  var gx = Math.max(0, Math.min(g.w - groesse.w, feld.gx - (groesse.w >> 1)));
+  var gy = Math.max(0, Math.min(g.h - groesse.h, feld.gy - (groesse.h >> 1)));
+
+  var res = client.place(setzePlot, gx, gy);
+  if (!res.ok) { toast(CODES[res.code] || res.code, true); render(); return; }
+
+  toast(plotName(setzePlot) + ' steht');
+  save();
+  scheduleSync();
+  endeSetzen();
+});
 
 $('kiste').addEventListener('click', function () {
   if (!isActive) return;
@@ -200,6 +280,8 @@ function zeichnePicker(p) {
 
     if (o.unlocked && !o.affordable) nachkaufZeile(v, o, box);
   });
+
+  verschiebeKnopf(p, box);
 }
 
 function nachkaufZeile(v, o, box) {

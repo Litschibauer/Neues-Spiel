@@ -54,11 +54,24 @@ export type PlotPlace = {
   h: number;
 };
 
+export type PlotSize = {
+  w: number;
+  h: number;
+};
+
 export type PlotDef = {
   id: string;
   startLevel: number;
   levels: readonly LevelDef[];
   place?: PlotPlace;
+  size?: PlotSize;
+  fixed?: boolean;
+  flat?: boolean;
+};
+
+export type GridDef = {
+  w: number;
+  h: number;
 };
 
 export type RequestTemplate = {
@@ -104,6 +117,7 @@ export type Ruleset = {
   chestEveryTicks?: number;
   chestSpreadTicks?: number;
   chestQueueMax?: number;
+  grid?: GridDef;
 };
 
 const GOLD = 0;
@@ -783,14 +797,32 @@ const V9: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const feld = { w: 2, h: 2 };
+
+const V10: Ruleset = {
   ...V9,
+  version: 10,
+
+  grid: { w: 8, h: 10 },
+
+  plots: V9.plots.map((p) => {
+    if (p.id.startsWith('field-')) return { ...p, size: feld, flat: true };
+    if (p.id === 'mill') return { ...p, size: { w: 2, h: 2 } };
+    if (p.id.startsWith('coop-')) return { ...p, size: { w: 2, h: 2 } };
+    if (p.id === 'pasture-1') return { ...p, size: { w: 3, h: 2 } };
+    if (p.id === 'dairy') return { ...p, size: { w: 2, h: 2 } };
+    return { ...p, size: { w: 1, h: 1 } };
+  }),
+};
+
+const DEV: Ruleset = {
+  ...V10,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 180,
   chestSpreadTicks: 120,
-  recipes: V9.recipes.map((r) => {
+  recipes: V10.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -806,14 +838,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [7, V7],
   [8, V8],
   [9, V9],
+  [10, V10],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 9;
+export const LATEST_RULESET_VERSION = 10;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -826,6 +859,14 @@ export function getRuleset(version: number): Ruleset {
 export function levelRecipes(rules: Ruleset, plot: number, level: number): readonly number[] {
   if (level <= 0) return [];
   return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
+}
+
+export function sizeOf(rules: Ruleset, plot: number): PlotSize {
+  return rules.plots[plot]?.size ?? { w: 1, h: 1 };
+}
+
+export function gridOf(rules: Ruleset): GridDef | null {
+  return rules.grid ?? null;
 }
 
 export function slotsAt(rules: Ruleset, plot: number, level: number): number {
@@ -1094,6 +1135,30 @@ export function validateRuleset(rules: Ruleset): string[] {
     }
   });
   if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
+  if (rules.grid) {
+    if (!Number.isInteger(rules.grid.w) || rules.grid.w < 1) problems.push('Rasterbreite ungültig');
+    if (!Number.isInteger(rules.grid.h) || rules.grid.h < 1) problems.push('Rasterhöhe ungültig');
+    let flaeche = 0;
+    for (const [i, p] of rules.plots.entries()) {
+      const groesse = p.size ?? { w: 1, h: 1 };
+      if (!Number.isInteger(groesse.w) || !Number.isInteger(groesse.h)) {
+        problems.push(`Platz ${i} (${p.id}): Größe nicht in ganzen Feldern`);
+        continue;
+      }
+      if (groesse.w < 1 || groesse.h < 1) problems.push(`Platz ${i} (${p.id}): Größe < 1`);
+      if (groesse.w > rules.grid.w || groesse.h > rules.grid.h) {
+        problems.push(`Platz ${i} (${p.id}) passt nicht aufs Raster`);
+      }
+      flaeche += groesse.w * groesse.h;
+    }
+    if (flaeche > rules.grid.w * rules.grid.h) {
+      problems.push(
+        `Alle Gebäude zusammen brauchen ${flaeche} Felder, das Raster hat ` +
+          `${rules.grid.w * rules.grid.h}`,
+      );
+    }
+  }
+
   if (rules.emergencyBuyOnly) {
     for (const plot of rules.plots.filter((p) => p.startLevel > 0)) {
       for (const recipe of plot.levels[plot.startLevel - 1]!.recipes) {

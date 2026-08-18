@@ -89,6 +89,10 @@ export class Client {
     return this.apply({ type: 'UPGRADE_SILO' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  place(plot: number, gx: number, gy: number): ActionResult {
+    return this.apply({ type: 'PLACE', plot, gx, gy } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buy(plot: number): ActionResult {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }

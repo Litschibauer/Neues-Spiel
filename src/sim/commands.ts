@@ -49,6 +49,13 @@ export type OpenChestCommand = CommandBase & { type: 'OPEN_CHEST'; chestId: numb
 
 export type UpgradeSiloCommand = CommandBase & { type: 'UPGRADE_SILO' };
 
+export type PlaceCommand = CommandBase & {
+  type: 'PLACE';
+  plot: number;
+  gx: number;
+  gy: number;
+};
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -65,7 +72,8 @@ export type Command =
   | SendTruckCommand
   | SendSlipCommand
   | OpenChestCommand
-  | UpgradeSiloCommand;
+  | UpgradeSiloCommand
+  | PlaceCommand;
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
@@ -79,6 +87,10 @@ export type SimErrorCode =
   | 'TOO_MANY_BOXES'
   | 'SILO_MAX'
   | 'SILO_LOCKED'
+  | 'NO_GRID'
+  | 'OFF_GRID'
+  | 'CELL_TAKEN'
+  | 'NOT_PLACED'
   | 'TRUCK_AWAY'
   | 'NO_WAYBILL'
   | 'NO_SUCH_STACK'

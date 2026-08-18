@@ -4,7 +4,10 @@ import type { Command } from './commands.ts';
 export function canonicalize(state: State): string {
   const items = state.items.join(',');
   const plots = state.plots
-    .map((p) => `${p.level}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}`)
+    .map(
+      (p) =>
+        `${p.level}@${p.gx},${p.gy}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}`,
+    )
     .join(',');
   const passives = state.passives.join(',');
   const orders = state.orders
@@ -61,6 +64,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|OPEN_CHEST|${c.chestId}`;
     case 'UPGRADE_SILO':
       return `${c.seq}|${c.tick}|UPGRADE_SILO`;
+    case 'PLACE':
+      return `${c.seq}|${c.tick}|PLACE|${c.plot}|${c.gx}|${c.gy}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

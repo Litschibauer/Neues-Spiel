@@ -87,6 +87,16 @@
         <div id="plots"></div>
         <button class="moebel" id="wagen" hidden></button>
         <button class="moebel" id="brett"></button>
+        <button class="zahnrad hammer" id="bauen" aria-label="Bauen">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3l7 7-3 3-7-7z"/><path d="M11 6 4 13l3 3 7-7"/><path d="m6 16-3 5 5-3"/>
+          </svg>
+        </button>
+        <div class="setzen" id="setzen" hidden>
+          <span id="setzen-text">Wohin?</span>
+          <button id="setzen-ab">Abbrechen</button>
+        </div>
         <button class="zahnrad" id="zahnrad" aria-label="Einstellungen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -119,6 +129,14 @@
       <h2>Postfach</h2>
       <div id="mail"></div>
       <button class="sheet-close" id="lager-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="bau-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bau-titel">
+      <h3 id="bau-titel">Bauen</h3>
+      <div id="bauliste"></div>
+      <button class="sheet-close" id="bau-close">Schließen</button>
     </div>
   </div>
 
@@ -171,6 +189,8 @@
   <!--INCLUDE:farm/texte.js-->
 
   <!--ICONS-->
+
+  <!--INCLUDE:farm/raster.js-->
 
   <!--INCLUDE:farm/bilder.js-->
 

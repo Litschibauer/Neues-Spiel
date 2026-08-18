@@ -7,6 +7,7 @@ import {
   priceBand,
   recipeMinLevel,
   recipeUnlocked,
+  sizeOf,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import { EMPTY_PLOT, capacityOf, count, stored } from '../sim/state.ts';
@@ -31,6 +32,9 @@ export type PlotView = {
   index: number;
   id: string;
   level: number;
+  gx: number;
+  gy: number;
+  size: { w: number; h: number };
   idle: boolean;
   busy: boolean;
   done: boolean;
@@ -190,6 +194,19 @@ export type FarmView = {
   notkauf: boolean;
   chests: readonly ChestView[];
   openBoxes: number;
+  grid: { w: number; h: number } | null;
+  buildable: readonly BuildView[];
+};
+
+export type BuildView = {
+  plot: number;
+  id: string;
+  label: string;
+  cost: readonly Stack[];
+  minPlayerLevel: number;
+  unlocked: boolean;
+  affordable: boolean;
+  size: { w: number; h: number };
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -302,6 +319,9 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     index: i,
     id: def.id,
     level: plot.level,
+    gx: plot.gx,
+    gy: plot.gy,
+    size: sizeOf(rules, i),
     idle: !running && !canRun,
     busy: lead !== null && lead.busy,
     done: anyDone,
@@ -409,6 +429,27 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     },
     truck: truckView(state, rules, skipEnabled && skipReady),
     notkauf: rules.emergencyBuyOnly === true,
+    grid: rules.grid ? { w: rules.grid.w, h: rules.grid.h } : null,
+    buildable: rules.plots.flatMap((def, i): BuildView[] => {
+      const plot = state.plots[i]!;
+      if (plot.level > 0) return [];
+      const stufe = def.levels[0];
+      if (!stufe) return [];
+      const level = levelOf(rules, state.xp);
+      const nötig = stufe.minPlayerLevel ?? 1;
+      return [
+        {
+          plot: i,
+          id: def.id,
+          label: stufe.label,
+          cost: stufe.cost.map((c) => ({ item: c.item, amount: c.amount })),
+          minPlayerLevel: nötig,
+          unlocked: level >= nötig,
+          affordable: level >= nötig && stufe.cost.every((c) => count(state, c.item) >= c.amount),
+          size: sizeOf(rules, i),
+        },
+      ];
+    }),
     chests: state.chests.map((c) => ({
       id: c.id,
       kind: rules.chestKinds?.[c.kind]?.label ?? '',

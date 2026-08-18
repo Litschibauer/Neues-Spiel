@@ -55,13 +55,13 @@ function attempt(force) {
 
 function show(next) {
   view = next;
-  ['brett', 'lager', 'stand', 'rest'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau'].forEach(function (name) {
   $(name + '-close').addEventListener('click', function () { show('farm'); });
   $(name + '-bg').addEventListener('click', function (e) {
     if (e.target === $(name + '-bg')) show('farm');

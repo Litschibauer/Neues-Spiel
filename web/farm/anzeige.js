@@ -20,6 +20,7 @@ function render() {
   renderAusbau(v);
   renderHofinfo(v);
   renderBadges(v);
+  renderBauliste(v);
   renderSheet(v);
 }
 
@@ -77,33 +78,33 @@ function plotStatus(p) {
   return 'nichts zu tun';
 }
 
-function placeOf(i) {
-  var p = rules.plots[i].place;
-  return p || { x: 2 + (i % 3) * 32, y: 4 + Math.floor(i / 3) * 24, w: 30, h: 20 };
-}
-
 function renderPlots(v) {
   var scene = $('scene');
-  if (!scene.firstChild) scene.innerHTML = artScene();
+  var wunsch = 'boden' + (bauModus ? '-bau' : '');
+  if (scene.dataset.stand !== wunsch) {
+    scene.innerHTML = artScene();
+    scene.dataset.stand = wunsch;
+  }
 
   var box = $('plots');
   box.textContent = '';
 
-  var reihenfolge = v.plots.slice().sort(function (a, b) {
-    return placeOf(a.index).y - placeOf(b.index).y;
+  var sichtbar = v.plots.filter(function (p) { return p.gx >= 0; });
+  var reihenfolge = sichtbar.slice().sort(function (a, b) {
+    return plotKasten(a.index, a).tiefe - plotKasten(b.index, b).tiefe;
   });
 
   reihenfolge.forEach(function (p) {
-    var ort = placeOf(p.index);
+    var ort = plotKasten(p.index, p);
     var tile = document.createElement('button');
     tile.className = 'plot' + (p.done ? ' ripe' : '') + (p.idle ? ' locked' : '') +
       (p.blocked === 'level' ? ' gated' : '');
     tile.disabled = p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false;
-    tile.style.left = ort.x + '%';
-    tile.style.top = ort.y + '%';
-    tile.style.width = ort.w + '%';
-    tile.style.height = ort.h + '%';
-    tile.style.zIndex = String(1 + ort.y);
+    tile.style.left = ort.left + '%';
+    tile.style.top = ort.top + '%';
+    tile.style.width = ort.width + '%';
+    tile.style.height = ort.height + '%';
+    tile.style.zIndex = String(1 + Math.round(ort.tiefe * 2));
     tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 
     var art = document.createElement('div');
@@ -244,6 +245,7 @@ function renderRequests(v) {
   t.board.forEach(function (z) {
     var karte = document.createElement('div');
     karte.className = 'zettel' + (z.deliverable ? ' bereit' : '');
+    karte.dataset.zettel = String(z.id);
 
     var kopf = document.createElement('div');
     kopf.className = 'kopf';
@@ -551,6 +553,38 @@ function renderStore(v) {
 
 function renderBadges() {}
 
+function renderBauliste(v) {
+  var box = $('bauliste');
+  box.textContent = '';
+
+  if (!v.grid) {
+    box.innerHTML = '<p class="empty">In diesem Regelwerk steht alles schon.</p>';
+    return;
+  }
+  if (v.buildable.length === 0) {
+    box.innerHTML = '<p class="empty">Alles gebaut.</p>';
+    return;
+  }
+
+  v.buildable.forEach(function (b) {
+    var karte = document.createElement('button');
+    karte.className = 'card';
+    karte.disabled = !b.affordable;
+    karte.innerHTML =
+      '<div class="body">' +
+      '<div class="top">' + plotName(b.plot) +
+        (b.label && b.label !== plotName(b.plot) && plotName(b.plot).indexOf(b.label) !== 0
+          ? ' · ' + b.label
+          : '') + '</div>' +
+      '<div class="sub">' + (b.unlocked
+        ? stacksMitBild(b.cost) + ' · ' + b.size.w + '×' + b.size.h + ' Felder'
+        : 'ab Stufe ' + b.minPlayerLevel) + '</div></div>' +
+      '<span class="go">' + (b.unlocked ? 'Bauen' : '🔒') + '</span>';
+    karte.addEventListener('click', function () { baueUndSetze(b.plot); });
+    box.appendChild(karte);
+  });
+}
+
 function renderHofinfo(v) {
   var box = $('hofinfo');
   box.textContent = '';
@@ -565,6 +599,9 @@ function renderHofinfo(v) {
 }
 
 var CODES = {
+  CELL_TAKEN: 'Da steht schon etwas',
+  OFF_GRID: 'Da ist kein Platz',
+  NOT_PLACED: 'Erst hinstellen',
   TRUCK_AWAY: 'Der Wagen ist unterwegs',
   TRUCK_NOT_FULL: 'Erst vollständig beladen',
   NO_WAYBILL: 'Kein Frachtbrief da',
