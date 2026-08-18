@@ -12,6 +12,20 @@ function nameOf(id) {
   return NAMES[id] || id;
 }
 function itemName(i) { return nameOf(rules.items[i].id); }
+
+function iconFor(id) {
+  return typeof ICONS === 'object' && ICONS[id] ? ICONS[id] : null;
+}
+function iconTag(id, klasse) {
+  var quelle = iconFor(id);
+  if (!quelle) return '';
+  return '<img class="ic' + (klasse ? ' ' + klasse : '') + '" src="' + quelle +
+    '" alt="" aria-hidden="true">';
+}
+function itemIcon(item, klasse) { return iconTag(rules.items[item].id, klasse); }
+function mengeMitBild(item, menge) {
+  return itemIcon(item) + '<span>' + menge + ' ' + itemName(item) + '</span>';
+}
 function animalOf(i) {
   var id = rules.plots[i].id;
   if (id.indexOf('coop-') === 0) return { one: 'Huhn', many: 'Hühner' };
@@ -34,6 +48,11 @@ function plotName(i) {
 }
 function stacks(list) {
   return list.map(function (x) { return x.amount + ' ' + itemName(x.item); }).join(' + ');
+}
+function stacksMitBild(list) {
+  return list
+    .map(function (x) { return itemIcon(x.item) + x.amount + ' ' + itemName(x.item); })
+    .join(' + ');
 }
 function costText(cost) { return stacks(cost); }
 

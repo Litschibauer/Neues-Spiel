@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
 
@@ -154,6 +154,34 @@ export function buildFarmPage(): string {
   return buildPageWithBundle('farm/page.html');
 }
 
+const ICON_MIME: Record<string, string> = {
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+};
+
+export function buildIcons(): string {
+  const dir = join(ROOT, 'web', 'farm', 'icons');
+  if (!existsSync(dir)) return 'var ICONS = {};';
+
+  const eintraege: string[] = [];
+  for (const datei of readdirSync(dir).sort()) {
+    const punkt = datei.lastIndexOf('.');
+    if (punkt <= 0) continue;
+    const endung = datei.slice(punkt).toLowerCase();
+    const mime = ICON_MIME[endung];
+    if (!mime) continue;
+
+    const name = datei.slice(0, punkt);
+    const daten = readFileSync(join(dir, datei)).toString('base64');
+    eintraege.push(`  ${JSON.stringify(name)}: 'data:${mime};base64,${daten}'`);
+  }
+
+  return `var ICONS = {\n${eintraege.join(',\n')}\n};`;
+}
+
 function resolveIncludes(template: string, depth = 0): string {
   if (depth > 5) throw new Error('INCLUDE zu tief verschachtelt');
   return template.replace(/^([ \t]*)<!--INCLUDE:([^>]+?)-->[ \t]*$/gm, (_all, indent, file) => {
@@ -175,7 +203,9 @@ function buildPageWithBundle(name: string): string {
   if (!template.includes('<!--BUNDLE-->')) {
     throw new Error(`Platzhalter <!--BUNDLE--> fehlt in ${name}`);
   }
-  return template.replace('<!--BUNDLE-->', () => buildClientBundle());
+  return template
+    .replace('<!--BUNDLE-->', () => buildClientBundle())
+    .replace('<!--ICONS-->', () => buildIcons());
 }
 
 export function buildAdminPage(): string {

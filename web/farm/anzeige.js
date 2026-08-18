@@ -213,7 +213,7 @@ function renderAusbau(v) {
   karte.innerHTML =
     '<div class="body"><div class="top">' + v.silo.upgrade.label + ' · auf ' +
     v.silo.upgrade.capacity + ' Platz</div>' +
-    '<div class="sub">' + stacks(v.silo.upgrade.cost) + '</div></div>' +
+    '<div class="sub">' + stacksMitBild(v.silo.upgrade.cost) + '</div></div>' +
     '<span class="go">Bauen</span>';
   karte.addEventListener('click', function () {
     act('Lager ausgebaut · ' + v.silo.upgrade.capacity + ' Platz', client.upgradeSilo());
@@ -247,7 +247,7 @@ function renderRequests(v) {
     var kopf = document.createElement('div');
     kopf.className = 'kopf';
     kopf.innerHTML = '<span class="ziel">nach ' + z.dest + '</span>' +
-      '<span class="lohn">' + stacks(z.reward) + ' · ' + z.xp + ' XP</span>';
+      '<span class="lohn">' + stacksMitBild(z.reward) + ' · ' + z.xp + ' XP</span>';
     karte.appendChild(kopf);
 
     var ware = document.createElement('div');
@@ -257,7 +257,7 @@ function renderRequests(v) {
       z.missing.forEach(function (m) { if (m.item === w.item) fehlt = m.amount; });
       var posten = document.createElement('span');
       posten.className = 'posten' + (fehlt > 0 ? ' fehlt' : '');
-      posten.textContent = w.amount + ' ' + itemName(w.item) +
+      posten.innerHTML = itemIcon(w.item) + w.amount + ' ' + itemName(w.item) +
         (fehlt > 0 ? ' (' + fehlt + ' fehlt)' : '');
       ware.appendChild(posten);
     });
@@ -476,7 +476,8 @@ function renderStore(v) {
     var chip = document.createElement('span');
     chip.className = 'chip';
     if (entry.amount === 0) chip.setAttribute('disabled', '');
-    chip.innerHTML = '<span>' + nameOf(entry.id) + '</span><span class="n">' + entry.amount + '</span>';
+    chip.innerHTML = iconTag(entry.id) + '<span>' + nameOf(entry.id) +
+      '</span><span class="n">' + entry.amount + '</span>';
     chips.appendChild(chip);
   });
 
@@ -499,7 +500,7 @@ function renderStore(v) {
     var offerHead = document.createElement('div');
     offerHead.className = 'head';
     offerHead.innerHTML =
-      '<span class="name">' + nameOf(entry.id) + ' anbieten</span>' +
+      '<span class="name">' + iconTag(entry.id) + nameOf(entry.id) + ' anbieten</span>' +
       '<span class="have">du hast ' + entry.amount + ' · ' +
       free + (free === 1 ? ' Platz' : ' Plätze') + ' frei</span>';
     offer.appendChild(offerHead);
@@ -563,7 +564,8 @@ function renderNotkauf(v) {
     karte.className = 'card';
     karte.disabled = v.currency.amount < entry.npcBuyPrice || v.silo.free < 1;
     karte.innerHTML =
-      '<div class="body"><div class="top">1 ' + nameOf(entry.id) + ' nachkaufen</div>' +
+      '<div class="body"><div class="top">' + iconTag(entry.id) + '1 ' +
+        nameOf(entry.id) + ' nachkaufen</div>' +
       '<div class="sub">' + (v.currency.amount < entry.npcBuyPrice
         ? 'zu wenig ' + itemName(v.currency.item)
         : v.silo.free < 1

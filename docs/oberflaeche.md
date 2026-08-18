@@ -122,6 +122,32 @@ Command und allem, was daran hängt.
 > Offline-Start wieder kaputt macht. Als Data-URI in der Vorlage ist es Teil
 > der Datei — und der Service Worker hat es damit automatisch mit.
 
+### 2b. Waren-Icons — `web/farm/icons/`
+
+Für jede Ware kann eine Bilddatei danebengelegt werden. Der Dateiname ist die
+**Katalog-Kennung** der Ware:
+
+```
+web/farm/icons/wheat.svg      web/farm/icons/cheese.png
+web/farm/icons/corn.svg       web/farm/icons/cow-feed.svg
+```
+
+`.svg`, `.png`, `.webp` und `.jpg` werden erkannt. Der Build liest den Ordner,
+macht aus jeder Datei eine Data-URI und schreibt sie als `ICONS` in die Seite —
+**kein Nachladen, keine zweite Datei**, damit der Offline-Start heil bleibt.
+Wer eine Datei austauschen will, legt sie hin und baut neu; wer eine Ware ohne
+Bild lässt, bekommt schlicht keins (`iconTag` gibt dann einen leeren String
+zurück).
+
+Verwendet wird das über drei Helfer in `texte.js`: `iconTag(id)` für eine
+Katalog-Kennung, `itemIcon(item)` für einen Warenindex und `stacksMitBild(list)`
+für „3 Weizen + 2 Mais" mit Bildern davor.
+
+> Größe im Auge behalten: Die Seite ist **eine** Datei, und Data-URIs sind rund
+> ein Drittel größer als die Rohdatei. Zwölf SVGs kosten hier 8 kB; zwölf PNGs
+> in 128 px kosten schnell das Zehnfache. Der Browsertest prüft nur, dass jedes
+> Bild lädt — nicht, wie schwer es ist.
+
 ### 3. Die Texte — `web/farm/texte.js` und die Renderer
 
 Anzeigenamen stehen in `NAMES`, alles andere direkt in der jeweiligen

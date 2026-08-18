@@ -172,7 +172,7 @@ function openPicker(p, slot) {
     card.disabled = !o.affordable;
     card.innerHTML =
       '<div class="body">' +
-      '<div class="top">' + nameOf(o.id) + '</div>' +
+      '<div class="top">' + iconTag(o.id) + nameOf(o.id) + '</div>' +
       '<div class="sub">' +
       (!o.unlocked
         ? 'ab Stufe ' + o.minPlayerLevel
@@ -180,7 +180,7 @@ function openPicker(p, slot) {
           timeText(o.durationTicks) +
           (o.affordable ? '' : ' · Zutaten fehlen')) +
       '</div></div>' +
-      '<span class="yield">+' + o.output.amount + ' ' + itemName(o.output.item) + '</span>';
+      '<span class="yield">+' + o.output.amount + ' ' + itemIcon(o.output.item, 'gross') + '</span>';
     card.addEventListener('click', function () {
       var slot = sheet.slot;
       closePicker();

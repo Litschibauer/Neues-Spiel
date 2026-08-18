@@ -858,6 +858,26 @@ try {
     wagenTipp,
   );
 
+  const bilder = await evaluate<{ chips: number; mitBild: number; geladen: number }>(
+    cdp,
+    `(function () {
+       document.getElementById('lagerhaus').click();
+       var chips = [...document.querySelectorAll('#stock .chip')];
+       var bilder = chips.filter(function (c) { return c.querySelector('img.ic'); });
+       var geladen = bilder.filter(function (c) {
+         var i = c.querySelector('img.ic');
+         return i.complete && i.naturalWidth > 0;
+       });
+       document.getElementById('lager-close').click();
+       return { chips: chips.length, mitBild: bilder.length, geladen: geladen.length };
+     })()`,
+  );
+  check(
+    'Jede Ware hat ein Bild, und die Bilder stecken in der Seite',
+    bilder.chips > 0 && bilder.mitBild === bilder.chips && bilder.geladen === bilder.chips,
+    `${bilder.geladen}/${bilder.chips} geladen`,
+  );
+
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
     latency: 0,

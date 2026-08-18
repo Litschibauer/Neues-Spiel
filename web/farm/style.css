@@ -335,7 +335,14 @@
   }
   .go[disabled] { background: var(--sunk); color: var(--muted); }
 
+  .ic {
+    width: 1.25em; height: 1.25em; vertical-align: -.28em;
+    margin-right: .18em; flex: none; display: inline-block;
+  }
+  .ic.gross { width: 1.7em; height: 1.7em; vertical-align: -.4em; }
+
   .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .chip .ic { width: 1.5em; height: 1.5em; vertical-align: -.42em; }
   .chip {
     display: inline-flex; align-items: center; gap: .35rem;
     background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
