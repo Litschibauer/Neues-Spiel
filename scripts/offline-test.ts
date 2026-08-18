@@ -760,6 +760,32 @@ try {
     `${beforeHarvest} → ${afterHarvest} Weizen`,
   );
 
+  const obenauf = await evaluate<string>(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         var s = t.querySelector('.status').textContent;
+         return /→/.test(s) || / oder /.test(s);
+       });
+       if (!tile) return 'kein Platz zum Starten';
+       tile.click();
+       var sheet = document.getElementById('pick-bg');
+       if (sheet.hidden) return 'Blatt blieb zu';
+       var karte = document.querySelector('#pick-list .opt');
+       var r = karte.getBoundingClientRect();
+       var treffer = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+       var drin = sheet.contains(treffer);
+       document.getElementById('pick-close').click();
+       return drin ? 'ok' : 'verdeckt von ' + (treffer ? treffer.className : 'nichts');
+     })()`,
+  );
+  check(
+    'Das Auswahlblatt liegt vor dem Hof, nicht dahinter',
+    obenauf === 'ok',
+    obenauf,
+  );
+
+
   const tabs = await evaluate<string>(
     cdp,
     `JSON.stringify(['orders', 'market', 'store', 'farm'].map(function (name) {

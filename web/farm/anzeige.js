@@ -99,7 +99,7 @@ function renderPlots(v) {
     tile.style.top = ort.y + '%';
     tile.style.width = ort.w + '%';
     tile.style.height = ort.h + '%';
-    tile.style.zIndex = String(10 + ort.y);
+    tile.style.zIndex = String(1 + ort.y);
     tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 
     var art = document.createElement('div');
