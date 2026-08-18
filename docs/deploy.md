@@ -12,7 +12,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 | Lauscht auf | `0.0.0.0` — im LAN erreichbar | `127.0.0.1` — **nur lokal** |
 | Spielstand | `data/dev/save.json` | `data/prod/save.json` |
 | Token | `data/dev/token` | `data/prod/token` |
-| Regelwerk | v1001 — Sekundenuhren | v5 — echte Zeiten |
+| Regelwerk | v1001 — Sekundenuhren | v6 — echte Zeiten |
 | Werkbank `/admin` | an | **aus** |
 
 Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version
@@ -265,13 +265,13 @@ NEUES_SPIEL_VERSION=$(git rev-parse --short HEAD) npm run prod
 
 ### Warum Dev schnelle Uhren hat
 
-In Produktion wächst Weizen zwei Minuten, Hühnerfutter braucht gut drei, Eier zwölf.
+In Produktion wächst Weizen 30 Sekunden, Hühnerfutter braucht eine Minute, Eier vier.
 Von Hand lässt sich damit kaum etwas testen: Ohne fertigen Platz und ohne Ware
 im Lager wird jede Aktion **lokal abgelehnt**, die Warteschlange bleibt leer —
 und ein Verbindungstest ohne Warteschlange prüft nichts.
 
 Das Dev-Regelwerk (v1001) hat denselben Inhalt bei zehnfachem Tempo: Weizen
-10 s, Hühnerfutter 20 s, Eier 72 s. Ein kompletter Durchlauf vom leeren Hof bis zum
+3 s, Hühnerfutter 6 s, Eier 24 s. Ein kompletter Durchlauf vom leeren Hof bis zum
 ersten Ei dauert damit ein paar Minuten statt einen Nachmittag.
 
 Es steht **außerhalb der Produktionsreihe** und ist bewusst kein Migrationsziel

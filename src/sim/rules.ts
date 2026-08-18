@@ -531,11 +531,34 @@ const V5: Ruleset = {
   siloCapacity: 200,
 };
 
-const DEV: Ruleset = {
+const V6: Ruleset = {
   ...V5,
+  version: 6,
+
+  recipes: V5.recipes.map((r) => {
+    const faster: Record<string, number> = {
+      wheat: 30,
+      corn: 90,
+      feed: 60,
+      'cow-feed': 90,
+      eggs: 240,
+      milk: 300,
+      cream: 180,
+      butter: 480,
+      cheese: 600,
+    };
+    const t = faster[r.id];
+    return t === undefined ? r : { ...r, durationTicks: t };
+  }),
+
+  requestSkipCooldownTicks: 600,
+};
+
+const DEV: Ruleset = {
+  ...V6,
   version: 1001,
   requestSkipCooldownTicks: 180,
-  recipes: V5.recipes.map((r) => {
+  recipes: V6.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -547,14 +570,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [3, V3],
   [4, V4],
   [5, V5],
+  [6, V6],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 5;
+export const LATEST_RULESET_VERSION = 6;
 
 export const DEV_RULESET_VERSION = 1001;
 

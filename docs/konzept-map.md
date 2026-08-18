@@ -220,6 +220,62 @@ Blatt mit einer Zeile pro Tier — eigener Status, eigene Uhr, eigener Knopf —
 plus „Alle ernten" und „Alle füttern", solange sich das lohnt. Die Kachel
 selbst fasst zusammen: „3 Hühner · 1 fertig · 2 hungrig".
 
+#### v6: die Uhr wird dreimal schneller
+
+Die erste Änderung, die aus dem Spielen kam statt aus dem Nachrechnen: **Zwei
+Minuten auf den ersten Weizen sind zu lang.** Wer anfängt, hat nichts zu tun
+und nichts zu entscheiden — er wartet. Genau da hören Leute auf.
+
+v6 ändert deshalb genau eine Sache: die Dauern. Kein Preis, keine Kosten, kein
+XP-Wert, keine Stufenschwelle.
+
+| Rezept | v5 | v6 |
+| --- | --- | --- |
+| Weizen | 100 s | **30 s** |
+| Mais | 260 s | **90 s** |
+| Hühnerfutter | 200 s | 60 s |
+| Kuhfutter | 300 s | 90 s |
+| Eier | 720 s | 240 s |
+| Milch | 900 s | 300 s |
+| Sahne | 600 s | 180 s |
+| Butter | 1500 s | 480 s |
+| Käse | 1800 s | 600 s |
+
+**Warum überall und nicht nur vorn.** Die naheliegende Fassung — nur die Feldfrüchte
+beschleunigen — kippt die Leiter: Weizen käme auf 8,0 Gold je Minute und läge
+damit über Milch (3,2) und Sahne (5,5). Die teuerste Freischaltung im Spiel
+zahlte dann schlechter als das Feld, das man geschenkt bekommt. Weil jede Zahl
+im Katalog denselben Faktor bekommt, bleibt die Reihenfolge exakt erhalten:
+
+| Rezept | Gold/min v5 | Gold/min v6 |
+| --- | --- | --- |
+| Mais | 1,6 | 4,7 |
+| Hühnerfutter | 1,8 | 6,0 |
+| Weizen | 2,4 | 8,0 |
+| Milch | 3,2 | 9,6 |
+| Sahne | 5,5 | 18,3 |
+| Eier | 6,3 | 18,8 |
+| Butter | 8,0 | 25,0 |
+| Käse | 11,0 | 33,0 |
+
+Auch die Stufen kommen dreimal schneller, weil XP je Ernte gleich blieb und die
+Ernten dichter liegen. Der Ausbau eines Hofs war damit nie eine Geldfrage
+allein, sondern immer eine Zeitfrage — die Zeitfrage ist jetzt eine andere.
+
+**Der Preis dafür, offen gesagt:** Das längste im Spiel dauert jetzt zehn
+Minuten. Das „morgen wieder reinschauen", von dem ein Live-Service-Spiel lebt,
+gibt es damit nicht mehr — es gibt nur noch „gleich weiter". Wenn sich der Hof
+zu schnell leerspielt, ist die Antwort nicht, den Anfang wieder zäh zu machen,
+sondern **oben etwas Langes anzubauen**: eine Kette hinter dem Käse, deren
+Stufen in Stunden rechnen. Vorne schnell, hinten lang — nicht überall mittel.
+
+Die Wartezeit fürs Wegschicken eines Kunden ist mitgewandert: 30 → 10 Minuten.
+
+**Laufende Produktion überlebt den Patch fair.** `RETIME` rechnet jede
+angefangene Uhr um: Wer 50 Sekunden Restzeit hatte, hat danach 30 — nie mehr
+als eine frische Runde, nie mehr als vorher. Nachgemessen für jeden möglichen
+Fortschritt in `migration.test.ts`.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

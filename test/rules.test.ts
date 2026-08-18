@@ -12,6 +12,7 @@ import {
   nextLevel,
   validateRuleset,
 } from '../src/sim/rules.ts';
+import type { RecipeDef, Ruleset } from '../src/sim/rules.ts';
 import { MIGRATIONS } from '../src/sim/migrate.ts';
 
 const VERSIONS = [...RULESETS.keys()].sort((a, b) => a - b);
@@ -284,4 +285,44 @@ test('kein Sackgassen-Zustand: verbrauchte Zutaten sind nachkaufbar und lohnen s
       }
     }
   }
+});
+
+test('v6 macht das Spiel schneller, ohne die Leiter umzustellen', () => {
+  const v5 = getRuleset(5);
+  const v6 = getRuleset(6);
+
+  const wheat = v6.recipes.find((r) => r.id === 'wheat')!;
+  const corn = v6.recipes.find((r) => r.id === 'corn')!;
+  assert.equal(wheat.durationTicks, 30, 'Weizen soll eine halbe Minute brauchen');
+  assert.equal(corn.durationTicks, 90, 'Mais soll anderthalb Minuten brauchen');
+
+  const rate = (rules: Ruleset, recipe: RecipeDef) => {
+    const inputs = recipe.inputs.reduce(
+      (sum, i) => sum + i.amount * rules.items[i.item]!.npcPrice,
+      0,
+    );
+    const output = recipe.output.amount * rules.items[recipe.output.item]!.npcPrice;
+    return ((output - inputs) * 60) / recipe.durationTicks;
+  };
+
+  const order = (rules: Ruleset) =>
+    rules.recipes
+      .map((r) => ({ id: r.id, gold: rate(rules, r) }))
+      .sort((a, b) => a.gold - b.gold)
+      .map((x) => x.id);
+
+  assert.deepEqual(order(v6), order(v5), 'die Reihenfolge nach Gold je Minute hat sich verschoben');
+
+  for (const r of v6.recipes) {
+    const old = v5.recipes.find((x) => x.id === r.id)!;
+    assert.ok(
+      r.durationTicks < old.durationTicks,
+      `${r.id} ist in v6 nicht schneller geworden (${old.durationTicks} → ${r.durationTicks})`,
+    );
+    assert.equal(r.xp, old.xp, `${r.id}: XP verändert — dann wandert auch die Stufenkurve`);
+  }
+
+  assert.deepEqual(v6.items, v5.items, 'v6 soll nur an der Uhr drehen, nicht an den Preisen');
+  assert.deepEqual(v6.plots, v5.plots, 'v6 soll nur an der Uhr drehen, nicht an den Kosten');
+  assert.deepEqual(v6.levelThresholds, v5.levelThresholds, 'Stufenschwellen sollen bleiben');
 });
