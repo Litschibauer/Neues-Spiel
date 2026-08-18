@@ -126,7 +126,10 @@ Was noch fehlt:
 
 - **M9 Aufgeschobener Zufall** — für die Fälle, in denen Vorwissen ein Cheat wäre
   (Mystery-Kisten). Der Vorwürfel-Fall ist mit M6 erledigt.
-- **Warteschlangenplätze** als Parameter von M1 — mehrere Produktionen pro Platz.
+- [x] ~~**Warteschlangenplätze** als Parameter von M1~~ — erledigt mit v5: Ein Platz
+      hält eine Liste von Produktionen, wie viele steht als `LevelDef.slots` im
+      Katalog. Ställe nutzen es für drei Tiere mit je eigener Uhr; wer keine Zahl
+      hinschreibt, bekommt wie bisher genau eine.
 
 **Faustregel pro Mechanik:** Wenn du keine langsame, offensichtlich korrekte Variante
 danebenschreiben kannst, hast du sie noch nicht verstanden.
