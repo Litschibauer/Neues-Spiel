@@ -182,7 +182,113 @@ function coreLoopVector(version: number) {
   };
 }
 
-for (const version of VERSIONS) vectors.push(coreLoopVector(version));
+
+function coreLoopBrett(version: number) {
+  const rules = getRuleset(version);
+  const R_WHEAT = 0;
+  const R_FEED = 1;
+  const R_EGGS = 2;
+  const MILL = rules.plots.findIndex((p) => p.id === 'mill');
+  const COOP = rules.plots.findIndex((p) => p.id === 'coop-1');
+  const WHEAT = rules.items.findIndex((i) => i.id === 'wheat');
+
+  const cmds: Command[] = [];
+  const start = fuzzStart(rules, 0, mulberry32(9090 + version));
+  let state = start;
+  let tick = 0;
+  const push = (c: Omit<Command, 'seq' | 'tick'>) => {
+    const cmd = { ...c, seq: cmds.length + 1, tick } as Command;
+    state = simulate(state, cmd, rules);
+    cmds.push(cmd);
+  };
+  const versuche = (c: Omit<Command, 'seq' | 'tick'>): boolean => {
+    try {
+      push(c);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const saat = () => state.items[WHEAT] ?? 0;
+  const felder = rules.plots
+    .map((p, i) => i)
+    .filter((i) => rules.plots[i]!.id.startsWith('field-') && state.plots[i]!.level > 0);
+
+  const runde = () => {
+    if (saat() === 0) versuche({ type: 'BUY_NPC', item: WHEAT, amount: 1 });
+    let gesetzt = 0;
+    for (const plot of felder) {
+      if (saat() <= 0) break;
+      if (versuche({ type: 'START', plot, slot: 0, recipe: R_WHEAT })) gesetzt++;
+    }
+    if (gesetzt === 0) return;
+    tick += rules.recipes[R_WHEAT]!.durationTicks;
+    for (const plot of felder) versuche({ type: 'COLLECT', plot, slot: 0 });
+
+    for (let slot = 0; slot < rules.requestSlots; slot++) {
+      const zettel = state.requests[slot];
+      if (!zettel) continue;
+      if (!zettel.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount)) continue;
+      if (state.tick < state.truck.awayUntil) continue;
+      if (versuche({ type: 'SEND_SLIP', slot })) {
+        tick += rules.truckAwayTicks ?? 0;
+        break;
+      }
+    }
+  };
+
+  const ziel =
+    rules.plots[MILL]!.levels[0]!.cost[0]!.amount + rules.plots[COOP]!.levels[0]!.cost[0]!.amount;
+  const brauchtStufe = Math.max(
+    rules.plots[MILL]!.levels[0]!.minPlayerLevel ?? 1,
+    rules.plots[COOP]!.levels[0]!.minPlayerLevel ?? 1,
+  );
+
+  for (let i = 0; i < 400; i++) {
+    if ((state.items[rules.currency] ?? 0) >= ziel && levelOf(rules, state.xp) >= brauchtStufe) {
+      break;
+    }
+    runde();
+  }
+
+  versuche({ type: 'BUY', plot: MILL });
+  for (let i = 0; i < 30; i++) {
+    if (rules.recipes[R_FEED]!.inputs.every((x) => (state.items[x.item] ?? 0) >= x.amount)) break;
+    runde();
+  }
+  if (versuche({ type: 'START', plot: MILL, slot: 0, recipe: R_FEED })) {
+    tick += rules.recipes[R_FEED]!.durationTicks;
+    versuche({ type: 'COLLECT', plot: MILL, slot: 0 });
+  }
+
+  for (let i = 0; i < 200; i++) {
+    if ((state.items[rules.currency] ?? 0) >= rules.plots[COOP]!.levels[0]!.cost[0]!.amount) break;
+    runde();
+  }
+  if (versuche({ type: 'BUY', plot: COOP })) {
+    if (versuche({ type: 'START', plot: COOP, slot: 0, recipe: R_EGGS })) {
+      tick += rules.recipes[R_EGGS]!.durationTicks;
+      versuche({ type: 'COLLECT', plot: COOP, slot: 0 });
+    }
+  }
+
+  for (let i = 0; i < 40; i++) runde();
+
+  return {
+    name: `core-loop-v${version}`,
+    rulesetVersion: version,
+    startState: start,
+    commands: cmds,
+    expectedStateHash: hashState(state),
+    expectedState: state,
+  };
+}
+
+for (const version of VERSIONS) {
+  const rules = getRuleset(version);
+  vectors.push(rules.boardDeliveryOnly ? coreLoopBrett(version) : coreLoopVector(version));
+}
 
 const doc = {
   $comment:

@@ -121,7 +121,10 @@ test('genau an der Schwelle geht es auf — keinen Punkt früher', () => {
 
 test('Erfahrung geht nie zurück', () => {
   const rnd = mulberry32(9);
-  const server = new Server(fuzzStart(rules, 5000, mulberry32(9)), T0, CURRENT_RULESET_VERSION);
+  const start = fuzzStart(rules, 5000, mulberry32(9));
+  const saat = start.items.slice();
+  saat[WHEAT] = 40;
+  const server = new Server({ ...start, items: saat }, T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
   let highest = client.state.xp;

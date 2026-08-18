@@ -135,7 +135,7 @@ test('nur die vorderen Kundenaufträge sind lieferbar, der Rest ist Vorrat', () 
   const reward = [{ item: GOLD, amount: 40 }];
   const state = {
     ...withItems({ [WHEAT]: 50 }),
-    requests: [0, 1, 2, 3, 4].map((n) => ({ id: n + 1, wants, reward, xp: 3 })),
+    requests: [0, 1, 2, 3, 4].map((n) => ({ id: n + 1, wants, reward, xp: 3, dest: 0 })),
   };
   const view = farmView(state, rules);
 
@@ -196,6 +196,7 @@ test('Wegschicken ist erlaubt, solange die Wartezeit abgelaufen ist', () => {
       wants: [{ item: WHEAT, amount: 99 }],
       reward: [{ item: GOLD, amount: 10 }],
       xp: 1,
+      dest: 0,
     })),
   };
 
@@ -216,7 +217,7 @@ test('während der Wartezeit sagt das Modell, WIE LANGE noch', () => {
     ...base,
     tick: 100,
     skipReadyAt: 400,
-    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1 }],
+    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1, dest: 0 }],
   };
 
   const v = farmView(wartend, rules);
@@ -229,7 +230,7 @@ test('kennt ein Regelwerk das Wegschicken nicht, taucht es gar nicht erst auf', 
   const ohne = { ...rules, requestSkipCooldownTicks: 0 };
   const state = {
     ...initialState(rules),
-    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1 }],
+    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1, dest: 0 }],
   };
 
   const v = farmView(state, ohne);

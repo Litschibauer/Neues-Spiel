@@ -73,6 +73,10 @@ export class Client {
     return this.apply({ type: 'LOAD_TRUCK', stack, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  sendSlip(slot: number): ActionResult {
+    return this.apply({ type: 'SEND_SLIP', slot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   sendTruck(): ActionResult {
     return this.apply({ type: 'SEND_TRUCK' } as Omit<Command, 'seq' | 'tick'>);
   }

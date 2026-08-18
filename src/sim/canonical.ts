@@ -15,7 +15,7 @@ export function canonicalize(state: State): string {
   const stacks = (list: readonly { item: number; amount: number }[]) =>
     list.map((x) => `${x.item}x${x.amount}`).join('+');
   const requests = state.requests
-    .map((r) => `${r.id}:${stacks(r.wants)}>${stacks(r.reward)}+${r.xp}xp`)
+    .map((r) => `${r.id}@${r.dest}:${stacks(r.wants)}>${stacks(r.reward)}+${r.xp}xp`)
     .join(',');
   return [
     `tick=${state.tick}`,
@@ -51,6 +51,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|LOAD_TRUCK|${c.stack}|${c.amount}`;
     case 'SEND_TRUCK':
       return `${c.seq}|${c.tick}|SEND_TRUCK`;
+    case 'SEND_SLIP':
+      return `${c.seq}|${c.tick}|SEND_SLIP|${c.slot}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

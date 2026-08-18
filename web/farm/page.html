@@ -85,38 +85,31 @@
         <svg class="scene" id="scene" viewBox="0 0 100 130" preserveAspectRatio="none"
              aria-hidden="true"></svg>
         <div id="plots"></div>
-        <button class="wagen" id="wagen" hidden></button>
+        <button class="moebel" id="wagen" hidden></button>
+        <button class="moebel" id="brett"></button>
+        <button class="moebel" id="lagerhaus"></button>
+        <button class="moebel" id="stand"></button>
       </div>
       <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
     </section>
+  </main>
 
-    <section class="view" id="view-orders" hidden>
-      <h2>Der Wagen</h2>
+  <div class="sheet-bg" id="brett-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="brett-titel">
+      <h3 id="brett-titel">Das Brett</h3>
       <div id="requests"></div>
+      <button class="sheet-close" id="brett-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="lager-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lager-titel">
+      <h3 id="lager-titel">Lager</h3>
+      <div class="chips" id="stock"></div>
       <h2>Postfach</h2>
       <div id="mail"></div>
-    </section>
-
-    <section class="view" id="view-market" hidden>
-      <p class="note" id="market-note" hidden>
-        Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich
-        nicht auf diesem Gerät. Anschauen geht trotzdem.
-      </p>
-      <h2>Andere Höfe bieten an</h2>
-      <div id="market-list"></div>
-      <h2>Deine Auslage</h2>
-      <div id="my-orders"></div>
-    </section>
-
-    <section class="view" id="view-store" hidden>
-      <h2>Vorräte</h2>
-      <div class="chips" id="stock"></div>
-      <h2>Beim Händler kaufen</h2>
+      <h2>Nachschub</h2>
       <div id="buy"></div>
-      <h2>An den Händler verkaufen</h2>
-      <div id="sell"></div>
-      <h2>Selbst anbieten</h2>
-      <div id="list"></div>
       <h2>Gerät</h2>
       <button class="card" id="forget">
         <div class="body">
@@ -125,29 +118,26 @@
         </div>
       </button>
       <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
-    </section>
-  </main>
+      <button class="sheet-close" id="lager-close">Schließen</button>
+    </div>
+  </div>
 
-  <nav>
-    <button data-view="farm" aria-current="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
-      Hof
-    </button>
-    <button data-view="orders">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg>
-      Aufträge
-      <span class="dot" id="dot-orders" hidden>0</span>
-    </button>
-    <button data-view="market">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.2 10H5.2z"/><path d="M9 9V6a3 3 0 016 0v3"/></svg>
-      Markt
-      <span class="dot" id="dot-market" hidden>0</span>
-    </button>
-    <button data-view="store">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>
-      Lager
-    </button>
-  </nav>
+  <div class="sheet-bg" id="stand-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="stand-titel">
+      <h3 id="stand-titel">Verkaufsstand</h3>
+      <p class="note" id="market-note" hidden>
+        Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich
+        nicht auf diesem Gerät. Anschauen geht trotzdem.
+      </p>
+      <h2>Selbst anbieten</h2>
+      <div id="list"></div>
+      <h2>Deine Auslage</h2>
+      <div id="my-orders"></div>
+      <h2>Andere Höfe bieten an</h2>
+      <div id="market-list"></div>
+      <button class="sheet-close" id="stand-close">Schließen</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>

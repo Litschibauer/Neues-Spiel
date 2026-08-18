@@ -55,18 +55,21 @@ function attempt(force) {
 
 function show(next) {
   view = next;
-  ['farm', 'orders', 'market', 'store'].forEach(function (name) {
-    $('view-' + name).hidden = name !== next;
+  ['brett', 'lager', 'stand'].forEach(function (name) {
+    $(name + '-bg').hidden = name !== next;
   });
-  document.querySelectorAll('nav button').forEach(function (b) {
-    b.setAttribute('aria-current', b.dataset.view === next ? 'true' : 'false');
-  });
-  window.scrollTo(0, 0);
   render();
 }
-document.querySelectorAll('nav button').forEach(function (b) {
-  b.addEventListener('click', function () { show(b.dataset.view); });
+
+['brett', 'lager', 'stand'].forEach(function (name) {
+  $(name + '-close').addEventListener('click', function () { show('farm'); });
+  $(name + '-bg').addEventListener('click', function (e) {
+    if (e.target === $(name + '-bg')) show('farm');
+  });
 });
+$('brett').addEventListener('click', function () { show('brett'); });
+$('lagerhaus').addEventListener('click', function () { show('lager'); });
+$('stand').addEventListener('click', function () { show('stand'); });
 
 function begin(restored) {
   client = restored;

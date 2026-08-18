@@ -106,6 +106,17 @@ export type StockView = {
   feePerUnit: number;
 };
 
+export type SlipView = {
+  slot: number;
+  id: number;
+  dest: string;
+  wants: readonly Stack[];
+  reward: readonly Stack[];
+  xp: number;
+  deliverable: boolean;
+  missing: readonly Stack[];
+};
+
 export type TruckStackView = {
   index: number;
   item: number;
@@ -131,6 +142,8 @@ export type TruckView = {
   } | null;
   next: { wants: readonly Stack[]; reward: readonly Stack[]; xp: number } | null;
   skippable: boolean;
+  board: readonly SlipView[];
+  boardOnly: boolean;
 };
 
 export type FarmView = {
@@ -153,6 +166,7 @@ export type FarmView = {
     cooldownTicks: number;
   };
   truck: TruckView;
+  notkauf: boolean;
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -363,6 +377,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       cooldownTicks: rules.requestSkipCooldownTicks,
     },
     truck: truckView(state, rules, skipEnabled && skipReady),
+    notkauf: rules.emergencyBuyOnly === true,
   };
 }
 
@@ -381,8 +396,25 @@ function truckView(state: State, rules: Ruleset, skippable: boolean): TruckView 
       waybill: null,
       next: null,
       skippable: false,
+      board: [],
+      boardOnly: false,
     };
   }
+
+  const orte = rules.destinations ?? [];
+  const board: SlipView[] = state.requests.slice(0, rules.requestSlots).map((r, slot) => ({
+    slot,
+    id: r.id,
+    dest: orte[r.dest] ?? '',
+    wants: r.wants.map((w) => ({ item: w.item, amount: w.amount })),
+    reward: r.reward.map((x) => ({ item: x.item, amount: x.amount })),
+    xp: r.xp,
+    deliverable: here && r.wants.every((w) => count(state, w.item) >= w.amount),
+    missing: r.wants.flatMap((w) => {
+      const fehlt = w.amount - count(state, w.item);
+      return fehlt > 0 ? [{ item: w.item, amount: fehlt }] : [];
+    }),
+  }));
 
   const stacks: TruckStackView[] = (waybill?.wants ?? []).map((w, i) => {
     const loaded = state.truck.loaded[i] ?? 0;
@@ -425,5 +457,7 @@ function truckView(state: State, rules: Ruleset, skippable: boolean): TruckView 
         }
       : null,
     skippable: here && skippable && waybill !== undefined,
+    board,
+    boardOnly: rules.boardDeliveryOnly === true,
   };
 }

@@ -108,8 +108,44 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const plantAll = `(function () {
+     var n = 0;
+     for (var k = 0; k < 12; k++) {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         var s = t.querySelector('.status').textContent;
+         return /→/.test(s) || / oder /.test(s);
+       });
+       if (!tile) break;
+       tile.click();
+       var sheet = document.getElementById('pick-bg');
+       if (sheet.hidden) { n++; continue; }
+       var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return !o.disabled && o.querySelector('.top').textContent === 'Weizen';
+       });
+       if (!opt) { document.getElementById('pick-close').click(); break; }
+       opt.click();
+       n++;
+     }
+     return n;
+   })()`;
+
+const harvestAll = `(function () {
+     var n = 0;
+     for (var k = 0; k < 12; k++) {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return t.querySelector('.status').textContent.indexOf('fertig') === 0;
+       });
+       if (!tile) break;
+       tile.click();
+       n++;
+     }
+     return n;
+   })()`;
+
+
+
 async function plantSomething(cdp: Cdp): Promise<boolean> {
-  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await evaluate(cdp, `document.getElementById('brett-close') && (document.getElementById('brett-bg').hidden = true, document.getElementById('lager-bg').hidden = true, document.getElementById('stand-bg').hidden = true)`);
   await sleep(200);
 
   const clicked = await evaluate<boolean>(
@@ -470,12 +506,9 @@ try {
     beforeAnyAction.snapshot.seq === 0,
   );
 
-  await syncAs(second.key, 0, [
-    { seq: 1, tick: 0, type: 'COLLECT_MAIL' },
-    { seq: 2, tick: 0, type: 'SELL_NPC', item: 1, amount: 5 },
-  ]);
-  const listed = await syncAs(second.key, 2, [
-    { seq: 3, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
+  await syncAs(second.key, 0, [{ seq: 1, tick: 0, type: 'COLLECT_MAIL' }]);
+  const listed = await syncAs(second.key, 1, [
+    { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
   ]);
   check('Der zweite Hof stellt einen Auftrag ein', listed.ok, listed.reason ?? listed.kind);
   check(
@@ -581,20 +614,27 @@ try {
   ).json()) as { snapshot: { state: { orders: unknown[] } } };
   check('Der verkaufte Auftrag ist beim Verkäufer weg', sellerState.snapshot.state.orders.length === 0);
 
-  const paid = await syncAs(second.key, 3, [{ seq: 4, tick: 0, type: 'COLLECT_MAIL' }]);
+  const paid = await syncAs(second.key, 2, [{ seq: 3, tick: 0, type: 'COLLECT_MAIL' }]);
   const sellerAfter = (await (
     await fetch(`http://127.0.0.1:${PORT}/api/state`, {
       headers: { authorization: `Bearer ${second.key}` },
     })
   ).json()) as { snapshot: { state: { items: number[] } } };
 
+  const sellerPaid = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    })
+  ).json()) as { snapshot: { state: { items: number[] } } };
+
   const devRules = getRuleset(1001);
-  const wheatPrice = devRules.items[1]!.npcPrice;
-  const expectedCoins = 5 * wheatPrice - listingFee(devRules, 1, 20) + 20 * 3;
+  const startGold = devRules.startingItems.find((x) => x.item === 0)?.amount ?? 0;
+  const expectedCoins = startGold - listingFee(devRules, 1, 20) + 20 * 3;
   check(
     `Der Verkäufer hat sein Geld — 20 × 3 = 60, abzüglich Gebühr`,
-    paid.ok && sellerAfter.snapshot.state.items[0] === expectedCoins,
-    `${sellerAfter.snapshot.state.items[0]} statt ${expectedCoins} Münzen`,
+    paid.ok && sellerPaid.snapshot.state.items[0] === expectedCoins,
+    `${sellerPaid.snapshot.state.items[0]} statt ${expectedCoins} Münzen ` +
+      `(vor dem Postfach: ${sellerAfter.snapshot.state.items[0]})`,
   );
 
   console.log('\n7. Die Spieloberfläche auf / (Telefonformat 390 × 844)');
@@ -786,14 +826,21 @@ try {
   );
 
 
-  const tabs = await evaluate<string>(
+  const haeuser = await evaluate<string>(
     cdp,
-    `JSON.stringify(['orders', 'market', 'store', 'farm'].map(function (name) {
-       document.querySelector('nav button[data-view="' + name + '"]').click();
-       return document.getElementById('view-' + name).hidden === false;
-     }))`,
+    `JSON.stringify([['brett', 'brett'], ['lagerhaus', 'lager'], ['stand', 'stand']]
+       .map(function (paar) {
+         document.getElementById(paar[0]).click();
+         var offen = document.getElementById(paar[1] + '-bg').hidden === false;
+         document.getElementById(paar[1] + '-close').click();
+         return offen && document.getElementById(paar[1] + '-bg').hidden === true;
+       }))`,
   );
-  check('Alle vier Ansichten öffnen sich', JSON.parse(tabs).every(Boolean), tabs);
+  check(
+    'Brett, Lager und Stand öffnen und schließen sich auf dem Hof',
+    JSON.parse(haeuser).every(Boolean),
+    haeuser,
+  );
 
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
@@ -802,7 +849,7 @@ try {
     uploadThroughput: 0,
   });
   await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
-  await evaluate(cdp, `document.querySelector('nav button[data-view="market"]').click()`);
+  await evaluate(cdp, `document.getElementById('stand').click()`);
   check(
     'Ohne Netz ist der Markt ausgegraut und der Hinweis sichtbar',
     await evaluate<boolean>(
@@ -876,7 +923,7 @@ try {
 
   console.log('\n8b. Menge und Preis wählen, Auftrag wegschicken');
 
-  await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
+  await evaluate(cdp, `document.getElementById('stand').click()`);
 
   const wheatStock = await evaluate<number>(
     cdp,
@@ -891,20 +938,23 @@ try {
   await evaluate(
     cdp,
     `(function () {
-       var pick = document.querySelector('#sell .pick');
+       var pick = document.querySelector('#list .pick');
        pick.querySelectorAll('button')[0].click();
        pick.querySelectorAll('button')[0].click();
      })()`,
   );
-  const chosen = await evaluate<number>(cdp, `Number(document.querySelector('#sell .pick input').value)`);
+  const chosen = await evaluate<number>(cdp, `Number(document.querySelector('#list .pick input').value)`);
   check(
-    'Die Menge lässt sich herunterzählen, statt immer alles zu verkaufen',
+    'Die Menge lässt sich herunterzählen, statt immer alles anzubieten',
     chosen === wheatStock - 2,
     `${wheatStock} → ${chosen}`,
   );
 
-  const goldBefore = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
-  await evaluate(cdp, `document.querySelector('#sell .done').click()`);
+  const eigeneVorher = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#my-orders .card').length`,
+  );
+  await evaluate(cdp, `document.querySelector('#list .done').click()`);
   await sleep(400);
   const leftOver = await evaluate<number>(
     cdp,
@@ -915,11 +965,14 @@ try {
        return c ? Number(c.querySelector('.n').textContent) : -1;
      })()`,
   );
-  const goldAfter = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  const eigeneNachher = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#my-orders .card').length`,
+  );
   check(
-    'Verkauft wird genau die gewählte Menge — der Rest bleibt liegen',
-    leftOver === 2 && goldAfter > goldBefore,
-    `${wheatStock} → ${leftOver} Weizen, ${goldBefore} → ${goldAfter} Gold`,
+    'Angeboten wird genau die gewählte Menge — der Rest bleibt liegen',
+    leftOver === 2 && eigeneNachher > eigeneVorher,
+    `${wheatStock} → ${leftOver} Weizen, Auslage ${eigeneVorher} → ${eigeneNachher}`,
   );
 
   const band = await evaluate<{ value: number; max: number; dip: number }>(
@@ -964,7 +1017,7 @@ try {
     arrived < 0 ? 'gar nicht angekommen' : `${arrived} ms`,
   );
 
-  await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
   const frachtText = `[...document.querySelectorAll('#requests .posten')]
        .map(function (p) { return p.textContent; }).join(' | ')`;
   const vorherFracht = await evaluate<string>(cdp, frachtText);
@@ -983,8 +1036,8 @@ try {
      })()`,
   );
   check(
-    'Ein Frachtbrief lässt sich wegschicken — es kommt ein anderer',
-    skipLabel === 'Wegschicken' && afterSkip.fracht !== vorherFracht,
+    'Ein Zettel lässt sich tauschen — es kommt ein anderer',
+    skipLabel === 'Tauschen' && afterSkip.fracht !== vorherFracht,
     `${vorherFracht} → ${afterSkip.fracht}`,
   );
   check(
@@ -1014,18 +1067,10 @@ try {
 
   check('SIGTERM beendet den Server zügig', stopMs < 3000, `${stopMs} ms`);
 
-  await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
-  await sleep(300);
   const beforeQueue = (await savedState()).queue;
-  await evaluate(
-    cdp,
-    `(function () {
-       var card = [...document.querySelectorAll('#buy .card')].find(function (c) {
-         return !c.disabled;
-       });
-       if (card) card.click();
-     })()`,
-  );
+  await evaluate(cdp, plantAll);
+  await sleep(200);
+  await evaluate(cdp, harvestAll);
   await sleep(300);
   const queuedWhileDown = (await savedState()).queue;
   check(
@@ -1073,8 +1118,8 @@ try {
 
   console.log('\n9b. Ein Stall mit drei Tieren — jedes einzeln');
 
-  const farmTab = `document.querySelector('nav button[data-view="farm"]').click()`;
-  const ordersTab = `document.querySelector('nav button[data-view="orders"]').click()`;
+  const farmTab = `document.getElementById('brett-close') && (document.getElementById('brett-bg').hidden = true, document.getElementById('lager-bg').hidden = true, document.getElementById('stand-bg').hidden = true)`;
+  const ordersTab = `document.getElementById('lagerhaus').click()`;
 
   await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=6000`, 'POST');
   await evaluate(cdp, ordersTab);
@@ -1098,40 +1143,6 @@ try {
   }
   await evaluate(cdp, `document.querySelector('#mail .card').click()`);
   await sleep(300);
-
-  const plantAll = `(function () {
-       var n = 0;
-       for (var k = 0; k < 12; k++) {
-         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-           var s = t.querySelector('.status').textContent;
-           return /→/.test(s) || / oder /.test(s);
-         });
-         if (!tile) break;
-         tile.click();
-         var sheet = document.getElementById('pick-bg');
-         if (sheet.hidden) { n++; continue; }
-         var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
-           return !o.disabled && o.querySelector('.top').textContent === 'Weizen';
-         });
-         if (!opt) { document.getElementById('pick-close').click(); break; }
-         opt.click();
-         n++;
-       }
-       return n;
-     })()`;
-
-  const harvestAll = `(function () {
-       var n = 0;
-       for (var k = 0; k < 12; k++) {
-         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-           return t.querySelector('.status').textContent.indexOf('fertig') === 0;
-         });
-         if (!tile) break;
-         tile.click();
-         n++;
-       }
-       return n;
-     })()`;
 
   const levelNow = async () =>
     Number(await evaluate<string>(cdp, `document.getElementById('lvl').textContent`));
@@ -1285,56 +1296,56 @@ try {
   await sleep(200);
 
 
-  console.log('\n9c. Der Lieferwagen fährt eine Fuhre');
+  console.log('\n9c. Ein Zettel vom Brett, der Wagen fährt los');
 
-  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await evaluate(cdp, farmTab);
   await sleep(300);
 
   check(
-    'Der Wagen steht auf dem Hof',
-    await evaluate<boolean>(cdp, `!document.getElementById('wagen').hidden`),
+    'Wagen, Brett, Lager und Stand stehen auf dem Hof',
+    await evaluate<boolean>(
+      cdp,
+      `!document.getElementById('wagen').hidden
+         && !!document.getElementById('brett')
+         && !!document.getElementById('lagerhaus')
+         && !!document.getElementById('stand')`,
+    ),
   );
 
-  const wahrheit = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+  const brettJetzt = (await api(`/api/admin/status?account=${status.accountId}`)) as {
     itemIds: string[];
     state: { requests: Array<{ wants: Array<{ item: number; amount: number }> }> };
   };
-  const frachtbrief = wahrheit.state.requests[0]!;
-  for (const posten of frachtbrief.wants) {
+  const zettel = brettJetzt.state.requests[0]!;
+  for (const posten of zettel.wants) {
     await api(
       `/api/admin/grant?account=${status.accountId}` +
-        `&item=${wahrheit.itemIds[posten.item]}&amount=${posten.amount}`,
+        `&item=${brettJetzt.itemIds[posten.item]}&amount=${posten.amount}`,
       'POST',
     );
   }
   await sleep(800);
-  await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
   await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Ware im Postfach');
   await evaluate(cdp, `document.querySelector('#mail .card').click()`);
   await sleep(500);
-  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
   await sleep(300);
 
-  const beladen = await evaluate<string>(
+  const bereit = await evaluate<string>(
     cdp,
     `(function () {
-       document.getElementById('wagen').click();
-       for (var k = 0; k < 8; k++) {
-         var b = [...document.querySelectorAll('#pick-list .laden')]
-           .find(function (x) { return !x.disabled; });
-         if (!b) break;
-         b.click();
-       }
-       var los = [...document.querySelectorAll('#pick-list .abfahrt')].find(function (b) {
-         return b.textContent.indexOf('Abfahren') === 0;
-       });
-       return los && !los.disabled ? los.textContent : 'nicht abfahrbereit';
+       document.getElementById('brett').click();
+       var karten = [...document.querySelectorAll('#requests .zettel')];
+       var los = karten.map(function (k) { return k.querySelector('.abfahrt'); })
+         .filter(function (b) { return b && !b.disabled && b.textContent === 'Abschicken'; });
+       return karten.length + '/' + los.length;
      })()`,
   );
   check(
-    'Posten für Posten beladen, dann darf er abfahren',
-    /^Abfahren/.test(beladen),
-    beladen,
+    'Am Brett hängen vier Zettel, einer davon ist lieferbar',
+    /^4\/[1-9]/.test(bereit),
+    bereit,
   );
 
   const goldVorher = await evaluate<number>(
@@ -1344,58 +1355,59 @@ try {
   await evaluate(
     cdp,
     `(function () {
-       var los = [...document.querySelectorAll('#pick-list .abfahrt')].find(function (b) {
-         return b.textContent.indexOf('Abfahren') === 0;
+       var b = [...document.querySelectorAll('#requests .abfahrt')].find(function (x) {
+         return !x.disabled && x.textContent === 'Abschicken';
        });
-       if (los) los.click();
+       if (b) b.click();
      })()`,
   );
   await sleep(700);
 
-  const nachAbfahrt = await evaluate<{ gold: number; text: string; weg: boolean }>(
+  const nachAbfahrt = await evaluate<{ gold: number; unterwegs: boolean; zettel: number }>(
     cdp,
     `(function () {
        var w = document.getElementById('wagen');
        return {
          gold: Number(document.getElementById('gold').textContent),
-         text: w.querySelector('.meta').textContent,
-         weg: w.className.indexOf('weg') >= 0,
+         unterwegs: w.className.indexOf('unterwegs') >= 0,
+         zettel: document.querySelectorAll('#requests .zettel').length,
        };
      })()`,
   );
   check(
-    'Die Fuhre wird bezahlt und der Wagen ist unterwegs',
-    nachAbfahrt.gold > goldVorher && nachAbfahrt.weg && /unterwegs/.test(nachAbfahrt.text),
-    `${goldVorher} → ${nachAbfahrt.gold} Gold, ${nachAbfahrt.text}`,
+    'Abgeschickt: Lohn sofort, Wagen sichtbar unterwegs, Zettel nachgerückt',
+    nachAbfahrt.gold > goldVorher && nachAbfahrt.unterwegs && nachAbfahrt.zettel === 4,
+    `${goldVorher} → ${nachAbfahrt.gold} Gold, unterwegs ${nachAbfahrt.unterwegs}, ` +
+      `${nachAbfahrt.zettel} Zettel`,
   );
 
-  const waehrendWeg = await evaluate<string>(
+  const gesperrt = await evaluate<boolean>(
     cdp,
-    `(function () {
-       document.getElementById('wagen').click();
-       var titel = document.getElementById('pick-title').textContent;
-       var knoepfe = document.querySelectorAll('#pick-list .laden').length;
-       document.getElementById('pick-close').click();
-       return titel + ' / ' + knoepfe;
-     })()`,
+    `[...document.querySelectorAll('#requests .abfahrt')].every(function (b) {
+       return b.disabled || b.textContent !== 'Abschicken';
+     })`,
   );
+  check('Solange er fährt, geht kein zweiter Zettel raus', gesperrt);
+
+  try {
+    await waitFor(
+      cdp,
+      `document.getElementById('wagen').className.indexOf('unterwegs') < 0`,
+      'Wagen zurück',
+      20_000,
+    );
+  } catch {
+  }
   check(
-    'Während der Fahrt lässt sich nichts laden',
-    /unterwegs \/ 0$/.test(waehrendWeg),
-    waehrendWeg,
+    'Nach der Fahrt steht er wieder da',
+    await evaluate<boolean>(
+      cdp,
+      `document.getElementById('wagen').className.indexOf('unterwegs') < 0`,
+    ),
   );
 
-  await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
-  await sleep(900);
-  const zurueck = await evaluate<string>(
-    cdp,
-    `document.getElementById('wagen').querySelector('.meta').textContent`,
-  );
-  check(
-    'Nach der Fahrzeit steht er mit einem neuen Frachtbrief da',
-    !/unterwegs/.test(zurueck),
-    zurueck,
-  );
+  await evaluate(cdp, `document.getElementById('brett-close').click()`);
+  await sleep(200);
 
   console.log('\n10. Eine neue Version erreicht den Browser');
 
@@ -1410,7 +1422,13 @@ try {
   const originalTemplate = readFileSync(template, 'utf8');
   const MARKER = 'NEUE-VERSION-PRUEFUNG';
   try {
-    writeFileSync(template, originalTemplate.replace('<h2>Vorräte</h2>', `<h2>Vorräte ${MARKER}</h2>`));
+    writeFileSync(
+      template,
+      originalTemplate.replace(
+        '<h3 id="lager-titel">Lager</h3>',
+        `<h3 id="lager-titel">Lager ${MARKER}</h3>`,
+      ),
+    );
     const built = spawn(
       process.execPath,
       ['--experimental-strip-types', join(ROOT, 'scripts', 'build-conformance.ts')],

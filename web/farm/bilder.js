@@ -55,6 +55,47 @@ function artTruck(unterwegs, voll) {
       : '');
 }
 
+function artBrett(zettel) {
+  var out = '<rect x="16" y="52" width="6" height="24" fill="var(--wood-dark)"/>' +
+    '<rect x="78" y="52" width="6" height="24" fill="var(--wood-dark)"/>' +
+    '<rect x="8" y="10" width="84" height="46" rx="4" fill="var(--wood)"/>' +
+    '<rect x="12" y="14" width="76" height="38" rx="3" fill="var(--wood-dark)" opacity=".35"/>';
+
+  var stellen = [[17, 16], [53, 16], [17, 35], [53, 35]];
+  for (var i = 0; i < Math.min(zettel, 4); i++) {
+    out += '<rect x="' + stellen[i][0] + '" y="' + stellen[i][1] +
+      '" width="30" height="15" rx="1.5" fill="var(--surface)"/>' +
+      '<path d="M' + (stellen[i][0] + 4) + ' ' + (stellen[i][1] + 5) + 'h20M' +
+      (stellen[i][0] + 4) + ' ' + (stellen[i][1] + 10) + 'h13" ' +
+      'stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"/>';
+  }
+  return out;
+}
+
+function artLager(voll) {
+  return '<ellipse cx="50" cy="72" rx="42" ry="6" fill="var(--ink)" opacity=".18"/>' +
+    '<path d="M14 72V34h72v38z" fill="var(--roof)"/>' +
+    '<path d="M50 12 6 38h88z" fill="var(--wood-dark)"/>' +
+    '<rect x="38" y="46" width="24" height="26" rx="2" fill="var(--wood)"/>' +
+    '<path d="M50 46v26" stroke="var(--wood-dark)" stroke-width="2"/>' +
+    '<rect x="44" y="24" width="12" height="10" rx="2" fill="var(--sky)" opacity=".8"/>' +
+    (voll
+      ? '<circle cx="80" cy="26" r="8" fill="var(--warn)"/>' +
+        '<path d="M80 21v6M80 30v1.5" stroke="var(--surface)" stroke-width="2.4" stroke-linecap="round"/>'
+      : '');
+}
+
+function artStand() {
+  return '<ellipse cx="50" cy="72" rx="40" ry="6" fill="var(--ink)" opacity=".18"/>' +
+    '<rect x="18" y="40" width="64" height="8" fill="var(--wood-dark)"/>' +
+    '<rect x="22" y="48" width="56" height="24" rx="2" fill="var(--wood)"/>' +
+    '<path d="M10 40h80l-8-18H18z" fill="var(--truck-cab)"/>' +
+    '<path d="M18 22h14l-4 18H10zM46 22h14l-2 18H44zM74 22h8l6 18H72z" fill="var(--surface)" opacity=".55"/>' +
+    '<circle cx="36" cy="58" r="5" fill="var(--ripe)"/>' +
+    '<circle cx="50" cy="58" r="5" fill="var(--leaf)"/>' +
+    '<circle cx="64" cy="58" r="5" fill="var(--corn)"/>';
+}
+
 function artField(stage, crop) {
   var soil = '<rect x="2" y="6" width="96" height="70" rx="7" fill="var(--soil)"/>' +
     '<path d="M6 16h88v4H6zM6 30h88v3H6zM6 44h88v3H6zM6 58h88v3H6z" fill="var(--soil-dark)" opacity=".4"/>';

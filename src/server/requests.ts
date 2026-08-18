@@ -55,11 +55,13 @@ export function topUpRequests(
   let id = nextId;
   while (requests.length < rules.requestQueueMax) {
     const template = usable[Math.floor(rnd() * usable.length)]!;
+    const orte = rules.destinations ?? [];
     requests.push({
       id,
       wants: template.wants.map((w) => ({ item: w.item, amount: w.amount })),
       reward: template.reward.map((r) => ({ item: r.item, amount: r.amount })),
       xp: template.xp,
+      dest: orte.length > 0 ? Math.floor(rnd() * orte.length) : 0,
     });
     id++;
   }

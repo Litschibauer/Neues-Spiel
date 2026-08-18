@@ -23,6 +23,7 @@ const FRACHT: Request = {
   ],
   reward: [{ item: GOLD, amount: 100 }],
   xp: 20,
+  dest: 3,
 };
 
 const NAECHSTE: Request = {
@@ -30,6 +31,7 @@ const NAECHSTE: Request = {
   wants: [{ item: WHEAT, amount: 3 }],
   reward: [{ item: GOLD, amount: 40 }],
   xp: 8,
+  dest: 5,
 };
 
 function hof(patch: Partial<State> = {}): State {
@@ -166,6 +168,7 @@ test('offline reicht die vorgewürfelte Warteschlange für mehrere Fuhren', () =
       wants: [{ item: WHEAT, amount: 2 }],
       reward: [{ item: GOLD, amount: 30 }],
       xp: 5,
+      dest: 1,
     });
   }
   const c = client(hof({ requests: vorrat }));

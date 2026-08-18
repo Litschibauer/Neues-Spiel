@@ -48,6 +48,7 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
       'LIST_ORDER',
       'LOAD_TRUCK',
       'SELL_NPC',
+      'SEND_SLIP',
       'SEND_TRUCK',
       'SKIP_REQUEST',
       'START',

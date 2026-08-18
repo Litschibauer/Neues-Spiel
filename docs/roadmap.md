@@ -146,8 +146,11 @@ danebenschreiben kannst, hast du sie noch nicht verstanden.
 - [x] ~~**Lieferwagen statt Kundentafel.**~~ Erledigt mit v7: Der Wagen steht auf
       dem Hof, wird Posten für Posten beladen, fährt ab und ist eine Weile weg.
       Der Frachtbrief ist der erste Eintrag der vorgewürfelten Warteschlange —
-      offline reichen zwanzig Fuhren am Stück. Offen bleibt daraus:
-      **Laufkundschaft**, die zufällig auftaucht und wieder geht, und **Events**.
+      offline reichen zwanzig Fuhren am Stück. Seit v8 hängen **vier Zettel**
+      an einem Brett, der Wagen fährt sichtbar los, und der Händler ist zu:
+      verkauft wird an Zettel oder an andere Höfe, gekauft nur ein einzelnes
+      Korn, wenn ein Fach leer ist. Offen bleibt daraus: **Laufkundschaft**,
+      die zufällig auftaucht und wieder geht, und **Events**.
 
 - **Zufall.** Muster 1 aus §5: Ergebnis erst beim Sync serverseitig würfeln. Der Client darf
   nichts wissen, was er nicht wissen soll.

@@ -322,6 +322,51 @@ auftaucht und wieder geht, und **Events**. Beide brauchen dieselbe Bauform —
 vorgewürfelt im Zustand, damit sie offline gelten — aber jeweils eine eigene
 Warteschlange.
 
+#### v8: ein Brett mit vier Zetteln, und der Händler macht zu
+
+Drei Änderungen, die zusammengehören, weil sie alle dasselbe wollen: **Der
+Hof soll ein Ort sein, an dem Spieler miteinander handeln — nicht ein Formular
+mit einem Automaten daneben.**
+
+**1. Vier Zettel statt eines Frachtbriefs.** Am Brett hängen vier Lieferungen,
+jede an einen anderen Ort. Wer die Ware hat, schickt sie los; wer sie nicht
+mag, tauscht den Zettel gegen den nächsten aus dem Vorrat — mit kurzer
+Wartezeit, damit Durchwürfeln nichts bringt. Das Brett sind schlicht die
+ersten vier Einträge derselben vorgewürfelten Warteschlange wie vorher.
+
+Das Beladen Posten für Posten aus v7 ist damit weg. Es klang gut und war in
+der Hand zäh: vier Zettel × drei Posten wären zwölf Zustände gewesen, die
+alle irgendwo hin müssen. Jetzt gilt **ganz oder gar nicht** — die Ware ist
+da oder sie fehlt, und der Zettel sagt genau, wie viel.
+
+**2. Der Wagen fährt wirklich.** `truckAwayTicks` ist von sieben Minuten auf
+**neun Sekunden** gefallen. Er ist keine Wartezeit mehr, sondern eine
+Bewegung: Er rollt links aus dem Bild, ist kurz weg, kommt zurück. Solange er
+fährt, geht kein zweiter Zettel raus — das ist der ganze Takt, und er reicht.
+
+**3. Kein Händler mehr.** Drei Riegel, alle als Daten im Regelwerk, keiner als
+`if` im Kern:
+
+| Flagge | Wirkung |
+| --- | --- |
+| `sellNpcDisabled` | `SELL_NPC` wird abgewiesen — Ware geht an Zettel oder an andere Höfe |
+| `boardDeliveryOnly` | `FILL_REQUEST` wird abgewiesen — Lieferungen laufen über das Brett und damit über den Wagen |
+| `emergencyBuyOnly` | `BUY_NPC` nur, wenn das Fach **leer** ist, und dann genau eins |
+
+Ältere Regelwerke haben die Flaggen nicht und verhalten sich unverändert —
+alte Kommandologs spielen Zeichen für Zeichen gleich ab.
+
+**Die Sackgasse, die dadurch entsteht, und der Riegel dagegen.** Ohne Händler
+kann ein Hof sich totspielen: letztes Korn gesät, Ernte verkauft, kein Gold für
+Nachschub. Deshalb prüft `validateRuleset` jetzt, dass das **Startgold für
+mindestens einen Notkauf jeder Startzutat reicht** — v8 gibt 60 Gold mit, ein
+Korn kostet 6. Ein Test spielt den Weg zurück: leerer Hof → ein Korn kaufen →
+viermal säen und ernten → Zettel abschicken.
+
+**Und die Leiste unten ist weg.** Brett, Lager und Verkaufsstand stehen als
+Gebäude am Weg. Antippen öffnet sie als Blatt über dem Hof. Es gibt nur noch
+**eine** Ansicht, und das ist der Hof.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

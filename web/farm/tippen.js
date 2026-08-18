@@ -305,7 +305,9 @@ $('pick-bg').addEventListener('click', function (e) {
   if (e.target === $('pick-bg')) closePicker();
 });
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && pickerPlot !== null) closePicker();
+  if (e.key !== 'Escape') return;
+  if (pickerPlot !== null) closePicker();
+  else if (view !== 'farm') show('farm');
 });
 
 function tapBuy(i) {

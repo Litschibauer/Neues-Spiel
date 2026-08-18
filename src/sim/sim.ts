@@ -208,6 +208,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
     }
 
     case 'SELL_NPC': {
+      if (rules.sellNpcDisabled) throw new SimError('NPC_DISABLED');
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
       const def = rules.items[cmd.item];
       if (!def) throw new SimError('NO_SUCH_ITEM');
@@ -223,6 +224,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
     }
 
     case 'BUY_NPC': {
+      if (rules.emergencyBuyOnly) {
+        if (cmd.amount !== 1) throw new SimError('BAD_AMOUNT');
+        if (count(s, cmd.item) > 0) throw new SimError('ONLY_WHEN_EMPTY');
+      }
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
       const def = rules.items[cmd.item];
       if (!def) throw new SimError('NO_SUCH_ITEM');
@@ -335,6 +340,8 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
     }
 
     case 'FILL_REQUEST': {
+      if (rules.boardDeliveryOnly) throw new SimError('USE_THE_BOARD');
+
       const index = s.requests.findIndex((r) => r.id === cmd.requestId);
       if (index < 0) throw new SimError('NO_SUCH_REQUEST');
 
@@ -381,6 +388,34 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         next.items = items;
         next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.truck.awayUntil };
       }
+      return next;
+    }
+
+    case 'SEND_SLIP': {
+      const away = truckAway(rules);
+      if (away <= 0) throw new SimError('TRUCK_DISABLED');
+      if (s.tick < s.truck.awayUntil) throw new SimError('TRUCK_AWAY');
+
+      if (!Number.isInteger(cmd.slot) || cmd.slot < 0 || cmd.slot >= rules.requestSlots) {
+        throw new SimError('NO_SUCH_SLIP');
+      }
+      const zettel = s.requests[cmd.slot];
+      if (!zettel) throw new SimError('NO_SUCH_SLIP');
+
+      for (const stack of zettel.wants) {
+        if (count(s, stack.item) < stack.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      }
+
+      const changes: [number, number][] = zettel.wants.map((w) => [w.item, -w.amount]);
+      for (const r of zettel.reward) changes.push([r.item, r.amount]);
+      const items = addItems(s.items, changes);
+      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+
+      const next = cloneState(s);
+      next.items = items;
+      next.requests = s.requests.filter((_, i) => i !== cmd.slot);
+      next.xp = s.xp + zettel.xp;
+      next.truck = { loaded: [], awayUntil: s.tick + away };
       return next;
     }
 

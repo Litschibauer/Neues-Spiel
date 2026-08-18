@@ -75,6 +75,10 @@ export type Ruleset = {
   requestQueueMax: number;
   requestSkipCooldownTicks: number;
   truckAwayTicks?: number;
+  destinations?: readonly string[];
+  boardDeliveryOnly?: boolean;
+  sellNpcDisabled?: boolean;
+  emergencyBuyOnly?: boolean;
 };
 
 const GOLD = 0;
@@ -671,12 +675,42 @@ const V7: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const V8: Ruleset = {
   ...V7,
+  version: 8,
+
+  truckAwayTicks: 9,
+  requestSkipCooldownTicks: 120,
+  requestSlots: 4,
+
+  boardDeliveryOnly: true,
+  sellNpcDisabled: true,
+  emergencyBuyOnly: true,
+
+  destinations: [
+    'Mühlbach',
+    'Seeblick',
+    'Bahnhof',
+    'Altdorf',
+    'Steinfurt',
+    'Grünau',
+    'Hafen',
+    'Marktplatz',
+  ],
+
+  startingItems: [
+    { item: GOLD, amount: 60 },
+    { item: WHEAT, amount: 6 },
+    { item: CORN, amount: 3 },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V8,
   version: 1001,
-  requestSkipCooldownTicks: 180,
-  truckAwayTicks: 42,
-  recipes: V7.recipes.map((r) => {
+  requestSkipCooldownTicks: 60,
+  truckAwayTicks: 9,
+  recipes: V8.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -690,14 +724,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [5, V5],
   [6, V6],
   [7, V7],
+  [8, V8],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 7;
+export const LATEST_RULESET_VERSION = 8;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -978,6 +1013,24 @@ export function validateRuleset(rules: Ruleset): string[] {
     }
   });
   if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
+  if (rules.emergencyBuyOnly) {
+    for (const plot of rules.plots.filter((p) => p.startLevel > 0)) {
+      for (const recipe of plot.levels[plot.startLevel - 1]!.recipes) {
+        for (const input of rules.recipes[recipe]!.inputs) {
+          const preis = rules.items[input.item]!.npcBuyPrice;
+          if (preis <= 0) continue;
+          const startGold =
+            rules.startingItems.find((x) => x.item === rules.currency)?.amount ?? 0;
+          if (startGold < preis) {
+            problems.push(
+              `Notkauf von ${rules.items[input.item]!.id} kostet ${preis}, ` +
+                `am Anfang gibt es nur ${startGold} — Sackgasse`,
+            );
+          }
+        }
+      }
+    }
+  }
   if (rules.truckAwayTicks !== undefined) {
     if (!Number.isInteger(rules.truckAwayTicks) || rules.truckAwayTicks < 0) {
       problems.push(`Wagen-Fahrzeit ungültig: ${rules.truckAwayTicks}`);

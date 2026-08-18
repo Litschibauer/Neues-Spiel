@@ -47,6 +47,7 @@ export type Request = {
   wants: readonly { item: number; amount: number }[];
   reward: readonly { item: number; amount: number }[];
   xp: number;
+  dest: number;
 };
 
 export type Truck = {
@@ -146,7 +147,7 @@ export function normalizeState(s: State): State {
     xp: s.xp ?? 0,
     offers: s.offers ?? [],
     mail: s.mail ?? [],
-    requests: s.requests ?? [],
+    requests: (s.requests ?? []).map((r) => (r.dest === undefined ? { ...r, dest: 0 } : r)),
     skipReadyAt: s.skipReadyAt ?? 0,
     truck: s.truck ?? { loaded: [], awayUntil: 0 },
   };

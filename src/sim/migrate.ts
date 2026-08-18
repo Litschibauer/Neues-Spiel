@@ -123,6 +123,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['4->5', GROW_AND_RETIME],
   ['5->6', RETIME],
   ['6->7', GROW_AND_RETIME],
+  ['7->8', GROW_AND_RETIME],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -197,6 +198,10 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (r.wants.length === 0) problems.push(`Auftrag ${r.id} verlangt nichts`);
     if (!Number.isSafeInteger(r.xp) || r.xp < 0) problems.push(`Auftrag ${r.id}: XP ungültig`);
     if (r.reward.length === 0) problems.push(`Auftrag ${r.id} gibt nichts`);
+    const orte = rules.destinations ?? [];
+    if (!Number.isInteger(r.dest) || r.dest < 0 || (orte.length > 0 && r.dest >= orte.length)) {
+      problems.push(`Auftrag ${r.id}: Ziel ${r.dest} gibt es nicht`);
+    }
     for (const stack of [...r.wants, ...r.reward]) {
       if (!rules.items[stack.item]) problems.push(`Auftrag ${r.id}: Gegenstand unbekannt`);
       if (stack.amount <= 0) problems.push(`Auftrag ${r.id}: Menge <= 0`);

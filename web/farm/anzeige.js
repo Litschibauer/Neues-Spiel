@@ -7,6 +7,7 @@ function render() {
   renderPurse(v);
   renderPlots(v);
   renderTruck(v);
+  renderMoebel(v);
   renderRequests(v);
   renderMail(v);
   renderMarket(v);
@@ -14,7 +15,7 @@ function render() {
 
   var typing = document.activeElement
     && document.activeElement.tagName === 'INPUT'
-    && $('view-store').contains(document.activeElement);
+    && $('stand-bg').contains(document.activeElement);
   if (!typing) renderStore(v);
   renderBadges(v);
   renderSheet(v);
@@ -167,30 +168,90 @@ function renderTruck(v) {
   if (!t.enabled) { knopf.hidden = true; return; }
 
   knopf.hidden = false;
-  knopf.className = 'wagen' + (t.here ? '' : ' weg') +
-    (t.waybill && t.waybill.full ? ' voll' : '');
-
-  var text;
-  if (!t.here) text = 'unterwegs · ' + timeText(t.backIn);
-  else if (!t.waybill) text = 'kein Auftrag';
-  else if (t.waybill.full) text = 'abfahrbereit';
-  else text = Math.round(t.waybill.progress * 100) + '% geladen';
-
+  knopf.className = 'moebel wagen' + (t.here ? '' : ' unterwegs');
   knopf.innerHTML =
     '<svg class="art" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">' +
-    artTruck(!t.here, t.waybill !== null && t.waybill.full) + '</svg>' +
-    '<span class="meta">' + text + '</span>';
-  knopf.setAttribute('aria-label', 'Lieferwagen — ' + text);
+    artTruck(!t.here, false) + '</svg>';
+  knopf.setAttribute('aria-label', t.here ? 'Lieferwagen wartet' : 'Lieferwagen unterwegs');
+}
+
+function renderMoebel(v) {
+  var bereit = v.truck.board.filter(function (z) { return z.deliverable; }).length;
+  moebel($('brett'), artBrett(v.truck.board.length), 'Brett', bereit);
+  moebel($('lagerhaus'), artLager(v.silo.full), 'Lager', v.mail.entries.length);
+  moebel($('stand'), artStand(), 'Stand', v.buyable);
+}
+
+function moebel(knopf, bild, name, zahl) {
+  knopf.innerHTML =
+    '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
+    bild + '</svg>' +
+    '<span class="meta">' + name + '</span>' +
+    (zahl > 0 ? '<span class="badge">' + zahl + '</span>' : '');
+  knopf.setAttribute('aria-label', name + (zahl > 0 ? ' — ' + zahl + ' offen' : ''));
 }
 
 function renderRequests(v) {
   var box = $('requests');
   box.textContent = '';
-  if (!v.truck.enabled) {
-    box.innerHTML = '<p class="empty">Kein Lieferwagen in diesem Regelwerk.</p>';
+  var t = v.truck;
+
+  if (!t.enabled || t.board.length === 0) {
+    box.innerHTML = '<p class="empty">Am Brett hängt gerade nichts.</p>';
     return;
   }
-  frachtInhalt(v, box);
+
+  t.board.forEach(function (z) {
+    var karte = document.createElement('div');
+    karte.className = 'zettel' + (z.deliverable ? ' bereit' : '');
+
+    var kopf = document.createElement('div');
+    kopf.className = 'kopf';
+    kopf.innerHTML = '<span class="ziel">nach ' + z.dest + '</span>' +
+      '<span class="lohn">' + stacks(z.reward) + ' · ' + z.xp + ' XP</span>';
+    karte.appendChild(kopf);
+
+    var ware = document.createElement('div');
+    ware.className = 'ware';
+    z.wants.forEach(function (w) {
+      var fehlt = 0;
+      z.missing.forEach(function (m) { if (m.item === w.item) fehlt = m.amount; });
+      var posten = document.createElement('span');
+      posten.className = 'posten' + (fehlt > 0 ? ' fehlt' : '');
+      posten.textContent = w.amount + ' ' + itemName(w.item) +
+        (fehlt > 0 ? ' (' + fehlt + ' fehlt)' : '');
+      ware.appendChild(posten);
+    });
+    karte.appendChild(ware);
+
+    var reihe = document.createElement('div');
+    reihe.className = 'reihe';
+
+    var los = document.createElement('button');
+    los.className = 'abfahrt';
+    los.disabled = !z.deliverable;
+    los.textContent = !t.here
+      ? 'Wagen unterwegs'
+      : z.deliverable ? 'Abschicken' : 'Ware fehlt';
+    los.addEventListener('click', function () {
+      act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), client.sendSlip(z.slot));
+    });
+    reihe.appendChild(los);
+
+    if (v.skip.enabled) {
+      var tausch = document.createElement('button');
+      tausch.className = 'abfahrt skip';
+      tausch.disabled = !v.skip.ready;
+      tausch.textContent = v.skip.ready ? 'Tauschen' : 'in ' + timeText(v.skip.readyIn);
+      tausch.addEventListener('click', function () {
+        act('Zettel getauscht', client.skipRequest(z.id));
+      });
+      reihe.appendChild(tausch);
+    }
+
+    karte.appendChild(reihe);
+    box.appendChild(karte);
+  });
 }
 
 function renderMail(v) {
@@ -380,9 +441,7 @@ function renderStore(v) {
     chips.appendChild(chip);
   });
 
-  var sellBox = $('sell');
   var listBox = $('list');
-  sellBox.textContent = '';
   listBox.textContent = '';
   var any = false;
 
@@ -391,37 +450,6 @@ function renderStore(v) {
     any = true;
     var pick = pickOf(entry);
     var amount = clamp(pick.amount, 1, entry.amount);
-
-    var sell = document.createElement('div');
-    sell.className = 'card trade';
-    var sellHead = document.createElement('div');
-    sellHead.className = 'head';
-    sellHead.innerHTML =
-      '<span class="name">' + nameOf(entry.id) + '</span>' +
-      '<span class="have">' + entry.npcPrice + ' ' + itemName(v.currency.item) +
-      ' pro Stück · du hast ' + entry.amount + '</span>';
-    sell.appendChild(sellHead);
-    sell.appendChild(numberPick(
-      'Menge',
-      function () { return picks[entry.item].amount; },
-      1,
-      entry.amount,
-      function (n, typing) { picks[entry.item].amount = n; if (!typing) render(); },
-      'alle',
-    ));
-
-    var sellGo = document.createElement('button');
-    sellGo.type = 'button';
-    sellGo.className = 'done';
-    sellGo.textContent = 'Verkaufen · ' + amount * entry.npcPrice + ' ' + itemName(v.currency.item);
-    sellGo.addEventListener('click', function () {
-      var n = clamp(picks[entry.item].amount, 1, client.preview().items[entry.item] || 0);
-      if (n <= 0) return;
-      act('Verkauft · ' + n + ' ' + nameOf(entry.id), client.sellNpc(entry.item, n));
-    });
-    sell.appendChild(sellGo);
-    sellBox.appendChild(sell);
-
     var price = clamp(pick.price, entry.bandMin, entry.bandMax);
     var fee = NS.listingFee(rules, entry.item, amount);
     var free = v.orderSlotsFree;
@@ -433,7 +461,8 @@ function renderStore(v) {
     offerHead.className = 'head';
     offerHead.innerHTML =
       '<span class="name">' + nameOf(entry.id) + ' anbieten</span>' +
-      '<span class="have">' + free + (free === 1 ? ' Platz' : ' Plätze') + ' frei</span>';
+      '<span class="have">du hast ' + entry.amount + ' · ' +
+      free + (free === 1 ? ' Platz' : ' Plätze') + ' frei</span>';
     offer.appendChild(offerHead);
     offer.appendChild(numberPick(
       'Menge',
@@ -476,58 +505,47 @@ function renderStore(v) {
     listBox.appendChild(offer);
   });
 
-  renderSeedShop(v);
+  renderNotkauf(v);
 
-  if (!any) {
-    sellBox.innerHTML = '<p class="empty">Nichts zu verkaufen.</p>';
-    listBox.innerHTML = '<p class="empty">Nichts anzubieten.</p>';
-  }
+  if (!any) listBox.innerHTML = '<p class="empty">Nichts anzubieten — erst ernten.</p>';
 }
 
-function renderSeedShop(v) {
+function renderNotkauf(v) {
   var box = $('buy');
   box.textContent = '';
   var any = false;
 
   v.stock.forEach(function (entry) {
     if (entry.npcBuyPrice <= 0) return;
+    if (v.notkauf && entry.amount > 0) return;
     any = true;
 
-    var canPay = Math.floor(v.currency.amount / entry.npcBuyPrice);
-    var fits = entry.item === v.currency.item ? canPay : Math.min(canPay, v.silo.free);
-    var buyCard = document.createElement('button');
-    buyCard.className = 'card';
-    buyCard.disabled = fits <= 0;
-    buyCard.innerHTML =
-      '<div class="body"><div class="top">' + nameOf(entry.id) + ' kaufen</div>' +
-      '<div class="sub">' + (canPay <= 0
+    var karte = document.createElement('button');
+    karte.className = 'card';
+    karte.disabled = v.currency.amount < entry.npcBuyPrice || v.silo.free < 1;
+    karte.innerHTML =
+      '<div class="body"><div class="top">1 ' + nameOf(entry.id) + ' nachkaufen</div>' +
+      '<div class="sub">' + (v.currency.amount < entry.npcBuyPrice
         ? 'zu wenig ' + itemName(v.currency.item)
-        : fits <= 0
+        : v.silo.free < 1
         ? 'kein Platz im Lager'
-        : entry.npcBuyPrice + ' ' + itemName(v.currency.item) + ' pro Stück · ' +
-          'Verkauf bringt ' + entry.npcPrice) + '</div></div>' +
+        : entry.npcBuyPrice + ' ' + itemName(v.currency.item) +
+          (v.notkauf ? ' · nur wenn nichts mehr da ist' : '')) + '</div></div>' +
       '<span class="go">+1</span>';
-    buyCard.addEventListener('click', function () {
-      act('Gekauft · 1 ' + nameOf(entry.id), client.buyNpc(entry.item, 1));
+    karte.addEventListener('click', function () {
+      act('Nachgekauft · 1 ' + nameOf(entry.id), client.buyNpc(entry.item, 1));
     });
-    box.appendChild(buyCard);
+    box.appendChild(karte);
   });
 
-  if (!any) box.innerHTML = '<p class="empty">Der Händler hat gerade nichts im Angebot.</p>';
+  if (!any) {
+    box.innerHTML = v.notkauf
+      ? '<p class="empty">Nachkaufen geht nur, wenn eine Saat ganz ausgegangen ist.</p>'
+      : '<p class="empty">Nichts nachzukaufen.</p>';
+  }
 }
 
-function renderBadges(v) {
-  var fahrbereit = v.truck.enabled && v.truck.here && v.truck.waybill && v.truck.waybill.full
-    ? 1 : 0;
-  var todo = fahrbereit + v.mail.entries.length;
-  var dotOrders = $('dot-orders');
-  dotOrders.hidden = todo === 0;
-  dotOrders.textContent = todo;
-
-  var dotMarket = $('dot-market');
-  dotMarket.hidden = v.buyable === 0;
-  dotMarket.textContent = v.buyable;
-}
+function renderBadges() {}
 
 var CODES = {
   TRUCK_AWAY: 'Der Wagen ist unterwegs',

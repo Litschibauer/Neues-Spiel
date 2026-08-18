@@ -79,6 +79,18 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
   const items = base.items.slice();
   if (gold > 0) items[rules.currency] = gold;
 
+  if (rnd) {
+    const platz = Math.floor(rules.siloCapacity / 4);
+    let belegt = 0;
+    rules.items.forEach((item, i) => {
+      if (!item.storable) return;
+      const menge = Math.floor(rnd() * 6);
+      if (belegt + menge > platz) return;
+      items[i] = (items[i] ?? 0) + menge;
+      belegt += menge;
+    });
+  }
+
   const requests = rnd ? topUpRequests({ ...base, items }, rules, 1, rnd).requests : [];
 
   const offers = rnd ? fuzzOffers(rules, rnd) : [];
@@ -248,8 +260,11 @@ export function playRandomSession(
     if (s.mail.length > 0) moves.push(() => client.collectMail());
 
     if (!opts.hoard) {
-      s.requests.slice(0, rules.requestSlots).forEach((request) => {
-        if (request.wants.every((w) => count(s, w.item) >= w.amount)) {
+      s.requests.slice(0, rules.requestSlots).forEach((request, slot) => {
+        if (!request.wants.every((w) => count(s, w.item) >= w.amount)) return;
+        if (rules.boardDeliveryOnly) {
+          if (s.tick >= s.truck.awayUntil) moves.push(() => client.sendSlip(slot));
+        } else {
           moves.push(() => client.fillRequest(request.id));
         }
       });

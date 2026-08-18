@@ -43,6 +43,8 @@ export type LoadTruckCommand = CommandBase & {
 
 export type SendTruckCommand = CommandBase & { type: 'SEND_TRUCK' };
 
+export type SendSlipCommand = CommandBase & { type: 'SEND_SLIP'; slot: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -56,11 +58,16 @@ export type Command =
   | FillRequestCommand
   | SkipRequestCommand
   | LoadTruckCommand
-  | SendTruckCommand;
+  | SendTruckCommand
+  | SendSlipCommand;
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
   | 'TRUCK_DISABLED'
+  | 'NO_SUCH_SLIP'
+  | 'USE_THE_BOARD'
+  | 'NPC_DISABLED'
+  | 'ONLY_WHEN_EMPTY'
   | 'TRUCK_AWAY'
   | 'NO_WAYBILL'
   | 'NO_SUCH_STACK'
