@@ -106,6 +106,33 @@ export type StockView = {
   feePerUnit: number;
 };
 
+export type TruckStackView = {
+  index: number;
+  item: number;
+  wanted: number;
+  loaded: number;
+  missing: number;
+  have: number;
+  loadable: number;
+};
+
+export type TruckView = {
+  enabled: boolean;
+  here: boolean;
+  backIn: number;
+  awayTicks: number;
+  waybill: {
+    id: number;
+    stacks: readonly TruckStackView[];
+    reward: readonly Stack[];
+    xp: number;
+    full: boolean;
+    progress: number;
+  } | null;
+  next: { wants: readonly Stack[]; reward: readonly Stack[]; xp: number } | null;
+  skippable: boolean;
+};
+
 export type FarmView = {
   level: number;
   xp: { total: number; into: number; span: number; atMax: boolean };
@@ -125,6 +152,7 @@ export type FarmView = {
     readyIn: number;
     cooldownTicks: number;
   };
+  truck: TruckView;
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -334,5 +362,68 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       readyIn: skipEnabled ? Math.max(0, state.skipReadyAt - state.tick) : 0,
       cooldownTicks: rules.requestSkipCooldownTicks,
     },
+    truck: truckView(state, rules, skipEnabled && skipReady),
+  };
+}
+
+function truckView(state: State, rules: Ruleset, skippable: boolean): TruckView {
+  const awayTicks = rules.truckAwayTicks ?? 0;
+  const here = state.tick >= state.truck.awayUntil;
+  const waybill = state.requests[0];
+  const folgt = state.requests[1];
+
+  if (awayTicks <= 0) {
+    return {
+      enabled: false,
+      here: false,
+      backIn: 0,
+      awayTicks: 0,
+      waybill: null,
+      next: null,
+      skippable: false,
+    };
+  }
+
+  const stacks: TruckStackView[] = (waybill?.wants ?? []).map((w, i) => {
+    const loaded = state.truck.loaded[i] ?? 0;
+    const missing = Math.max(0, w.amount - loaded);
+    const have = count(state, w.item);
+    return {
+      index: i,
+      item: w.item,
+      wanted: w.amount,
+      loaded,
+      missing,
+      have,
+      loadable: Math.min(missing, have),
+    };
+  });
+
+  const verlangt = stacks.reduce((sum, x) => sum + x.wanted, 0);
+  const drin = stacks.reduce((sum, x) => sum + Math.min(x.loaded, x.wanted), 0);
+
+  return {
+    enabled: true,
+    here,
+    backIn: here ? 0 : Math.max(0, state.truck.awayUntil - state.tick),
+    awayTicks,
+    waybill: waybill
+      ? {
+          id: waybill.id,
+          stacks,
+          reward: waybill.reward.map((r) => ({ item: r.item, amount: r.amount })),
+          xp: waybill.xp,
+          full: stacks.every((x) => x.missing === 0),
+          progress: verlangt > 0 ? drin / verlangt : 0,
+        }
+      : null,
+    next: folgt
+      ? {
+          wants: folgt.wants.map((w) => ({ item: w.item, amount: w.amount })),
+          reward: folgt.reward.map((r) => ({ item: r.item, amount: r.amount })),
+          xp: folgt.xp,
+        }
+      : null,
+    skippable: here && skippable && waybill !== undefined,
   };
 }

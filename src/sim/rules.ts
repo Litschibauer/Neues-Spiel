@@ -74,6 +74,7 @@ export type Ruleset = {
   requestSlots: number;
   requestQueueMax: number;
   requestSkipCooldownTicks: number;
+  truckAwayTicks?: number;
 };
 
 const GOLD = 0;
@@ -138,37 +139,37 @@ const V1: Ruleset = {
     {
       id: 'field-1',
       startLevel: 1,
-      place: at(3, 53, 30, 20),
+      place: at(3, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
     },
     {
       id: 'field-2',
       startLevel: 1,
-      place: at(35, 53, 30, 20),
+      place: at(35, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
     },
     {
       id: 'field-3',
       startLevel: 1,
-      place: at(67, 53, 30, 20),
+      place: at(67, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT] }],
     },
     {
       id: 'field-4',
       startLevel: 0,
-      place: at(3, 76, 30, 20),
+      place: at(3, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT], minPlayerLevel: 2 }],
     },
     {
       id: 'field-5',
       startLevel: 0,
-      place: at(35, 76, 30, 20),
+      place: at(35, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT], minPlayerLevel: 4 }],
     },
     {
       id: 'field-6',
       startLevel: 0,
-      place: at(67, 76, 30, 20),
+      place: at(67, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT], minPlayerLevel: 6 }],
     },
     {
@@ -180,7 +181,7 @@ const V1: Ruleset = {
     {
       id: 'coop-1',
       startLevel: 0,
-      place: at(47, 30, 26, 18),
+      place: at(47, 29, 26, 17),
       levels: [
         { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
         { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
@@ -330,37 +331,37 @@ const V3: Ruleset = {
     {
       id: 'field-1',
       startLevel: 1,
-      place: at(3, 53, 30, 20),
+      place: at(3, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
     },
     {
       id: 'field-2',
       startLevel: 1,
-      place: at(35, 53, 30, 20),
+      place: at(35, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
     },
     {
       id: 'field-3',
       startLevel: 1,
-      place: at(67, 53, 30, 20),
+      place: at(67, 60, 30, 18),
       levels: [{ label: 'Feld', cost: [], recipes: [R_WHEAT, R_CORN] }],
     },
     {
       id: 'field-4',
       startLevel: 0,
-      place: at(3, 76, 30, 20),
+      place: at(3, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(100), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 2 }],
     },
     {
       id: 'field-5',
       startLevel: 0,
-      place: at(35, 76, 30, 20),
+      place: at(35, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(250), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 4 }],
     },
     {
       id: 'field-6',
       startLevel: 0,
-      place: at(67, 76, 30, 20),
+      place: at(67, 81, 30, 18),
       levels: [{ label: 'Feld', cost: gold(500), recipes: [R_WHEAT, R_CORN], minPlayerLevel: 6 }],
     },
     {
@@ -372,7 +373,7 @@ const V3: Ruleset = {
     {
       id: 'coop-1',
       startLevel: 0,
-      place: at(47, 30, 26, 18),
+      place: at(47, 29, 26, 17),
       levels: [
         { label: 'Gehege', cost: gold(300), recipes: [], minPlayerLevel: 3 },
         { label: 'Hühner', cost: gold(200), recipes: [R_EGGS] },
@@ -390,7 +391,7 @@ const V3: Ruleset = {
     {
       id: 'pasture-1',
       startLevel: 0,
-      place: at(3, 29, 38, 20),
+      place: at(3, 28, 38, 18),
       levels: [
         { label: 'Kuhgehege', cost: gold(1200), recipes: [], minPlayerLevel: 6 },
         { label: 'Kühe', cost: gold(900), recipes: [R_MILK] },
@@ -607,11 +608,75 @@ const V6: Ruleset = {
   requestSkipCooldownTicks: 600,
 };
 
-const DEV: Ruleset = {
+const V7: Ruleset = {
   ...V6,
+  version: 7,
+
+  truckAwayTicks: 420,
+  requestSkipCooldownTicks: 900,
+
+  requestTemplates: [
+    { id: 'fuhre-weizen', wants: [want(WHEAT, 12)], reward: gold(95), xp: 21 },
+    { id: 'fuhre-mais', wants: [want(CORN, 10)], reward: gold(135), xp: 30 },
+    {
+      id: 'fuhre-hof',
+      wants: [want(WHEAT, 10), want(CORN, 6)],
+      reward: gold(160),
+      xp: 36,
+    },
+    {
+      id: 'fuhre-muehle',
+      wants: [want(FEED, 4), want(WHEAT, 8)],
+      reward: gold(130),
+      xp: 29,
+    },
+    { id: 'fuhre-eier', wants: [want(EGGS, 6)], reward: gold(320), xp: 71 },
+    {
+      id: 'fuhre-markt',
+      wants: [want(EGGS, 4), want(WHEAT, 10)],
+      reward: gold(290),
+      xp: 64,
+    },
+    {
+      id: 'fuhre-milch',
+      wants: [want(MILK, 6), want(FEED, 4)],
+      reward: gold(410),
+      xp: 91,
+    },
+    { id: 'fuhre-sahne', wants: [want(CREAM, 4)], reward: gold(645), xp: 143 },
+    {
+      id: 'fuhre-molkerei',
+      wants: [want(MILK, 4), want(CREAM, 2), want(EGGS, 3)],
+      reward: gold(710),
+      xp: 158,
+    },
+    {
+      id: 'fuhre-butter',
+      wants: [want(BUTTER, 2), want(MILK, 4)],
+      reward: gold(1215),
+      xp: 270,
+    },
+    {
+      id: 'fuhre-kaese',
+      wants: [want(CHEESE, 2), want(MILK, 3)],
+      reward: gold(1765),
+      xp: 392,
+    },
+    {
+      id: 'fuhre-gross',
+      wants: [want(BUTTER, 2), want(CHEESE, 1), want(MILK, 4)],
+      reward: gold(2010),
+      xp: 447,
+    },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V7,
   version: 1001,
   requestSkipCooldownTicks: 180,
-  recipes: V6.recipes.map((r) => {
+  truckAwayTicks: 42,
+  recipes: V7.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -624,14 +689,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [4, V4],
   [5, V5],
   [6, V6],
+  [7, V7],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 6;
+export const LATEST_RULESET_VERSION = 7;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -912,6 +978,11 @@ export function validateRuleset(rules: Ruleset): string[] {
     }
   });
   if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
+  if (rules.truckAwayTicks !== undefined) {
+    if (!Number.isInteger(rules.truckAwayTicks) || rules.truckAwayTicks < 0) {
+      problems.push(`Wagen-Fahrzeit ungültig: ${rules.truckAwayTicks}`);
+    }
+  }
   if (rules.requestSkipCooldownTicks < 0) {
     problems.push(`Überspring-Wartezeit negativ: ${rules.requestSkipCooldownTicks}`);
   }

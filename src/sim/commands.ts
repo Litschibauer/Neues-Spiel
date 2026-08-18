@@ -35,6 +35,14 @@ export type FillRequestCommand = CommandBase & { type: 'FILL_REQUEST'; requestId
 
 export type SkipRequestCommand = CommandBase & { type: 'SKIP_REQUEST'; requestId: number };
 
+export type LoadTruckCommand = CommandBase & {
+  type: 'LOAD_TRUCK';
+  stack: number;
+  amount: number;
+};
+
+export type SendTruckCommand = CommandBase & { type: 'SEND_TRUCK' };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -46,10 +54,18 @@ export type Command =
   | BuyOfferCommand
   | CollectMailCommand
   | FillRequestCommand
-  | SkipRequestCommand;
+  | SkipRequestCommand
+  | LoadTruckCommand
+  | SendTruckCommand;
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
+  | 'TRUCK_DISABLED'
+  | 'TRUCK_AWAY'
+  | 'NO_WAYBILL'
+  | 'NO_SUCH_STACK'
+  | 'TRUCK_NOT_FULL'
+  | 'TOO_MUCH'
   | 'NO_SUCH_SLOT'
   | 'PLOT_LOCKED'
   | 'PLOT_BUSY'

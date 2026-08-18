@@ -49,6 +49,11 @@ export type Request = {
   xp: number;
 };
 
+export type Truck = {
+  loaded: readonly number[];
+  awayUntil: number;
+};
+
 export type State = {
   tick: number;
   xp: number;
@@ -61,6 +66,7 @@ export type State = {
   nextOrderId: number;
   requests: readonly Request[];
   skipReadyAt: number;
+  truck: Truck;
 };
 
 export function count(s: State, item: number): number {
@@ -118,6 +124,7 @@ export function initialState(rules: Ruleset): State {
     mail: [],
     nextOrderId: 1,
     requests: [],
+    truck: { loaded: [], awayUntil: 0 },
     skipReadyAt: 0,
   };
 }
@@ -141,6 +148,7 @@ export function normalizeState(s: State): State {
     mail: s.mail ?? [],
     requests: s.requests ?? [],
     skipReadyAt: s.skipReadyAt ?? 0,
+    truck: s.truck ?? { loaded: [], awayUntil: 0 },
   };
 }
 
@@ -156,6 +164,7 @@ export function cloneState(s: State): State {
     mail: s.mail,
     nextOrderId: s.nextOrderId,
     requests: s.requests,
+    truck: s.truck,
     skipReadyAt: s.skipReadyAt,
   };
 }

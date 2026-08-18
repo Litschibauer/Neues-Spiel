@@ -6,8 +6,8 @@ function artScene() {
 
     '<path d="M0 26h100v3H0zM0 52h100v2H0z" fill="var(--meadow-dark)" opacity=".5"/>' +
 
-    '<path d="M0 63h100v5H0z" fill="var(--path)"/>' +
-    '<path d="M82 63V58h6v5z" fill="var(--path)"/>' +
+    '<path d="M0 62h100v11H0z" fill="var(--path)"/>' +
+    '<path d="M82 62V58h6v4z" fill="var(--path)"/>' +
 
     '<g opacity=".92">' +
     '<path d="M74 58V45h20v13z" fill="var(--surface)"/>' +
@@ -30,6 +30,29 @@ function artScene() {
   }
 
   return out;
+}
+
+function artTruck(unterwegs, voll) {
+  var ladung = voll
+    ? '<rect x="12" y="2" width="44" height="6" rx="2" fill="var(--corn)"/>'
+    : '';
+
+  return '<ellipse cx="50" cy="36" rx="46" ry="3.5" fill="var(--ink)" opacity=".18"/>' +
+    ladung +
+    '<rect x="6" y="7" width="52" height="22" rx="3" fill="var(--truck)"/>' +
+    '<rect x="6" y="15" width="52" height="3" fill="var(--ink)" opacity=".1"/>' +
+    '<path d="M58 29V12h13l10 9v8z" fill="var(--truck-cab)"/>' +
+    '<rect x="63" y="14" width="10" height="7" rx="1.5" fill="var(--sky)" opacity=".9"/>' +
+    '<circle cx="22" cy="30" r="6" fill="var(--ink)"/>' +
+    '<circle cx="22" cy="30" r="2.6" fill="var(--muted)"/>' +
+    '<circle cx="72" cy="30" r="6" fill="var(--ink)"/>' +
+    '<circle cx="72" cy="30" r="2.6" fill="var(--muted)"/>' +
+    (unterwegs
+      ? '<g opacity=".5"><circle cx="2" cy="24" r="4" fill="var(--surface)">' +
+        '<animate attributeName="r" values="1.5;6" dur="1.6s" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values=".6;0" dur="1.6s" repeatCount="indefinite"/>' +
+        '</circle></g>'
+      : '');
 }
 
 function artField(stage, crop) {

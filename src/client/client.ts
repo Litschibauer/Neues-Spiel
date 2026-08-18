@@ -69,6 +69,14 @@ export class Client {
     return this.apply({ type: 'COLLECT', plot, slot } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  loadTruck(stack: number, amount: number): ActionResult {
+    return this.apply({ type: 'LOAD_TRUCK', stack, amount } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  sendTruck(): ActionResult {
+    return this.apply({ type: 'SEND_TRUCK' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buy(plot: number): ActionResult {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }

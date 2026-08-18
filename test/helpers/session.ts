@@ -255,6 +255,20 @@ export function playRandomSession(
       });
     }
 
+    const fahrzeit = rules.truckAwayTicks ?? 0;
+    if (fahrzeit > 0 && s.tick >= s.truck.awayUntil && s.requests.length > 0) {
+      const frachtbrief = s.requests[0]!;
+      let voll = true;
+      frachtbrief.wants.forEach((w, i) => {
+        const drin = s.truck.loaded[i] ?? 0;
+        if (drin >= w.amount) return;
+        voll = false;
+        const moeglich = Math.min(w.amount - drin, count(s, w.item));
+        if (moeglich > 0) moves.push(() => client.loadTruck(i, 1 + pick(moeglich)));
+      });
+      if (voll) moves.push(() => client.sendTruck());
+    }
+
     if (rules.requestSkipCooldownTicks > 0 && s.tick >= s.skipReadyAt) {
       const open = s.requests.slice(0, rules.requestSlots);
       if (open.length > 0) {

@@ -10,7 +10,7 @@ import {
   recipeUnlocked,
   slotsAt,
 } from './rules.ts';
-import type { State } from './state.ts';
+import type { Request, State } from './state.ts';
 import {
   EMPTY_PLOT,
   emptySlots,
@@ -23,6 +23,30 @@ import {
   storedIn,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
+
+export function truckAway(rules: Ruleset): number {
+  return rules.truckAwayTicks ?? 0;
+}
+
+function leereLadung(waybill: Request | undefined): number[] {
+  const out: number[] = [];
+  if (!waybill) return out;
+  for (let i = 0; i < waybill.wants.length; i++) out.push(0);
+  return out;
+}
+
+function geladenZurueck(s: State, waybill: Request): Array<[number, number]> {
+  return waybill.wants.flatMap((w, i): Array<[number, number]> => {
+    const menge = s.truck.loaded[i] ?? 0;
+    return menge > 0 ? [[w.item, menge]] : [];
+  });
+}
+
+function ladungVon(s: State, waybill: Request): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < waybill.wants.length; i++) out.push(s.truck.loaded[i] ?? 0);
+  return out;
+}
 import type { Command } from './commands.ts';
 import { SimError } from './commands.ts';
 
@@ -323,6 +347,9 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       const changes: [number, number][] = request.wants.map((w) => [w.item, -w.amount]);
       for (const r of request.reward) changes.push([r.item, r.amount]);
+      if (index === 0) {
+        for (const [item, menge] of geladenZurueck(s, request)) changes.push([item, menge]);
+      }
       const items = addItems(s.items, changes);
       if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
 
@@ -330,6 +357,9 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       next.items = items;
       next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
       next.xp = s.xp + request.xp;
+      if (index === 0) {
+        next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.truck.awayUntil };
+      }
       return next;
     }
 
@@ -344,6 +374,63 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
       next.skipReadyAt = s.tick + rules.requestSkipCooldownTicks;
+
+      if (index === 0) {
+        const items = addItems(s.items, geladenZurueck(s, s.requests[0]!));
+        if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+        next.items = items;
+        next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.truck.awayUntil };
+      }
+      return next;
+    }
+
+    case 'LOAD_TRUCK': {
+      const away = truckAway(rules);
+      if (away <= 0) throw new SimError('TRUCK_DISABLED');
+      if (s.tick < s.truck.awayUntil) throw new SimError('TRUCK_AWAY');
+
+      const waybill = s.requests[0];
+      if (!waybill) throw new SimError('NO_WAYBILL');
+
+      const stack = waybill.wants[cmd.stack];
+      if (!stack) throw new SimError('NO_SUCH_STACK');
+      if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
+
+      const schon = s.truck.loaded[cmd.stack] ?? 0;
+      if (schon + cmd.amount > stack.amount) throw new SimError('TOO_MUCH');
+      if (count(s, stack.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+
+      const loaded = ladungVon(s, waybill);
+      loaded[cmd.stack] = schon + cmd.amount;
+
+      const next = cloneState(s);
+      next.items = addItem(s.items, stack.item, -cmd.amount);
+      next.truck = { loaded, awayUntil: s.truck.awayUntil };
+      return next;
+    }
+
+    case 'SEND_TRUCK': {
+      const away = truckAway(rules);
+      if (away <= 0) throw new SimError('TRUCK_DISABLED');
+      if (s.tick < s.truck.awayUntil) throw new SimError('TRUCK_AWAY');
+
+      const waybill = s.requests[0];
+      if (!waybill) throw new SimError('NO_WAYBILL');
+
+      const voll = waybill.wants.every((w, i) => (s.truck.loaded[i] ?? 0) >= w.amount);
+      if (!voll) throw new SimError('TRUCK_NOT_FULL');
+
+      const items = addItems(
+        s.items,
+        waybill.reward.map((r): [number, number] => [r.item, r.amount]),
+      );
+      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+
+      const next = cloneState(s);
+      next.items = items;
+      next.requests = s.requests.slice(1);
+      next.xp = s.xp + waybill.xp;
+      next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.tick + away };
       return next;
     }
 

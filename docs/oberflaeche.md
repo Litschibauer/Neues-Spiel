@@ -149,6 +149,8 @@ v.plots[]      {id, level, idle, busy, done, progress, remaining,
                 capacity, free, slots[]}
 v.plots[].slots[] {index, busy, done, progress, remaining,
                 producing, output, next, tap}
+v.truck        {enabled, here, backIn, awayTicks, skippable,
+                waybill {stacks[], reward, xp, full, progress}, next}
 v.requests[]   {wants, reward, xp, waiting, deliverable}
 v.offers[]     {item, amount, price, total, affordable, fits}
 v.orders[]     {item, amount, price, expiresIn}

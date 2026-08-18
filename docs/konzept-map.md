@@ -276,6 +276,52 @@ angefangene Uhr um: Wer 50 Sekunden Restzeit hatte, hat danach 30 — nie mehr
 als eine frische Runde, nie mehr als vorher. Nachgemessen für jeden möglichen
 Fortschritt in `migration.test.ts`.
 
+#### v7: aus Kundschaft wird ein Lieferwagen
+
+Die Kundentafel war eine Liste, die immer voll war. Drei Wünsche, sofort
+nachgefüllt, ohne Rhythmus und ohne Ort — man hat sie abgearbeitet wie ein
+Formular. Ein Lieferwagen macht daraus etwas, das **da ist oder nicht da ist**:
+Er steht auf dem Weg, man belädt ihn Posten für Posten, er fährt ab, und für
+eine Weile ist er weg.
+
+**Die Mechanik hängt an einer Zeile Zustand.** Der Wagen ist nicht „unterwegs"
+als Flagge, die jemand umlegen müsste — er ist unterwegs, solange
+`tick < truck.awayUntil`. Damit gibt es nichts fortzuschreiben, keinen Timer,
+der beim Nachrechnen anspringen könnte, und offline stimmt es von allein.
+
+```
+truck { loaded: [2, 0], awayUntil: 8400 }
+```
+
+**Der Frachtbrief ist der erste Eintrag der Auftrags-Warteschlange.** Die gab
+es schon: Der Server würfelt vor und legt bis zu zwanzig Aufträge in den
+Zustand, der Client verbraucht sie. Das war bisher der Offline-Vorrat für die
+Kundentafel und ist jetzt der Vorrat an Fuhren — **null neue Zufallslogik**,
+und offline lassen sich zwanzig Fuhren hintereinander fahren, bevor Nachschub
+nötig wird. Der nächste Brief ist deshalb auch schon sichtbar („Als Nächstes").
+
+Zwei neue Commands, mehr nicht:
+
+| Command | Regel |
+| --- | --- |
+| `LOAD_TRUCK {stack, amount}` | Wagen da, Posten gibt es, nie mehr als verlangt, Ware im Lager |
+| `SEND_TRUCK` | jeder Posten voll → Lohn und XP sofort, Wagen weg für `truckAwayTicks` |
+
+**Eine Falle, die auffiel, bevor sie eine wurde:** Verschwindet der Frachtbrief
+auf einem anderen Weg — abgelehnt oder über das alte `FILL_REQUEST` geliefert —,
+dann würde die Ladung auf dem Wagen stehen bleiben und beim *nächsten* Brief
+mitzählen. Das wäre Freifracht gewesen. Beide Wege erstatten deshalb die
+Ladung ins Lager und leeren die Ladefläche; ein Test hält jeden fest.
+
+Die Fuhren sind eigene Vorlagen, keine umbenannten Kundenwünsche: größer
+(10–12 Einheiten statt 3–5), oft zweispaltig, und sie zahlen **1,9×** statt
+1,5× Händlerpreis. Ein Wagen zu beladen soll sich lohnen.
+
+Was noch fehlt und bewusst getrennt kommt: **Laufkundschaft**, die zufällig
+auftaucht und wieder geht, und **Events**. Beide brauchen dieselbe Bauform —
+vorgewürfelt im Zustand, damit sie offline gelten — aber jeweils eine eigene
+Warteschlange.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

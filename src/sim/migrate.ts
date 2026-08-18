@@ -122,6 +122,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['3->4', GROW_AND_RETIME],
   ['4->5', GROW_AND_RETIME],
   ['5->6', RETIME],
+  ['6->7', GROW_AND_RETIME],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -169,6 +170,22 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (o.price <= 0) problems.push(`Angebot ${o.id} ohne Preis`);
     if (!rules.items[o.item]) problems.push(`Angebot ${o.id}: Gegenstand ${o.item} unbekannt`);
   }
+
+  const waybill = state.requests[0];
+  if (state.truck.awayUntil < 0 || !Number.isSafeInteger(state.truck.awayUntil)) {
+    problems.push(`Wagen-Rückkehr ungültig: ${state.truck.awayUntil}`);
+  }
+  state.truck.loaded.forEach((menge, i) => {
+    if (!Number.isSafeInteger(menge) || menge < 0) {
+      problems.push(`Wagen: Ladung ${menge} auf Posten ${i} ungültig`);
+    }
+    const posten = waybill?.wants[i];
+    if (!posten) {
+      if (menge > 0) problems.push(`Wagen: Ladung auf Posten ${i}, den es nicht gibt`);
+    } else if (menge > posten.amount) {
+      problems.push(`Wagen: ${menge} geladen, verlangt sind ${posten.amount}`);
+    }
+  });
 
   if (state.requests.length > rules.requestQueueMax) {
     problems.push(`Auftragsvorrat über Limit: ${state.requests.length} > ${rules.requestQueueMax}`);

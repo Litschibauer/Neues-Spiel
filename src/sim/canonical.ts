@@ -29,6 +29,7 @@ export function canonicalize(state: State): string {
     `nextOrderId=${state.nextOrderId}`,
     `requests=[${requests}]`,
     `skipReadyAt=${state.skipReadyAt}`,
+    `truck=${state.truck.loaded.join('/')}@${state.truck.awayUntil}`,
   ].join('|');
 }
 
@@ -46,6 +47,10 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|BUY_NPC|${c.item}|${c.amount}`;
     case 'LIST_ORDER':
       return `${c.seq}|${c.tick}|LIST_ORDER|${c.item}|${c.amount}|${c.price}`;
+    case 'LOAD_TRUCK':
+      return `${c.seq}|${c.tick}|LOAD_TRUCK|${c.stack}|${c.amount}`;
+    case 'SEND_TRUCK':
+      return `${c.seq}|${c.tick}|SEND_TRUCK`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

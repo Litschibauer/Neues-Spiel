@@ -143,6 +143,12 @@ danebenschreiben kannst, hast du sie noch nicht verstanden.
   Browser-Test führt einen kompletten Handel zwischen zwei Höfen durch. Details
   und die drei nicht offensichtlichen Entscheidungen stehen in der Konzept-Map
   unter M5.
+- [x] ~~**Lieferwagen statt Kundentafel.**~~ Erledigt mit v7: Der Wagen steht auf
+      dem Hof, wird Posten für Posten beladen, fährt ab und ist eine Weile weg.
+      Der Frachtbrief ist der erste Eintrag der vorgewürfelten Warteschlange —
+      offline reichen zwanzig Fuhren am Stück. Offen bleibt daraus:
+      **Laufkundschaft**, die zufällig auftaucht und wieder geht, und **Events**.
+
 - **Zufall.** Muster 1 aus §5: Ergebnis erst beim Sync serverseitig würfeln. Der Client darf
   nichts wissen, was er nicht wissen soll.
 - **Nachbarn, Events, Ranglisten.** Alle online-only — hier entscheidet sich, wie groß der

@@ -965,22 +965,28 @@ try {
   );
 
   await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
-  const requestsBefore = await evaluate<number>(cdp, `document.querySelectorAll('#requests .card').length`);
+  const frachtText = `[...document.querySelectorAll('#requests .posten')]
+       .map(function (p) { return p.textContent; }).join(' | ')`;
+  const vorherFracht = await evaluate<string>(cdp, frachtText);
   const skipLabel = await evaluate<string>(cdp, `document.querySelector('#requests .skip').textContent`);
   await evaluate(cdp, `document.querySelector('#requests .skip').click()`);
   await sleep(400);
-  const afterSkip = await evaluate<{ count: number; label: string; disabled: boolean }>(
+  const afterSkip = await evaluate<{ fracht: string; label: string; disabled: boolean }>(
     cdp,
     `(function () {
        var s = document.querySelector('#requests .skip');
        return {
-         count: document.querySelectorAll('#requests .card').length,
+         fracht: ${frachtText},
          label: s ? s.textContent : '',
          disabled: s ? s.disabled : false,
        };
      })()`,
   );
-  check('Ein Auftrag lässt sich wegschicken', skipLabel === 'Wegschicken' && afterSkip.count <= requestsBefore);
+  check(
+    'Ein Frachtbrief lässt sich wegschicken — es kommt ein anderer',
+    skipLabel === 'Wegschicken' && afterSkip.fracht !== vorherFracht,
+    `${vorherFracht} → ${afterSkip.fracht}`,
+  );
   check(
     'Danach ist der Knopf gesperrt und sagt, wie lange noch',
     afterSkip.disabled && /in \d/.test(afterSkip.label),
@@ -1262,20 +1268,134 @@ try {
   );
 
   await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
-  await sleep(600);
-  const geerntet = await evaluate<string>(
-    cdp,
-    `(function () {
+  const huhnEins = `(function () {
        var row = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
          return o.querySelector('.top').textContent === 'Huhn 1';
        });
        return row ? row.querySelector('.sub').textContent : 'weg';
-     })()`,
-  );
+     })()`;
+  try {
+    await waitFor(cdp, `/fertig/.test(${huhnEins})`, 'Huhn 1 fertig', 15_000);
+  } catch {
+  }
+  const geerntet = await evaluate<string>(cdp, huhnEins);
   check('Jedes Tier wird einzeln fertig und einzeln abgeerntet', /fertig/.test(geerntet), geerntet);
 
   await evaluate(cdp, `document.getElementById('pick-close').click()`);
   await sleep(200);
+
+
+  console.log('\n9c. Der Lieferwagen fährt eine Fuhre');
+
+  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await sleep(300);
+
+  check(
+    'Der Wagen steht auf dem Hof',
+    await evaluate<boolean>(cdp, `!document.getElementById('wagen').hidden`),
+  );
+
+  const wahrheit = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    itemIds: string[];
+    state: { requests: Array<{ wants: Array<{ item: number; amount: number }> }> };
+  };
+  const frachtbrief = wahrheit.state.requests[0]!;
+  for (const posten of frachtbrief.wants) {
+    await api(
+      `/api/admin/grant?account=${status.accountId}` +
+        `&item=${wahrheit.itemIds[posten.item]}&amount=${posten.amount}`,
+      'POST',
+    );
+  }
+  await sleep(800);
+  await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Ware im Postfach');
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(500);
+  await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
+  await sleep(300);
+
+  const beladen = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('wagen').click();
+       for (var k = 0; k < 8; k++) {
+         var b = [...document.querySelectorAll('#pick-list .laden')]
+           .find(function (x) { return !x.disabled; });
+         if (!b) break;
+         b.click();
+       }
+       var los = [...document.querySelectorAll('#pick-list .abfahrt')].find(function (b) {
+         return b.textContent.indexOf('Abfahren') === 0;
+       });
+       return los && !los.disabled ? los.textContent : 'nicht abfahrbereit';
+     })()`,
+  );
+  check(
+    'Posten für Posten beladen, dann darf er abfahren',
+    /^Abfahren/.test(beladen),
+    beladen,
+  );
+
+  const goldVorher = await evaluate<number>(
+    cdp,
+    `Number(document.getElementById('gold').textContent)`,
+  );
+  await evaluate(
+    cdp,
+    `(function () {
+       var los = [...document.querySelectorAll('#pick-list .abfahrt')].find(function (b) {
+         return b.textContent.indexOf('Abfahren') === 0;
+       });
+       if (los) los.click();
+     })()`,
+  );
+  await sleep(700);
+
+  const nachAbfahrt = await evaluate<{ gold: number; text: string; weg: boolean }>(
+    cdp,
+    `(function () {
+       var w = document.getElementById('wagen');
+       return {
+         gold: Number(document.getElementById('gold').textContent),
+         text: w.querySelector('.meta').textContent,
+         weg: w.className.indexOf('weg') >= 0,
+       };
+     })()`,
+  );
+  check(
+    'Die Fuhre wird bezahlt und der Wagen ist unterwegs',
+    nachAbfahrt.gold > goldVorher && nachAbfahrt.weg && /unterwegs/.test(nachAbfahrt.text),
+    `${goldVorher} → ${nachAbfahrt.gold} Gold, ${nachAbfahrt.text}`,
+  );
+
+  const waehrendWeg = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('wagen').click();
+       var titel = document.getElementById('pick-title').textContent;
+       var knoepfe = document.querySelectorAll('#pick-list .laden').length;
+       document.getElementById('pick-close').click();
+       return titel + ' / ' + knoepfe;
+     })()`,
+  );
+  check(
+    'Während der Fahrt lässt sich nichts laden',
+    /unterwegs \/ 0$/.test(waehrendWeg),
+    waehrendWeg,
+  );
+
+  await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
+  await sleep(900);
+  const zurueck = await evaluate<string>(
+    cdp,
+    `document.getElementById('wagen').querySelector('.meta').textContent`,
+  );
+  check(
+    'Nach der Fahrzeit steht er mit einem neuen Frachtbrief da',
+    !/unterwegs/.test(zurueck),
+    zurueck,
+  );
 
   console.log('\n10. Eine neue Version erreicht den Browser');
 

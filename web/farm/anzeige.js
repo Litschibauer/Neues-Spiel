@@ -6,6 +6,7 @@ function render() {
 
   renderPurse(v);
   renderPlots(v);
+  renderTruck(v);
   renderRequests(v);
   renderMail(v);
   renderMarket(v);
@@ -160,62 +161,36 @@ function renderPlots(v) {
   });
 }
 
+function renderTruck(v) {
+  var knopf = $('wagen');
+  var t = v.truck;
+  if (!t.enabled) { knopf.hidden = true; return; }
+
+  knopf.hidden = false;
+  knopf.className = 'wagen' + (t.here ? '' : ' weg') +
+    (t.waybill && t.waybill.full ? ' voll' : '');
+
+  var text;
+  if (!t.here) text = 'unterwegs · ' + timeText(t.backIn);
+  else if (!t.waybill) text = 'kein Auftrag';
+  else if (t.waybill.full) text = 'abfahrbereit';
+  else text = Math.round(t.waybill.progress * 100) + '% geladen';
+
+  knopf.innerHTML =
+    '<svg class="art" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">' +
+    artTruck(!t.here, t.waybill !== null && t.waybill.full) + '</svg>' +
+    '<span class="meta">' + text + '</span>';
+  knopf.setAttribute('aria-label', 'Lieferwagen — ' + text);
+}
+
 function renderRequests(v) {
   var box = $('requests');
   box.textContent = '';
-
-  if (v.requests.length === 0) {
-    box.innerHTML = '<p class="empty">Gerade wartet niemand. Neue Kunden kommen beim nächsten Sync.</p>';
+  if (!v.truck.enabled) {
+    box.innerHTML = '<p class="empty">Kein Lieferwagen in diesem Regelwerk.</p>';
     return;
   }
-
-  v.requests.forEach(function (r) {
-    var card = document.createElement('button');
-    card.className = 'card' + (r.waiting ? ' queued' : '');
-    card.disabled = !r.deliverable;
-
-    var body = document.createElement('div');
-    body.className = 'body';
-    var top = document.createElement('div');
-    top.className = 'top';
-    top.textContent = stacks(r.wants);
-    var sub = document.createElement('div');
-    sub.className = 'sub';
-    sub.textContent = r.waiting ? 'wartet noch' : r.deliverable ? 'lieferbar' : 'noch nicht genug da';
-    body.appendChild(top); body.appendChild(sub);
-
-    var pay = document.createElement('div');
-    pay.className = 'pay';
-    var amount = document.createElement('div');
-    amount.className = 'amount';
-    amount.textContent = stacks(r.reward);
-    var xp = document.createElement('div');
-    xp.className = 'xp';
-    xp.textContent = '+' + r.xp + ' XP';
-    pay.appendChild(amount); pay.appendChild(xp);
-
-    card.appendChild(body); card.appendChild(pay);
-    if (r.deliverable) {
-      card.addEventListener('click', function () {
-        act('Geliefert · +' + stacks(r.reward), client.fillRequest(r.id));
-      });
-    }
-    box.appendChild(card);
-
-    if (v.skip.enabled && !r.waiting) {
-      var skip = document.createElement('button');
-      skip.type = 'button';
-      skip.className = 'skip';
-      skip.disabled = !r.skippable;
-      skip.textContent = r.skippable
-        ? 'Wegschicken'
-        : 'Wegschicken wieder in ' + timeText(v.skip.readyIn);
-      skip.addEventListener('click', function () {
-        act('Weggeschickt', client.skipRequest(r.id));
-      });
-      box.appendChild(skip);
-    }
-  });
+  frachtInhalt(v, box);
 }
 
 function renderMail(v) {
@@ -542,8 +517,9 @@ function renderSeedShop(v) {
 }
 
 function renderBadges(v) {
-  var todo = v.requests.filter(function (r) { return r.deliverable; }).length
-    + v.mail.entries.length;
+  var fahrbereit = v.truck.enabled && v.truck.here && v.truck.waybill && v.truck.waybill.full
+    ? 1 : 0;
+  var todo = fahrbereit + v.mail.entries.length;
   var dotOrders = $('dot-orders');
   dotOrders.hidden = todo === 0;
   dotOrders.textContent = todo;
@@ -554,6 +530,10 @@ function renderBadges(v) {
 }
 
 var CODES = {
+  TRUCK_AWAY: 'Der Wagen ist unterwegs',
+  TRUCK_NOT_FULL: 'Erst vollständig beladen',
+  NO_WAYBILL: 'Kein Frachtbrief da',
+  TOO_MUCH: 'So viel verlangt der Frachtbrief nicht',
   SILO_FULL: 'Lager voll',
   CANT_AFFORD: 'Zu wenig Gold',
   NOT_ENOUGH_ITEMS: 'Zutaten fehlen',
