@@ -142,120 +142,12 @@ function renderStall(p) {
 }
 
 function renderSheet(v) {
-  if (sheet.mode === 'wagen') { renderFracht(v); return; }
   if (sheet.mode === null || sheet.plot === null) return;
   var p = v.plots[sheet.plot];
   if (sheet.mode === 'stall') renderStall(p);
 }
 
-function openTruck() {
-  if (!isActive) return;
-  sheet = { plot: null, mode: 'wagen', slot: 0 };
-  pickerPlot = -1;
-  client.localTick = tickNow();
-  renderFracht(NS.farmView(client.preview(), rules, navigator.onLine));
-  $('pick-bg').hidden = false;
-}
-
-function renderFracht(v) {
-  var box = $('pick-list');
-  box.textContent = '';
-  var t = v.truck;
-  $('pick-title').textContent = !t.here
-    ? 'Der Wagen ist unterwegs'
-    : t.waybill ? 'Frachtbrief' : 'Kein Frachtbrief';
-  frachtInhalt(v, box);
-}
-
-function frachtInhalt(v, box) {
-  var t = v.truck;
-
-  if (!t.here) {
-    box.innerHTML = '<p class="empty">Der Wagen ist unterwegs — zurück in ' +
-      timeText(t.backIn) + '. Dann steht der nächste Frachtbrief an.</p>';
-    return;
-  }
-  if (!t.waybill) {
-    box.innerHTML = '<p class="empty">Gerade liegt nichts an. Beim nächsten Sync kommt Arbeit.</p>';
-    return;
-  }
-
-  var liste = document.createElement('div');
-  liste.className = 'frachtbrief';
-
-  t.waybill.stacks.forEach(function (p) {
-    var zeile = document.createElement('div');
-    zeile.className = 'posten' + (p.missing === 0 ? ' fertig' : '');
-
-    var was = document.createElement('div');
-    was.className = 'was';
-    was.innerHTML = '<b>' + itemName(p.item) + '</b><span>' +
-      (p.missing === 0 ? 'vollständig' : 'im Lager: ' + p.have) + '</span>';
-
-    var zahl = document.createElement('div');
-    zahl.className = 'zahl';
-    zahl.textContent = p.loaded + ' / ' + p.wanted;
-
-    zeile.appendChild(was);
-    zeile.appendChild(zahl);
-
-    if (p.missing > 0) {
-      var laden = document.createElement('button');
-      laden.className = 'abfahrt laden';
-      laden.disabled = p.loadable <= 0;
-      laden.textContent = p.loadable > 0 ? '+ ' + p.loadable : 'fehlt';
-      laden.addEventListener('click', function () {
-        act('Geladen · ' + p.loadable + ' ' + itemName(p.item),
-            client.loadTruck(p.index, p.loadable));
-      });
-      zeile.appendChild(laden);
-    }
-
-    liste.appendChild(zeile);
-  });
-
-  var lohn = document.createElement('div');
-  lohn.className = 'lohn';
-  lohn.innerHTML = '<span>Lohn</span><b>' + stacks(t.waybill.reward) +
-    ' · ' + t.waybill.xp + ' XP</b>';
-  liste.appendChild(lohn);
-
-  var los = document.createElement('button');
-  los.className = 'abfahrt';
-  los.disabled = !t.waybill.full;
-  los.textContent = t.waybill.full
-    ? 'Abfahren · ' + stacks(t.waybill.reward)
-    : 'Erst vollständig beladen';
-  los.addEventListener('click', function () {
-    act('Wagen abgefahren · ' + stacks(t.waybill.reward), client.sendTruck());
-  });
-  liste.appendChild(los);
-
-  if (v.skip.enabled) {
-    var weg = document.createElement('button');
-    weg.className = 'abfahrt skip';
-    weg.disabled = !t.skippable;
-    weg.textContent = t.skippable
-      ? 'Wegschicken'
-      : 'Wegschicken wieder in ' + timeText(v.skip.readyIn);
-    weg.addEventListener('click', function () {
-      act('Frachtbrief weggeschickt', client.skipRequest(t.waybill.id));
-    });
-    liste.appendChild(weg);
-  }
-
-  if (t.next) {
-    var naechster = document.createElement('p');
-    naechster.className = 'empty naechste';
-    naechster.textContent = 'Als Nächstes: ' + stacks(t.next.wants) +
-      ' für ' + stacks(t.next.reward);
-    liste.appendChild(naechster);
-  }
-
-  box.appendChild(liste);
-}
-
-$('wagen').addEventListener('click', openTruck);
+$('wagen').addEventListener('click', function () { show('brett'); });
 
 $('kiste').addEventListener('click', function () {
   if (!isActive) return;

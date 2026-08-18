@@ -842,6 +842,22 @@ try {
     haeuser,
   );
 
+  const wagenTipp = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('wagen').click();
+       var offen = document.getElementById('brett-bg').hidden === false;
+       var titel = document.getElementById('brett-titel').textContent;
+       document.getElementById('brett-close').click();
+       return offen ? titel : 'nichts geöffnet';
+     })()`,
+  );
+  check(
+    'Ein Tipp auf den Wagen führt zum Brett, nicht in eine Sackgasse',
+    wagenTipp === 'Das Brett',
+    wagenTipp,
+  );
+
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
     latency: 0,

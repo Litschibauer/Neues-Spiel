@@ -223,25 +223,6 @@
   }
   .zettel .reihe .skip { flex: 0 0 5.5rem; }
 
-  .frachtbrief { display: flex; flex-direction: column; gap: .45rem; }
-  .frachtbrief .posten {
-    display: flex; align-items: center; gap: .5rem;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 12px; padding: .5rem .6rem;
-  }
-  .frachtbrief .posten .was { flex: 1; min-width: 0; }
-  .frachtbrief .posten .was b { font-size: .85rem; font-weight: 650; }
-  .frachtbrief .posten .was span { display: block; font-size: .68rem; color: var(--muted); }
-  .frachtbrief .posten.fertig { border-color: var(--accent); }
-  .frachtbrief .posten .zahl {
-    font-variant-numeric: tabular-nums; font-weight: 700; font-size: .8rem;
-    min-width: 3.2rem; text-align: right;
-  }
-  .frachtbrief .lohn {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: .8rem; padding: .1rem .2rem;
-  }
-  .frachtbrief .lohn b { color: var(--gold); font-variant-numeric: tabular-nums; }
   .abfahrt {
     width: 100%; padding: .7rem; border-radius: 12px; border: 0;
     background: var(--accent); color: var(--on-accent);
@@ -250,7 +231,6 @@
   .abfahrt[disabled] { background: var(--sunk); color: var(--muted); }
   .abfahrt.laden { width: auto; padding: .35rem .7rem; font-size: .78rem; flex: none; }
   .abfahrt.skip { background: var(--sunk); color: var(--muted); }
-  .frachtbrief .naechste { margin: .3rem 0 0; padding: .7rem; font-size: .72rem; }
 
   .plot .bar {
     position: absolute; left: 12%; right: 12%; bottom: .85rem;
