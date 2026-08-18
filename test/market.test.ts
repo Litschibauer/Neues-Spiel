@@ -1,17 +1,3 @@
-/**
- * Das Orderbuch (M5) — die erste Stelle, an der zwei Höfe einander begegnen.
- *
- * Bis hierhin war jeder Spielstand für sich prüfbar: Ein Command, ein Hof, eine
- * Antwort. Ab hier hängt das Ergebnis davon ab, was jemand anders im selben
- * Moment tut — und **das** ist die Klasse von Fehlern, die man nicht durch
- * Nachdenken findet.
- *
- * Deshalb prüft diese Datei vor allem eine einzige Eigenschaft, in mehreren
- * Verkleidungen: **Ware wird weder erschaffen noch vernichtet.** Ein Markt, der
- * unter Gleichzeitigkeit Eier verdoppelt, ist schlimmer als gar kein Markt —
- * er entwertet jede Stunde, die irgendjemand ehrlich gespielt hat.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -30,29 +16,15 @@ const rules = getRuleset(CURRENT_RULESET_VERSION);
 const GOLD = rules.currency;
 const WHEAT = 1;
 const R_WHEAT = 0;
-/** Puffer für Einstellgebühren, damit sie in diesen Tests nie der Grund sind. */
+
 const FEE_BUDGET = 500;
-/** Saatgut, das ein frischer Hof mitbringt — ohne das kann er kein Feld bestellen. */
+
 const STARTING_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
-/** Was das Einstellen von `amount` Stück kostet. */
+
 function listingFee(item: number, amount: number): number {
   return Math.floor((rules.items[item]!.npcPrice * amount * rules.listingFeePct + 99) / 100);
 }
 
-/**
- * Ein Hof am Markt — genau so verdrahtet wie im Betrieb.
- *
- * `live` ist die Landkarte der geladenen Höfe, die im Server die HTTP-Schicht
- * hält. Hier ist sie eine Map; die Verdrahtung selbst kommt aus `market.ts`,
- * damit dieser Test das Echte prüft und keine Nachbildung.
- */
-/**
- * Ein Hof am Markt — genau so verdrahtet wie im Betrieb.
- *
- * `gold` ist das, was der Test sehen will; die Einstellgebühr kommt oben drauf.
- * Sonst scheiterte jeder Verkäufer daran, dass er pleite ist, statt an dem, was
- * eigentlich geprüft wird — und die Gebühr hat einen eigenen Test.
- */
 function farm(
   market: Market,
   live: Map<string, Server>,
@@ -70,14 +42,12 @@ function farm(
   return game;
 }
 
-/** Einen Zug spielen und sofort syncen — der Online-Fall. */
 function play(game: Server, act: (c: Client) => void, atMs = T0 + 60_000) {
   const client = new Client(game.snapshot);
   act(client);
   return game.sync(client.buildSyncRequest(), atMs);
 }
 
-/** Alle Waren beider Höfe zusammen — Lager, Escrow und Postfach (§7). */
 function goodsAcross(...states: State[]): number {
   return states.reduce((n, s) => n + totalGoods(s, rules), 0);
 }
@@ -105,13 +75,11 @@ test('zwei Höfe handeln wirklich miteinander', () => {
   const anna = farm(market, live, 'anna', 0, 30);
   const ben = farm(market, live, 'ben', 500);
 
-  // Anna stellt zwanzig Weizen zu 3 Münzen ein.
   play(anna, (c) => c.listOrder(WHEAT, 20, 3));
   publishOrders(market, 'anna', anna);
   assert.equal(market.size, 1, 'der Auftrag steht nicht im Buch');
   assert.equal(count(anna.snapshot.state, WHEAT), 10, 'Escrow hat nichts aus dem Lager genommen');
 
-  // Ben sieht ihn — und Anna sieht ihren eigenen nicht.
   ben.stockOffers();
   anna.stockOffers();
   assert.equal(ben.snapshot.state.offers.length, 1);
@@ -126,17 +94,12 @@ test('zwei Höfe handeln wirklich miteinander', () => {
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.kind, 'applied');
 
-  // Ben hat die Ware und 60 Münzen weniger.
   assert.equal(count(ben.snapshot.state, WHEAT), 20);
   assert.equal(count(ben.snapshot.state, GOLD), 500 + FEE_BUDGET - 60);
 
-  // Anna war live, also ist ihr Auftrag schon weg und das Geld unterwegs.
   assert.equal(anna.snapshot.state.orders.length, 0, 'Annas Auftrag steht noch');
   assert.equal(market.size, 0, 'das Angebot steht noch im Buch');
 
-  // Es kommt durchs Postfach — Anna war nicht dabei und konnte nichts wissen
-  // (§7). Zugestellt wird beim nächsten echten Sync, also braucht es einen Zug;
-  // ein Sync ohne Commands ist ein No-op und rührt nichts an.
   play(anna, (c) => c.start(0, R_WHEAT));
   const mailGold = anna.snapshot.state.mail.find((m) => m.item === GOLD);
   assert.equal(mailGold?.amount, 60, 'Anna hat ihren Erlös nicht bekommen');
@@ -164,9 +127,6 @@ test('DER KERNPUNKT: ein Handel erschafft und vernichtet nichts', () => {
 
   assert.equal(goodsAfter, goodsBefore, 'Ware ist aus dem Nichts entstanden oder verschwunden');
 
-  // Münzen wechseln beim Handel nur den Besitzer — bis auf die Einstellgebühr.
-  // Die verschwindet mit Absicht: Sie ist die einzige Geldsenke im Spiel, und
-  // ohne eine solche wächst die Geldmenge nur.
   const fee = listingFee(WHEAT, 25);
   assert.ok(fee > 0, 'die Gebühr rundet auf null ab');
   assert.equal(goldBefore - goldAfter, fee, 'es ist mehr oder weniger als die Gebühr verschwunden');
@@ -181,8 +141,6 @@ test('zwei Käufer, ein Angebot — genau einer gewinnt', () => {
   play(anna, (c) => c.listOrder(WHEAT, 10, 3));
   publishOrders(market, 'anna', anna);
 
-  // Beide haben dasselbe Angebot in ihrer Auslage — genau die Situation, in der
-  // ein Markt Ware verdoppelt, wenn er nicht aufpasst.
   ben.stockOffers();
   cem.stockOffers();
   const offerId = ben.snapshot.state.offers[0]!.id;
@@ -194,8 +152,6 @@ test('zwei Käufer, ein Angebot — genau einer gewinnt', () => {
   assert.equal(first.ok, true);
   assert.equal(count(ben.snapshot.state, WHEAT), 10, 'der Gewinner hat die Ware nicht');
 
-  // Der Zweite bekommt kein Bußgeld, sondern eine Absage: Er hat nichts falsch
-  // gemacht, er war nur langsamer.
   assert.equal(second.ok, false);
   if (!second.ok) assert.match(second.reason, /OFFER_GONE/);
   assert.equal(count(cem.snapshot.state, WHEAT), 0, 'der Verlierer hat Ware bekommen');
@@ -207,13 +163,10 @@ test('zwei Käufer, ein Angebot — genau einer gewinnt', () => {
 });
 
 test('was vor dem verlorenen Kauf lag, bleibt bestehen', () => {
-  // Präfix-Commit (§9): Ein verlorenes Rennen ganz hinten im Log darf nicht die
-  // halbe Sitzung kosten.
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 20);
   const ben = farm(market, live, 'ben', 500);
-  // Cem braucht Saatgut: Er soll vor dem verlorenen Kauf ehrlich arbeiten, und
-  // seit Säen ein Korn kostet, geht das nicht mit leerem Lager.
+
   const cem = farm(market, live, 'cem', 500, STARTING_WHEAT);
 
   play(anna, (c) => c.listOrder(WHEAT, 10, 3));
@@ -222,9 +175,8 @@ test('was vor dem verlorenen Kauf lag, bleibt bestehen', () => {
   cem.stockOffers();
   const offerId = cem.snapshot.state.offers[0]!.id;
 
-  play(ben, (c) => c.buyOffer(offerId)); // Ben gewinnt
+  play(ben, (c) => c.buyOffer(offerId));
 
-  // Cem hat vorher ehrlich gearbeitet und danach gekauft.
   const client = new Client(cem.snapshot);
   client.start(0, R_WHEAT);
   client.advanceClock(rules.recipes[R_WHEAT]!.durationTicks);
@@ -235,8 +187,7 @@ test('was vor dem verlorenen Kauf lag, bleibt bestehen', () => {
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.kind, 'partial');
-    // seq 1 = START, seq 2 = COLLECT, seq 3 = der verlorene Kauf. Das Warten
-    // dazwischen ist kein Command — es stellt nur die Uhr.
+
     assert.equal(result.rejectedFrom, 3, 'abgeschnitten wurde an der falschen Stelle');
   }
   assert.equal(
@@ -247,9 +198,6 @@ test('was vor dem verlorenen Kauf lag, bleibt bestehen', () => {
 });
 
 test('offline zurückziehen verliert gegen einen echten Kauf', () => {
-  // Der unangenehmste Fall überhaupt: Anna zieht ihren Auftrag im Funkloch
-  // zurück, während Ben ihn längst gekauft hat. Nur eine Seite kann gewinnen —
-  // und es muss die sein, auf der jemand bezahlt hat.
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 20);
   const ben = farm(market, live, 'ben', 500);
@@ -257,28 +205,23 @@ test('offline zurückziehen verliert gegen einen echten Kauf', () => {
   play(anna, (c) => c.listOrder(WHEAT, 10, 3));
   publishOrders(market, 'anna', anna);
 
-  // Anna geht offline: Ihr Client behält den Snapshot MIT dem Auftrag.
   const annaOffline = new Client(anna.snapshot);
 
-  // Anna ist nicht mehr „live" — der Verkauf bleibt beim Markt liegen.
   live.delete('anna');
   ben.stockOffers();
   play(ben, (c) => c.buyOffer(ben.snapshot.state.offers[0]!.id));
   assert.equal(market.peekSettlements('anna').length, 1, 'der Verkauf ist nirgends vermerkt');
 
-  // Im Funkloch zieht Anna zurück — lokal geht das, sie weiß es ja nicht besser.
   annaOffline.advanceClock(30);
   assert.equal(annaOffline.cancelOrder(1).ok, true);
   assert.equal(count(annaOffline.preview(), WHEAT), 20, 'lokal ist die Ware nicht zurück');
 
-  // Beim Sync wird abgerechnet, BEVOR nachgerechnet wird.
   settleSales(market, 'anna', anna);
   const result = anna.sync(annaOffline.buildSyncRequest(), T0 + 120_000);
 
   assert.equal(result.ok, false, 'das Zurückziehen wurde übernommen');
   if (!result.ok) assert.match(result.reason, /NO_SUCH_ORDER/);
 
-  // Und jetzt der eigentliche Punkt: Die zehn Weizen gibt es genau einmal.
   const total = count(anna.snapshot.state, WHEAT) + count(ben.snapshot.state, WHEAT);
   assert.equal(total, 20, `Ware verdoppelt oder verloren: ${total} statt 20`);
   assert.equal(count(anna.snapshot.state, WHEAT), 10, 'Anna hat ihren Rest nicht');
@@ -286,9 +229,6 @@ test('offline zurückziehen verliert gegen einen echten Kauf', () => {
 });
 
 test('ein Verkauf löst keinen Divergenz-Fehlalarm aus', () => {
-  // Der Zustand hat sich unter dem Client geändert, ohne dass er etwas falsch
-  // gemacht hätte. Ein Alarm hier wäre eine Fehlermeldung über einen Bug, den
-  // es nicht gibt — und würde echte Alarme im Rauschen ersticken (R1).
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 20);
   const ben = farm(market, live, 'ben', 500);
@@ -301,7 +241,6 @@ test('ein Verkauf löst keinen Divergenz-Fehlalarm aus', () => {
   ben.stockOffers();
   play(ben, (c) => c.buyOffer(ben.snapshot.state.offers[0]!.id));
 
-  // Anna spielt offline etwas völlig Unverfängliches.
   annaOffline.start(0, R_WHEAT);
   annaOffline.advanceClock(rules.recipes[R_WHEAT]!.durationTicks);
   annaOffline.collect(0);
@@ -313,7 +252,6 @@ test('ein Verkauf löst keinen Divergenz-Fehlalarm aus', () => {
   if (result.ok) assert.equal(result.divergence, null, 'Kanarienvogel hat falsch angeschlagen');
   assert.equal(anna.divergenceAlerts.length, 0, 'ein Alarm ist im Monitoring gelandet');
 
-  // Und beim nächsten Sync ist er wieder scharf.
   const next = new Client(anna.snapshot);
   next.advanceClock(5);
   next.start(1, R_WHEAT);
@@ -330,25 +268,15 @@ test('das Buch folgt dem Escrow, nicht umgekehrt', () => {
   publishOrders(market, 'anna', anna);
   assert.equal(market.size, 1);
 
-  // Zweimal abgleichen darf nicht zwei Angebote ergeben.
   publishOrders(market, 'anna', anna);
   assert.equal(market.size, 1, 'derselbe Auftrag steht doppelt im Buch');
 
-  // Zurückgezogen → raus aus dem Buch. Sonst könnte jemand Ware kaufen, die
-  // niemand mehr hat.
   play(anna, (c) => c.cancelOrder(1), T0 + 120_000);
   publishOrders(market, 'anna', anna);
   assert.equal(market.size, 0, 'das Angebot steht noch im Buch');
 });
 
 test('ein Angebot bleibt liegen, solange der Verkäufer weg ist', () => {
-  // Früher fiel es nach einem Tag zurück ins Postfach. Das klang fair und
-  // machte den Escrow zum kostenlosen Zwischenlager — deshalb steht die Frist
-  // in Produktion jetzt auf 0.
-  //
-  // Der Nebeneffekt ist ausdrücklich gewollt: Wer drei Tage nicht spielt,
-  // verkauft trotzdem weiter. Das passt zum Rest des Spiels, in dem der Hof
-  // auch ohne den Spieler arbeitet.
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 20);
 
@@ -356,7 +284,6 @@ test('ein Angebot bleibt liegen, solange der Verkäufer weg ist', () => {
   publishOrders(market, 'anna', anna);
   assert.equal(market.size, 1);
 
-  // Weit über die alte Frist hinaus weiterspielen.
   const later = 100 * 86_400;
   const client = new Client(anna.snapshot);
   client.advanceClock(later);
@@ -371,8 +298,6 @@ test('ein Angebot bleibt liegen, solange der Verkäufer weg ist', () => {
 });
 
 test('zurückgezogen verschwindet es dagegen sofort aus dem Buch', () => {
-  // Der einzige Weg zurück, seit es keine Frist mehr gibt — und er muss
-  // sauber greifen, sonst könnte jemand Ware kaufen, die niemand mehr hat.
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 20);
 
@@ -387,18 +312,15 @@ test('zurückgezogen verschwindet es dagegen sofort aus dem Buch', () => {
 });
 
 test('niemand kauft bei sich selbst', () => {
-  // Sonst wäre es eine Geldpresse: Gold zurück, Ware zurück, Auftrag weg.
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 500, 20);
 
   play(anna, (c) => c.listOrder(WHEAT, 10, 3));
   publishOrders(market, 'anna', anna);
 
-  // Die Auslage zeigt es ihr gar nicht erst …
   anna.stockOffers();
   assert.equal(anna.snapshot.state.offers.length, 0);
 
-  // … und selbst wenn die Nummer bekannt wäre, lehnt der Markt ab.
   const entry = market.entries()[0]!;
   assert.equal(market.claim(entry.id, 'anna', T0), null);
   assert.equal(market.size, 1, 'das Angebot ist trotz Ablehnung verschwunden');
@@ -415,9 +337,6 @@ test('das Buch überlebt einen Neustart', () => {
     publishOrders(market, 'anna', anna);
     market.flush();
 
-    // Ein Verkauf, der noch nicht abgerechnet ist — das ist der Teil, dessen
-    // Verlust wirklich wehtäte: Ben hätte bezahlt und Anna nichts bekommen.
-    // Deshalb wird er sofort geschrieben und nicht gesammelt.
     market.claim(market.entries()[0]!.id, 'ben', T0);
     db.close();
 
@@ -439,17 +358,14 @@ test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
     const anna = farm(market, live, 'anna', 0, 20);
     play(anna, (c) => c.listOrder(WHEAT, 10, 3));
     publishOrders(market, 'anna', anna);
-    // Kein `flush` nötig: Ein eingestelltes Angebot geht sofort durch. Sonst
-    // wäre es sichtbar, aber nicht kaufbar — der Kauf wird im Speicher
-    // entschieden, nicht in der Auslage.
+
     assert.equal(market.flush(), 0, 'das Angebot wartet noch aufs Schreiben');
     db.close();
 
     const again = new Market(new SqliteStorage(join(dir, 'spiel.db')));
     assert.equal(again.size, 1);
     assert.equal(again.browse('ben', 10)[0]!.amount, 10);
-    // Die Nummernvergabe läuft weiter, statt bei 1 neu zu beginnen — sonst
-    // bekäme ein neues Angebot die Nummer eines alten.
+
     again.reconcile('cem', [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 0 }], T0);
     assert.notEqual(again.browse('anna', 10)[0]!.id, 1);
   } finally {
@@ -457,23 +373,6 @@ test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
   }
 });
 
-/**
- * Verfallen, während man weg war — und zwar über den echten Weg.
- *
- * Die Sim-Tests stellen die Uhr direkt. Im Betrieb passiert es anders: Der
- * Verkäufer ist zwei Tage offline, kommt zurück, und seine Spielzeit springt
- * beim ersten Command nach vorn. Erst dabei greift die Frist.
- *
- * Geprüft wird die Frage, die für die Wirtschaft zählt: **Wird die Ware
- * vernichtet?** Nein — sie kommt zurück, und zwar durchs Postfach.
- */
-/**
- * Verkauft, während der Verkäufer sehr lange weg war.
- *
- * Der Verkauf wirkt sofort auf seinen Snapshot, die Re-Simulation seiner
- * Offline-Züge läuft danach. Beides fasst dieselbe Ware an — passierte es
- * doppelt, gäbe es sie zweimal.
- */
 test('ein Verkauf während langer Abwesenheit verdoppelt nichts', () => {
   const { market, live } = setup();
   const anna = farm(market, live, 'anna', 0, 30);
@@ -482,13 +381,11 @@ test('ein Verkauf während langer Abwesenheit verdoppelt nichts', () => {
   play(anna, (c) => c.listOrder(WHEAT, 20, 3));
   publishOrders(market, 'anna', anna);
 
-  // Anna verschwindet. Ben kauft.
   live.delete('anna');
   ben.stockOffers();
   play(ben, (c) => c.buyOffer(ben.snapshot.state.offers[0]!.id));
   assert.equal(count(ben.snapshot.state, WHEAT), 20);
 
-  // Anna kommt erst nach Tagen zurück.
   const later = 3 * 86_400;
   settleSales(market, 'anna', anna);
   const client = new Client(anna.snapshot);
@@ -496,15 +393,12 @@ test('ein Verkauf während langer Abwesenheit verdoppelt nichts', () => {
   client.start(1, R_WHEAT);
   anna.sync(client.buildSyncRequest(), T0 + (later + 60) * 1000);
 
-  // Kein Weizen zurück ins Postfach — er gehört Ben.
   const wheatInMail = anna.snapshot.state.mail
     .filter((m) => m.item === WHEAT)
     .reduce((n, m) => n + m.amount, 0);
   assert.equal(wheatInMail, 0, 'die verkaufte Ware kam dem Verkäufer zurück');
   assert.equal(anna.snapshot.state.orders.length, 0, 'der verkaufte Auftrag steht noch');
 
-  // Die Gegenprobe über beide Höfe. Ein Korn steckt in Annas Feld — gesät ist
-  // verbraucht, wie Futter, das zu Eiern wird. Alles andere muss sich finden.
   const seeded = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
   const total =
     count(anna.snapshot.state, WHEAT) + wheatInMail + count(ben.snapshot.state, WHEAT);
@@ -514,7 +408,6 @@ test('ein Verkauf während langer Abwesenheit verdoppelt nichts', () => {
     `Ware verdoppelt oder verloren: ${total} statt ${30 - seeded}`,
   );
 
-  // Und das Geld ist trotzdem angekommen.
   const gold = anna.snapshot.state.mail.find((m) => m.item === GOLD);
   assert.equal(gold?.amount, 60, 'Anna hat ihren Erlös nicht bekommen');
 });

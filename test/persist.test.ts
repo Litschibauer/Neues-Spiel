@@ -1,17 +1,3 @@
-/**
- * Der Spielstand auf dem Gerät.
- *
- * Die unauffälligere Hälfte von „offline spielbar", und die wichtigere: Ohne
- * sie liegt die ganze Offline-Sitzung nur im Speicher der Seite. Ein Neustart,
- * ein Tab, den iOS unter Speicherdruck wegwirft — und alles seit dem letzten
- * Sync ist weg. Ausgerechnet im Funkloch.
- *
- * Der Browser-Teil (Service Worker, `localStorage`, Neuladen ohne Netz) steckt
- * in `scripts/offline-test.ts` und braucht einen echten Chromium. Hier steht
- * das, was sich in Node prüfen lässt — und das ist der Kern: Kommt nach dem
- * Neustart derselbe Zustand heraus, und nimmt der Server ihn an?
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
@@ -29,10 +15,9 @@ const WHEAT = 1;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
 const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
 const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
-/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+
 const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
-/** So, wie es im Browser passiert: durch JSON und zurück. */
 function roundTrip(client: Client, offset = -1234) {
   const stored = JSON.stringify(serializeClient(client, offset));
   return restoreClient(JSON.parse(stored));
@@ -62,14 +47,11 @@ test('ein Neustart mitten in der Sitzung kostet nichts', () => {
   assert.equal(back.client.queue.length, client.queue.length);
   assert.equal(back.client.baseSeq, client.baseSeq);
 
-  // Das Entscheidende: derselbe Zustand, bis aufs Bit.
   assert.deepEqual(back.client.state, client.state);
   assert.equal(hashState(back.client.state), hashState(client.state));
 });
 
 test('nach dem Neustart nimmt der Server die Sitzung an — ohne Divergenz', () => {
-  // Der Kanarienvogel vergleicht den Zustand nach dem letzten Command (§9).
-  // Ein Wiederherstellen, das auch nur einen Tick danebenliegt, fiele hier auf.
   const server = freshServer();
   const client = new Client(server.snapshot, 'geraet-a');
 
@@ -89,9 +71,6 @@ test('nach dem Neustart nimmt der Server die Sitzung an — ohne Divergenz', () 
 });
 
 test('gesichert wird der BESTÄTIGTE Snapshot, nicht der vorhergesagte', () => {
-  // Läge im Speicher der optimistisch gerechnete Zustand, käme die
-  // Warteschlange nach dem Neustart ein zweites Mal obendrauf — die Ernte
-  // wäre doppelt da, und der Sync meldete Divergenz.
   const server = freshServer();
   const client = new Client(server.snapshot);
 
@@ -125,15 +104,12 @@ test('nach einem Sync ist die Warteschlange auch im Speicher leer', () => {
 });
 
 test('eine unlesbare Warteschlange kostet die Sitzung, nicht die App', () => {
-  // Sollte nie vorkommen — der Log war schon einmal gültig. Falls doch, ist
-  // ein Snapshot ohne die letzten Aktionen weit besser als eine Seite, die
-  // gar nicht mehr startet.
   const server = freshServer();
   const client = new Client(server.snapshot);
   client.start(0, R_WHEAT);
 
   const blob = serializeClient(client, 0);
-  // Ein Command, den es so nicht geben kann.
+
   blob.queue = [{ seq: 1, tick: 0, type: 'START', plot: 99, recipe: 0 }];
 
   const back = restoreClient(blob);
@@ -148,14 +124,11 @@ test('ein Speicherstand aus einer anderen Zukunft wird abgelehnt', () => {
 });
 
 test('Dev- und Produktionsstände liegen nie im selben Fach', () => {
-  // Ein Dev-Stand auf dem Produktions-Server wäre ein Fork mit Ansage:
-  // gleiche Sequenznummern, völlig andere Geschichte (R3).
   assert.notEqual(storageKeyFor('http://host:8788'), storageKeyFor('http://host:8787'));
   assert.equal(storageKeyFor('https://hof.example'), storageKeyFor('https://hof.example'));
 });
 
 test('zufällige Sitzungen überstehen den Neustart an jeder Stelle', () => {
-  // Nicht nur an den Stellen, die jemand von Hand ausgewählt hat.
   for (let seed = 1; seed <= 80; seed++) {
     const server = freshServer();
     const client = playRandomSession(server.snapshot, mulberry32(seed), {

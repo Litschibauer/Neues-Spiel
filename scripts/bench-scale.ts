@@ -1,25 +1,3 @@
-/**
- * Trägt ein Server das?
- *
- *   node --experimental-strip-types scripts/bench-scale.ts [höfe] [runden]
- *
- * Die Frage ist nicht „wie schnell ist ein Sync" — das misst `bench-sync.ts`.
- * Hier geht es um die Größe, an der ein einzelner Server kippt: **wie viele
- * gleichzeitige Spieler**, ohne Loadbalancer, ohne Regionen.
- *
- * Gemessen wird das, was dabei wirklich weh tut, und das ist selten die
- * Rechenzeit:
- *
- *  - **Schreiblast.** Die alte Fassung schrieb bei jedem Sync eine ganze Datei,
- *    und der Command-Log darin wuchs unbegrenzt. Der Aufwand einer Sitzung
- *    stieg damit quadratisch — für EINEN Spieler 344 MB über 6000 Aktionen.
- *  - **Speicher.** Jeder benutzte Hof bleibt geladen. Bei ein paar tausend
- *    Spielern entscheidet sich hier, ob 1 GB RAM reichen.
- *
- * Der Lauf simuliert echte Sitzungen über den echten Sim-Kern und den echten
- * Speicher — keine Attrappe. Was hier steht, gilt.
- */
-
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,7 +10,7 @@ import { initialState } from '../src/sim/state.ts';
 
 const FARMS = Number(process.argv[2] ?? 2000);
 const ROUNDS = Number(process.argv[3] ?? 30);
-const FLUSH_EVERY = 8; // entspricht dem Sammel-Takt des Servers
+const FLUSH_EVERY = 8;
 
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 const T0 = 1_700_000_000_000;
@@ -48,7 +26,6 @@ const live = new Map<string, Server>();
 
 console.log(`\n${FARMS} Höfe, ${ROUNDS} Runden je Hof — echter Kern, echter Speicher\n`);
 
-// ── Höfe anlegen ─────────────────────────────────────────────────────────
 const created = process.hrtime.bigint();
 const ids: string[] = [];
 for (let i = 0; i < FARMS; i++) {
@@ -68,10 +45,6 @@ for (let i = 0; i < FARMS; i++) {
 }
 console.log(`Anlegen:   ${(Number(process.hrtime.bigint() - created) / 1e6).toFixed(0)} ms`);
 
-// ── Spielen ──────────────────────────────────────────────────────────────
-//
-// Eine Runde je Hof ist eine Sitzung, wie sie wirklich vorkommt: säen, ernten,
-// verkaufen, gelegentlich am Markt anbieten. Alles über die echten Commands.
 let syncs = 0;
 let writes = 0;
 const start = process.hrtime.bigint();
@@ -88,8 +61,7 @@ for (let round = 1; round <= ROUNDS; round++) {
     client.start(0, R_WHEAT);
     client.advanceClock(duration);
     client.collect(0);
-    // Jeder zehnte Hof bietet an statt zu verkaufen — sonst bliebe der Markt
-    // leer und die Buchführung ungemessen.
+
     if (i % 10 === 0 && round % 5 === 0) client.listOrder(WHEAT, 10, rules.items[WHEAT]!.npcPrice);
     else client.sellNpc(WHEAT, 10);
 
@@ -125,17 +97,8 @@ let walBytes = 0;
 try {
   walBytes = statSync(walPath).size;
 } catch {
-  /* kein WAL vorhanden */
 }
-/**
- * Vor dem Messen aufräumen lassen.
- *
- * `heapUsed` ohne erzwungene Bereinigung misst überwiegend Müll, der noch
- * nicht abgeholt wurde — zwei Läufe desselben Codes unterschieden sich damit
- * um den Faktor zweieinhalb. Mit `--expose-gc` steht hier eine Zahl, die
- * wirklich etwas über den Bedarf aussagt; ohne das Flag wird sie als
- * unzuverlässig ausgewiesen, statt sie zu behaupten.
- */
+
 const gc = (globalThis as { gc?: () => void }).gc;
 if (gc) {
   gc();

@@ -1,23 +1,3 @@
-/**
- * Generator für die Golden Vectors.
- *
- *   node --experimental-strip-types scripts/generate-golden.ts
- *
- * Erzeugt `test/vectors/golden.json`: einen Korpus aus expliziten Command-Logs
- * mit dem jeweils erwarteten Endzustand.
- *
- * WICHTIG — warum explizite Commands und keine Seeds:
- * Die Vektoren sollen von *jeder* Plattform abspielbar sein (iOS, Android,
- * WASM, Server). Ein Seed würde voraussetzen, dass dort derselbe PRNG bitgenau
- * dasselbe liefert — also genau die Annahme, die wir eigentlich prüfen wollen.
- * Deshalb steht jeder Command ausgeschrieben in der Datei.
- *
- * Neu erzeugen ist eine BEWUSSTE Handlung: Ändern sich die Vektoren, ohne dass
- * jemand die Regeln absichtlich geändert hat, ist das ein Determinismus-Bug.
- * Eine echte Regeländerung gehört in eine neue Ruleset-Version (R2), nicht in
- * überschriebene Golden Vectors.
- */
-
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Server } from '../src/server/server.ts';
@@ -42,30 +22,17 @@ const PROFILES: Array<{ name: string; opts: SessionOptions; seeds: number[] }> =
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
   {
-    // Lange Zeitachse: viel passive Produktion zwischen den Aktionen, Lager
-    // laeuft voll, Auftraege stehen lange offen. Das Postfach kommt aus dem
-    // Startzustand (fuzzStart) — es fuellt sich im Betrieb von aussen.
     name: 'trade',
     opts: { steps: 45, maxAdvance: 90_000, advanceChance: 0.4, chaosChance: 0.05 },
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
   {
-    // Nie verkaufen: der einzige verlaessliche Weg ans volle Lager. Seit ein
-    // Feld netto einen Weizen bringt statt zehn, braucht der Weg dorthin
-    // deutlich mehr Schritte.
     name: 'hoard',
     opts: { steps: 120, maxAdvance: 1500, advanceChance: 0.45, chaosChance: 0.05, hoard: true },
     seeds: [1, 2, 3, 5, 8, 13, 21, 34, 55, 89],
   },
 ];
 
-/**
- * Jeder Vektor trägt seine eigene Regelversion.
- *
- * Seit Inhalt Daten ist, ist der Katalog Teil dessen, was bewiesen werden muss.
- * Der Korpus deckt deshalb jedes ausgelieferte Regelwerk ab — die
- * Produktionsreihe und das Dev-Tempo.
- */
 const VERSIONS = [...RULESETS.keys()].sort((a, b) => a - b);
 
 const vectors = [];
@@ -95,16 +62,6 @@ for (const profile of PROFILES) {
   }
 }
 
-/**
- * Ein handgeschriebener Vektor für den Kernkreislauf.
- *
- * Die Zufallssitzungen decken breit ab, aber niemand kann ihnen ansehen, WAS
- * sie prüfen. Dieser hier läuft den Weg, um den es im Spiel geht, in genau der
- * Reihenfolge: Feld -> Weizen -> verkaufen -> Mühle kaufen -> Futter mahlen ->
- * Gehege kaufen -> Hühner kaufen -> füttern -> warten -> Eier sammeln.
- *
- * Er ist damit gleichzeitig Abnahmetest und lesbare Dokumentation des Loops.
- */
 function coreLoopVector(version: number) {
   const rules = getRuleset(version);
   const R_WHEAT = 0;
@@ -128,9 +85,6 @@ function coreLoopVector(version: number) {
     tick += rules.recipes[recipe]!.durationTicks;
   };
 
-  // Saatgut ist endlich (M5-Wirtschaft): Wer sät, verbraucht ein Korn. Drei
-  // Felder brauchen also drei, und wenn die Kundenaufträge den Vorrat
-  // abgenommen haben, muss beim Händler nachgekauft werden.
   const SEED = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
   const seedsForARound = 3 * SEED;
   const restock = () => {
@@ -144,8 +98,6 @@ function coreLoopVector(version: number) {
     for (let plot = 0; plot < 3; plot++) push({ type: 'COLLECT', plot });
   };
 
-  // Sich hocharbeiten: Weizen anbauen, Aufträge beliefern (das bringt die
-  // Erfahrung), Rest verkaufen — bis Level UND Gold für die Kette reichen.
   const goal =
     rules.plots[MILL]!.levels[0]!.cost[0]!.amount +
     rules.plots[COOP]!.levels[0]!.cost[0]!.amount +
@@ -160,8 +112,6 @@ function coreLoopVector(version: number) {
 
     sowThreeFields();
 
-    // Aufträge beliefern, solange die Ware reicht — Erfahrung kommt fast nur
-    // von hier.
     for (;;) {
       const fillable = state.requests
         .slice(0, rules.requestSlots)
@@ -170,8 +120,6 @@ function coreLoopVector(version: number) {
       push({ type: 'FILL_REQUEST', requestId: fillable.id });
     }
 
-    // Die Aussaat der nächsten Runde zurückbehalten — sie beim Händler
-    // zurückzukaufen wäre teurer, als der Weizen einbringt.
     const keep = seedsForARound;
     const sellable = state.items[WHEAT]! - keep;
     if (sellable > 0) push({ type: 'SELL_NPC', item: WHEAT, amount: sellable });
@@ -179,20 +127,13 @@ function coreLoopVector(version: number) {
 
   push({ type: 'BUY', plot: MILL });
 
-  // Mahlgut sicherstellen: Die Aufträge oben haben den Vorrat unter Umständen
-  // komplett abgenommen.
-  //
-  // Bewusst über ALLE Zutaten des Rezepts statt über „Weizen": Seit v3 braucht
-  // Futter Mais **und** Weizen. Ein Generator, der nur Weizen nachzieht, liefe
-  // dort endlos — und genau das ist der Unterschied zwischen „Inhalt ist eine
-  // Tabelle" als Behauptung und als Eigenschaft.
   const haveAll = () =>
     rules.recipes[R_FEED]!.inputs.every((i) => (state.items[i.item] ?? 0) >= i.amount);
   for (let guard = 0; guard < 50 && !haveAll(); guard++) {
     for (const input of rules.recipes[R_FEED]!.inputs) {
       const missing = input.amount - (state.items[input.item] ?? 0);
       if (missing <= 0) continue;
-      // Was das Feld hergibt, wird angebaut; alles andere beim Händler geholt.
+
       if (input.item === WHEAT) sowThreeFields();
       else if (rules.items[input.item]!.npcBuyPrice > 0) {
         push({ type: 'BUY_NPC', item: input.item, amount: missing });
@@ -204,7 +145,6 @@ function coreLoopVector(version: number) {
   wait(R_FEED);
   push({ type: 'COLLECT', plot: MILL });
 
-  // Gold für Gehege und Hühner zusammenbekommen.
   const coopCost =
     rules.plots[COOP]!.levels[0]!.cost[0]!.amount + rules.plots[COOP]!.levels[1]!.cost[0]!.amount;
   for (let round = 0; round < 200 && state.items[rules.currency]! < coopCost; round++) {
@@ -220,14 +160,12 @@ function coreLoopVector(version: number) {
     if (sellable > 0) push({ type: 'SELL_NPC', item: WHEAT, amount: sellable });
   }
 
-  push({ type: 'BUY', plot: COOP }); // Gehege
-  push({ type: 'BUY', plot: COOP }); // Hühner
-  push({ type: 'START', plot: COOP, recipe: R_EGGS }); // füttern
+  push({ type: 'BUY', plot: COOP });
+  push({ type: 'BUY', plot: COOP });
+  push({ type: 'START', plot: COOP, recipe: R_EGGS });
   wait(R_EGGS);
-  push({ type: 'COLLECT', plot: COOP }); // Eier sammeln
+  push({ type: 'COLLECT', plot: COOP });
 
-  // Und zum Schluss der Punkt des Ganzen: einen Kundenauftrag beliefern,
-  // sofern die Ware dafür reicht. Sonst an den NPC verkaufen.
   const last = state.requests
     .slice(0, rules.requestSlots)
     .find((r) => r.wants.every((w) => (state.items[w.item] ?? 0) >= w.amount));

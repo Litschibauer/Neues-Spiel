@@ -1,16 +1,3 @@
-/**
- * SHA-256, reine Integer-Arithmetik.
- *
- * Warum nicht `node:crypto`: Der Kanarienvogel-Hash (R1) wird auf BEIDEN Seiten
- * gebraucht — auch im Browser und später in einer Mobile-Runtime. Eine
- * Plattform-API dafür hieße, dass der Client je nach Umgebung einen anderen
- * Weg nimmt als der Server. Genau solche Gabelungen sind die Quelle von
- * Determinismus-Bugs.
- *
- * Diese Fassung kommt ohne jede Plattform-API aus und liefert nachweislich
- * dieselben Digests wie `node:crypto` (siehe `sha256.test.ts`).
- */
-
 const K = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -22,7 +9,6 @@ const K = [
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-/** UTF-8-Kodierung von Hand — `TextEncoder` wäre wieder eine Plattform-API. */
 function utf8Bytes(text: string): number[] {
   const bytes: number[] = [];
   for (let i = 0; i < text.length; i++) {
@@ -31,12 +17,9 @@ function utf8Bytes(text: string): number[] {
     if (code >= 0xd800 && code <= 0xdfff) {
       const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
       if (code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
-        // Vollständiges Surrogatpaar → ein Codepoint.
         code = 0x10000 + ((code - 0xd800) << 10) + (next - 0xdc00);
         i++;
       } else {
-        // Einzelnes Surrogat ist kein gültiger Text. Der Standard (und damit
-        // auch node:crypto) ersetzt es durch U+FFFD, statt es durchzureichen.
         code = 0xfffd;
       }
     }
@@ -67,11 +50,9 @@ export function sha256Hex(text: string): string {
   const bytes = utf8Bytes(text);
   const bitLength = bytes.length * 8;
 
-  // Padding: eine 1-Bit, dann Nullen, dann die Länge als 64-Bit big-endian.
   bytes.push(0x80);
   while (bytes.length % 64 !== 56) bytes.push(0);
-  // Die oberen 32 Bit der Länge: Nachrichten dieser Größe kommen hier nicht vor,
-  // aber das Format verlangt sie.
+
   const highLength = Math.floor(bitLength / 0x100000000);
   bytes.push(
     (highLength >>> 24) & 0xff,

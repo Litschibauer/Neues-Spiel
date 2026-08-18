@@ -1,19 +1,3 @@
-/**
- * Verteidigungslinie 3 gegen R1: Golden Vectors.
- *
- * Das Kernproblem beim Plattform-Determinismus ist, dass man iOS, Android und
- * Server nicht in einem Prozess vergleichen kann. Golden Vectors lösen das wie
- * Testvektoren in der Kryptografie: ein festgeschriebener Korpus aus Eingaben
- * mit erwarteten Ergebnissen, den jede Implementierung abspielen muss.
- *
- * Damit ist der Plattform-Beweis vorbereitet, ohne dass hier ein Handy stehen
- * muss — der Mobile-Port führt an Tag eins denselben Korpus aus.
- *
- * In dieser Node-Runtime prüft der Test zusätzlich, dass der Sim-Kern über die
- * Zeit stabil bleibt: Wandert ein Hash, ohne dass jemand die Regeln bewusst
- * geändert hat, ist genau das der Determinismus-Bug, den wir suchen.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -27,14 +11,6 @@ import type { Command } from '../src/sim/commands.ts';
 type Vector = {
   name: string;
   rulesetVersion: number;
-  /**
-   * Der vollständige Ausgangszustand.
-   *
-   * Steht bewusst ausgeschrieben in der Datei, statt aus Parametern
-   * rekonstruiert zu werden: Ein Vektor muss seine Eingabe komplett
-   * mitbringen, sonst prüft eine fremde Plattform am Ende die
-   * Rekonstruktionslogik mit statt nur den Sim-Kern.
-   */
   startState: State;
   commands: Command[];
   expectedStateHash: string;
@@ -58,8 +34,6 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   const commands = golden.vectors.reduce((n, v) => n + v.commands.length, 0);
   assert.ok(commands >= 100, `zu wenige Commands im Korpus: ${commands}`);
 
-  // Jeder Command-Typ muss vorkommen, sonst bleiben Regeln ungeprüft — und der
-  // Mobile-Port hätte für sie keinen Abgleich.
   const types = new Set(golden.vectors.flatMap((v) => v.commands.map((c) => c.type)));
   assert.deepEqual(
     [...types].sort(),
@@ -79,16 +53,12 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
     'Korpus deckt nicht alle Command-Typen ab',
   );
 
-  // Und jede ausgelieferte Regelversion muss vorkommen. Sonst bliebe ein
-  // ganzer Katalog — samt seiner Rezepte und Plätze — ohne Plattform-Beweis.
   const versions = [...new Set(golden.vectors.map((v) => v.rulesetVersion))];
   assert.deepEqual(
     versions.sort((a, b) => a - b),
     [...RULESETS.keys()].sort((a, b) => a - b),
   );
 
-  // Der Kernkreislauf muss wirklich durchlaufen sein: Rezepte MIT Eingaben
-  // (Mühle, Gehege) sind der Pfad, an dem sich datengetriebener Inhalt beweist.
   const withInputs = golden.vectors.some((v) =>
     v.commands.some((c) => {
       if (c.type !== 'START') return false;
@@ -97,8 +67,6 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
   );
   assert.ok(withInputs, 'kein Vektor benutzt ein Rezept mit Eingaben');
 
-  // Der handgeschriebene Kernkreislauf muss dabei sein: Er ist der einzige
-  // Vektor, dem man ansieht, WAS er prüft.
   for (const version of RULESETS.keys()) {
     assert.ok(
       golden.vectors.some((v) => v.name === `core-loop-v${version}`),
@@ -112,16 +80,13 @@ test('jeder Golden Vector reproduziert exakt seinen erwarteten Endzustand', () =
     const rules = getRuleset(v.rulesetVersion);
     const final = simulateAll(v.startState, v.commands, rules);
 
-    // Erst der volle Zustand — der zeigt bei einem Fehlschlag, WAS abweicht.
     assert.deepEqual(final, v.expectedState, `Vektor ${v.name}: Zustand weicht ab`);
-    // Dann der Hash — das ist der Wert, den fremde Plattformen vergleichen.
+
     assert.equal(hashState(final), v.expectedStateHash, `Vektor ${v.name}: Hash weicht ab`);
   }
 });
 
 test('Vektoren sind selbsttragend: keine Seeds, nur explizite Commands', () => {
-  // Ein Seed würde voraussetzen, dass fremde Plattformen denselben PRNG haben —
-  // also genau die Annahme, die der Korpus eigentlich prüfen soll.
   for (const v of golden.vectors) {
     assert.ok(Array.isArray(v.commands) && v.commands.length > 0, `${v.name}: keine Commands`);
     for (const c of v.commands) {

@@ -1,19 +1,3 @@
-/**
- * Der Katalog ist jetzt der Inhalt des Spiels — und Daten haben keinen Compiler.
- *
- * Solange Weizen und Eier fest im Code standen, konnte ein Rezept gar nicht auf
- * etwas zeigen, das es nicht gibt. Seit Inhalt eine Tabelle ist, kann es das
- * sehr wohl — und der Fehler fiele erst bei einem Spieler auf, offline, ohne
- * Netz für einen Hotfix.
- *
- * Zwei Eigenschaften werden hier geprüft, und die zweite ist die teurere:
- *
- *  1. Jedes ausgelieferte Regelwerk ist in sich widerspruchsfrei.
- *  2. **Kataloge sind append-only.** Zustände speichern Indizes. Wer einen
- *     Eintrag einschiebt oder entfernt, verschiebt die Bedeutung aller
- *     gespeicherten Spielstände — aus Weizen wird stillschweigend Mehl.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -42,7 +26,6 @@ test('jedes ausgelieferte Regelwerk ist widerspruchsfrei', () => {
 test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht', () => {
   const base = getRuleset(1);
 
-  // Rezept zeigt auf einen Gegenstand, den es nicht gibt.
   const danglingOutput = {
     ...base,
     recipes: [{ id: 'ghost', inputs: [], output: { item: 99, amount: 1 }, durationTicks: 10 }],
@@ -51,14 +34,12 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
   };
   assert.ok(validateRuleset(danglingOutput).length > 0, 'unbekannte Ausgabe nicht erkannt');
 
-  // Platz erlaubt ein Rezept, das es nicht gibt.
   const danglingRecipe = {
     ...base,
     plots: [{ id: 'f', startLevel: 1, levels: [{ label: 'F', cost: [], recipes: [42] }] }],
   };
   assert.ok(validateRuleset(danglingRecipe).length > 0, 'unbekanntes Rezept nicht erkannt');
 
-  // Eine Startstufe, für die trotzdem ein Preis eingetragen ist.
   const paidStart = {
     ...base,
     plots: [
@@ -71,14 +52,12 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
   };
   assert.ok(validateRuleset(paidStart).length > 0, 'bezahlte Startstufe nicht erkannt');
 
-  // Startstufe jenseits der vorhandenen Stufen.
   const tooHigh = {
     ...base,
     plots: [{ id: 'f', startLevel: 5, levels: [{ label: 'F', cost: [], recipes: [0] }] }],
   };
   assert.ok(validateRuleset(tooHigh).length > 0, 'Startstufe außerhalb nicht erkannt');
 
-  // Dieselbe Zutat zweimal — die Bestandsprüfung im Kern zählt sonst doppelt.
   const doubled = {
     ...base,
     recipes: [
@@ -97,7 +76,6 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
   };
   assert.ok(validateRuleset(doubled).length > 0, 'doppelte Zutat nicht erkannt');
 
-  // Passive mit Eingaben — die geschlossene Form trägt das nicht (produce.ts).
   const hungryPassive = {
     ...base,
     recipes: [
@@ -113,7 +91,6 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
   };
   assert.ok(validateRuleset(hungryPassive).length > 0, 'gefütterte Passive nicht erkannt');
 
-  // Passive mit Ausgabemenge > 1 — dito.
   const batchPassive = {
     ...base,
     recipes: [
@@ -124,7 +101,6 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
   };
   assert.ok(validateRuleset(batchPassive).length > 0, 'Stapel-Passive nicht erkannt');
 
-  // Währung, die Lagerplatz kostet.
   const heavyMoney = {
     ...base,
     items: base.items.map((i, idx) => (idx === 0 ? { ...i, storable: true } : i)),
@@ -133,8 +109,6 @@ test('die Prüfung hat Zähne — sie findet die Fehler, die man wirklich macht'
 });
 
 test('Kataloge wachsen nur hinten — sonst verschiebt sich die Bedeutung aller Indizes', () => {
-  // Nur entlang der Produktionsreihe: Das Dev-Regelwerk ist Wegwerfware und
-  // steht bewusst außerhalb jeder Migration.
   for (let i = 1; i < PRODUCTION_VERSIONS.length; i++) {
     const from = getRuleset(PRODUCTION_VERSIONS[i - 1]!);
     const to = getRuleset(PRODUCTION_VERSIONS[i]!);
@@ -145,8 +119,6 @@ test('Kataloge wachsen nur hinten — sonst verschiebt sich die Bedeutung aller 
     assert.ok(to.plots.length >= from.plots.length, `${label}: Plätze verschwunden`);
     assert.ok(to.passives.length >= from.passives.length, `${label}: Passive verschwunden`);
 
-    // Und das Präfix muss dasselbe MEINEN. Preise und Zeiten dürfen sich
-    // ändern (das ist ein Balance-Patch), die Identität nicht.
     from.items.forEach((item, index) => {
       assert.equal(to.items[index]!.id, item.id, `${label}: Gegenstand ${index} umgedeutet`);
       assert.equal(
@@ -170,9 +142,7 @@ test('Kataloge wachsen nur hinten — sonst verschiebt sich die Bedeutung aller 
         after.levels.length >= plot.levels.length,
         `${label}: Platz ${index} hat Stufen verloren`,
       );
-      // Stufen dürfen dazukommen (neue Ausbaustufe), nie verschwinden oder
-      // ihre Rezepte verlieren — sonst hinge ein gespeicherter Platz plötzlich
-      // auf einer Stufe, die es nicht mehr gibt.
+
       plot.levels.forEach((level, l) => {
         for (const recipe of level.recipes) {
           assert.ok(
@@ -199,7 +169,7 @@ test('für jeden Sprung in der Produktionsreihe gibt es eine Migration', () => {
     const key = `${PRODUCTION_VERSIONS[i - 1]}->${PRODUCTION_VERSIONS[i]}`;
     assert.ok(MIGRATIONS.has(key), `Migration ${key} fehlt`);
   }
-  // Und ins Dev-Regelwerk führt bewusst keiner.
+
   assert.ok(
     ![...MIGRATIONS.keys()].some((k) => k.endsWith(`->${DEV_RULESET_VERSION}`)),
     'es gibt einen Migrationspfad ins Dev-Regelwerk',
@@ -219,12 +189,10 @@ test('die benannten Versionen zeigen auf Regelwerke, die es gibt', () => {
 test('abgeleitete Abfragen stimmen mit dem Katalog überein', () => {
   const v1 = getRuleset(1);
 
-  // Handelbar ist, was lagerfähig ist und einen Referenzpreis hat.
   assert.equal(isTradable(v1, v1.currency), false, 'Münzen sind nicht handelbar');
   assert.equal(isTradable(v1, 1), true, 'Weizen ist handelbar');
   assert.equal(isTradable(v1, 999), false, 'unbekannter Index ist nicht handelbar');
 
-  // Stufe 0 kann nichts, Stufe 1 des Feldes kann Weizen.
   assert.deepEqual([...levelRecipes(v1, 0, 0)], []);
   assert.deepEqual([...levelRecipes(v1, 0, 1)], [0]);
   assert.equal(nextLevel(v1, 0, 1), null, 'ein Feld hat nur eine Stufe');
@@ -234,26 +202,20 @@ test('DER KERNKREISLAUF steht als Tabelle da — Feld, Mühle, Gehege', () => {
   const v1 = getRuleset(1);
   const id = (i: number) => v1.items[i]!.id;
 
-  // Feld: frisst Saatgut, gibt mehr Weizen zurück, als es genommen hat. Der
-  // Gewinn ist die Differenz — nicht der Ertrag.
   const wheat = v1.recipes.find((r) => r.id === 'wheat')!;
   assert.equal(wheat.inputs.length, 1, 'Weizen wächst nicht aus dem Nichts');
   assert.equal(id(wheat.inputs[0]!.item), 'wheat', 'gesät wird Weizen');
   assert.equal(id(wheat.output.item), 'wheat');
   assert.ok(wheat.output.amount > wheat.inputs[0]!.amount, 'Aussaat lohnt sich nicht');
 
-  // Mühle: frisst Weizen, gibt Futter.
   const feed = v1.recipes.find((r) => r.id === 'feed')!;
   assert.equal(id(feed.inputs[0]!.item), 'wheat');
   assert.equal(id(feed.output.item), 'feed');
 
-  // Gehege: frisst Futter, gibt Eier. Die Kette entsteht daraus, dass die
-  // Ausgabe des einen die Eingabe des anderen ist — niemand hat sie gebaut.
   const eggs = v1.recipes.find((r) => r.id === 'eggs')!;
   assert.equal(id(eggs.inputs[0]!.item), 'feed');
   assert.equal(id(eggs.output.item), 'eggs');
 
-  // Und das Gehege hat genau zwei Kaufschritte: Bau und Hühner.
   const coop = v1.plots.find((p) => p.id === 'coop-1')!;
   assert.equal(coop.startLevel, 0, 'muss erst gekauft werden');
   assert.equal(coop.levels.length, 2);
@@ -262,12 +224,6 @@ test('DER KERNKREISLAUF steht als Tabelle da — Feld, Mühle, Gehege', () => {
 });
 
 test('der Einstieg ist bespielbar, ohne dass etwas gekauft werden muss', () => {
-  // Die Leerlauf-Regel aus Architektur §6: Es darf keinen Zustand geben, in dem
-  // offline nichts zu tun ist.
-  //
-  // Früher war das leicht zu prüfen — die Startplätze brauchten keine Zutaten.
-  // Seit Saatgut verbraucht wird, ist die Bedingung länger, aber dieselbe: Was
-  // ein Startplatz braucht, muss von Anfang an dabei sein.
   const v1 = getRuleset(1);
   const free = v1.plots.filter((p) => p.startLevel > 0);
   assert.ok(free.length >= 3, `zu wenige Startplätze: ${free.length}`);
@@ -288,8 +244,6 @@ test('der Einstieg ist bespielbar, ohne dass etwas gekauft werden muss', () => {
     }
   }
 
-  // Und der Vorrat muss für ALLE Startplätze gleichzeitig reichen — sonst
-  // stünde ein Feld von der ersten Minute an brach.
   const need = new Map<number, number>();
   for (const plot of free) {
     const recipe = plot.levels[plot.startLevel - 1]!.recipes[0];
@@ -307,9 +261,6 @@ test('der Einstieg ist bespielbar, ohne dass etwas gekauft werden muss', () => {
 });
 
 test('kein Sackgassen-Zustand: verbrauchte Zutaten sind nachkaufbar und lohnen sich', () => {
-  // Der Preis dafür, dass Saatgut endlich ist: Wer seinen letzten Weizen
-  // verkauft, muss zurück ins Spiel finden. Sonst wäre der Hof tot — genau das
-  // verbietet §6.
   for (const version of [...RULESETS.keys()]) {
     const rules = getRuleset(version);
     const free = rules.plots.filter((p) => p.startLevel > 0);
@@ -324,8 +275,6 @@ test('kein Sackgassen-Zustand: verbrauchte Zutaten sind nachkaufbar und lohnen s
           );
         }
 
-        // Nachkaufen muss sich auch rechnen, sonst ist die Sackgasse nur
-        // langsamer: Der Ertrag muss den Einkauf überzahlen.
         const cost = def.inputs.reduce(
           (sum, i) => sum + i.amount * rules.items[i.item]!.npcBuyPrice,
           0,

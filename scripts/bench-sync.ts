@@ -1,17 +1,3 @@
-/**
- * Lastmessung für die Server-Re-Simulation (Risiko R4).
- *
- *   node --experimental-strip-types scripts/bench-sync.ts
- *
- * Die zentrale Frage bei „mehrere tausend Spieler weltweit": Was kostet ein
- * Sync — und wovon hängen die Kosten ab?
- *
- * Behauptung aus §7: Dank der geschlossenen Produktionsformel kostet ein Sync
- * O(Commands), NICHT O(Offline-Dauer). Ein Spieler, der drei Wochen weg war,
- * ist damit genauso billig wie einer, der drei Minuten weg war. Das hier misst,
- * ob das stimmt.
- */
-
 import { performance } from 'node:perf_hooks';
 import { Server } from '../src/server/server.ts';
 import { getRuleset, CURRENT_RULESET_VERSION } from '../src/sim/rules.ts';
@@ -29,13 +15,6 @@ const EGGS = 3;
 const R_WHEAT = 0;
 const R_FEED = 1;
 
-/**
- * Ein Regelwerk mit beliebig vielen Feldern.
- *
- * Früher war die Feldzahl ein Parameter von `initialState`. Jetzt steht sie im
- * Regelwerk — die Spielgröße zu variieren heißt also, eine Tabelle zu bauen.
- * Genau das ist der Punkt von Phase 1.
- */
 function withFields(count: number): Ruleset {
   const plots = [];
   for (let i = 0; i < count; i++) {
@@ -48,7 +27,6 @@ function withFields(count: number): Ruleset {
   return { ...rules, plots };
 }
 
-/** Baut einen garantiert legalen Log, indem beim Bauen mitsimuliert wird. */
 function makeLog(target: number, r: Ruleset): Command[] {
   let state = initialState(r);
   const cmds: Command[] = [];
@@ -62,7 +40,6 @@ function makeLog(target: number, r: Ruleset): Command[] {
       cmds.push(c);
       seq++;
     } catch {
-      /* illegal an dieser Stelle — überspringen */
     }
   };
 
@@ -76,7 +53,6 @@ function makeLog(target: number, r: Ruleset): Command[] {
       tryPush({ seq: seq + 1, tick, type: 'COLLECT', plot: f });
     }
 
-    // Lager leeren, damit die Ernte nicht am Limit hängen bleibt.
     for (const item of [WHEAT, FEED, EGGS]) {
       const peek = advanceTo(state, tick, r);
       const have = count(peek, item);
@@ -90,7 +66,6 @@ function makeLog(target: number, r: Ruleset): Command[] {
 }
 
 function timeSyncs(cmds: Command[], nowMs: number, runs: number): number {
-  // Aufwärmen, damit die JIT-Kompilierung nicht mitgemessen wird.
   for (let i = 0; i < 20; i++) {
     const s = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     s.sync({ baseSeq: 0, rulesetVersion: CURRENT_RULESET_VERSION, commands: cmds }, nowMs);
@@ -147,12 +122,10 @@ const cmp = makeLog(100, rules);
 const cmpNow = T0 + 30 * DAY_MS;
 const closed = timeSyncs(cmp, cmpNow, 2000);
 
-// Nur die Command-Spanne, Tick für Tick.
 const refStart = performance.now();
 referenceRun(initialState(rules), cmp, rules);
 const naiveSpan = performance.now() - refStart;
 
-// Und das, was ein O(Zeit)-Server für 30 Tage Abwesenheit zusätzlich täte.
 const naiveAdvanceStart = performance.now();
 let held = 0;
 let progress = 0;

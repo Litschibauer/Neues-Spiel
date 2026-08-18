@@ -1,35 +1,3 @@
-/**
- * Das Anzeigemodell — die Brücke zwischen Sim-Kern und Oberfläche.
- *
- * Es beantwortet die Fragen, die JEDE Oberfläche stellt, egal wie sie aussieht:
- * Ist dieses Feld reif? Wie weit ist es? Kann ich mir das leisten? Passt es
- * noch ins Lager? Diese Fragen haben genau eine richtige Antwort, und die soll
- * nicht in jeder Oberfläche neu — und leicht anders — hergeleitet werden.
- *
- * ── Warum das eine eigene Datei ist ─────────────────────────────────────────
- *
- * Weil hier drei Dinge zusammenkommen, die man sonst dauerhaft vermischt:
- *
- *  1. **Die Sim** darf nichts von Anzeige wissen. Sie kennt Katalogindizes und
- *     Ticks, sonst nichts (§2.2).
- *  2. **Die Oberfläche** darf keine Spielregel enthalten. Sobald sie selbst
- *     ausrechnet, ob etwas bezahlbar ist, gibt es zwei Wahrheiten — und eine
- *     davon ist irgendwann falsch.
- *  3. **Beides zusammen** muss prüfbar sein, ohne einen Browser zu starten.
- *
- * ── Bewusst ohne Text ───────────────────────────────────────────────────────
- *
- * Hier steht **kein einziges deutsches Wort für die Anzeige**: keine Namen,
- * keine Statussätze, keine Zeitangaben wie „9 s". Nur Zahlen, Flags und
- * Katalog-Kennungen.
- *
- * Das ist die Bedingung dafür, dass eine zweite Oberfläche billig wird — ein
- * eigenes Design, eine andere Sprache, später eine native App. Sie alle
- * konsumieren dasselbe Modell und entscheiden selbst, wie „reif" aussieht und
- * wie es heißt. Ein Statussatz an dieser Stelle wäre bequem und würde genau
- * das verhindern.
- */
-
 import type { Ruleset } from '../sim/rules.ts';
 import { levelOf, levelStartedAt, listingFee, nextLevelAt, priceBand } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
@@ -37,78 +5,38 @@ import { EMPTY_PLOT, count, stored } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
-/** Warum eine Aktion gerade nicht geht. `null` heißt: sie geht. */
 export type Blocker = 'level' | 'cost' | 'inputs' | 'space' | 'slots' | 'offline' | null;
 
 export type PlotView = {
   index: number;
-  /** Katalog-Kennung des Platzes — daran hängt die Zeichnung. */
   id: string;
   level: number;
-  /** Gehört dem Spieler noch nicht, oder kann auf dieser Stufe nichts. */
   idle: boolean;
   busy: boolean;
   done: boolean;
-  /** 0…1. Bei `done` immer 1, bei leerem Platz 0. */
   progress: number;
-  /** Ticks bis fertig. 0, wenn nichts läuft oder es fertig ist. */
   remaining: number;
-  /** Was gerade produziert wird — Katalog-Kennung, oder `null`. */
   producing: string | null;
-  /** Was beim Abholen herauskommt. */
   output: Stack | null;
-  /**
-   * Das Rezept, das ein Tipp STARTEN würde — mit dem, was es kostet.
-   *
-   * `null`, wenn gerade nichts zu starten ist. Steht hier, seit Zutaten
-   * verbraucht werden: „Antippen zum Starten" verschweigt, dass ein Korn aus
-   * dem Lager verschwindet, und ein Spieler, der das erst hinterher merkt,
-   * zählt Verluste statt Erträge. Die Oberfläche soll den Preis nennen können,
-   * bevor getippt wird — und ihn nicht selbst ausrechnen müssen.
-   */
   next: RecipeOption | null;
-  /**
-   * ALLE Rezepte, die dieser Platz auf seiner Stufe fahren könnte.
-   *
-   * Ein Feld kann seit v3 Weizen **oder** Mais, eine Molkerei Sahne **oder**
-   * Butter. Damit ist „was startet ein Tipp" keine Frage mehr, die das Modell
-   * allein beantworten kann — der Spieler muss wählen.
-   *
-   * Warum die Liste hier steht und nicht in der Oberfläche zusammengesucht
-   * wird: Welche Rezepte auf welcher Stufe erlaubt sind, ist eine Spielregel.
-   * Eine Oberfläche, die sie selbst ausrechnet, ist eine zweite Wahrheit — und
-   * die erste, die einen Ausbau vergisst, zeigt einem Spieler ein Rezept, das
-   * die Sim ablehnt.
-   *
-   * Enthält auch, was gerade NICHT geht (`affordable: false`). Ein fehlendes
-   * Maiskorn soll man sehen, nicht raten.
-   */
   options: readonly RecipeOption[];
-  /**
-   * Was ein Tipp auf diesen Platz auslöst. Genau eine Antwort, damit nicht
-   * jede Oberfläche ihre eigene Reihenfolge erfindet.
-   */
   tap: 'collect' | 'start' | 'buy' | 'none';
   blocked: Blocker;
   upgrade: {
     label: string;
     cost: readonly Stack[];
     minPlayerLevel: number;
-    /** Spielerstufe reicht. */
     unlocked: boolean;
-    /** Stufe reicht UND bezahlbar. */
     affordable: boolean;
   } | null;
 };
 
-/** Ein Rezept, wie es zur Auswahl steht — mit dem, was es kostet und bringt. */
 export type RecipeOption = {
   recipe: number;
   id: string;
   inputs: readonly Stack[];
   output: Stack;
   durationTicks: number;
-  /** Zutaten sind da. `false` heißt: sichtbar, aber nicht startbar. */
   affordable: boolean;
 };
 
@@ -117,15 +45,8 @@ export type RequestView = {
   wants: readonly Stack[];
   reward: readonly Stack[];
   xp: number;
-  /** Steht noch im Vorrat und ist nicht annehmbar. */
   waiting: boolean;
   deliverable: boolean;
-  /**
-   * Darf JETZT weggeschickt werden — Platz vorn, Wartezeit abgelaufen.
-   *
-   * Getrennt von `skip.ready` weiter unten, weil die Oberfläche beides
-   * braucht: welcher Auftrag den Knopf bekommt, und warum er grau ist.
-   */
   skippable: boolean;
 };
 
@@ -133,7 +54,6 @@ export type OfferView = {
   id: number;
   item: number;
   amount: number;
-  /** Pro Stück. */
   price: number;
   total: number;
   affordable: boolean;
@@ -145,16 +65,7 @@ export type OrderView = {
   item: number;
   amount: number;
   price: number;
-  /**
-   * Ticks bis zum Verfall — `null` heißt: verfällt nicht.
-   *
-   * Der Normalfall ist inzwischen `null`. Ware bleibt stehen, bis jemand sie
-   * kauft oder der Verkäufer sie zurückzieht; bezahlt wird stattdessen beim
-   * Einstellen (`fee`). Das Feld bleibt trotzdem, weil ein Regelwerk eine Frist
-   * wieder einschalten darf — und dann muss die Oberfläche sie zeigen können.
-   */
   expiresIn: number | null;
-  /** Wie lange der Auftrag schon steht. Ohne Frist die interessantere Zahl. */
   listedFor: number;
 };
 
@@ -162,27 +73,11 @@ export type StockView = {
   item: number;
   id: string;
   amount: number;
-  /** An den NPC verkaufbar. */
   sellable: boolean;
   npcPrice: number;
-  /**
-   * Was der Händler dafür VERLANGT. `0` heißt: führt er nicht.
-   *
-   * Immer höher als `npcPrice` — sonst wäre der Händler eine Geldpresse, und
-   * `validateRuleset` ließe das Regelwerk gar nicht erst durch.
-   */
   npcBuyPrice: number;
-  /** Höchstpreis im Band — was ein Angebot am Markt bringen darf. */
   bandMax: number;
-  /** Mindestpreis im Band. Zusammen mit `bandMax` der erlaubte Bereich (§8). */
   bandMin: number;
-  /**
-   * Was das Einstellen EINES Stücks kostet.
-   *
-   * Aufgerundet, also nicht linear: Zwei Stück kosten nicht zwangsläufig das
-   * Doppelte. Für die genaue Summe rechnet die Oberfläche mit `listingFee` —
-   * derselben Funktion wie die Sim.
-   */
   feePerUnit: number;
 };
 
@@ -198,31 +93,20 @@ export type FarmView = {
   orderSlotsFree: number;
   mail: { entries: readonly Stack[]; capacity: number };
   stock: readonly StockView[];
-  /** Wie viele Angebote gerade wirklich kaufbar wären — für eine Zahl am Reiter. */
   buyable: number;
-  /**
-   * Der Zustand des Wegschickens (M6).
-   *
-   * `enabled: false` heißt: Das Regelwerk kennt es nicht — dann zeigt die
-   * Oberfläche den Knopf gar nicht erst, statt einen dauerhaft grauen.
-   */
   skip: {
     enabled: boolean;
     ready: boolean;
-    /** Ticks bis zum nächsten Mal. 0, wenn es jetzt geht. */
     readyIn: number;
-    /** Die volle Wartezeit — damit sich ein Fortschrittsbalken zeichnen lässt. */
     cooldownTicks: number;
   };
 };
 
-/** Rezepte, die auf diesem Platz und dieser Stufe laufen dürfen. */
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
   if (level <= 0) return [];
   return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
 }
 
-/** Erstes erlaubtes Rezept, dessen Zutaten vorhanden sind. `-1` = keins. */
 function startable(state: State, rules: Ruleset, plot: number): number {
   for (const index of recipesAt(rules, plot, state.plots[plot]?.level ?? 0)) {
     const recipe = rules.recipes[index];
@@ -259,9 +143,6 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
 
   const nextRecipe = busy ? -1 : startable(state, rules, i);
 
-  // Alle Rezepte dieser Stufe, nicht nur das erste mögliche. Ein Platz mit
-  // zwei Rezepten braucht eine Auswahl, und die Auswahl braucht auch das,
-  // was gerade nicht geht.
   const options: RecipeOption[] = busy
     ? []
     : recipesAt(rules, i, plot.level).flatMap((index) => {
@@ -285,7 +166,6 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
   if (done || busy) {
     tap = done ? 'collect' : 'none';
   } else if (!canRun) {
-    // Noch nicht gekauft, oder gekauft und leer (ein Gehege ohne Hühner).
     tap = upgrade ? 'buy' : 'none';
     if (upgrade && !upgrade.unlocked) blocked = 'level';
     else if (upgrade && !upgrade.affordable) blocked = 'cost';
@@ -316,21 +196,12 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
   };
 }
 
-/**
- * Alles, was eine Oberfläche über diesen Hof wissen muss — in einem Rutsch.
- *
- * `state` ist der VORHERGESAGTE Zustand (`client.preview()`), nicht der
- * bestätigte: Der Spieler soll seine Ernte sofort sehen und nicht erst nach
- * dem Sync (§3).
- */
 export function farmView(state: State, rules: Ruleset, online = true): FarmView {
   const used = stored(state, rules);
   const free = rules.siloCapacity - used;
   const at = nextLevelAt(rules, state.xp);
   const from = levelStartedAt(rules, state.xp);
 
-  // Wegschicken kostet Wartezeit statt Geld (M6). Beides einmal ausrechnen,
-  // damit die Auftragsliste und die Anzeige darüber dieselbe Antwort geben.
   const skipEnabled = rules.requestSkipCooldownTicks > 0;
   const skipReady = state.tick >= state.skipReadyAt;
 
@@ -396,8 +267,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       capacity: rules.mailCapacity,
     },
     stock,
-    // Ohne Netz ist nichts kaufbar (§6) — das gehört ins Modell, nicht in jede
-    // Oberfläche einzeln.
+
     buyable: online ? offers.filter((o) => o.affordable && o.fits).length : 0,
     skip: {
       enabled: skipEnabled,

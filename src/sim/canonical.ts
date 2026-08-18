@@ -1,26 +1,6 @@
-/**
- * Kanonische Serialisierung von Zustand und Commands.
- *
- * Bewusst OHNE Krypto und ohne jede Plattform-API — reines String-Bauen aus
- * Integern. Damit läuft diese Datei überall: Node, Browser, WASM, Mobile.
- *
- * Genau das macht sie zum Vergleichspunkt für den Plattform-Beweis: Zwei
- * Runtimes müssen für denselben Command-Log denselben kanonischen String
- * erzeugen. Ein Hash darüber ist nur noch Bequemlichkeit.
- *
- * Seit Inhalt Daten ist, stehen hier nur noch Zahlen — Katalogindizes statt
- * Namen. Ein neuer Gegenstand verlängert das Inventar-Array um einen Eintrag
- * und ändert sonst nichts an der Form.
- */
-
 import type { State } from './state.ts';
 import type { Command } from './commands.ts';
 
-/**
- * Feste Schlüsselreihenfolge, Arrays in Indexreihenfolge.
- * Kein `JSON.stringify(obj)` über Objekte — dessen Reihenfolge ist zwar in der
- * Praxis stabil, aber nichts, worauf man einen Konsistenzbeweis stützen will.
- */
 export function canonicalize(state: State): string {
   const items = state.items.join(',');
   const plots = state.plots.map((p) => `${p.level}:${p.recipe}:${p.startedAt}`).join(',');

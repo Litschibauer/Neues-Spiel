@@ -1,8 +1,3 @@
-/**
- * Sync-Eigenschaften: Atomarität, Idempotenz, Fork-Erkennung
- * (Architektur §9, Risiken R3 und R8).
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
@@ -24,15 +19,13 @@ test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor'
       rulesetVersion: CURRENT_RULESET_VERSION,
       commands: [
         { seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT },
-        { seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }, // Feld schon belegt
+        { seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT },
         { seq: 3, tick: 200, type: 'START', plot: 1, recipe: R_WHEAT },
       ],
     },
     T0 + 200 * 1000,
   );
 
-  // Das legale Präfix bleibt — sonst würde ein einziger Fehler ganz hinten im
-  // Log einem ehrlichen Spieler eine ganze Offline-Sitzung kosten.
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.kind, 'partial');
@@ -41,8 +34,7 @@ test('Präfix-Commit: ein illegales Command kippt nicht die legale Arbeit davor'
 
   assert.equal(server.snapshot.seq, 1);
   assert.equal(server.snapshot.state.plots[0]!.recipe, R_WHEAT);
-  // Alles ab dem Verstoß ist verworfen — auch das legale seq 3 dahinter,
-  // denn es wurde auf einem Zustand gerechnet, den es nie gab.
+
   assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
@@ -61,7 +53,7 @@ test('ist schon das erste neue Command illegal, wird gar nichts übernommen', ()
     {
       baseSeq: 1,
       rulesetVersion: CURRENT_RULESET_VERSION,
-      commands: [{ seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }], // belegt
+      commands: [{ seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }],
     },
     T0 + 100 * 1000,
   );
@@ -87,7 +79,6 @@ test('R8 — ein wiederholter Sync ist ein No-op, kein Fehler', () => {
 
   const stateAfterFirst = structuredClone(server.snapshot.state);
 
-  // Verbindung brach ab, Client schickt denselben Log noch einmal.
   const second = server.sync(req, T0 + 7300 * 1000);
   assert.equal(second.ok, true);
   if (!second.ok) return;
@@ -98,7 +89,6 @@ test('R8 — ein wiederholter Sync ist ein No-op, kein Fehler', () => {
 test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
-  // Handy und Tablet starten beide vom selben Snapshot.
   const phone = new Client(server.snapshot);
   const tablet = new Client(server.snapshot);
 
@@ -111,24 +101,17 @@ test('R3 — Multi-Device-Fork wird erkannt statt still übernommen', () => {
   const r1 = server.sync(phone.buildSyncRequest(), T0 + 100 * 1000);
   assert.equal(r1.ok, true);
 
-  // Das Tablet baut auf einem inzwischen veralteten Snapshot auf.
   const r2 = server.sync(tablet.buildSyncRequest(), T0 + 100 * 1000);
   assert.equal(r2.ok, false);
   if (r2.ok) return;
   assert.equal(r2.reason, 'FORK_DETECTED');
 
-  // Das Tablet übernimmt den Server-Stand und verliert seine Offline-Arbeit —
-  // genau der UX-Bruch, den ein Aktiv-Gerät-Token verhindern soll (R3).
   tablet.adopt(r2.snapshot, DISCARD_QUEUE);
   assert.equal(tablet.state.plots[0]!.recipe, R_WHEAT);
   assert.equal(tablet.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
 test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entscheidet', () => {
-  // Ursprünglicher Bug: Die Idempotenz-Prüfung hing allein an der `seq`. Ein
-  // zweites Gerät, das vom selben Snapshot aus offline ging, benutzt zwangsläufig
-  // dieselben Nummern — und wurde deshalb als „schon erledigt" durchgewinkt.
-  // Seine Offline-Arbeit verschwand kommentarlos.
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const original = {
@@ -138,7 +121,6 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
   };
   assert.equal(server.sync(original, T0 + 1000).ok, true);
 
-  // Gleiche seq, gleicher baseSeq, ANDERE Aktion → das ist ein Fork, kein Replay.
   const forked = {
     baseSeq: 0,
     rulesetVersion: CURRENT_RULESET_VERSION,
@@ -149,7 +131,6 @@ test('Regression: Fork und Replay teilen sich Sequenznummern — Inhalt entschei
   if (res.ok) return;
   assert.equal(res.reason, 'FORK_DETECTED');
 
-  // Und der echte Replay bleibt weiterhin ein sauberes No-op.
   const replay = server.sync(original, T0 + 3000);
   assert.equal(replay.ok, true);
   if (!replay.ok) return;
@@ -178,7 +159,7 @@ test('Lücken in der Sequenz werden abgelehnt', () => {
       rulesetVersion: CURRENT_RULESET_VERSION,
       commands: [
         { seq: 1, tick: 0, type: 'START', plot: 0, recipe: R_WHEAT },
-        { seq: 3, tick: 10, type: 'START', plot: 1, recipe: R_WHEAT }, // seq 2 fehlt
+        { seq: 3, tick: 10, type: 'START', plot: 1, recipe: R_WHEAT },
       ],
     },
     T0 + 100 * 1000,
@@ -197,15 +178,11 @@ test('R1 — der Kanarienvogel schlägt bei einem Determinismus-Bug an', () => {
   client.advanceClock(7200);
   client.collect(0);
 
-  // Wir simulieren einen Client, der (etwa durch eine kaputte Optimierung)
-  // einen anderen Zustand berechnet hat als der Server.
   const req = client.buildSyncRequest();
   req.clientHash = 'deadbeefdeadbeef';
 
   const res = server.sync(req, T0 + 7200 * 1000);
 
-  // Wichtig: Der Log ist legal, also wird er angewandt. Der Hash-Mismatch ist
-  // ein Bug-Alarm fürs Monitoring — keine Sanktion gegen den Spieler.
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.divergence, true);
@@ -214,9 +191,6 @@ test('R1 — der Kanarienvogel schlägt bei einem Determinismus-Bug an', () => {
 });
 
 test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () => {
-  // Der Unterschied zu FORK_DETECTED: Diese Ablehnung kommt aus dem
-  // Aktiv-Gerät-Verfahren, nicht aus der Kollision. Der Client kann daraus
-  // eine Frage machen statt einer Fehlermeldung nach dem Verlust.
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
 
   const phone = new Client(server.snapshot, 'handy');
@@ -225,7 +199,6 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   assert.equal(server.sync(phone.buildSyncRequest(), T0 + 10_000).ok, true);
   assert.equal(server.activeDevice?.id, 'handy');
 
-  // Das Tablet fragt nach — und erfährt es, ohne etwas riskiert zu haben.
   assert.equal(server.isActiveDevice('tablet'), false);
   assert.equal(server.isActiveDevice('handy'), true);
 
@@ -237,7 +210,7 @@ test('R3 — das zweite Gerät wird abgewiesen, BEVOR es Arbeit verliert', () =>
   assert.equal(res.ok, false);
   if (res.ok) return;
   assert.equal(res.reason, 'NOT_ACTIVE_DEVICE');
-  // Der Stand des Handys ist unberührt.
+
   assert.equal(server.snapshot.seq, 1);
   assert.equal(server.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
 });
@@ -259,8 +232,6 @@ test('R3 — ausdrückliche Übernahme geht durch', () => {
   assert.equal(server.activeDevice?.id, 'tablet');
   assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
 
-  // Und jetzt ist das Handy dran mit Abgewiesenwerden — es erfährt es beim
-  // nächsten Sync, statt es nie zu erfahren.
   const back = server.sync(
     { baseSeq: 2, rulesetVersion: CURRENT_RULESET_VERSION, commands: [], deviceId: 'handy' },
     T0 + 30_000,
@@ -271,8 +242,6 @@ test('R3 — ausdrückliche Übernahme geht durch', () => {
 });
 
 test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
-  // Skripte und Tests nehmen nicht teil — sonst wäre jede curl-Zeile ein
-  // Geräte-Wechsel.
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const withId = new Client(server.snapshot, 'handy');
   withId.start(0, R_WHEAT);
@@ -291,22 +260,12 @@ test('ohne Geräte-Kennung bleibt alles wie vorher', () => {
   assert.equal(server.activeDevice?.id, 'handy', 'und sie beanspruchen die Rechte nicht');
 });
 
-/**
- * Weiterspielen, WÄHREND ein Sync unterwegs ist.
- *
- * Auf einem Handy ist eine Rundreise leicht eine Sekunde lang, und in dieser
- * Sekunde tippt niemand brav still. Vorher hat die eintreffende Antwort die
- * Warteschlange komplett geleert — inklusive der Tipps, die der Server nie
- * gesehen hatte. Für den Spieler sah das aus wie ein Feld, das sich von selbst
- * wieder füllt: kein Fehler, keine Meldung, nur weg.
- */
 test('Aktionen während eines laufenden Syncs überleben die Antwort', async () => {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot, 'handy');
 
   client.start(0, R_WHEAT);
 
-  // Die Antwort kommt erst, nachdem der Spieler weitergetippt hat.
   let queuedDuringFlight = false;
   const engine = new SyncEngine(
     client,
@@ -328,25 +287,15 @@ test('Aktionen während eines laufenden Syncs überleben die Antwort', async () 
   assert.equal(client.baseSeq, 1, 'der gesendete Zug ist nicht bestätigt');
   assert.equal(client.queue.length, 1, 'der Zug während des Fluges ist verschwunden');
   assert.equal(client.queue[0]!.type, 'START');
-  // Neu nummeriert: Die alte Nummer gehörte zu einem Snapshot, den es nicht
-  // mehr gibt.
+
   assert.equal(client.queue[0]!.seq, 2);
 
-  // Und beide Felder laufen — der Server nimmt den Nachzügler ohne Murren an.
   const second = server.sync(client.buildSyncRequest(), T0 + 60_000);
   assert.equal(second.ok, true);
   assert.notEqual(second.snapshot.state.plots[0]!.recipe, EMPTY_PLOT);
   assert.notEqual(second.snapshot.state.plots[1]!.recipe, EMPTY_PLOT);
 });
 
-/**
- * Die Gegenprobe, und sie ist die wichtigere: Was der Server ABGELEHNT hat,
- * darf nicht zurück in die Warteschlange.
- *
- * Sonst schickt der Client es endlos erneut. Beim Markt ist das kein
- * Gedankenspiel: Ein Kauf auf ein vergriffenes Angebot ist für den lokalen
- * Sim-Kern völlig regelkonform — er sieht die geteilte Welt ja nicht.
- */
 test('vom Server abgelehnte Commands wandern nicht zurück in die Warteschlange', async () => {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot, 'handy');
@@ -355,7 +304,6 @@ test('vom Server abgelehnte Commands wandern nicht zurück in die Warteschlange'
   client.advanceClock(1);
   client.start(1, R_WHEAT);
 
-  // Der Server nimmt nur das erste und lehnt ab dem zweiten ab.
   const engine = new SyncEngine(
     client,
     async (req) => ({

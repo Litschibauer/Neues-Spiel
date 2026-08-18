@@ -1,16 +1,3 @@
-/**
- * Accounts (Phase 4).
- *
- * Ein Account ist ein langer Zufallsschlüssel — kein Benutzername, kein
- * Passwort, keine E-Mail. Warum das für den Anfang die richtige Wahl ist und
- * was es kostet, steht in `accounts.ts`.
- *
- * Geprüft wird hier vor allem eines: **dass Höfe sich nicht vermischen.** Das
- * ist die Eigenschaft, an der ein Mehrspieler-Server steht oder fällt — ein
- * Schlüssel, der den falschen Hof aufmacht, wäre schlimmer als gar keine
- * Accounts.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -35,7 +22,7 @@ const R_WHEAT = 0;
 const WHEAT = 1;
 const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
 const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
-/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
+
 const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
 function tempStore() {
@@ -59,10 +46,9 @@ test('ein Schlüssel ist lang genug, dass Raten aussichtslos ist', () => {
 
   const body = key.slice(KEY_PREFIX.length).replace(/-/g, '');
   assert.equal(body.length, 24, '24 Base32-Zeichen = 120 Bit');
-  // Keine Zeichen, die man beim Abschreiben verwechselt.
+
   assert.match(body, /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]+$/);
 
-  // Und wirklich zufällig: 500 Schlüssel, keine zwei gleich.
   const seen = new Set<string>();
   for (let i = 0; i < 500; i++) seen.add(generateKey());
   assert.equal(seen.size, 500);
@@ -72,7 +58,6 @@ test('Tippfehler beim Abschreiben kosten nicht den Hof', () => {
   const key = 'hof_20EBTP-XACTHM-QK4H7E-D6T9KS';
   const canonical = normalizeKey(key);
 
-  // Kleinbuchstaben, fehlende Bindestriche, Leerzeichen, O statt 0, I statt 1.
   assert.equal(normalizeKey('  20ebtp xacthm qk4h7e d6t9ks '), canonical);
   assert.equal(normalizeKey('HOF_20EBTPXACTHMQK4H7ED6T9KS'), canonical);
   assert.equal(normalizeKey('hof_2OEBTP-XACTHM-QK4H7E-D6T9KS'), canonical, 'O statt 0');
@@ -88,11 +73,9 @@ test('DER KERNPUNKT: zwei Höfe sehen einander nicht', () => {
     assert.notEqual(a.key, b.key);
     assert.notEqual(a.account.id, b.account.id);
 
-    // Jeder Schlüssel öffnet genau seinen Hof.
     assert.equal(store.resolve(a.key)?.id, a.account.id);
     assert.equal(store.resolve(b.key)?.id, b.account.id);
 
-    // Und keinen anderen.
     assert.notEqual(store.resolve(a.key)?.id, b.account.id);
     assert.equal(store.resolve('hof_00000-000000-000000-000000'), null);
     assert.equal(store.resolve(''), null);
@@ -107,7 +90,6 @@ test('Spielstände bleiben getrennt — auch nach echtem Spielen', () => {
     const a = store.create(T0, emptyGame());
     const b = store.create(T0, emptyGame());
 
-    // Hof A erntet, Hof B nicht.
     const gameA = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     const client = new Client(gameA.snapshot);
     client.start(0, R_WHEAT);
@@ -140,7 +122,6 @@ test('nach einem Neustart sind alle Höfe wieder da', () => {
     const b = store.create(T0 + 1, emptyGame());
     store.flush();
 
-    // Neuer Store auf derselben Datei — wie ein Serverneustart.
     const again = new AccountStore(path);
     assert.equal(again.count, 2);
     assert.equal(again.resolve(a.key)?.id, a.account.id);
@@ -151,9 +132,6 @@ test('nach einem Neustart sind alle Höfe wieder da', () => {
 });
 
 test('auf der Platte liegt nur der Hash, nie der Schlüssel', () => {
-  // Ein Backup, eine versehentlich geteilte Datei — nichts davon soll fremde
-  // Höfe aufmachen können. Geprüft wird die ROHE Datei, nicht eine Abfrage:
-  // Es geht ja gerade darum, was jemand sieht, der sie einfach aufmacht.
   const { dir, path, store } = tempStore();
   try {
     const { key } = store.create(T0, emptyGame());
@@ -169,9 +147,6 @@ test('auf der Platte liegt nur der Hash, nie der Schlüssel', () => {
 });
 
 test('beim Umzug alter Stände kostet eine kaputte Datei einen Hof, nicht alle', () => {
-  // Der Übergang von „eine JSON-Datei je Hof" auf die Datenbank. Wer so einen
-  // Stand liegen hat, soll ihn nicht verlieren — und eine unlesbare Datei
-  // darunter darf den Umzug nicht abbrechen.
   const dir = mkdtempSync(join(tmpdir(), 'ns-accounts-'));
   try {
     const legacy = join(dir, 'accounts');
@@ -197,9 +172,6 @@ test('beim Umzug alter Stände kostet eine kaputte Datei einen Hof, nicht alle',
 });
 
 test('gesammeltes Schreiben verliert nichts — auch nicht vor dem Schreiben', () => {
-  // Der Server merkt sich Änderungen und schreibt sie im Takt. Ein Lesen
-  // dazwischen muss den NEUEN Stand liefern, sonst rechnete der nächste Sync
-  // auf einem veralteten Spielstand weiter.
   const { dir, path, store } = tempStore();
   try {
     const { account } = store.create(T0, emptyGame());
@@ -214,7 +186,6 @@ test('gesammeltes Schreiben verliert nichts — auch nicht vor dem Schreiben', (
     assert.equal(store.pendingWrites, 0);
     store.close();
 
-    // Und nach einem Neustart steht es wirklich in der Datei.
     assert.equal(new AccountStore(path).load(account.id)?.nextRequestId, 42);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -232,10 +203,8 @@ test('ein Server ohne Bremse ließe sich mit Höfen zumüllen (R4)', () => {
   assert.equal(blocked.ok, false);
   if (!blocked.ok) assert.equal(blocked.reason, 'TOO_MANY_NEW_FARMS');
 
-  // Jemand anders darf trotzdem.
   assert.equal(limiter.allow('5.6.7.8', now, 3).ok, true);
 
-  // Und eine Stunde später geht es wieder.
   assert.equal(limiter.allow('1.2.3.4', now + 3_600_001, 4).ok, true);
 });
 
@@ -247,8 +216,6 @@ test('ist der Server voll, wird niemand mehr angelegt', () => {
 });
 
 test('ein alter Einzel-Spielstand lässt sich als Hof übernehmen', () => {
-  // Vor den Accounts gab es einen Hof und ein Token. Wer so einen Stand
-  // liegen hat, soll ihn nicht verlieren.
   const { dir, store } = tempStore();
   try {
     const oldToken = 'altes-feldtest-token-xyz';

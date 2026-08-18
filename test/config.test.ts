@@ -1,15 +1,3 @@
-/**
- * Die Trennung von Entwicklung und Produktion (siehe `config.ts`).
- *
- * Diese Tests prüfen keine Spielregel, sondern eine **Betriebsregel** — und die
- * sind es, die im Ernstfall wehtun. Ein Server, der versehentlich mit
- * Sekundenuhren auf echten Spielständen läuft, lässt sich nicht zurückdrehen:
- * Die Migration hat die Zeiten dann bereits umgerechnet.
- *
- * Deshalb steht die Konfiguration in einer eigenen, reinen Funktion — damit
- * genau diese Fälle prüfbar sind, ohne einen Server zu starten.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -23,7 +11,6 @@ import { DEV_RULESET_VERSION, LATEST_RULESET_VERSION } from '../src/sim/rules.ts
 const ROOT = '/srv/spiel';
 
 test('die Umgebung muss genannt werden — es gibt keinen Standardwert', () => {
-  // Ein vergessenes Flag darf nie zu „irgendwas" führen.
   assert.throws(() => resolveConfig({}, [], ROOT), ConfigError);
   assert.throws(() => resolveConfig({}, ['--env=staging'], ROOT), ConfigError);
   assert.throws(() => resolveConfig({ NEUES_SPIEL_ENV: 'PROD' }, [], ROOT), ConfigError);
@@ -33,7 +20,7 @@ test('beide Schreibweisen des Flags funktionieren, Umgebungsvariable auch', () =
   assert.equal(resolveConfig({}, ['--env=dev'], ROOT).env, 'dev');
   assert.equal(resolveConfig({}, ['--env', 'dev'], ROOT).env, 'dev');
   assert.equal(resolveConfig({ NEUES_SPIEL_ENV: 'prod' }, [], ROOT).env, 'prod');
-  // Das Flag schlägt die Variable — was man tippt, gilt.
+
   assert.equal(resolveConfig({ NEUES_SPIEL_ENV: 'prod' }, ['--env=dev'], ROOT).env, 'dev');
 });
 
@@ -52,13 +39,11 @@ test('die beiden Umgebungen teilen sich nichts', () => {
 });
 
 test('RIEGEL: das Dev-Regelwerk kommt nicht in Produktion', () => {
-  // Der teuerste Betriebsfehler, den dieses System zulässt — deshalb ein
-  // Startabbruch und keine Warnung.
   assert.throws(
     () => resolveConfig({ NEUES_SPIEL_RULESET: String(DEV_RULESET_VERSION) }, ['--env=prod'], ROOT),
     ConfigError,
   );
-  // In Dev ist genau das dagegen der Normalfall.
+
   assert.equal(
     resolveConfig({ NEUES_SPIEL_RULESET: String(DEV_RULESET_VERSION) }, ['--env=dev'], ROOT)
       .rulesetVersion,
@@ -70,7 +55,6 @@ test('RIEGEL: die Werkbank ist in Produktion aus, in Dev an', () => {
   assert.equal(resolveConfig({}, ['--env=prod'], ROOT).adminEnabled, false);
   assert.equal(resolveConfig({}, ['--env=dev'], ROOT).adminEnabled, true);
 
-  // Ausdrücklich einschalten geht — mit sichtbarer Warnung im Startprotokoll.
   const forced = resolveConfig({ NEUES_SPIEL_ADMIN: '1' }, ['--env=prod'], ROOT);
   assert.equal(forced.adminEnabled, true);
   assert.ok(
@@ -78,19 +62,15 @@ test('RIEGEL: die Werkbank ist in Produktion aus, in Dev an', () => {
     'keine Warnung im Startprotokoll',
   );
 
-  // Und in Dev abschalten geht ebenso.
   assert.equal(resolveConfig({ NEUES_SPIEL_ADMIN: '0' }, ['--env=dev'], ROOT).adminEnabled, false);
 });
 
 test('RIEGEL: Produktion geht nicht im Klartext ins Netz', () => {
-  // Der Hof-Schlüssel reist in JEDEM Aufruf mit, und daneben steht kein
-  // Passwort: Wer ihn unterwegs mitliest, hat den Hof. Deshalb Startabbruch.
   assert.throws(
     () => resolveConfig({ NEUES_SPIEL_HOST: '0.0.0.0' }, ['--env=prod'], ROOT),
     ConfigError,
   );
 
-  // Die Fehlermeldung muss die Auswege nennen — sonst rät man am Server herum.
   try {
     resolveConfig({ NEUES_SPIEL_HOST: '0.0.0.0' }, ['--env=prod'], ROOT);
     assert.fail('kein Abbruch');
@@ -101,7 +81,6 @@ test('RIEGEL: Produktion geht nicht im Klartext ins Netz', () => {
     assert.match(text, /127\.0\.0\.1/);
   }
 
-  // Drei Auswege, alle drei müssen durchgehen.
   const proxied = resolveConfig(
     { NEUES_SPIEL_HOST: '0.0.0.0', NEUES_SPIEL_BEHIND_PROXY: '1' },
     ['--env=prod'],
@@ -124,8 +103,6 @@ test('RIEGEL: Produktion geht nicht im Klartext ins Netz', () => {
 });
 
 test('halb angegebenes TLS ist schlimmer als gar keins', () => {
-  // Man glaubt, es läuft verschlüsselt, und es läuft im Klartext. Also lieber
-  // gar nicht starten — in beiden Umgebungen.
   for (const env of ['dev', 'prod']) {
     assert.throws(
       () => resolveConfig({ NEUES_SPIEL_TLS_CERT: '/etc/tls/cert.pem' }, [`--env=${env}`], ROOT),
@@ -141,15 +118,13 @@ test('halb angegebenes TLS ist schlimmer als gar keins', () => {
 });
 
 test('Dev darf unverschlüsselt ins LAN — sagt es aber deutlich', () => {
-  // Vom Handy aus testen soll gehen, ohne erst ein Zertifikat zu besorgen.
   const dev = resolveConfig({}, ['--env=dev'], ROOT);
   assert.equal(dev.host, '0.0.0.0');
   assert.equal(isSecureTransport(dev), false);
 
   const text = describeConfig(dev).join('\n');
   assert.match(text, /Unverschlüsselt/);
-  // Der zweite, leicht zu übersehende Grund: ohne sicheren Kontext kein
-  // Service Worker — und damit kein Start ohne Netz.
+
   assert.match(text, /Service Worker/);
 });
 
@@ -181,9 +156,6 @@ test('alles Wichtige lässt sich überschreiben — ohne die Riegel aufzuweichen
   assert.equal(cfg.tokenPath, '/etc/spiel/token');
   assert.equal(cfg.version, 'a1b2c3d');
 
-  // Die Datenbank folgt dem Spielstandpfad, wenn nichts anderes gesagt ist.
-  // Ohne das schriebe jemand, der sein Datenverzeichnis verlegt, still an zwei
-  // verschiedene Orte — und merkt es erst, wenn Höfe fehlen.
   assert.equal(cfg.dbPath, '/var/lib/spiel/spiel.db');
 });
 
@@ -195,7 +167,7 @@ test('das Startprotokoll verrät, was läuft — sonst rät man beim Deployen', 
   assert.match(text, /abc1234/);
   assert.match(text, /8788/);
   assert.match(text, /v1001/);
-  // Der Pfad, unter dem die Spielstände WIRKLICH liegen — nicht der alte.
+
   assert.match(text, /spiel\.db/);
   assert.doesNotMatch(text, /save\.json/);
 });

@@ -1,24 +1,3 @@
-/**
- * Ruleset-Migration (Risiko R2, Architektur §9).
- *
- * Das Grundproblem: Live-Service heißt ständige Balance-Patches, aber jede
- * Regeländerung ändert das deterministische Ergebnis. Ein Spieler, der offline
- * unter alten Regeln gespielt hat, darf NICHT unter neuen nachgerechnet werden —
- * sonst weicht der Server garantiert von seinem Client ab (R1).
- *
- * Die Auflösung besteht aus drei Teilen:
- *
- *  1. Der Log wird immer unter der Version validiert, unter der er entstanden ist.
- *  2. ERST DANACH wird der Zustand auf die neue Version gehoben — an einer
- *     definierten Grenze, nämlich am Sync.
- *  3. Migration passiert ausschließlich SERVERSEITIG. Der Client bekommt das
- *     Ergebnis fertig im Snapshot und rechnet nie selbst um. Damit kann die
- *     Migration gar nicht erst zwischen Client und Server divergieren.
- *
- * Leitprinzip für jede Migration: **Nie schlechter als ein Neuanfang unter den
- * neuen Regeln, nie besser als das, was der Spieler schon hatte.**
- */
-
 import type { Ruleset } from './rules.ts';
 import { getRuleset, levelRecipes } from './rules.ts';
 import type { State } from './state.ts';
@@ -33,21 +12,6 @@ export class MigrationError extends Error {
 
 export type MigrationStep = (state: State, from: Ruleset, to: Ruleset) => State;
 
-/**
- * Rechnet laufende Produktionszeiten um, wenn sich eine Rezeptdauer ändert.
- *
- * Regel: Die verbleibende Zeit bleibt erhalten — gedeckelt auf die neue
- * Gesamtdauer. Konkret:
- *
- *   - halb fertig     → behält seine Restzeit
- *   - frisch gestartet → startet neu mit der (kürzeren) neuen Dauer, profitiert
- *                        also vom Buff statt darauf sitzen zu bleiben
- *   - fertig           → bleibt fertig
- *
- * So verliert niemand Fortschritt, und niemand bekommt etwas geschenkt, das
- * über einen frischen Start hinausgeht. Gilt für Felder, Mühlen und Backöfen
- * gleichermaßen — es ist derselbe Platz mit demselben Timer.
- */
 function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
   let changed = false;
   const plots = state.plots.map((p) => {
@@ -70,7 +34,6 @@ function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
   return next;
 }
 
-/** Hält den Fortschritt passiver Plätze im gültigen Bereich, wenn sich die Taktung ändert. */
 function clampPassives(state: State, _from: Ruleset, to: Ruleset): State {
   let changed = false;
   const passives = state.passives.map((progress, i) => {
@@ -88,23 +51,9 @@ function clampPassives(state: State, _from: Ruleset, to: Ruleset): State {
   return next;
 }
 
-/**
- * Der reine Zahlen-Patch: Zeiten ändern sich, die Form des Zustands nicht.
- */
 export const RETIME: MigrationStep = (state, from, to) =>
   clampPassives(rescaleDurations(state, from, to), from, to);
 
-/**
- * Der Inhalts-Patch: Der Zustand WÄCHST.
- *
- * Ein neuer Gegenstand verlängert das Inventar, ein neues Feld die Platzliste,
- * eine neue Weide die Fortschrittsliste. Weil Kataloge append-only sind
- * (`rules.ts`), genügt Auffüllen mit Nullen: Bestehende Indizes behalten ihre
- * Bedeutung, alles Neue startet leer.
- *
- * Das ist der ehrlichere Test für R2 als jeder Zahlen-Patch — hier ändert sich
- * die *Form* des Zustands, nicht nur sein Inhalt.
- */
 export const GROW: MigrationStep = (state, from, to) => {
   if (
     to.items.length === state.items.length &&
@@ -118,8 +67,6 @@ export const GROW: MigrationStep = (state, from, to) => {
     to.plots.length < state.plots.length ||
     to.passives.length < state.passives.length
   ) {
-    // Schrumpfen ist keine Auffüll-Migration: Wohin mit den Beständen, wohin
-    // mit der laufenden Produktion? Das braucht einen bewussten Plan.
     throw new MigrationError(`v${from.version} → v${to.version}: Katalog schrumpft`);
   }
 
@@ -130,8 +77,7 @@ export const GROW: MigrationStep = (state, from, to) => {
   next.items = items;
 
   const plots = state.plots.slice();
-  // Neue Plätze kommen mit ihrer Startstufe dazu — ein Patch, der ein Feld
-  // geschenkt hinzufügt, tut das damit auch für bestehende Höfe.
+
   while (plots.length < to.plots.length) {
     plots.push({ level: to.plots[plots.length]!.startLevel, recipe: EMPTY_PLOT, startedAt: 0 });
   }
@@ -144,37 +90,18 @@ export const GROW: MigrationStep = (state, from, to) => {
   return next;
 };
 
-/** Inhalt dazu UND Zeiten anpassen — die beiden Bausteine hintereinander. */
 export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
   RETIME(GROW(state, from, to), from, to);
 
-/** Ein Schritt pro Versionssprung. Migrationen werden der Reihe nach angewandt. */
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
-  // v1 → v2 war ein reiner Zahlen-Patch: andere Preise, andere Zeiten, gleicher
-  // Katalog. Da wächst nichts, es muss nur die laufende Produktion umgerechnet
-  // werden.
   ['1->2', RETIME],
-  // v2 → v3 ist der erste echte INHALTS-Patch: Mais, Kühe, Molkerei. Der
-  // Zustand wächst — Inventar, Plätze — und gleichzeitig ändern sich Zeiten.
-  // Genau dafür lag `GROW_AND_RETIME` bereit.
+
   ['2->3', GROW_AND_RETIME],
 ]);
 
-/**
- * Prüft, dass ein Zustand nach den gegebenen Regeln überhaupt gültig ist.
- *
- * Eine Migration, die einen ungültigen Zustand erzeugt, ist schlimmer als gar
- * keine: Sie bringt Spieler in Situationen, die die Sim nie herstellen könnte,
- * und lässt danach Aktionen scheitern, die eigentlich erlaubt sein müssten.
- */
 export function assertInvariants(state: State, rules: Ruleset): void {
   const problems: string[] = [];
 
-  // ── Form: Zustand und Katalog müssen zusammenpassen ──────────────────
-  //
-  // Seit Inhalt Daten ist, ist DAS die erste Bruchstelle: Ein Inventar mit
-  // fünf Einträgen unter einem Katalog mit sechs bedeutet, dass ein Index
-  // stillschweigend fehlt — und dann wandert die Bedeutung aller Zahlen.
   if (state.items.length !== rules.items.length) {
     problems.push(`Inventar ${state.items.length} != Katalog ${rules.items.length}`);
   }
@@ -189,9 +116,6 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     problems.push(`Lager über Limit: ${stored(state, rules)} > ${rules.siloCapacity}`);
   }
 
-  // Die Behälter-Invariante aus §7: JEDER Ort, an dem Ware liegen kann, ist
-  // begrenzt. Ein einziger ungedeckelter Behälter macht das Lagerlimit — und
-  // damit die Inflationsbremse — wertlos.
   if (state.orders.length > rules.orderSlots) {
     problems.push(`zu viele Aufträge: ${state.orders.length} > ${rules.orderSlots}`);
   }
@@ -209,9 +133,6 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!rules.items[m.item]) problems.push(`Postfach: Gegenstand ${m.item} unbekannt`);
   }
 
-  // Die Auslage des Marktes ist ebenfalls ein Behälter (§7) — und obendrein das
-  // einzige Stück Zustand, das von außen kommt. Ein Angebot mit Menge 0 oder
-  // negativem Preis wäre hier der Beweis, dass etwas es falsch hineingelegt hat.
   if (state.offers.length > rules.offerSlots) {
     problems.push(`Auslage über Limit: ${state.offers.length} > ${rules.offerSlots}`);
   }
@@ -224,7 +145,6 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     if (!rules.items[o.item]) problems.push(`Angebot ${o.id}: Gegenstand ${o.item} unbekannt`);
   }
 
-  // Auch die Auftragsschlange ist ein Behälter und braucht ihr Limit (§7).
   if (state.requests.length > rules.requestQueueMax) {
     problems.push(`Auftragsvorrat über Limit: ${state.requests.length} > ${rules.requestQueueMax}`);
   }
@@ -283,18 +203,9 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   }
 }
 
-/**
- * Hebt einen Zustand von `fromVersion` auf `toVersion`, Sprung für Sprung.
- *
- * Bewusst kein Sprung über mehrere Versionen auf einmal: Jeder Schritt ist für
- * sich testbar, und ein Spieler, der drei Patches verschlafen hat, läuft durch
- * dieselben Schritte wie alle anderen — nur hintereinander.
- */
 export function migrateState(state: State, fromVersion: number, toVersion: number): State {
   if (toVersion === fromVersion) return state;
   if (toVersion < fromVersion) {
-    // Downgrades gibt es nicht. Ein Rollback des Servers auf eine ältere
-    // Version braucht einen bewussten Plan, keine automatische Umrechnung.
     throw new MigrationError(`Downgrade ${fromVersion} → ${toVersion} wird nicht unterstützt`);
   }
 

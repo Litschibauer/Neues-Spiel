@@ -1,17 +1,3 @@
-/**
- * Der Tunnel-Test (Architektur §10).
- *
- * Szenario: Zug fährt in den Tunnel, Verbindung ist tot, der Spieler spielt
- * weiter. Danach wieder Empfang. Nichts darf verloren gehen, nichts doppelt
- * angewandt werden, und es darf keinen sichtbaren Moduswechsel geben.
- *
- * Der fieseste Fall ist NICHT „keine Verbindung" — das ist einfach. Es ist die
- * verlorene ANTWORT: Der Server hat den Batch bereits angewandt, der Client
- * hat es nie erfahren und spielt weiter. Dann behauptet der Client beim
- * nächsten Versuch, an einer Stelle zu stehen, die der Server längst hinter
- * sich hat.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
@@ -28,9 +14,8 @@ const WHEAT = 1;
 const R_WHEAT = 0;
 const SEED_COST = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
 const START_WHEAT = rules.startingItems.find((x) => x.item === WHEAT)?.amount ?? 0;
-/** Weizen nach genau einer Ernte auf einem frischen Hof: Vorrat − Saat + Ertrag. */
-const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
+const AFTER_ONE = START_WHEAT - SEED_COST + rules.recipes[R_WHEAT]!.output.amount;
 
 function setup() {
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
@@ -38,14 +23,13 @@ function setup() {
   return { server, client };
 }
 
-/** Transport mit Schalter — „im Tunnel" heißt: wirft. */
 function makeTransport(server: Server, clock: { now: number }) {
   const state = { online: true, dropResponses: false, calls: 0 };
   const transport: Transport = async (req) => {
     state.calls++;
     if (!state.online) throw new Error('ENETUNREACH');
     const res = server.sync(req, clock.now);
-    if (state.dropResponses) throw new Error('ETIMEDOUT'); // Server hat's, Client nicht
+    if (state.dropResponses) throw new Error('ETIMEDOUT');
     return res;
   };
   return { transport, state };
@@ -57,7 +41,6 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
   const { transport, state } = makeTransport(server, clock);
   const engine = new SyncEngine(client, transport, { rnd: mulberry32(1) });
 
-  // Vor dem Tunnel: normaler Sync.
   client.start(0, R_WHEAT);
   clock.now = T0 + 10_000;
   client.advanceClock(10);
@@ -65,7 +48,6 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
   assert.equal(engine.view, 'live');
   assert.equal(client.queue.length, 0);
 
-  // ── Tunnel ──
   state.online = false;
 
   client.start(1, R_WHEAT);
@@ -78,17 +60,13 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
   assert.equal(failed.kind, 'failed');
   assert.equal(engine.view, 'offline');
 
-  // Entscheidend: Das Gameplay merkt davon nichts. Die Commands liegen sicher
-  // in der Queue, und der Spieler kann einfach weitermachen.
   assert.equal(client.queue.length, 3);
   assert.equal(client.start(2, R_WHEAT).ok, true);
   assert.equal(client.queue.length, 4);
 
-  // Backoff greift — es wird nicht in einer Schleife gehämmert.
   const backing = await engine.attempt(clock.now);
   assert.equal(backing.kind, 'backing-off');
 
-  // ── Raus aus dem Tunnel ──
   state.online = true;
   clock.now += 120_000;
 
@@ -97,9 +75,8 @@ test('Tunnel: Spielen läuft weiter, nichts geht verloren, kein Moduswechsel', a
   assert.equal(engine.view, 'live');
   assert.equal(client.queue.length, 0);
 
-  // Alle vier Offline-Commands sind angekommen.
   assert.equal(server.snapshot.seq, 5);
-  // Drei Aussaaten (drei Saatkörner weg), zwei Ernten (zweimal Ertrag).
+
   assert.equal(
     count(server.snapshot.state, WHEAT),
     START_WHEAT - 3 * SEED_COST + 2 * rules.recipes[R_WHEAT]!.output.amount,
@@ -118,58 +95,43 @@ test('verlorene Antwort: Server hat den Batch, der Client weiß es nicht', async
   client.collect(0);
   clock.now = T0 + 7200_000;
 
-  // Der Request kommt an und wird angewandt — nur die Antwort geht verloren.
   state.dropResponses = true;
   const lost = await engine.attempt(clock.now);
   assert.equal(lost.kind, 'failed');
 
-  // Server ist weiter, Client denkt, nichts sei passiert.
   assert.equal(server.snapshot.seq, 2);
   assert.equal(client.queue.length, 2);
 
-  // Der Spieler spielt ahnungslos weiter.
   client.advanceClock(600);
   assert.equal(client.start(1, R_WHEAT).ok, true);
   clock.now += 600_000;
 
-  // Neuer Versuch: Der Client schickt ab seinem alten Stand — inklusive der
-  // zwei Commands, die längst drin sind.
   state.dropResponses = false;
   clock.now += 120_000;
   const res = await engine.attempt(clock.now);
 
   assert.equal(res.kind, 'synced');
-  // Nichts verloren …
+
   assert.equal(server.snapshot.seq, 3);
   assert.equal(server.snapshot.state.plots[1]!.recipe, R_WHEAT);
-  // … und nichts doppelt: Feld 0 wurde genau einmal geerntet (und Feld 1 säte
-  // danach noch ein Korn aus).
+
   assert.equal(count(server.snapshot.state, WHEAT), AFTER_ONE - SEED_COST);
   assert.equal(client.queue.length, 0);
 });
 
 test('Regression: Wiederaufsetzen ohne Zeitsprung dazwischen', async () => {
-  // Der Bug, den erst ein echter Lauf über HTTP zeigte: Der Server schrieb
-  // seinen Zustand beim Sync bis „jetzt" fort und war damit der Zeitachse des
-  // Clients voraus. Nach einer verlorenen Antwort datierte der ahnungslose
-  // Client seine nächsten Commands auf Ticks, die der Server längst hinter
-  // sich hatte — und lehnte sie als TIME_WENT_BACKWARDS ab.
-  //
-  // Die alten Tests trafen das nicht, weil sie zwischen den Aktionen großzügig
-  // die Uhr vorstellten. Hier passiert bewusst fast nichts dazwischen.
   const { server, client } = setup();
   const clock = { now: T0 };
   const { transport, state } = makeTransport(server, clock);
   const engine = new SyncEngine(client, transport, { rnd: mulberry32(11) });
 
   client.start(0, R_WHEAT);
-  clock.now = T0 + 2_000; // Server ist jetzt real 2 s weiter als Tick 0.
+  clock.now = T0 + 2_000;
 
   state.dropResponses = true;
   await engine.attempt(clock.now);
   assert.equal(server.snapshot.seq, 1, 'Server hat den Batch angewandt');
 
-  // Kein advanceClock: Der Spieler tippt einfach weiter, im selben Tick.
   assert.equal(client.start(1, R_WHEAT).ok, true);
 
   state.dropResponses = false;
@@ -185,9 +147,6 @@ test('Regression: Wiederaufsetzen ohne Zeitsprung dazwischen', async () => {
 });
 
 test('Snapshot-Zeit bleibt an den verbrauchten Ticks ausgerichtet', async () => {
-  // Der Server darf `serverTs` nicht auf die Wanduhr setzen, sondern nur um die
-  // tatsächlich verbrauchten Ticks weiterstellen. Sonst verfiele dem Spieler
-  // die Zeit zwischen seinem letzten Command und dem Sync.
   const { server, client } = setup();
   const clock = { now: T0 };
   const { transport } = makeTransport(server, clock);
@@ -196,14 +155,12 @@ test('Snapshot-Zeit bleibt an den verbrauchten Ticks ausgerichtet', async () => 
   client.advanceClock(100);
   client.start(0, R_WHEAT);
 
-  // Sync erst deutlich später — 900 s liegen ungenutzt dazwischen.
   clock.now = T0 + 1000 * 1000;
   await engine.attempt(clock.now);
 
   assert.equal(server.snapshot.state.tick, 100);
   assert.equal(server.snapshot.serverTs, T0 + 100 * 1000, 'serverTs folgt dem Tick, nicht der Uhr');
 
-  // Die ungenutzten 900 s stehen dem Spieler weiterhin zur Verfügung.
   client.advanceClock(900);
   assert.equal(client.start(1, R_WHEAT).ok, true);
   const res = await engine.attempt(clock.now);
@@ -240,7 +197,6 @@ test('Fork wird auch über die Engine sauber aufgelöst — Server gewinnt', asy
   const clock = { now: T0 };
   const { transport } = makeTransport(server, clock);
 
-  // Zweites Gerät synct zuerst.
   const other = new Client(server.snapshot);
   other.start(2, R_WHEAT);
   other.advanceClock(50);
@@ -255,8 +211,6 @@ test('Fork wird auch über die Engine sauber aufgelöst — Server gewinnt', asy
   if (res.kind !== 'synced') return;
   assert.equal(res.result.ok, false);
 
-  // Der Client steht danach sauber auf dem Server-Stand, nicht in einem
-  // Zwischenzustand — und die Queue ist leer, nicht endlos wiederholend.
   assert.equal(client.queue.length, 0);
   assert.equal(client.state.plots[2]!.recipe, R_WHEAT);
   assert.equal(engine.view, 'live');
@@ -268,10 +222,9 @@ test('Präfix-Commit über die Engine: legale Arbeit bleibt, Rest wird gemeldet'
   const { transport } = makeTransport(server, clock);
   const engine = new SyncEngine(client, transport, { rnd: mulberry32(5) });
 
-  // Ein manipulierter/kaputter Client, der die lokale Prüfung umgeht.
   client.start(0, R_WHEAT);
   client.advanceClock(100);
-  client.queue.push({ seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT }); // belegt
+  client.queue.push({ seq: 2, tick: 100, type: 'START', plot: 0, recipe: R_WHEAT });
   clock.now = T0 + 200_000;
 
   const res = await engine.attempt(clock.now);
@@ -285,8 +238,6 @@ test('Präfix-Commit über die Engine: legale Arbeit bleibt, Rest wird gemeldet'
 });
 
 test('Thundering Herd: 500 Clients verlassen gleichzeitig den Tunnel', async () => {
-  // Ohne Jitter würden alle im selben Moment erneut anklopfen und sich ihre
-  // eigene Lastspitze bauen — genau dann, wenn der Zug den Tunnel verlässt.
   const attempts: number[] = [];
 
   for (let i = 0; i < 500; i++) {
@@ -304,13 +255,8 @@ test('Thundering Herd: 500 Clients verlassen gleichzeitig den Tunnel', async () 
   const min = Math.min(...attempts);
   const max = Math.max(...attempts);
 
-  // Alle liegen im erwarteten Fenster (baseDelay 2s, halbiert plus Jitter).
   assert.ok(min >= 1000 && max <= 2000, `Backoff außerhalb der Erwartung: ${min}–${max}ms`);
 
-  // Der eigentliche Test ist die VERTEILUNG, nicht die Anzahl verschiedener
-  // Werte: Bei ~1000 möglichen Millisekunden und 500 Ziehungen sind Kollisionen
-  // statistisch normal. Entscheidend ist, dass die Last das ganze Fenster füllt
-  // und sich nicht in einer Ecke sammelt.
   const buckets = new Array(10).fill(0);
   for (const a of attempts) {
     const idx = Math.min(9, Math.floor(((a - 1000) / 1000) * 10));
@@ -321,7 +267,7 @@ test('Thundering Herd: 500 Clients verlassen gleichzeitig den Tunnel', async () 
     buckets.every((n) => n > 0),
     `Lücken in der Streuung: ${buckets.join(', ')}`,
   );
-  // Kein Zehntel des Fensters trägt mehr als das Dreifache des Durchschnitts.
+
   assert.ok(
     Math.max(...buckets) < (attempts.length / 10) * 3,
     `Ballung in einem Fenster: ${buckets.join(', ')}`,
@@ -348,14 +294,11 @@ test('wiederholtes Scheitern verlängert den Abstand, statt zu hämmern', async 
 
   assert.ok(delays[5]! > delays[0]! * 4, `kein spürbares Backoff: ${delays.join(', ')}`);
   assert.ok(Math.max(...delays) <= 60_000, 'Backoff übersteigt das Maximum');
-  // Und die Commands liegen die ganze Zeit unversehrt in der Queue.
+
   assert.equal(client.queue.length, 1);
 });
 
 test('eine ausdrückliche Handlung überspringt das Backoff', async () => {
-  // Nach längerer Funkstille wächst der Abstand auf bis zu eine Minute. Tippt
-  // der Spieler dann auf „jetzt syncen", darf ihn das Backoff nicht ignorieren:
-  // Er weiß etwas, das der Timer nicht weiß — nämlich dass er wieder Netz hat.
   const { server, client } = setup();
   const clock = { now: T0 };
   const { transport, state } = makeTransport(server, clock);
@@ -365,7 +308,7 @@ test('eine ausdrückliche Handlung überspringt das Backoff', async () => {
   client.start(0, R_WHEAT);
   for (let i = 0; i < 4; i++) {
     const res = await engine.attempt(clock.now);
-    if (res.kind === 'failed') clock.now += 10; // absichtlich NICHT abwarten
+    if (res.kind === 'failed') clock.now += 10;
   }
   assert.equal((await engine.attempt(clock.now)).kind, 'backing-off');
 
@@ -375,18 +318,6 @@ test('eine ausdrückliche Handlung überspringt das Backoff', async () => {
   assert.equal(client.queue.length, 0);
 });
 
-/**
- * Schwaches Netz — der Fall, der schlimmer ist als gar keines.
- *
- * Kein Netz ist harmlos: Der Aufruf scheitert sofort, das Backoff greift, das
- * Spiel läuft weiter. Ein Balken mit einem halben Balken Empfang scheitert
- * aber nicht — er **hängt**. Ohne Frist bliebe `inFlight` für immer gesetzt,
- * jeder weitere Versuch prallte daran ab, und der Client synchronisierte nie
- * wieder, ohne dass irgendwo ein Fehler aufträte.
- *
- * Das ist die unangenehmste Sorte Fehler: Ein hängender Client sieht für den
- * Spieler genauso aus wie ein verbundener.
- */
 test('eine hängende Leitung blockiert den Client nicht dauerhaft', async () => {
   const { server, client } = setup();
 
@@ -398,8 +329,7 @@ test('eine hängende Leitung blockiert den Client nicht dauerhaft', async () => 
         resolve(server.sync(req, T0 + 60_000));
         return;
       }
-      // Genau wie ein `fetch`, das auf Antwort wartet: Es passiert nichts —
-      // weder Erfolg noch Fehler.
+
       signal?.addEventListener('abort', () => {
         aborted = true;
         reject(new Error('aborted'));
@@ -422,10 +352,8 @@ test('eine hängende Leitung blockiert den Client nicht dauerhaft', async () => 
   assert.equal(engine.inFlight, false, 'der Client bleibt für immer „beschäftigt"');
   assert.equal(engine.timeouts, 1);
 
-  // Die Arbeit ist unangetastet — nichts wurde verworfen, nur nicht gesendet.
   assert.equal(client.queue.length, 1);
 
-  // Und sobald die Leitung wieder trägt, geht es ohne Zutun weiter.
   hangs = false;
   const second = await engine.attempt(Date.now(), true);
   assert.equal(second.kind, 'synced');
@@ -433,11 +361,6 @@ test('eine hängende Leitung blockiert den Client nicht dauerhaft', async () => 
   assert.equal(server.snapshot.seq, 1);
 });
 
-/**
- * Und die Gegenprobe: Eine langsame, aber funktionierende Verbindung darf
- * nicht abgewürgt werden. Sonst hätte man aus schwachem Netz gar keines
- * gemacht — dieselbe Krankheit mit umgekehrtem Vorzeichen.
- */
 test('langsam ist nicht kaputt — eine träge Antwort wird abgewartet', async () => {
   const { server, client } = setup();
 
@@ -459,22 +382,12 @@ test('langsam ist nicht kaputt — eine träge Antwort wird abgewartet', async (
   assert.equal(server.snapshot.seq, 1);
 });
 
-/**
- * Ein abgebrochener Sync darf nichts doppelt anwenden.
- *
- * Der Server kann den Batch längst haben — die Frist lief ja auf dem Rückweg
- * ab. Genau dafür ist der Sync idempotent (§9): Beim nächsten Versuch erkennt
- * der Server das überlappende Präfix und wendet nur den Rest an.
- */
 test('nach einer Frist ist der erneute Versuch sicher', async () => {
   const { server, client } = setup();
 
   let swallowResponse = true;
   const transport: Transport = (req, signal) =>
     new Promise((resolve, reject) => {
-      // Der Server wendet an — die Antwort bleibt auf der Strecke.
-      // Reichlich Zeitbudget: Der Server misst selbst (§4), und die Ernte
-      // liegt zwei Minuten Spielzeit hinter dem Start.
       const result = server.sync(req, T0 + 600_000);
       if (!swallowResponse) {
         resolve(result);
@@ -502,7 +415,6 @@ test('nach einer Frist ist der erneute Versuch sicher', async () => {
   assert.equal(again.kind, 'synced');
   if (again.kind === 'synced') assert.equal(again.result.kind, 'duplicate');
 
-  // Die Ernte gibt es genau einmal.
   assert.equal(count(server.snapshot.state, WHEAT), AFTER_ONE);
   assert.equal(server.snapshot.seq, 2);
 });

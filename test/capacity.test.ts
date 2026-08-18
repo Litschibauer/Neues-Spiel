@@ -1,11 +1,3 @@
-/**
- * Lagerlimits (Architektur §7).
- *
- * Kernaussage: Das Limit ist eine Regel INNERHALB der Sim, kein nachträglicher
- * Server-Check. Deshalb lässt der Client den Verstoß offline gar nicht erst zu —
- * es gibt nichts, was beim Sync auffallen könnte.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
@@ -18,9 +10,6 @@ import { advanceTo } from '../src/sim/sim.ts';
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(CURRENT_RULESET_VERSION);
 
-// Katalogindizes unter v1 — hier bewusst ausgeschrieben statt aus dem Regelwerk
-// gezogen: Ein Test, der seine Erwartung aus derselben Quelle holt wie der Code,
-// prüft am Ende nur noch sich selbst.
 const WHEAT = 1;
 const FEED = 2;
 const R_WHEAT = 0;
@@ -29,12 +18,6 @@ const MILL = 6;
 const GROW = rules.recipes[R_WHEAT]!.durationTicks;
 const YIELD = rules.recipes[R_WHEAT]!.output.amount;
 
-/**
- * Spielstand mit fast vollem Lager.
- *
- * `freeSpace` ist der Platz VOR dem Säen. Säen gibt ein Korn ab, macht also
- * einen Platz frei — wer eine Ernte blockieren will, muss das mitrechnen.
- */
 function nearlyFull(freeSpace: number) {
   const base = initialState(rules);
   const items = base.items.map(() => 0);
@@ -42,13 +25,11 @@ function nearlyFull(freeSpace: number) {
   return { ...base, items };
 }
 
-/** Gerade so wenig Platz, dass die Ernte nicht mehr passt. */
 const TIGHT = YIELD - 2;
-/** Wie viel Saatgut ein Feld verschluckt. */
+
 const SEED = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
 
 test('Lagerlimit kann offline gar nicht überschritten werden', () => {
-  // Nur noch Platz für 5, die Ernte bringt 10.
   const server = new Server(nearlyFull(TIGHT), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
@@ -61,7 +42,7 @@ test('Lagerlimit kann offline gar nicht überschritten werden', () => {
   assert.equal(res.ok, false);
   if (res.ok) return;
   assert.equal(res.code, 'SILO_FULL');
-  // Entscheidend: Das Command landet nicht mal im Log.
+
   assert.equal(client.queue.length, before);
 });
 
@@ -71,9 +52,8 @@ test('Hard block statt stillem Verlust: der fertige Platz bleibt stehen', () => 
 
   client.start(0, R_WHEAT);
   client.advanceClock(GROW);
-  client.collect(0); // blockiert
+  client.collect(0);
 
-  // Platz schaffen → dieselbe Ernte geht jetzt durch, nichts ist verloren.
   assert.equal(client.sellNpc(WHEAT, 20).ok, true);
   assert.equal(client.collect(0).ok, true);
   assert.equal(count(client.state, WHEAT), rules.siloCapacity - TIGHT - SEED - 20 + YIELD);
@@ -87,7 +67,6 @@ test('Hard block statt stillem Verlust: der fertige Platz bleibt stehen', () => 
 test('Server lehnt einen handgebauten Log ab, der das Limit verletzt', () => {
   const server = new Server(nearlyFull(TIGHT), T0, CURRENT_RULESET_VERSION);
 
-  // Ein manipulierter Client, der die lokale Prüfung einfach überspringt.
   const res = server.sync(
     {
       baseSeq: 0,
@@ -100,20 +79,17 @@ test('Server lehnt einen handgebauten Log ab, der das Limit verletzt', () => {
     T0 + GROW * 1000,
   );
 
-  // Präfix-Commit: Das legale Pflanzen bleibt, die illegale Ernte nicht.
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.kind, 'partial');
   assert.equal(res.rejectedFrom, 2);
   assert.equal(res.reason, 'ILLEGAL_COMMAND:SILO_FULL');
   assert.equal(res.snapshot.seq, 1);
-  // Gesät ist gesät: Das Korn ist weg, die Ernte kam nicht.
+
   assert.equal(count(res.snapshot.state, WHEAT), rules.siloCapacity - TIGHT - SEED);
 });
 
 test('Eingaben verbrauchen macht Platz — die Mühle entlastet das Lager', () => {
-  // Drei Weizen werden zu zwei Futter: Der Produktionsplatz ist damit auch ein
-  // Ventil gegen ein volles Lager.
   const base = nearlyFull(0);
   const withMill = {
     ...base,
@@ -131,9 +107,6 @@ test('Eingaben verbrauchen macht Platz — die Mühle entlastet das Lager', () =
 });
 
 test('ein passiver Produzent stallt bei vollem Lager — und bunkert keine Zeit', () => {
-  // Der Basis-Kreislauf hat keinen passiven Platz. Die Mechanik steht trotzdem
-  // im Kern (siehe rules.ts) und muss geprüft bleiben — hier über ein
-  // synthetisches Regelwerk, damit die Integration nicht ungetestet verrottet.
   const withCoop: Ruleset = {
     ...rules,
     recipes: [
@@ -144,16 +117,14 @@ test('ein passiver Produzent stallt bei vollem Lager — und bunkert keine Zeit'
   };
 
   let s = { ...initialState(withCoop) };
-  s = advanceTo(s, 600 * rules.siloCapacity, withCoop); // exakt voll
+  s = advanceTo(s, 600 * rules.siloCapacity, withCoop);
   assert.equal(count(s, WHEAT), rules.siloCapacity);
   assert.equal(stored(s, withCoop), withCoop.siloCapacity);
 
-  // Weitere 10h bei vollem Lager: nichts entsteht, nichts wird angespart.
   const later = advanceTo(s, s.tick + 36_000, withCoop);
   assert.equal(count(later, WHEAT), rules.siloCapacity);
   assert.equal(later.passives[0], 0);
 
-  // Nach dem Freiräumen gibt es KEINEN Schwall aus gebunkerter Zeit.
   const freed = { ...later, items: later.items.map((v, i) => (i === WHEAT ? 50 : v)) };
   const resumed = advanceTo(freed, later.tick + 600, withCoop);
   assert.equal(count(resumed, WHEAT), 51, 'genau eine Einheit nach genau einem Intervall');

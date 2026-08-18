@@ -1,17 +1,3 @@
-/**
- * Kundenaufträge (M6) — und warum sie offline funktionieren, obwohl sie
- * zufällig sind.
- *
- * Das ist der interessante Teil. Zufall gehört dem Server (§5), aber ein
- * Auftrag, den man erst nach dem Sync erfüllen kann, wäre kein Offline-Feature.
- * Die Auflösung ist **Vorrat statt Verbindung** (Architektur §6): Der Server
- * würfelt im Voraus und schickt einen Stapel mit. Der Client verbraucht ihn
- * ohne Netz, ohne selbst je zu würfeln.
- *
- * Geprüft wird deshalb beides: die Regel im Sim-Kern und die Eigenschaft,
- * dass der Vorrat offline nicht ausgeht.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
@@ -34,7 +20,6 @@ const R_WHEAT = 0;
 const MILL = 6;
 const COOP = 7;
 
-/** Ein Hof mit Ware im Lager und einem vollen Auftragsvorrat. */
 function stocked(items: Partial<Record<number, number>>, seed = 1) {
   const base = initialState(rules);
   const inventory = base.items.slice();
@@ -78,8 +63,6 @@ test('ohne die Ware geht gar nichts — und zwar schon offline', () => {
 });
 
 test('nur die vorderen Plätze sind annehmbar — der Rest ist Vorrat', () => {
-  // Sonst wäre die Schlange ein Regal, aus dem man sich den besten Auftrag
-  // heraussucht. Der Vorrat soll nachrücken, nicht zur Auswahl stehen.
   const state = stocked({ [WHEAT]: 90, [FEED]: 10 });
   const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
 
@@ -93,14 +76,12 @@ test('nur die vorderen Plätze sind annehmbar — der Rest ist Vorrat', () => {
 });
 
 test('erledigt ein Auftrag den Slot, rückt der nächste nach — ohne Netz', () => {
-  // DAS ist die Eigenschaft, die M6 offline-fähig macht.
   const state = stocked({ [WHEAT]: 90, [FEED]: 12 });
   const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
 
   const queueBefore = client.state.requests.length;
   const wasHidden = client.state.requests[rules.requestSlots]!;
 
-  // Den ersten erfüllbaren Auftrag im Slot-Fenster beliefern.
   const active = client.state.requests
     .slice(0, rules.requestSlots)
     .find((r) => r.wants.every((w) => count(client.state, w.item) >= w.amount))!;
@@ -113,17 +94,12 @@ test('erledigt ein Auftrag den Slot, rückt der nächste nach — ohne Netz', ()
 });
 
 test('eine ganze Sitzung im Funkloch: anbauen, ernten, liefern, wiederholen', () => {
-  // Der Praxistest für „Vorrat statt Verbindung": kein einziger Sync, nur
-  // spielen. Das Lagerlimit macht Vorratshaltung unmöglich, also muss zwischen
-  // den Lieferungen wirklich produziert werden — genau wie im Spiel.
   const state = stocked({});
   const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
   const grow = rules.recipes[R_WHEAT]!.durationTicks;
 
   let filled = 0;
   for (let round = 0; round < 40; round++) {
-    // Saatgut nachkaufen, wenn keines mehr da ist — seit Säen ein Korn kostet,
-    // gehört das zur Sitzung dazu. Genau dafür gibt es den Händler.
     if (count(client.state, WHEAT) < 3) client.buyNpc(WHEAT, 6);
     for (let plot = 0; plot < 3; plot++) client.start(plot, R_WHEAT);
     client.advanceClock(grow);
@@ -139,17 +115,13 @@ test('eine ganze Sitzung im Funkloch: anbauen, ernten, liefern, wiederholen', ()
     }
   }
 
-  // Der Vorrat muss eine ganze Sitzung tragen, nicht nur ein paar Minuten.
   assert.ok(filled >= 15, `zu wenige Aufträge offline erfüllbar: ${filled}`);
   assert.ok(count(client.state, GOLD) > 0, 'keine Belohnung angekommen');
 
-  // Und wenn er doch leerläuft, ist das keine Sackgasse: Der NPC-Verkauf
-  // bleibt offen (§6). Genau das ist das Ventil gegen den Leerlauf.
   assert.equal(client.sellNpc(WHEAT, count(client.state, WHEAT)).ok, true);
 });
 
 test('Aufträge lohnen sich mehr als der NPC-Verkauf', () => {
-  // Sonst wären sie Zierde, und der Kreislauf hätte weiterhin kein Ziel.
   for (const template of rules.requestTemplates) {
     const npcValue = template.wants.reduce(
       (sum, w) => sum + w.amount * rules.items[w.item]!.npcPrice,
@@ -164,9 +136,6 @@ test('Aufträge lohnen sich mehr als der NPC-Verkauf', () => {
 });
 
 test('der Server verteilt nur, was der Hof auch herstellen kann', () => {
-  // Ein frischer Hof hat drei Felder und sonst nichts. Bekäme er Aufträge über
-  // Eier, wären drei Slots blockiert und offline gäbe es nichts zu tun —
-  // genau der Leerlauf, den Architektur §6 verbietet.
   const fresh = initialState(rules);
   assert.deepEqual([...reachableItems(fresh, rules)], [WHEAT]);
 
@@ -193,14 +162,12 @@ test('mit Mühle und Gehege wächst das Auftragsangebot mit', () => {
   const reachable = reachableItems(built, rules);
   assert.deepEqual([...reachable].sort((a, b) => a - b), [WHEAT, FEED, EGGS]);
 
-  // Und es kommen wirklich Aufträge über die neuen Waren durch.
   const { requests } = topUpRequests(built, rules, 1, mulberry32(3));
   const wanted = new Set(requests.flatMap((r) => r.wants.map((w) => w.item)));
   assert.ok(wanted.size > 1, 'nach dem Ausbau immer noch nur eine Ware gefragt');
 });
 
 test('der Server füllt beim Sync auf — hinten, nicht vorne', () => {
-  // Ein Sync darf dem Spieler nicht die Auswahl unter den Fingern wegziehen.
   const server = new Server(stocked({ [WHEAT]: 60 }), T0, CURRENT_RULESET_VERSION);
   server.rollRequest = mulberry32(11);
   const client = new Client(server.snapshot);
@@ -214,11 +181,10 @@ test('der Server füllt beim Sync auf — hinten, nicht vorne', () => {
   const res = server.sync(client.buildSyncRequest(), T0 + 1000);
   assert.equal(res.ok, true);
   if (!res.ok) return;
-  // Kein Fehlalarm: Der Nachschub kommt NACH dem Kanarienvogel-Vergleich.
+
   assert.equal(res.divergence, false);
   assert.deepEqual(server.divergenceAlerts, []);
 
-  // Wieder voll, und die verbliebenen alten Aufträge stehen weiterhin vorn.
   assert.equal(res.snapshot.state.requests.length, rules.requestQueueMax);
   const survivors = activeBefore.filter((id) => id !== target.id);
   const nowFront = res.snapshot.state.requests.slice(0, rules.requestSlots).map((r) => r.id);
@@ -229,7 +195,6 @@ test('der Server füllt beim Sync auf — hinten, nicht vorne', () => {
 });
 
 test('Auftragsnummern werden nie zweimal vergeben', () => {
-  // Zwei Aufträge mit derselben Nummer machen `FILL_REQUEST` mehrdeutig.
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   server.rollRequest = mulberry32(5);
   server.stockRequests();
@@ -237,7 +202,6 @@ test('Auftragsnummern werden nie zweimal vergeben', () => {
   const seen = new Set<number>(server.snapshot.state.requests.map((r) => r.id));
   const client = new Client(server.snapshot);
 
-  // Ein paar Runden liefern und syncen — jedes Mal kommt Nachschub.
   for (let round = 0; round < 5; round++) {
     server.deliver({ item: WHEAT, amount: 20, arrivedAt: T0 });
     const res = server.sync(
@@ -256,8 +220,6 @@ test('Auftragsnummern werden nie zweimal vergeben', () => {
 });
 
 test('ein frischer Hof hat sofort etwas zu tun — auch ohne Sync', () => {
-  // Die Leerlauf-Regel aus §6, als Test. Wer die App startet, soll nicht erst
-  // eine Verbindung brauchen, um ein Ziel zu haben.
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   server.rollRequest = mulberry32(2);
   server.stockRequests();
@@ -266,14 +228,11 @@ test('ein frischer Hof hat sofort etwas zu tun — auch ohne Sync', () => {
 
   const client = new Client(server.snapshot);
   assert.ok(client.state.requests.length >= rules.requestSlots);
-  // Und die Felder laufen: Es gibt einen Weg von hier zum ersten Auftrag.
+
   assert.equal(client.start(0, R_WHEAT).ok, true);
 });
 
 test('Belohnungen sprengen das Lager nicht', () => {
-  // Eine lagerpflichtige Belohnung braucht Platz — wie alles andere (§7).
-  // Der Basis-Inhalt zahlt nur in Münzen, also über ein eigenes Regelwerk:
-  // Die Regel muss stehen, bevor der erste Auftrag Ware ausschüttet.
   const tightRules = {
     ...rules,
     requestTemplates: [
@@ -291,7 +250,7 @@ test('Belohnungen sprengen das Lager nicht', () => {
   const withItems = { ...base, items };
   const state = {
     ...withItems,
-    // Ein Hof mit Mühle, sonst gälte Futter als unerreichbar.
+
     plots: withItems.plots.map((p, i) => (i === MILL ? { ...p, level: 1 } : p)),
   };
   state.requests = topUpRequests(state, tightRules, 1, mulberry32(1)).requests;
@@ -304,8 +263,6 @@ test('Belohnungen sprengen das Lager nicht', () => {
     /SILO_FULL/,
   );
 
-  // Mit Platz geht derselbe Auftrag durch — der Riegel ist die Kapazität,
-  // nicht der Auftrag.
   const roomy = { ...state, items: state.items.map((v, i) => (i === WHEAT ? 10 : v)) };
   const after = simulate(
     roomy,
@@ -323,12 +280,6 @@ test('zufällige Sitzungen mit Aufträgen bleiben invariant', () => {
   }
 });
 
-// ── Wegschicken (M6) ───────────────────────────────────────────────────────
-//
-// Die Mechanik ist klein, aber sie fasst die Warteschlange an — und die ist
-// das, was Offline-Spiel über Stunden trägt. Geprüft wird deshalb nicht nur
-// „geht", sondern vor allem: dass sie sich nicht missbrauchen lässt.
-
 const COOLDOWN = rules.requestSkipCooldownTicks;
 
 test('einen Auftrag wegschicken lässt den nächsten nachrücken', () => {
@@ -343,8 +294,7 @@ test('einen Auftrag wegschicken lässt den nächsten nachrücken', () => {
   const after = client.state.requests.slice(0, rules.requestSlots).map((r) => r.id);
   assert.ok(!after.includes(before[0]!), 'der weggeschickte Auftrag steht noch da');
   assert.equal(client.state.requests.length, vorrat - 1, 'es ist genau einer verschwunden');
-  // Der Nachrücker kommt aus dem Vorrat, nicht aus dem Nichts: Die vorderen
-  // Plätze sind wieder voll, ohne dass jemand gewürfelt hätte.
+
   assert.equal(after.length, Math.min(rules.requestSlots, vorrat - 1));
   assert.equal(after[0], before[1], 'die Reihenfolge stimmt nicht');
 });
@@ -357,7 +307,6 @@ test('DER PUNKT: bezahlt wird mit Wartezeit, nicht mit Geld', () => {
   assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
   assert.equal(count(client.state, GOLD), goldBefore, 'Wegschicken hat Gold gekostet');
 
-  // Und alles Gold der Welt kauft den zweiten Versuch nicht frei.
   const second = client.skipRequest(client.state.requests[0]!.id);
   assert.equal(second.ok, false);
   if (!second.ok) assert.equal(second.code, 'SKIP_ON_COOLDOWN');
@@ -369,20 +318,16 @@ test('nach der Wartezeit geht es wieder — auf die Sekunde genau', () => {
 
   assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
 
-  // Eine Sekunde zu früh.
   client.advanceClock(COOLDOWN - 1);
   const early = client.skipRequest(client.state.requests[0]!.id);
   assert.equal(early.ok, false);
   if (!early.ok) assert.equal(early.code, 'SKIP_ON_COOLDOWN');
 
-  // Genau auf der Grenze.
   client.advanceClock(1);
   assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
 });
 
 test('der Vorrat ist kein Regal: hinten wird nicht ausgesucht', () => {
-  // Ohne diese Grenze könnte man sich durch die Schlange bis zum besten
-  // Auftrag durchgraben, ohne je einen der vorderen anzufassen.
   const state = stocked({ [WHEAT]: 40 });
   const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
 
@@ -399,12 +344,11 @@ test('einen Auftrag, den es nicht gibt, kann man auch nicht wegschicken', () => 
   const res = client.skipRequest(9999);
   assert.equal(res.ok, false);
   if (!res.ok) assert.equal(res.code, 'NO_SUCH_REQUEST');
-  // Und der Fehlschlag darf die Wartezeit nicht angestoßen haben.
+
   assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
 });
 
 test('Wegschicken geht offline — der Server rechnet es kommentarlos nach', () => {
-  // Der eigentliche Anspruch: Es braucht keinen Würfel und keine Verbindung.
   const server = new Server(fuzzStart(rules, 0, mulberry32(7)), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
@@ -420,9 +364,6 @@ test('Wegschicken geht offline — der Server rechnet es kommentarlos nach', () 
 });
 
 test('die Wartezeit überlebt einen Sync — sie steht im Zustand, nicht im Client', () => {
-  // Läge sie nur im Client, wäre sie mit einem Neuladen weg. Sie gehört in den
-  // Zustand, damit der Server sie nachrechnen kann — sonst wäre sie keine Regel,
-  // sondern eine Bitte an die Oberfläche.
   const server = new Server(fuzzStart(rules, 0, mulberry32(9)), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
 
@@ -433,7 +374,6 @@ test('die Wartezeit überlebt einen Sync — sie steht im Zustand, nicht im Clie
 
   assert.ok(res.snapshot.state.skipReadyAt > res.snapshot.state.tick, 'Wartezeit ist nicht gesetzt');
 
-  // Ein frischer Client auf demselben Snapshot erbt sie.
   const zweiter = new Client(res.snapshot);
   const sofort = zweiter.skipRequest(zweiter.state.requests[0]!.id);
   assert.equal(sofort.ok, false);
@@ -441,8 +381,6 @@ test('die Wartezeit überlebt einen Sync — sie steht im Zustand, nicht im Clie
 });
 
 test('ein Regelwerk ohne Wartezeit kennt das Wegschicken gar nicht', () => {
-  // 0 heißt aus. Dann soll es eine klare Absage geben statt eines
-  // Überspringens ohne jede Bremse.
   const ohne = { ...rules, requestSkipCooldownTicks: 0 };
   const state = stocked({ [WHEAT]: 40 });
   const cmd = { seq: 1, tick: 0, type: 'SKIP_REQUEST' as const, requestId: state.requests[0]!.id };
@@ -451,8 +389,6 @@ test('ein Regelwerk ohne Wartezeit kennt das Wegschicken gar nicht', () => {
 });
 
 test('Wegschicken verändert nichts außer der Schlange und der Uhr', () => {
-  // Die Absicherung gegen versehentliche Nebenwirkungen: kein Gold, keine Ware,
-  // keine Erfahrung. Es ist ein Verzicht, keine Aktion mit Ertrag.
   const state = stocked({ [WHEAT]: 40, [GOLD]: 500 });
   const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
 

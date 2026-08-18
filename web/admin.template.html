@@ -198,9 +198,7 @@
       $('s-tick').textContent = s.tick;
       $('s-rules').textContent = 'v' + s.rulesetVersion +
         (s.targetRulesetVersion !== s.rulesetVersion ? ' → v' + s.targetRulesetVersion : '');
-      // Der Zustand hält ein Inventar in Katalogreihenfolge; welche
-      // Reihenfolge das ist, sagt der Server mit (`itemIds`). Die Werkbank
-      // hat damit keine eingebaute Gegenstandsliste mehr.
+
       var names = { gold: 'Gold', wheat: 'Weizen', eggs: 'Eier', milk: 'Milch', flour: 'Mehl', bread: 'Brot' };
       $('s-items').textContent = (s.itemIds || [])
         .map(function (id, i) { return (names[id] || id) + ' ' + ((s.state.items || [])[i] || 0); })

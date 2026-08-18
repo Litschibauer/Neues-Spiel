@@ -1,22 +1,3 @@
-/**
- * Der Feldtest, automatisiert: **im Funkloch neu laden.**
- *
- *   node --experimental-strip-types scripts/offline-test.ts
- *
- * Alles andere in diesem Projekt lässt sich in Node prüfen. Das hier nicht:
- * Ob eine Seite ohne Netz startet, hängt an Service Worker, Cache und
- * `localStorage` — an Dingen, die es nur im Browser gibt. Ein Test mit
- * Attrappen würde genau das nicht beweisen, worum es geht.
- *
- * Deshalb fährt dieses Skript einen echten Chromium und redet über das
- * DevTools-Protokoll mit ihm. Node 22 bringt einen WebSocket-Client mit, also
- * kostet das **keine Abhängigkeit** — die Kernaussage des Projekts bleibt
- * „npm test, keine Dependencies".
- *
- * Bewusst NICHT Teil von `npm test`: Es braucht einen Browser und einen
- * laufenden Server. Ein Testlauf, der ohne beides rot wird, sagt nichts.
- */
-
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,10 +23,6 @@ function findChromium(): string {
   );
 }
 
-// ── Ein sehr kleiner DevTools-Klient ─────────────────────────────────────
-//
-// Genug für: Seite öffnen, JavaScript auswerten, Netz abschalten, neu laden.
-
 type CdpResult = Record<string, unknown>;
 
 class Cdp {
@@ -53,7 +30,6 @@ class Cdp {
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: CdpResult) => void; reject: (e: Error) => void }>();
 
-  /** Ereignisse ohne `id` — Dialoge, Konsolenausgaben, Fehler. */
   onEvent: (method: string, params: CdpResult) => void = () => {};
 
   private constructor(socket: WebSocket) {
@@ -105,7 +81,6 @@ class Cdp {
   }
 }
 
-/** JavaScript in der Seite auswerten und das Ergebnis zurückholen. */
 async function evaluate<T>(cdp: Cdp, expression: string): Promise<T> {
   const res = (await cdp.send('Runtime.evaluate', {
     expression,
@@ -122,7 +97,6 @@ async function evaluate<T>(cdp: Cdp, expression: string): Promise<T> {
   return res.result?.value as T;
 }
 
-/** Auf eine Bedingung in der Seite warten. */
 async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 15_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -134,17 +108,6 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Einen freien Platz bestellen — und dabei den Rezeptwähler bedienen, falls er
- * aufgeht.
- *
- * Seit ein Feld zwei Früchte kann, ist „auf die Kachel tippen" nicht mehr
- * gleichbedeutend mit „etwas startet". Genau deshalb steht das hier als
- * Helfer: Jede Prüfung, die etwas anbauen will, soll denselben Weg gehen wie
- * ein Spieler.
- *
- * Gibt zurück, ob wirklich etwas gestartet wurde.
- */
 async function plantSomething(cdp: Cdp): Promise<boolean> {
   await evaluate(cdp, `document.querySelector('nav button[data-view="farm"]').click()`);
   await sleep(200);
@@ -164,7 +127,7 @@ async function plantSomething(cdp: Cdp): Promise<boolean> {
   if (!clicked) return false;
 
   await sleep(200);
-  // Wähler offen? Dann die erste Möglichkeit nehmen, die wirklich geht.
+
   return await evaluate<boolean>(
     cdp,
     `(function () {
@@ -180,15 +143,12 @@ async function plantSomething(cdp: Cdp): Promise<boolean> {
   );
 }
 
-// ── Der eigentliche Test ─────────────────────────────────────────────────
-
 const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
 function check(name: string, ok: boolean, detail?: string): void {
   checks.push({ name, ok, detail });
   console.log(`  ${ok ? '✓' : '✗'} ${name}${detail ? `  (${detail})` : ''}`);
 }
 
-/** Nur noch fürs Admin-Panel — Spieler melden sich mit ihrem Hof-Schlüssel an. */
 const ADMIN_TOKEN = 'offline-test-admin-0123456789';
 const PORT = 8799;
 const dataDir = mkdtempSync(join(tmpdir(), 'ns-offline-'));
@@ -199,13 +159,6 @@ const chromium = findChromium();
 console.log(`\nChromium: ${chromium}`);
 console.log(`Server:   http://127.0.0.1:${PORT}\n`);
 
-/**
- * Den ECHTEN Server starten, nicht eine nachgebaute Kopie.
- *
- * Ein Testserver, der die Routen nachbildet, prüft am Ende sich selbst. Der
- * Service Worker hängt an Kleinigkeiten wie Content-Type und Cache-Header —
- * genau an dem, was eine Attrappe anders macht.
- */
 let serverLog = '';
 
 function startServer() {
@@ -227,8 +180,6 @@ function startServer() {
   child.stdout?.on('data', (d) => (serverLog += d));
   child.stderr?.on('data', (d) => (serverLog += d));
   child.on('exit', (code, signal) => {
-    // Ein absichtlicher Neustart ist kein Fehler — SIGTERM und SIGKILL kommen
-    // aus diesem Skript.
     if (code !== null && code !== 0 && signal === null) {
       console.error(`  Server beendet mit ${code}`);
     }
@@ -236,17 +187,14 @@ function startServer() {
   return child;
 }
 
-/** Veränderlich, weil Abschnitt 9 den Server absichtlich neu startet. */
 let server = startServer();
 
-/** Warten, bis `/health` antwortet. Gibt zurück, ob es geklappt hat. */
 async function serverUp(tries = 80): Promise<boolean> {
   for (let i = 0; i < tries; i++) {
     await sleep(250);
     try {
       if (((await api('/health')) as { ok?: boolean }).ok === true) return true;
     } catch {
-      /* noch nicht da */
     }
   }
   return false;
@@ -275,7 +223,6 @@ let cdp: Cdp | null = null;
 let failed = false;
 
 try {
-  // Auf den Server warten.
   let up = false;
   let lastError = '';
   for (let i = 0; i < 80 && !up; i++) {
@@ -291,7 +238,6 @@ try {
     throw new Error(`Server ist nicht hochgekommen (${lastError})`);
   }
 
-  // Auf den Debug-Port warten.
   let wsUrl = '';
   for (let i = 0; i < 60 && !wsUrl; i++) {
     await sleep(250);
@@ -301,7 +247,6 @@ try {
       };
       wsUrl = info.webSocketDebuggerUrl;
     } catch {
-      /* noch nicht da */
     }
   }
   if (!wsUrl) throw new Error('Chromium hat den Debug-Port nicht geöffnet');
@@ -316,9 +261,6 @@ try {
   await cdp.send('Runtime.enable');
   await cdp.send('Network.enable');
 
-  // Ein offener `alert()` blockiert JEDE weitere Auswertung — der Browser
-  // wartet auf einen Menschen, den es hier nicht gibt. Also wegklicken und
-  // den Text mitschreiben: Er ist meist die eigentliche Fehlermeldung.
   const dialogs: string[] = [];
   cdp.onEvent = (method, params) => {
     if (method === 'Page.javascriptDialogOpening') {
@@ -326,8 +268,6 @@ try {
       void cdp!.send('Page.handleJavaScriptDialog', { accept: true });
     }
     if (method === 'Runtime.exceptionThrown') {
-      // `text` ist meist nur „Uncaught". Was wirklich passiert ist, steht in
-      // der Beschreibung samt Stack — ohne die sucht man im Dunkeln.
       const d = params as {
         exceptionDetails?: {
           text?: string;
@@ -343,11 +283,8 @@ try {
     }
   };
 
-  // ── 1. Erster Besuch: Hof anlegen, Schlüssel bekommen, spielen ────────
   console.log('1. Erster Besuch — neuen Hof anlegen (Feldtest-Ansicht)');
-  // Bewusst die Feldtest-Ansicht: Sie zeigt Warteschlange, `seq` und Tick im
-  // DOM, und genau daran hängen die Prüfungen unten. Das Spiel selbst liegt
-  // auf `/` und wird in Abschnitt 7 geprüft.
+
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/feldtest` });
   await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
   await evaluate(cdp, `document.getElementById('create').click()`);
@@ -376,11 +313,8 @@ try {
   }
   check('Seite verbindet und zeigt den Hof', true);
 
-  // Zeitbudget erst JETZT — der Hof existiert vorher noch nicht.
   await api('/api/admin/time?seconds=4000', 'POST');
 
-  // Zwei Felder bestellen, damit es etwas zu verlieren gibt. Das dritte bleibt
-  // frei — daran wird später gezeigt, dass man OHNE Netz weiterspielen kann.
   try {
     await waitFor(
       cdp,
@@ -415,7 +349,6 @@ try {
   );
   check('Spielstand liegt lokal auf dem Gerät', !!savedRaw && savedRaw.length > 100);
 
-  // Warten, bis der Service Worker die Hülle im Cache hat.
   await waitFor(
     cdp,
     'navigator.serviceWorker.controller || navigator.serviceWorker.ready',
@@ -430,7 +363,6 @@ try {
   );
   check('Service Worker hat die Hülle im Cache', cached);
 
-  // ── 2. Netz kappen und NEU LADEN ──────────────────────────────────────
   console.log('\n2. Funkloch — Netz aus, Seite neu laden');
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
@@ -461,7 +393,6 @@ try {
   );
   check('Der Hof sieht aus wie vorher — die Felder laufen', stateMatches);
 
-  // ── 3. Offline WEITERSPIELEN ──────────────────────────────────────────
   console.log('\n3. Offline weiterspielen');
   const before = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
   await evaluate(cdp, `document.querySelectorAll('#fields .field')[2].click()`);
@@ -469,7 +400,6 @@ try {
   const after = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
   check('Aktionen gehen im Funkloch weiter', after > before, `${before} → ${after}`);
 
-  // ── 4. Netz zurück, alles ankommen lassen ─────────────────────────────
   console.log('\n4. Netz zurück');
   await cdp.send('Network.emulateNetworkConditions', {
     offline: false,
@@ -497,7 +427,6 @@ try {
   check('Server hat die Offline-Arbeit übernommen', status.seq >= after, `seq ${status.seq}`);
   check('Kein Divergenz-Alarm', status.divergenceAlerts === 0);
 
-  // ── 5. Zweiter Hof: die Stände dürfen sich nicht vermischen ───────────
   console.log('\n5. Zweiter Hof auf demselben Server');
   const second = (await (
     await fetch(`http://127.0.0.1:${PORT}/api/account`, { method: 'POST' })
@@ -515,14 +444,8 @@ try {
     ((await api('/api/admin/accounts')) as { count: number }).count === 2,
   );
 
-  // ── 6. Handel: zwei Höfe im selben Browser-Test ───────────────────────
-  //
-  // Bis hierhin war jeder Hof eine Insel. Jetzt stellt der zweite etwas ein,
-  // der erste sieht es im Regal und kauft es mit einem echten Klick — über
-  // echtes HTTP, nicht über eine Attrappe.
   console.log('\n6. Markt — der zweite Hof verkauft, der erste kauft');
 
-  /** Einen Batch für einen bestimmten Hof abschicken, ohne Browser. */
   const syncAs = async (key: string, baseSeq: number, commands: unknown[]) =>
     (await (
       await fetch(`http://127.0.0.1:${PORT}/api/sync`, {
@@ -539,19 +462,14 @@ try {
       })
     ).json()) as { snapshot: { seq: number; state: { items: number[]; orders: unknown[] } } };
 
-  // Der Verkäufer bekommt Weizen ins Postfach, holt ihn ab und stellt ihn ein.
   await api(`/api/admin/grant?account=${second.accountId}&item=wheat&amount=30`, 'POST');
 
-  // Der Zustandsabruf allein muss das Postfach füllen — ohne dass der Spieler
-  // irgendetwas getan hätte. Genau daran hakte es vorher.
   const beforeAnyAction = await stateAs(second.key);
   check(
     'Ein Geschenk erreicht das Postfach ohne Zutun des Spielers',
     beforeAnyAction.snapshot.seq === 0,
   );
-  // Einstellen kostet eine Gebühr, und ein frischer Hof hat kein Gold. Also
-  // erst ein paar Körner an den Händler — genau der Weg, den ein echter
-  // Spieler geht, bevor er zum ersten Mal selbst anbietet.
+
   await syncAs(second.key, 0, [
     { seq: 1, tick: 0, type: 'COLLECT_MAIL' },
     { seq: 2, tick: 0, type: 'SELL_NPC', item: 1, amount: 5 },
@@ -566,7 +484,6 @@ try {
       .offers === 1,
   );
 
-  // Der Käufer braucht Münzen — sie kommen wie jedes Geschenk ins Postfach.
   await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=500`, 'POST');
   await evaluate(cdp, `document.getElementById('sync').click()`);
   await waitFor(cdp, `document.querySelectorAll('#market .offer').length === 1`, 'Angebot sichtbar');
@@ -583,9 +500,6 @@ try {
   );
   check('Der Käufer sieht das fremde Angebot', /20 Weizen/.test(shelfText), shelfText);
 
-  // Ausgegraut ohne Netz — die Regel aus §6, direkt im DOM nachgesehen.
-  // Echtes Funkloch, nicht nur ein abgefeuertes Ereignis: `navigator.onLine`
-  // ändert sich sonst gar nicht, und genau die Fahne liest die Seite.
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
     latency: 0,
@@ -609,10 +523,6 @@ try {
   });
   await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
 
-  // Auf den Sync warten, den das Netz-zurück auslöst — nicht nur darauf, dass
-  // der Knopf wieder klickbar aussieht. Sonst klickt man in eine Auslage, die
-  // im nächsten Wimpernschlag neu gezeichnet wird, und der Klick fällt ins
-  // Leere. Genau daran war dieser Test einmal flatterhaft.
   await waitFor(
     cdp,
     `document.getElementById('pill').className.indexOf('live') >= 0
@@ -664,8 +574,6 @@ try {
       .offers === 0,
   );
 
-  // Der Verkäufer war offline. Sein Erlös muss ihn trotzdem erreichen — durchs
-  // Postfach, wie jedes Ereignis, von dem er nichts wissen konnte (§7).
   const sellerState = (await (
     await fetch(`http://127.0.0.1:${PORT}/api/state`, {
       headers: { authorization: `Bearer ${second.key}` },
@@ -679,10 +587,7 @@ try {
       headers: { authorization: `Bearer ${second.key}` },
     })
   ).json()) as { snapshot: { state: { items: number[] } } };
-  // Aus dem Regelwerk gerechnet, nicht abgeschrieben: 5 Weizen an den Händler,
-  // minus Einstellgebühr auf 20 Weizen, plus 20 × 3 Verkaufserlös. Feste Zahlen
-  // hier wären bei jedem Balancing-Patch rot — und zwar zu Recht rot, aber aus
-  // dem falschen Grund.
+
   const devRules = getRuleset(1001);
   const wheatPrice = devRules.items[1]!.npcPrice;
   const expectedCoins = 5 * wheatPrice - listingFee(devRules, 1, 20) + 20 * 3;
@@ -691,17 +596,11 @@ try {
     paid.ok && sellerAfter.snapshot.state.items[0] === expectedCoins,
     `${sellerAfter.snapshot.state.items[0]} statt ${expectedCoins} Münzen`,
   );
-  // ── 7. Die Spieloberfläche ────────────────────────────────────────────
-  //
-  // Zwei Oberflächen auf einem Kern: Wenn das Spiel denselben Hof anders sieht
-  // als das Messgerät, liegt es an einer Anzeige — und das will man merken.
-  // Geprüft wird deshalb nicht das Aussehen, sondern dass dieselben Zahlen
-  // ankommen und dass eine Ernte über echte Klicks funktioniert.
+
   console.log('\n7. Die Spieloberfläche auf /');
 
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
-  // Null-sicher: Direkt nach `Page.navigate` gibt es das Element noch nicht,
-  // und `waitFor` würde an der Ausnahme abbrechen statt weiterzuwarten.
+
   await waitFor(
     cdp,
     'document.getElementById("shell") && !document.getElementById("shell").hidden',
@@ -718,8 +617,7 @@ try {
        lvl: document.getElementById('lvl').textContent,
      })`,
   );
-  // Mit `?account=`: Ohne Angabe nimmt die Werkbank den ZULETZT angelegten Hof
-  // — das wäre hier der Verkäufer aus Abschnitt 6, nicht der im Browser.
+
   const truth = (await api(`/api/admin/status?account=${status.accountId}`)) as {
     state: { items: number[]; plots: unknown[] };
   };
@@ -729,20 +627,15 @@ try {
     `${shown.gold} Gold, ${shown.plots} Plätze, Stufe ${shown.lvl}`,
   );
 
-  // Jeder Platz zeichnet sich selbst — aus dem Katalog, nicht aus einer Liste
-  // in der Seite. Ein neues Gebäude taucht damit von allein auf.
   check(
     'Jeder Platz hat ein Bild',
     (await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot svg.art').length`)) ===
       shown.plots,
   );
 
-  // Ernten über einen echten Klick: Zeit gutschreiben, bis etwas reif ist.
   await api('/api/admin/time?seconds=4000', 'POST');
   await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
-  // Auf den Sync warten, den das Netz-zurück auslöst — nicht nur darauf, dass
-  // irgendwo „reif" steht. Sonst klickt man auf eine Kachel, die der nächste
-  // Neuzeichnung schon ersetzt hat, und der Klick fällt ins Leere.
+
   await waitFor(
     cdp,
     `document.getElementById('conn').className.indexOf('live') >= 0
@@ -765,9 +658,6 @@ try {
   const beforeHarvest = await stockOf('Weizen');
   await evaluate(cdp, `document.querySelector('#plots .plot.ripe').click()`);
 
-  // Bewusst eine eigene Schleife statt `waitFor`: Bei einer Zeitüberschreitung
-  // bricht `waitFor` ab, und dann steht man ohne die eine Information da, die
-  // man bräuchte — was die Seite in diesem Moment eigentlich anzeigte.
   let afterHarvest = beforeHarvest;
   for (let i = 0; i < 40 && afterHarvest <= beforeHarvest; i++) {
     await sleep(250);
@@ -814,8 +704,6 @@ try {
     `${beforeHarvest} → ${afterHarvest} Weizen`,
   );
 
-  // Die Navigation muss die vier Ansichten wirklich umschalten — sonst ist der
-  // halbe Hof unerreichbar.
   const tabs = await evaluate<string>(
     cdp,
     `JSON.stringify(['orders', 'market', 'store', 'farm'].map(function (name) {
@@ -825,7 +713,6 @@ try {
   );
   check('Alle vier Ansichten öffnen sich', JSON.parse(tabs).every(Boolean), tabs);
 
-  // Und die Offline-Regel aus §6, jetzt in der echten Oberfläche.
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
     latency: 0,
@@ -843,8 +730,6 @@ try {
     ),
   );
 
-  // Neu laden im Funkloch — dieselbe Prüfung wie für das Messgerät, jetzt für
-  // die Seite, die Spieler wirklich sehen.
   await cdp.send('Page.reload', { ignoreCache: false });
   let gameOffline = false;
   for (let i = 0; i < 40 && !gameOffline; i++) {
@@ -856,16 +741,6 @@ try {
   }
   check('Das Spiel startet im Funkloch — kein Dinosaurier', gameOffline);
 
-  // ── 8. Live-Anstöße ───────────────────────────────────────────────────
-  //
-  // Die Prüfung, die es vorher nicht geben konnte: Ein Angebot, das jemand
-  // ANDERS einstellt, muss auf einem stillstehenden Bildschirm auftauchen,
-  // ohne dass jemand tippt oder neu lädt.
-  //
-  // Dass hier wirklich der Anstoß wirkt und nicht der Vier-Sekunden-Timer,
-  // liegt an der Sync-Maschine: Ein Hof mit leerer Warteschlange sendet ohne
-  // `force` gar nichts (`nothing-to-do`). Wer nichts tut, bliebe also ewig auf
-  // einem alten Markt sitzen — genau das war die Beschwerde.
   console.log('\n8. Live — ein fremdes Angebot erscheint ohne Zutun');
 
   await cdp.send('Network.emulateNetworkConditions', {
@@ -882,7 +757,6 @@ try {
     20_000,
   );
 
-  // Die Leitung steht — von außen sichtbar, ohne in den Browser zu schauen.
   let streams = 0;
   for (let i = 0; i < 40 && streams === 0; i++) {
     await sleep(250);
@@ -897,7 +771,6 @@ try {
     `document.querySelectorAll('#market-list .card').length`,
   );
 
-  // Jetzt stellt der zweite Hof etwas ein — komplett am Browser vorbei.
   await api(`/api/admin/grant?account=${second.accountId}&item=eggs&amount=6`, 'POST');
   const sellerSeq = (await stateAs(second.key)).snapshot.seq;
   await syncAs(second.key, sellerSeq, [
@@ -905,7 +778,6 @@ try {
     { seq: sellerSeq + 2, tick: 0, type: 'LIST_ORDER', item: 3, amount: 6, price: 12 },
   ]);
 
-  // Kein Klick, kein Neuladen, kein Tastendruck: nur warten.
   let offersAfter = offersBefore;
   for (let i = 0; i < 40 && offersAfter <= offersBefore; i++) {
     await sleep(250);
@@ -920,12 +792,6 @@ try {
     `${offersBefore} → ${offersAfter} Angebote`,
   );
 
-  // ── 8b. Menge, Preis und Wegschicken über echte Klicks ────────────────
-  //
-  // Drei Bedienelemente, die es vorher nicht gab. Sie sind der einzige Weg,
-  // wie ein Spieler eine ANDERE Menge als „alles" verkauft — und wenn sie
-  // nicht funktionieren, merkt das kein Node-Test, weil die Sim sie längst
-  // kann. Geprüft wird deshalb der Klick, nicht die Regel.
   console.log('\n8b. Menge und Preis wählen, Auftrag wegschicken');
 
   await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
@@ -940,7 +806,6 @@ try {
      })()`,
   );
 
-  // Zweimal auf Minus: aus „alles" wird „alles minus zwei".
   await evaluate(
     cdp,
     `(function () {
@@ -975,7 +840,6 @@ try {
     `${wheatStock} → ${leftOver} Weizen, ${goldBefore} → ${goldAfter} Gold`,
   );
 
-  // Der Preiswähler beim Anbieten: bis ans obere Bandende und keinen weiter.
   const band = await evaluate<{ value: number; max: number; dip: number }>(
     cdp,
     `(function () {
@@ -998,11 +862,6 @@ try {
     `runter auf ${band.dip}, hoch bis höchstens ${band.max} → ${band.value}`,
   );
 
-  // Wie schnell ist eine Aktion beim Server? Lange hing das ausschließlich am
-  // Vier-Sekunden-Takt — gemessen ~3 s, und alles, was daran hängt (Erlös,
-  // Orderbuch, Anstoß an die anderen), kam entsprechend später. Die Schranke
-  // hier ist bewusst großzügig: Sie soll nicht die Maschine messen, sondern
-  // auffallen, wenn wieder auf den Takt gewartet wird.
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
     .seq;
   const tapped = Date.now();
@@ -1023,7 +882,6 @@ try {
     arrived < 0 ? 'gar nicht angekommen' : `${arrived} ms`,
   );
 
-  // Und Wegschicken: einmal geht, sofort danach nicht mehr.
   await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
   const requestsBefore = await evaluate<number>(cdp, `document.querySelectorAll('#requests .card').length`);
   const skipLabel = await evaluate<string>(cdp, `document.querySelector('#requests .skip').textContent`);
@@ -1047,17 +905,8 @@ try {
     afterSkip.label,
   );
 
-  // ── 9. Neustart des Servers, mitten im Spiel ──────────────────────────
-  //
-  // Der Fall, den es im Betrieb garantiert gibt: neue Version ausrollen,
-  // Kernel-Update, Kiste neu gestartet. Für den Spieler darf das nichts
-  // anderes sein als ein kurzes Funkloch — und dafür ist die ganze Architektur
-  // gebaut. Hier wird das einmal wirklich durchgespielt statt behauptet.
   console.log('\n9. Neustart des Servers, während jemand spielt');
 
-  // Die Seite hält ihren Client bewusst privat. Was sie nach außen gibt, ist
-  // der Spielstand im Gerätespeicher — und der reicht: Er enthält den
-  // bestätigten Snapshot und die noch offene Warteschlange.
   const savedState = () =>
     evaluate<{ seq: number; queue: number }>(
       cdp!,
@@ -1074,16 +923,9 @@ try {
   server.kill('SIGTERM');
   await new Promise<void>((resolve) => server.once('exit', () => resolve()));
   const stopMs = Date.now() - stopped;
-  // Zwanzig Sekunden gibt systemd (TimeoutStopSec), danach räumt es hart ab.
-  // Zwei sind die eigene Notbremse im Server. Alles darüber wäre ein Hänger.
+
   check('SIGTERM beendet den Server zügig', stopMs < 3000, `${stopMs} ms`);
 
-  // Der Spieler tippt weiter, während gar nichts da ist.
-  // Bewusst ein Kauf beim Händler und keine Aussaat: An dieser Stelle im Lauf
-  // sind die Felder womöglich alle bestellt und das Saatgut verkauft. Der
-  // Händler geht immer, solange Gold da ist — und darum geht es hier auch
-  // nicht, sondern darum, dass IRGENDETWAS ohne Server in der Warteschlange
-  // landet.
   await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
   await sleep(300);
   const beforeQueue = (await savedState()).queue;
@@ -1110,7 +952,6 @@ try {
     throw new Error('Server kam nach dem Neustart nicht hoch');
   }
 
-  // Ab hier: kein Klick, kein Neuladen. Die Seite muss sich allein fangen.
   const recovering = Date.now();
   await waitFor(
     cdp,
@@ -1132,8 +973,6 @@ try {
     `seq ${seqBeforeRestart} → ${seqAfterRestart}`,
   );
 
-  // Und die Live-Leitung baut sich ebenfalls allein wieder auf — sonst wäre
-  // der Markt nach dem ersten Neustart für immer wieder auf dem Timer.
   let streamsBack = 0;
   for (let i = 0; i < 60 && streamsBack === 0; i++) {
     await sleep(250);
@@ -1143,17 +982,6 @@ try {
   }
   check('Die Live-Leitung kommt von allein zurück', streamsBack >= 1, `${streamsBack} offen`);
 
-  // ── 10. Eine neue Version kommt beim Spieler an ───────────────────────
-  //
-  // Der gemeldete Fehler, der diesen Abschnitt erzwungen hat: „neu gecloned,
-  // trotzdem die alte Seite." Ursache war der Cachename des Service Workers —
-  // er trug `NEUES_SPIEL_VERSION`, und das steht auf `unbekannt`, wenn niemand
-  // es setzt. Damit war `sw.js` nach jedem Deploy byteweise identisch, der
-  // Browser sah keinen Grund für eine Erneuerung, und weil die Hülle aus dem
-  // Cache zuerst kommt, blieb die alte Seite **für immer** stehen.
-  //
-  // Serverseitig sah dabei alles richtig aus. Genau deshalb steht das hier:
-  // Ein Fehler, den man nur im Browser sieht, braucht eine Prüfung im Browser.
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
@@ -1163,7 +991,6 @@ try {
     shellBefore,
   );
 
-  // Oberfläche ändern, neu bauen, neu starten — wie ein echtes Ausrollen.
   const template = join(ROOT, 'web', 'farm.template.html');
   const originalTemplate = readFileSync(template, 'utf8');
   const MARKER = 'NEUE-VERSION-PRUEFUNG';
@@ -1181,8 +1008,6 @@ try {
     server = startServer();
     if (!(await serverUp())) throw new Error('Server kam mit der neuen Version nicht hoch');
 
-    // EIN Neuladen. Kein Cache-Löschen, kein Hard-Reload — genau das, was ein
-    // Spieler tut, der die App wieder aufmacht.
     await cdp.send('Page.reload', {});
     let sawNew = false;
     for (let i = 0; i < 60 && !sawNew; i++) {
@@ -1204,8 +1029,6 @@ try {
       `${shellBefore} → ${shellAfter}`,
     );
   } finally {
-    // Die Vorlage IMMER zurückschreiben — sonst hinterlässt ein abgebrochener
-    // Lauf eine veränderte Datei im Arbeitsverzeichnis.
     writeFileSync(template, originalTemplate);
     const rebuilt = spawn(
       process.execPath,
@@ -1221,14 +1044,11 @@ try {
   cdp?.close();
   browser.kill('SIGKILL');
   server.kill('SIGKILL');
-  // Chromium räumt seinen Profilordner asynchron auf; ein `rmSync` mitten
-  // hinein wirft `ENOTEMPTY`. Das ist Aufräumen, kein Prüfergebnis — und darf
-  // deshalb den Bericht nicht verschlucken, wie es eine Zeit lang tat.
+
   for (const path of [dataDir, profileDir]) {
     try {
       rmSync(path, { recursive: true, force: true });
     } catch {
-      /* Reste im /tmp sind kein Grund, rot zu werden */
     }
   }
 }

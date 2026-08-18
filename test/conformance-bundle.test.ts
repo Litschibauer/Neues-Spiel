@@ -1,16 +1,3 @@
-/**
- * Der Konformitäts-Bundle muss dem Sim-Kern treu bleiben.
- *
- * Der Bundle ist das Werkzeug für den Plattform-Beweis: Er läuft in Safari auf
- * iPhone und iPad und damit in JavaScriptCore statt V8. Aber ein Beweis ist er
- * nur, wenn er wirklich denselben Code ausführt wie Client und Server.
- *
- * Deshalb wird er hier aus den Quellen frisch gebaut, in einem isolierten
- * Kontext ausgeführt und muss dieselben Golden Vectors bestehen. Schlägt das
- * fehl, hat das Bündeln etwas verbogen — und ein grünes Ergebnis auf dem iPad
- * wäre wertlos.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RULESETS } from '../src/sim/rules.ts';
@@ -46,11 +33,7 @@ test('der Bundle lässt sich bauen und besteht alle Golden Vectors', () => {
   const report = runBundle();
 
   assert.ok(report.total >= 100, `zu wenige Vektoren im Bundle: ${report.total}`);
-  // Umkopieren: Arrays aus dem VM-Kontext haben einen fremden Prototyp.
-  //
-  // Gegen die Registrierung geprüft statt gegen eine abgeschriebene Liste: Eine
-  // neue Regelversion soll hier nicht rot werden, weil jemand vergessen hat,
-  // eine Zahl nachzutragen — sie soll rot werden, wenn sie im Bundle FEHLT.
+
   assert.deepEqual(
     [...report.rulesetVersions].sort((a, b) => a - b),
     [...RULESETS.keys()].sort((a, b) => a - b),
@@ -68,18 +51,14 @@ test('der Bundle lässt sich bauen und besteht alle Golden Vectors', () => {
 test('der Bundle braucht keine Plattform-APIs', () => {
   const source = buildConformanceBundle();
 
-  // Würde eine davon hineinrutschen, liefe der Bundle im Browser nicht — oder,
-  // schlimmer, er liefe mit plattformabhängigem Verhalten.
   for (const forbidden of ['node:crypto', 'require(', 'process.', 'Buffer']) {
     assert.ok(!source.includes(forbidden), `Bundle enthält ${forbidden}`);
   }
-  // Und keine übrig gebliebenen Modul-Schlüsselwörter, die im Browser brechen.
+
   assert.ok(!/^import\b/m.test(source), 'Bundle enthält noch import-Anweisungen');
   assert.ok(!/^export\b/m.test(source), 'Bundle enthält noch export-Anweisungen');
 });
 
 test('der Bundle ist reproduzierbar', () => {
-  // Zwei Läufe müssen byteweise dasselbe ergeben, sonst ist unklar, welche
-  // Fassung auf dem Testgerät lag.
   assert.equal(buildConformanceBundle(), buildConformanceBundle());
 });

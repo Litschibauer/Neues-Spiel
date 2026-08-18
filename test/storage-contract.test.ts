@@ -1,22 +1,3 @@
-/**
- * Der Speichervertrag.
- *
- * Dieselbe Testreihe läuft gegen **jede** Implementierung von `Storage`. Wer
- * eine neue schreibt — Postgres, MariaDB, was auch immer —, hängt sie unten in
- * `BACKENDS` ein und macht diese Tests grün. Mehr ist nicht zu tun, und weniger
- * reicht nicht.
- *
- * Dieselbe Disziplin wie die Golden Vectors für den Sim-Kern: Eine Behauptung
- * über Austauschbarkeit ist wertlos, solange sie nicht ausgeführt wird. Eine
- * Schnittstelle mit nur einer Implementierung ist meistens nur die Form dieser
- * einen Implementierung — erst die zweite zeigt, ob wirklich nichts
- * durchgesickert ist.
- *
- * Geprüft wird nicht „speichert und liest", sondern das, woran ein Speicher im
- * Betrieb scheitert: Atomarität unter Gleichzeitigkeit, Isolation zwischen
- * Höfen, und dass nichts verloren geht, was Geld ist.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -29,7 +10,6 @@ const T0 = 1_700_000_000_000;
 
 type Backend = {
   name: string;
-  /** Neuer, leerer Speicher. `reopen` schließt und öffnet denselben wieder. */
   open: () => { store: Storage; reopen: () => Storage; done: () => void };
 };
 
@@ -51,7 +31,6 @@ const BACKENDS: Backend[] = [
           try {
             store.close();
           } catch {
-            /* schon zu */
           }
           rmSync(dir, { recursive: true, force: true });
         },
@@ -62,8 +41,7 @@ const BACKENDS: Backend[] = [
     name: 'nur im Speicher',
     open: () => {
       const store = new MemoryStorage();
-      // Ein Neustart ist hier bedeutungslos — der Vertrag verlangt ihn auch
-      // nicht von jedem Speicher. Die Dauerhaftigkeitstests überspringen ihn.
+
       return { store, reopen: () => store, done: () => store.close() };
     },
   },
@@ -112,10 +90,6 @@ for (const backend of BACKENDS) {
   });
 
   suite('ein geladener Spielstand ist eine KOPIE, keine Leitung in den Speicher', (store) => {
-    // Sonst schriebe ein Aufrufer, der das Geladene verändert, unbemerkt in die
-    // Datenbank — und ein abgelehnter Sync hinterließe trotzdem Spuren. Eine
-    // echte Datenbank kann das gar nicht; eine Implementierung im Speicher
-    // schon, und deshalb steht es im Vertrag.
     store.putFarms([{ account: account('a1'), game: game(1) }]);
     const loaded = store.loadFarm('a1')!;
     loaded.nextRequestId = 999;
@@ -143,8 +117,6 @@ for (const backend of BACKENDS) {
   });
 
   suite('ein Verkauf hinterlegt die Abrechnung im selben Griff', (store) => {
-    // Getrennt wäre die Lücke dazwischen genau der Fall, in dem der Käufer
-    // bezahlt hat und der Verkäufer nichts bekommt.
     store.putOffers([offer(1, 'anna', 10, 3)], []);
     store.claimOffer(1, 'ben', T0 + 50);
 
@@ -154,12 +126,10 @@ for (const backend of BACKENDS) {
     assert.equal(due[0]!.orderId, 1);
     assert.equal(due[0]!.soldMs, T0 + 50);
 
-    // Entnommen heißt entnommen — sonst bekäme er sein Geld zweimal.
     assert.deepEqual(store.takeSettlements('anna'), []);
   });
 
   suite('niemand kauft bei sich selbst', (store) => {
-    // Sonst wäre es eine Geldpresse: Gold zurück, Ware zurück, Auftrag weg.
     store.putOffers([offer(1, 'anna')], []);
     assert.equal(store.claimOffer(1, 'anna', T0), null);
     assert.equal(store.loadBook().length, 1, 'das Angebot ist trotz Ablehnung weg');
@@ -195,14 +165,12 @@ for (const backend of BACKENDS) {
   });
 
   suite('DER ZWEITE KERNPUNKT: ein Hof gehört immer nur einem Prozess', (store) => {
-    // Ohne das hätten zwei Serverprozesse zwei Kopien desselben Hofes im
-    // Speicher — und jeder Sync des einen wäre für den anderen ein Fork (R3).
     store.putFarms([{ account: account('a1'), game: game(1) }]);
     const until = Date.now() + 60_000;
 
     assert.equal(store.claimFarm('a1', 'prozess-1', until), true);
     assert.equal(store.claimFarm('a1', 'prozess-2', until), false, 'zwei Besitzer gleichzeitig');
-    // Derselbe Prozess darf jederzeit verlängern.
+
     assert.equal(store.claimFarm('a1', 'prozess-1', until + 1000), true);
 
     store.releaseFarm('a1', 'prozess-1');
@@ -210,8 +178,6 @@ for (const backend of BACKENDS) {
   });
 
   suite('ein abgestürzter Prozess blockiert den Hof nicht für immer', (store) => {
-    // Freigeben kann nur, wer noch läuft. Ohne Ablauf wäre ein Absturz das
-    // dauerhafte Ende dieses Hofes — der teuerste denkbare Bug.
     store.putFarms([{ account: account('a1'), game: game(1) }]);
     assert.equal(store.claimFarm('a1', 'abgestuerzt', Date.now() - 1), true);
     assert.equal(store.claimFarm('a1', 'der-neue', Date.now() + 60_000), true, 'Hof bleibt verwaist');
@@ -235,13 +201,6 @@ for (const backend of BACKENDS) {
   });
 }
 
-/**
- * Dauerhaftigkeit — nur für Speicher, die eine Platte haben.
- *
- * Bewusst getrennt: „nur im Speicher" ist eine gültige Implementierung des
- * Vertrags, sie überlebt eben keinen Neustart. Diese Prüfung an alle zu
- * stellen, hieße, eine Anforderung zu erfinden, die es nicht gibt.
- */
 test('[SQLite] alles überlebt einen Neustart', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ns-contract-'));
   const path = join(dir, 'spiel.db');
@@ -257,7 +216,7 @@ test('[SQLite] alles überlebt einen Neustart', () => {
     assert.equal(again.loadFarm('a1')?.nextRequestId, 11, 'Spielstand weg');
     assert.equal(again.loadBook().length, 1, 'Buch stimmt nicht');
     assert.equal(again.loadBook()[0]!.sellerId, 'anna');
-    // Der wichtigste Teil: Bertas Erlös. Ben hat bezahlt.
+
     assert.equal(again.loadSettlements().length, 1, 'die Abrechnung ist verloren');
     assert.equal(again.loadSettlements()[0]!.gold, 30);
     assert.equal(again.getMeta('markt.naechsteNummer'), '77');

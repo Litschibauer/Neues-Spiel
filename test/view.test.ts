@@ -1,16 +1,3 @@
-/**
- * Das Anzeigemodell (`view.ts`).
- *
- * Bis hierhin hatte die Oberfläche keine einzige Prüfung — sie steckte in einer
- * HTML-Datei und ließ sich nur im Browser anfassen. Genau dort saßen aber
- * Entscheidungen mit Spielwirkung: Ist das bezahlbar? Passt das ins Lager? Was
- * passiert bei einem Tipp?
- *
- * Solche Fragen doppelt zu beantworten — einmal in der Sim, einmal in der
- * Anzeige — ist der sichere Weg zu zwei Wahrheiten. Diese Tests halten fest,
- * dass es nur eine gibt, und sie laufen ohne Browser.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { farmView } from '../src/client/view.ts';
@@ -52,9 +39,6 @@ test('ein frischer Hof: drei Felder bespielbar, der Rest wartet auf Stufen', () 
     ['field-1', 'field-2', 'field-3'],
   );
 
-  // Alles andere ist gesperrt — und sagt AUS WELCHEM Grund. Der Unterschied
-  // zwischen „zu teuer" und „Stufe fehlt" ist der zwischen „gleich" und
-  // „später", und den muss eine Oberfläche zeigen können.
   const mill = view.plots.find((p) => p.id === 'mill')!;
   assert.equal(mill.tap, 'buy');
   assert.equal(mill.blocked, 'level');
@@ -82,7 +66,6 @@ test('ein laufendes Feld meldet Fortschritt, ein fertiges meldet Ernte', () => {
 });
 
 test('„zu teuer" und „Stufe fehlt" werden nicht verwechselt', () => {
-  // Genug Erfahrung für die Mühle (Stufe 2), aber kein Gold.
   const level2 = rules.levelThresholds[0]!;
   const broke = farmView({ ...initialState(rules), xp: level2 }, rules);
   const mill = broke.plots.find((p) => p.id === 'mill')!;
@@ -90,7 +73,6 @@ test('„zu teuer" und „Stufe fehlt" werden nicht verwechselt', () => {
   assert.equal(mill.upgrade?.affordable, false);
   assert.equal(mill.blocked, 'cost');
 
-  // Mit Gold wird derselbe Platz kaufbar — ohne dass sich sonst etwas ändert.
   const rich = farmView({ ...withItems({ [GOLD]: 1000 }), xp: level2 }, rules);
   const affordable = rich.plots.find((p) => p.id === 'mill')!;
   assert.equal(affordable.blocked, null);
@@ -98,8 +80,6 @@ test('„zu teuer" und „Stufe fehlt" werden nicht verwechselt', () => {
 });
 
 test('fehlende Zutaten sperren die Mühle, ohne sie zu verstecken', () => {
-  // Mühle gekauft, aber kein Weizen im Lager — das Startsaatgut ist längst
-  // in der Erde.
   const base = withItems({ [GOLD]: 0, [WHEAT]: 0 });
   const plots = base.plots.slice();
   plots[MILL] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
@@ -115,8 +95,8 @@ test('ein Angebot, das man sich nicht leisten kann, sagt genau das', () => {
   const state = {
     ...withItems({ [GOLD]: 100 }),
     offers: [
-      { id: 1, item: EGGS, amount: 10, price: 5 }, // 50 — geht
-      { id: 2, item: EGGS, amount: 10, price: 30 }, // 300 — zu teuer
+      { id: 1, item: EGGS, amount: 10, price: 5 },
+      { id: 2, item: EGGS, amount: 10, price: 30 },
     ],
   };
   const view = farmView(state, rules);
@@ -142,8 +122,6 @@ test('ein volles Lager macht Angebote unkaufbar, nicht unsichtbar', () => {
 });
 
 test('OHNE NETZ ist nichts kaufbar — die Regel steht im Modell, nicht in der Anzeige', () => {
-  // Sonst müsste jede Oberfläche selbst daran denken (§6), und die erste, die
-  // es vergisst, verspricht dem Spieler etwas, das der Server ablehnt.
   const state = {
     ...withItems({ [GOLD]: 10_000 }),
     offers: [{ id: 1, item: EGGS, amount: 5, price: 5 }],
@@ -164,16 +142,12 @@ test('nur die vorderen Kundenaufträge sind lieferbar, der Rest ist Vorrat', () 
   const active = view.requests.filter((r) => !r.waiting);
   assert.equal(active.length, rules.requestSlots);
   assert.ok(active.every((r) => r.deliverable), 'Ware ist da, aber nicht lieferbar');
-  // Der Vorrat ist sichtbar, aber nicht anklickbar — sonst wäre die Schlange
-  // ein Regal, aus dem man sich den besten Auftrag heraussucht.
+
   assert.ok(view.requests.some((r) => r.waiting));
   assert.ok(view.requests.filter((r) => r.waiting).every((r) => !r.deliverable));
 });
 
 test('das Modell enthält keinen einzigen Anzeigetext', () => {
-  // Die Bedingung dafür, dass ein eigenes Design oder eine zweite Sprache
-  // billig bleibt. Erlaubt sind nur Katalog-Kennungen und Ausbau-Bezeichner
-  // aus dem Regelwerk — beides Daten, keine Sätze.
   const state = {
     ...withItems({ [GOLD]: 500, [WHEAT]: 20 }),
     offers: [{ id: 1, item: EGGS, amount: 4, price: 20 }],
@@ -204,8 +178,6 @@ test('das Modell enthält keinen einzigen Anzeigetext', () => {
 });
 
 test('das Modell rechnet keine Regel nach, es liest sie ab', () => {
-  // Gegenprobe zum vorigen Test: Was das Modell über Kosten und Stufen sagt,
-  // muss aus dem Regelwerk kommen — sonst hätte man zwei Wahrheiten.
   const view = farmView(farm({ xp: 10_000 }), rules);
   view.plots.forEach((p, i) => {
     const def = rules.plots[i]!;
@@ -214,8 +186,6 @@ test('das Modell rechnet keine Regel nach, es liest sie ab', () => {
     assert.deepEqual(p.upgrade?.cost ?? null, next?.cost ?? null);
   });
 });
-
-// ── Wegschicken (M6) ───────────────────────────────────────────────────────
 
 test('Wegschicken ist erlaubt, solange die Wartezeit abgelaufen ist', () => {
   const base = initialState(rules);
@@ -235,14 +205,12 @@ test('Wegschicken ist erlaubt, solange die Wartezeit abgelaufen ist', () => {
   assert.equal(v.skip.readyIn, 0);
   assert.equal(v.skip.cooldownTicks, rules.requestSkipCooldownTicks);
 
-  // Nur die vorderen Plätze — hinten ist Vorrat, kein Regal zum Aussuchen.
   const skippable = v.requests.filter((r) => r.skippable);
   assert.equal(skippable.length, rules.requestSlots);
   assert.ok(v.requests.filter((r) => r.waiting).every((r) => !r.skippable));
 });
 
 test('während der Wartezeit sagt das Modell, WIE LANGE noch', () => {
-  // Ein grauer Knopf ohne Zahl sieht aus wie ein kaputter Knopf.
   const base = initialState(rules);
   const wartend = {
     ...base,
@@ -270,11 +238,7 @@ test('kennt ein Regelwerk das Wegschicken nicht, taucht es gar nicht erst auf', 
   assert.ok(v.requests.every((r) => !r.skippable));
 });
 
-// ── Mengen und Preise beim Verkaufen ───────────────────────────────────────
-
 test('das Modell liefert die Grenzen, die eine Mengen- und Preiswahl braucht', () => {
-  // Die Oberfläche darf das Preisband nicht selbst ausrechnen — sonst gäbe es
-  // zwei Wahrheiten, und die Sim lehnte ab, was die Anzeige erlaubt hat.
   const v = farmView(withItems({ [WHEAT]: 12 }), rules);
   const wheat = v.stock.find((s) => s.item === WHEAT)!;
 
@@ -283,15 +247,12 @@ test('das Modell liefert die Grenzen, die eine Mengen- und Preiswahl braucht', (
   assert.ok(wheat.bandMax >= wheat.bandMin);
   assert.ok(wheat.npcPrice > 0, 'der Festpreis des Händlers fehlt');
 
-  // Und jeder Preis im Band muss von der Sim akzeptiert werden — genau das ist
-  // die Zusage, auf die sich der Preiswähler stützt.
   for (let price = wheat.bandMin; price <= wheat.bandMax; price++) {
     const state = withItems({ [WHEAT]: 12, [GOLD]: 1000 });
     const cmd = { seq: 1, tick: 0, type: 'LIST_ORDER' as const, item: WHEAT, amount: 1, price };
     assert.doesNotThrow(() => simulate(state, cmd, rules), `Preis ${price} wurde abgelehnt`);
   }
 
-  // Einen darüber lehnt sie ab — die Grenze ist also echt und nicht nur Zierde.
   assert.throws(
     () =>
       simulate(
@@ -303,16 +264,12 @@ test('das Modell liefert die Grenzen, die eine Mengen- und Preiswahl braucht', (
   );
 });
 
-// ── Mehrere Rezepte je Platz (v3) ──────────────────────────────────────────
-
 test('ein Feld mit zwei Früchten bietet BEIDE an — auch die, die gerade nicht geht', () => {
-  // Der Punkt des Wählers: Ein Mais, den man nicht säen kann, ist eine
-  // Information. Ein Mais, der gar nicht dasteht, ist ein Rätsel.
   const v3 = getRuleset(3);
   const CORN = v3.items.findIndex((i) => i.id === 'corn');
   const base = initialState(v3);
   const items = base.items.slice();
-  items[CORN] = 0; // Weizen ja, Mais nein.
+  items[CORN] = 0;
 
   const field = farmView({ ...base, items }, v3).plots[0]!;
   assert.equal(field.options.length, 2, 'das Feld bietet nicht beide Früchte an');
@@ -323,13 +280,11 @@ test('ein Feld mit zwei Früchten bietet BEIDE an — auch die, die gerade nicht
   assert.equal(field.options[0]!.affordable, true);
   assert.equal(field.options[1]!.affordable, false, 'Mais ohne Saatgut gilt als machbar');
 
-  // Und `next` bleibt das erste, das wirklich geht — daran hängt der Ein-Tipp-Fall.
   assert.equal(field.next?.id, 'wheat');
   assert.equal(field.tap, 'start');
 });
 
 test('ein Platz mit genau einem Rezept braucht keine Auswahl', () => {
-  // Sonst bekäme die Mühle einen Wähler mit einem einzigen Eintrag.
   const v3 = getRuleset(3);
   const MILL = v3.plots.findIndex((p) => p.id === 'mill');
   const base = initialState(v3);
@@ -359,7 +314,7 @@ test('die Auswahl nennt Kosten, Dauer und Ertrag — alles aus dem Regelwerk', (
   assert.deepEqual(corn.inputs, def.inputs);
   assert.deepEqual(corn.output, def.output);
   assert.equal(corn.durationTicks, def.durationTicks);
-  // Und die Frucht sät sich selbst — kein zweiter Katalogeintrag fürs Saatgut.
+
   assert.equal(corn.inputs[0]!.item, corn.output.item);
   assert.ok(corn.output.amount > corn.inputs[0]!.amount);
 });

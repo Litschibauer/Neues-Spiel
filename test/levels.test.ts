@@ -1,19 +1,3 @@
-/**
- * Erfahrung und Level (M8).
- *
- * Die kleinste Mechanik im ganzen Projekt — und die einzige, die **kein
- * Command** braucht. Erfahrung fällt beim Abholen und Liefern nebenbei an,
- * das Level wird daraus abgeleitet, und seine ganze Wirkung ist eine Zahl
- * neben dem Preis eines Platzes.
- *
- * Zwei Eigenschaften sind hier wichtiger als die Regel selbst:
- *
- *  1. **Das Level steht nicht im Zustand.** Es wird aus der Erfahrung
- *     berechnet. Zwei Zahlen für dieselbe Sache laufen sonst auseinander.
- *  2. **Niemand wird zurückgestuft.** Eine Levelkurve, die in einem Patch
- *     steigt, würde genau das tun — deshalb dürfen Schwellen nur sinken.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
@@ -46,15 +30,12 @@ test('das Level ergibt sich aus der Erfahrung, nicht aus einem zweiten Feld', ()
   assert.equal(levelOf(rules, rules.levelThresholds[0]!), 2);
   assert.equal(levelOf(rules, rules.levelThresholds[1]!), 3);
 
-  // Über der letzten Schwelle ist Schluss — kein Level aus dem Nichts.
   const max = rules.levelThresholds.length + 1;
   assert.equal(levelOf(rules, 10_000_000), max);
   assert.equal(nextLevelAt(rules, 10_000_000), null, 'Maximum hat kein Danach');
 });
 
 test('der Fortschrittsbalken hat immer einen Anfang und ein Ende', () => {
-  // Ohne beides ließe sich kein Balken zeichnen, und genau dafür sind die
-  // beiden Abfragen da.
   for (const xp of [0, 5, 39, 40, 41, 119, 500, 4400, 99_999]) {
     const start = levelStartedAt(rules, xp);
     const next = nextLevelAt(rules, xp);
@@ -82,7 +63,6 @@ test('Erfahrung fällt beim Abholen an — ohne eigenes Command', () => {
   assert.equal(client.collect(0).ok, true);
   assert.equal(client.state.xp, rules.recipes[R_WHEAT]!.xp);
 
-  // Und das Log enthält nur die zwei Aktionen — kein XP-Command.
   assert.deepEqual(
     client.queue.map((c) => c.type),
     ['START', 'COLLECT'],
@@ -90,7 +70,6 @@ test('Erfahrung fällt beim Abholen an — ohne eigenes Command', () => {
 });
 
 test('Liefern ist die Hauptquelle — deutlich mehr als Ernten', () => {
-  // Sonst wäre der schnellste Weg nach oben, Aufträge zu ignorieren.
   const perHarvest = rules.recipes[R_WHEAT]!.xp;
   for (const template of rules.requestTemplates) {
     assert.ok(
@@ -140,8 +119,6 @@ test('genau an der Schwelle geht es auf — keinen Punkt früher', () => {
 });
 
 test('Erfahrung geht nie zurück', () => {
-  // Keine Aktion darf Erfahrung kosten — sonst könnte ein Spieler ein Level
-  // verlieren, und ein Platz, den er gekauft hat, wäre plötzlich gesperrt.
   const rnd = mulberry32(9);
   const server = new Server(fuzzStart(rules, 5000, mulberry32(9)), T0, CURRENT_RULESET_VERSION);
   const client = new Client(server.snapshot);
@@ -175,9 +152,6 @@ test('Erfahrung geht nie zurück', () => {
 });
 
 test('Levelschwellen dürfen über Versionen nur sinken', () => {
-  // Ein Patch, der die Kurve anhebt, würde Spieler zurückstufen — und ihnen
-  // damit Plätze wieder zusperren, die sie längst gekauft haben. Das Level
-  // wird ja abgeleitet, es kann sich also rückwärts bewegen.
   for (let i = 1; i < PRODUCTION_VERSIONS.length; i++) {
     const from = getRuleset(PRODUCTION_VERSIONS[i - 1]!);
     const to = getRuleset(PRODUCTION_VERSIONS[i]!);
@@ -197,7 +171,6 @@ test('Levelschwellen dürfen über Versionen nur sinken', () => {
 });
 
 test('die Levelsperren sind erreichbar und in sinnvoller Reihenfolge', () => {
-  // Eine Sperre über dem Maximum wäre ein Platz, den es nie gibt.
   const max = rules.levelThresholds.length + 1;
   for (const plot of rules.plots) {
     for (const level of plot.levels) {
@@ -205,16 +178,12 @@ test('die Levelsperren sind erreichbar und in sinnvoller Reihenfolge', () => {
     }
   }
 
-  // Und die Kette muss in der Reihenfolge aufgehen, in der man sie spielt:
-  // Mühle vor Gehege, sonst hat man Hühner ohne Futter.
   const mill = rules.plots[MILL]!.levels[0]!.minPlayerLevel ?? 1;
   const coop = rules.plots[COOP]!.levels[0]!.minPlayerLevel ?? 1;
   assert.ok(mill <= coop, 'das Gehege öffnet vor der Mühle — Hühner ohne Futter');
 });
 
 test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () => {
-  // Der Praxistest: ein frischer Hof, nur die drei Startfelder, keine
-  // Geschenke. Wie lange bis zur Mühle?
   const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
   server.rollRequest = mulberry32(4);
   server.stockRequests();
@@ -224,9 +193,6 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
   const cost = rules.plots[MILL]!.levels[0]!.cost[0]!.amount;
   let cycles = 0;
 
-  // Saatgut ist endlich: Drei Felder kosten drei Körner pro Runde. Wer die
-  // Aufträge beliefert hat, muss beim Händler nachkaufen — genau der Weg, den
-  // ein Spieler ohne Weizen im Lager gehen muss.
   const seed = rules.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
   const perRound = 3 * seed;
 
@@ -246,7 +212,7 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
       if (!fillable) break;
       client.fillRequest(fillable.id);
     }
-    // Die Aussaat der nächsten Runde bleibt liegen — zurückkaufen wäre teurer.
+
     const sellable = count(client.state, WHEAT) - perRound;
     if (sellable > 0) client.sellNpc(WHEAT, sellable);
     cycles++;
@@ -255,11 +221,9 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
   assert.ok(cycles < 200, 'die Mühle ist unerreichbar');
   assert.equal(client.buy(MILL).ok, true);
 
-  // In Spielzeit: Wie lange dauert das? Ein Zyklus ist eine Wachstumsdauer.
   const minutes = Math.round((cycles * GROW) / 60);
   assert.ok(minutes <= 60, `bis zur Mühle vergehen ${minutes} Minuten — zu zäh für den Einstieg`);
 
-  // Und der Server nimmt die ganze Aufstiegs-Sitzung ohne Divergenz ab.
   const res = server.sync(client.buildSyncRequest(), T0 + client.localTick * 1000);
   assert.equal(res.ok, true);
   if (!res.ok) return;

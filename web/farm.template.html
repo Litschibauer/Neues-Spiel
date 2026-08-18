@@ -4,18 +4,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
-  /*
-   * Die Oberfläche.
-   *
-   * Sie kennt KEINE Spielregel. Sie liest `state` und `rules` und zeichnet, was
-   * dort steht — welche Plätze es gibt, welche Rezepte laufen dürfen, was ein
-   * Ausbau kostet. Eine neue Feldfrucht, ein neues Gebäude, ein neuer
-   * Gegenstand ändern hier keine Zeile; sie tauchen von allein auf.
-   *
-   * Das ist der Grund, warum es sich gelohnt hat, mit dem Aussehen zu warten,
-   * bis Inhalt Daten war: Jetzt kostet die Oberfläche einmal Arbeit statt
-   * einmal pro Feldfrucht.
-   */
   :root {
     --ground: #f7f4ee; --surface: #ffffff; --sunk: #efeae0; --line: #e2dbcd;
     --ink: #2b2521; --muted: #7d7266;
@@ -82,7 +70,6 @@
   [hidden] { display: none !important; }
   button { font: inherit; color: inherit; cursor: pointer; }
 
-  /* ── Gerüst ─────────────────────────────────────────────────────── */
   #shell { display: flex; flex-direction: column; min-height: 100%; }
 
   .topbar {
@@ -93,8 +80,6 @@
   }
   .purse { display: flex; align-items: center; gap: .5rem; }
 
-  /* Levelring: Stufe in der Mitte, Fortschritt als Kreis. Eine Zahl, die nur
-     steigt, verdient die auffälligste Stelle. */
   .ring { position: relative; width: 2.5rem; height: 2.5rem; flex: none; }
   .ring svg { transform: rotate(-90deg); display: block; }
   .ring b {
@@ -113,8 +98,6 @@
   }
   .coins svg { flex: none; }
 
-  /* Lagerbalken. Volles Lager ist die häufigste Frustquelle im Genre — also
-     immer sichtbar und nicht in einem Menü versteckt. */
   .silo { display: flex; align-items: center; gap: .5rem; font-size: .7rem; color: var(--muted); }
   .silo-track {
     flex: 1; height: .3rem; border-radius: 999px; background: var(--sunk); overflow: hidden;
@@ -136,7 +119,6 @@
     border: 1px dashed var(--line); border-radius: 14px; margin: 0;
   }
 
-  /* ── Plätze ─────────────────────────────────────────────────────── */
   .plots { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: .6rem; }
   .plot {
     position: relative; padding: 0; overflow: hidden;
@@ -155,7 +137,6 @@
   .plot.gated { opacity: .55; }
   .plot[disabled] { cursor: default; }
 
-  /* Reifezeichen: ein Punkt, den man aus dem Augenwinkel sieht. */
   .plot .badge {
     position: absolute; top: .4rem; right: .4rem; width: .6rem; height: .6rem;
     border-radius: 50%; background: var(--ripe);
@@ -171,7 +152,6 @@
   }
   .upgrade[disabled] { background: var(--sunk); color: var(--muted); }
 
-  /* ── Karten: Aufträge, Angebote, Lager ──────────────────────────── */
   .card {
     width: 100%; background: var(--surface); border: 1px solid var(--line);
     border-radius: 14px; box-shadow: var(--shadow); padding: .7rem .8rem;
@@ -187,9 +167,6 @@
   .card .pay .amount { font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
   .card .pay .xp { font-size: .66rem; color: var(--accent); font-weight: 650; }
 
-  /* ── Mengen- und Preiswähler ─────────────────────────────────────────
-     Große Flächen, weil das mit dem Daumen bedient wird: 44 px ist die
-     Untergrenze, unter der man daneben tippt. */
   .trade { display: block; }
   .trade .head { display: flex; align-items: baseline; gap: .4rem; margin-bottom: .5rem; }
   .trade .head .name { font-size: .85rem; font-weight: 620; }
@@ -221,9 +198,6 @@
   .trade .done:disabled { background: var(--line); color: var(--muted); }
   .trade .note { font-size: .68rem; color: var(--muted); margin-top: .35rem; text-align: center; }
 
-  /* ── Der Rezeptwähler ────────────────────────────────────────────────
-     Von unten hereinfahrend statt mittig: Auf einem Handy ist der untere
-     Bildschirmrand die einzige Stelle, die der Daumen sicher erreicht. */
   .sheet-bg {
     position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.45);
     display: flex; align-items: flex-end; justify-content: center;
@@ -246,7 +220,6 @@
   .opt .yield { font-weight: 700; color: var(--leaf-dark); font-variant-numeric: tabular-nums; }
   .opt:disabled { opacity: .5; }
 
-  /* Wegschicken: klein und unauffällig — es ist ein Verzicht, keine Belohnung. */
   .skip {
     margin-top: .4rem; width: 100%; height: 2rem; border-radius: 10px;
     border: 1px dashed var(--line); background: transparent;
@@ -270,14 +243,12 @@
   .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
   .chip[disabled] { opacity: .45; }
 
-  /* ── Markt: ohne Netz sichtbar, aber nicht bedienbar (§6) ───────── */
   #market-list.no-net { opacity: .45; pointer-events: none; }
   .note {
     margin: 0; font-size: .75rem; color: var(--warn);
     background: var(--warn-soft); border-radius: 10px; padding: .55rem .7rem;
   }
 
-  /* ── Untere Navigation ──────────────────────────────────────────── */
   nav {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
     background: var(--surface); border-top: 1px solid var(--line);
@@ -297,7 +268,6 @@
     font-size: .58rem; font-weight: 800; line-height: .95rem; text-align: center;
   }
 
-  /* ── Statusleiste unten am Inhalt ───────────────────────────────── */
   .conn {
     display: flex; align-items: center; justify-content: center; gap: .4rem;
     font-size: .68rem; color: var(--muted); padding: .3rem 0;
@@ -306,7 +276,6 @@
   .conn.live { color: var(--accent); }
   .conn.off { color: var(--warn); }
 
-  /* ── Bänder ─────────────────────────────────────────────────────── */
   .banner {
     background: var(--warn-soft); color: var(--warn); border-radius: 12px;
     padding: .6rem .75rem; font-size: .78rem;
@@ -328,7 +297,6 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem); }
   .toast.bad { background: var(--bad); color: var(--surface); }
 
-  /* ── Einstieg ───────────────────────────────────────────────────── */
   .gate {
     min-height: 100%; display: flex; flex-direction: column; justify-content: center;
     gap: 1rem; padding: 2rem 1.2rem; max-width: 26rem; margin: 0 auto;
@@ -366,7 +334,6 @@
   .tiny a { color: inherit; }
 </style>
 
-<!-- ── Einstieg ─────────────────────────────────────────────────── -->
 <div class="gate" id="gate">
   <div>
     <h1>Dein Hof</h1>
@@ -381,11 +348,6 @@
   <p class="tiny"><a href="/feldtest">Feldtest-Ansicht</a></p>
 </div>
 
-<!--
-  Der Schlüssel wird GENAU EINMAL gezeigt. Deshalb hält der Ablauf hier an,
-  statt ihn stillschweigend wegzuspeichern: Wer das Gerät verliert und ihn nie
-  gesehen hat, hat keine Chance mehr.
--->
 <div class="gate" id="keygate" hidden>
   <div class="keybox">
     <strong>Das ist dein Schlüssel</strong>
@@ -401,7 +363,6 @@
   </div>
 </div>
 
-<!-- ── Das Spiel ────────────────────────────────────────────────── -->
 <div id="shell" hidden>
   <header class="topbar">
     <div class="purse">
@@ -432,10 +393,6 @@
     </div>
   </header>
 
-  <!--
-    Der Rezeptwähler. Liegt außerhalb von <main>, weil er über allem liegt und
-    nicht zu einer der vier Ansichten gehört.
-  -->
   <div class="sheet-bg" id="pick-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="pick-title">
       <h3 id="pick-title"></h3>
@@ -450,13 +407,11 @@
       <button id="takeover">Hier weiterspielen</button>
     </div>
 
-    <!-- Hof -->
     <section class="view" id="view-farm">
       <div class="plots" id="plots"></div>
       <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
     </section>
 
-    <!-- Aufträge -->
     <section class="view" id="view-orders" hidden>
       <h2>Kunden warten</h2>
       <div id="requests"></div>
@@ -464,7 +419,6 @@
       <div id="mail"></div>
     </section>
 
-    <!-- Markt -->
     <section class="view" id="view-market" hidden>
       <p class="note" id="market-note" hidden>
         Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich
@@ -476,7 +430,6 @@
       <div id="my-orders"></div>
     </section>
 
-    <!-- Lager -->
     <section class="view" id="view-store" hidden>
       <h2>Vorräte</h2>
       <div class="chips" id="stock"></div>
@@ -529,21 +482,9 @@
 (function () {
   'use strict';
 
-  /**
-   * Der Sim-Kern, wie ihn der Server benutzt — dasselbe Bündel, dieselben
-   * Funktionen. Das Skript oben legt ihn auf `globalThis`; hier bekommt er
-   * einen kurzen Namen.
-   */
   var NS = globalThis.NeuesSpiel;
   var $ = function (id) { return document.getElementById(id); };
 
-  /**
-   * Sicherheitsabstand auf die Uhr (§4).
-   *
-   * Der Client darf NIE eine Spielzeit annehmen, die vor dem Server liegt —
-   * sonst lehnt der die Aktion als Zeitreise ab und ein ehrlicher Spieler
-   * verliert seine Sitzung. Zwei Sekunden Rückstand kosten nichts.
-   */
   var CLOCK_SAFETY_TICKS = 2;
 
   var token = localStorage.getItem('ns-token') || '';
@@ -559,7 +500,6 @@
   var view = 'farm';
   var SAVE_KEY = NS.storageKeyFor(location.origin);
 
-  // ── Speichern und Laden ───────────────────────────────────────────
   function save() {
     if (!client) return;
     try {
@@ -606,22 +546,6 @@
     });
   };
 
-  // ── Die Live-Leitung ──────────────────────────────────────────────
-  //
-  // Bis hierhin fragte die Seite alle vier Sekunden nach. Für den eigenen Hof
-  // reicht das — der ändert sich ja nur, wenn man selbst etwas tut. Für den
-  // Markt nicht: Ein neues Angebot sah man erst beim nächsten Timer, und bei
-  // einem Kauf, den der Schnellere gewinnt, ist das der Unterschied zwischen
-  // „geht" und „war schon weg".
-  //
-  // Über die Leitung kommen KEINE Spieldaten, nur das Wort „nudge". Die Seite
-  // macht daraufhin einen ganz normalen erzwungenen Sync — denselben, den auch
-  // der Timer auslöst. Ein Codeweg, kein zweiter Zustandspfad.
-  //
-  // Warum `fetch` und nicht `EventSource`: `EventSource` kann keine Header
-  // setzen, der Schlüssel müsste also in die URL. In der URL landet er im
-  // Serverprotokoll und in jedem Proxy dazwischen. Ein Lesestrom über `fetch`
-  // behält ihn im Header — dieselbe Behandlung wie bei jedem anderen Aufruf.
   var liveAbort = null;
   var liveRetryMs = 1000;
 
@@ -642,7 +566,7 @@
       cache: 'no-store',
     }).then(function (res) {
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
-      liveRetryMs = 1000; // Steht die Leitung, beginnt das Backoff wieder von vorn.
+      liveRetryMs = 1000;
 
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
@@ -653,8 +577,6 @@
           if (chunk.done) throw new Error('stream ended');
           buffer += decoder.decode(chunk.value, { stream: true });
 
-          // SSE trennt Nachrichten durch eine Leerzeile. Alles Unvollständige
-          // bleibt im Puffer stehen — ein Paket darf mitten im Wort enden.
           var parts = buffer.split('\n\n');
           buffer = parts.pop();
           parts.forEach(function (block) {
@@ -665,43 +587,24 @@
       }
       return pump();
     }).catch(function () {
-      // Abgebrochen, abgerissen, Server voll — alles derselbe Fall: Der Timer
-      // spielt weiter, und wir versuchen es gleich noch mal. Wichtig ist nur,
-      // dass wir nicht in einer Schleife hämmern.
       if (ctl.signal.aborted) return;
       liveAbort = null;
 
-      // Mit Streuung, und das ist beim Neustart des Servers der entscheidende
-      // Punkt: Dann reißen ALLE Leitungen in derselben Millisekunde ab. Ohne
-      // Streuung kämen alle Geräte exakt eine Sekunde später gleichzeitig
-      // zurück — der Server hätte seinen ersten Ansturm, bevor er überhaupt
-      // fertig hochgefahren ist, und würde das Muster bei jedem Fehlschlag
-      // wiederholen. Ein halber bis ganzer Faktor Zufall bricht den Gleichtakt.
       var wait = liveRetryMs * (0.5 + Math.random());
       setTimeout(startLive, wait);
       liveRetryMs = Math.min(liveRetryMs * 2, 60000);
     });
   }
 
-  /**
-   * Ein Anstoß ist angekommen.
-   *
-   * Nicht sofort syncen, sondern mit einer kleinen Zufallsverzögerung: Ein
-   * Anstoß geht an ALLE gleichzeitig. Ohne Streuung antworten tausend Geräte in
-   * derselben Millisekunde, und ein Server, der einen Verkauf verkraftet, geht
-   * an dessen Benachrichtigung kaputt. Eine halbe Sekunde Unschärfe merkt
-   * niemand; ein zeitgleicher Ansturm schon.
-   */
   var nudgeTimer = null;
   function onNudge() {
-    if (nudgeTimer) return; // Schon einer unterwegs — mehr als einmal syncen bringt nichts.
+    if (nudgeTimer) return;
     nudgeTimer = setTimeout(function () {
       nudgeTimer = null;
       attempt(true);
     }, Math.floor(Math.random() * 500));
   }
 
-  /** Spielzeit aus der SERVERZEIT ableiten, nicht aus der Geräteuhr (§4). */
   function tickNow() {
     var snap = client.snapshotMeta;
     var serverNow = Date.now() + clockOffsetMs;
@@ -709,11 +612,6 @@
     return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
   }
 
-  /**
-   * Snapshot übernehmen — nur beim Verbindungsaufbau.
-   *
-   * Wirft die Warteschlange weg, und das ist hier richtig: Es gibt noch keine.
-   */
   function adopt(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
@@ -721,32 +619,12 @@
     save();
   }
 
-  /**
-   * Nach einem Sync: Uhr und Zeitanker nachziehen — **mehr nicht.**
-   *
-   * Der Client wurde von der Sync-Maschine bereits übernommen, und zwar mit
-   * der Grenze, bis zu der gesendet wurde: Was der Spieler WÄHREND der
-   * Rundreise angetippt hat, bleibt erhalten (siehe `Client.adopt`).
-   *
-   * Hier noch einmal `client.adopt(snapshot)` aufzurufen, machte genau das
-   * zunichte — ohne zweites Argument wirft es die ganze Warteschlange weg.
-   * Der Fehler war von außen kaum zu greifen: Die Ernte wurde angezeigt, kurz
-   * darauf stand das Lager wieder auf dem alten Wert, und nichts meldete
-   * einen Fehler. Im Browser-Test fiel etwa jeder dritte Lauf darüber.
-   */
   function afterSync(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
     save();
   }
 
-  /**
-   * Anzeigenamen — der einzige Ort im Projekt, der welche kennt.
-   *
-   * Der Sim-Kern rechnet mit Katalogindizes. Fehlt hier ein Name, steht die
-   * Katalog-Kennung da: Ein neuer Gegenstand macht die Seite nicht kaputt, er
-   * sieht nur eine Version lang technisch aus.
-   */
   var NAMES = {
     gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
     corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter',
@@ -766,7 +644,6 @@
   }
   function costText(cost) { return stacks(cost); }
 
-  /** Wartezeit menschlich: Sekunden, Minuten, Stunden. */
   function timeText(seconds) {
     if (seconds < 60) return seconds + ' s';
     if (seconds < 3600) return Math.ceil(seconds / 60) + ' min';
@@ -779,24 +656,7 @@
   function recipesAt(i, level) {
     return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
   }
-  // ── Bilder ────────────────────────────────────────────────────────
-  //
-  // Bewusst als Inline-SVG statt als Bilddateien: Sie färben sich über die
-  // CSS-Variablen mit (Hell/Dunkel), skalieren ohne Unschärfe, und die App
-  // bleibt eine einzige Datei — also auch im Funkloch vollständig.
-  //
-  // Welche Zeichnung ein Platz bekommt, hängt an seiner Katalog-Kennung. Eine
-  // unbekannte Kennung bekommt das Feld; ein neues Gebäude ist damit sofort
-  // spielbar und sieht nur eine Version lang generisch aus.
 
-  /**
-   * Das Feld — und seit v3 zwei Früchte darauf.
-   *
-   * `crop` ist die Katalog-Kennung des laufenden Rezepts, nicht eine Zahl:
-   * Kommt eine dritte Frucht dazu, ist das hier eine Zeile mehr und sonst
-   * nichts. Unbekannte Kennungen zeichnen Weizen — eine Frucht ohne eigenes
-   * Bild soll aussehen wie irgendetwas, nicht wie ein leeres Feld.
-   */
   function artField(stage, crop) {
     var soil = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
       '<path d="M0 34h100v46H0z" fill="var(--soil)"/>' +
@@ -805,8 +665,7 @@
 
     var out = soil, x, i;
     var isCorn = crop === 'corn';
-    // Mais steht weiter auseinander und wird höher — man soll auf einen Blick
-    // sehen, was auf dem Feld steht, ohne den Text zu lesen.
+
     var count = isCorn ? 4 : 5;
     var gap = isCorn ? 22 : 18;
     var left = isCorn ? 18 : 14;
@@ -823,7 +682,6 @@
           : '<path d="M' + x + ' 66V42" stroke="var(--leaf)" stroke-width="2.5" stroke-linecap="round"/>' +
             '<path d="M' + x + ' 52c-5-2-6-7-6-7s6 1 6 5zM' + x + ' 46c5-2 6-7 6-7s-6 1-6 5z" fill="var(--leaf-dark)"/>';
       } else if (isCorn) {
-        // Reifer Mais: hoher Halm, ein Kolben seitlich, Fahne obenauf.
         out += '<path d="M' + x + ' 70V26" stroke="var(--corn-leaf)" stroke-width="3" stroke-linecap="round"/>' +
           '<path d="M' + x + ' 44c-9-3-10-10-10-10s10 1 10 7zM' + x + ' 36c9-3 10-10 10-10s-10 1-10 7z" fill="var(--corn-leaf)"/>' +
           '<ellipse cx="' + (x + 5) + '" cy="48" rx="4" ry="8" fill="var(--corn)"/>' +
@@ -838,11 +696,10 @@
     return out;
   }
 
-  /** Kuhgehege: Stufe 1 ist die leere Weide, ab Stufe 2 steht eine Kuh darauf. */
   function artPasture(level, ready) {
     var out = '<rect x="0" y="0" width="100" height="80" fill="var(--sky)"/>' +
       '<path d="M0 54h100v26H0z" fill="var(--leaf)" opacity=".5"/>' +
-      // Zaun — er macht aus einer Wiese ein Gehege.
+
       '<path d="M6 44v22M28 44v22M72 44v22M94 44v22" stroke="var(--wood)" stroke-width="3" stroke-linecap="round"/>' +
       '<path d="M2 50h96M2 60h96" stroke="var(--wood)" stroke-width="2.5" stroke-linecap="round"/>';
 
@@ -859,7 +716,6 @@
         '</g>';
     }
     if (ready) {
-      // Der volle Eimer steht daneben, sobald abgeholt werden kann.
       out += '<g transform="translate(20 66)">' +
         '<path d="M-6 -7h12l-2 9h-8z" fill="var(--milk)" stroke="var(--soil-dark)" stroke-width="1"/>' +
         '<path d="M-6 -7h12" stroke="var(--soil-dark)" stroke-width="1.4"/>' +
@@ -868,7 +724,6 @@
     return out;
   }
 
-  /** Molkerei: ein Haus mit Kanne. Dampft, solange etwas läuft. */
   function artDairy(working) {
     var steam = working
       ? '<g opacity=".7"><circle cx="70" cy="26" r="3" fill="var(--milk)">' +
@@ -883,7 +738,7 @@
       '<rect x="64" y="30" width="8" height="12" fill="var(--wood)"/>' +
       steam +
       '<rect x="30" y="48" width="12" height="14" rx="1" fill="var(--soil-dark)" opacity=".5"/>' +
-      // Milchkanne davor, damit man das Haus von der Mühle unterscheidet.
+
       '<g transform="translate(84 56)">' +
       '<path d="M-6 6h12l-1-12h-10z" fill="var(--feather-2)" stroke="var(--soil-dark)" stroke-width="1"/>' +
       '<rect x="-3" y="-9" width="6" height="4" rx="1" fill="var(--soil-dark)" opacity=".7"/>' +
@@ -891,8 +746,6 @@
   }
 
   function artMill(working) {
-    // Die Flügel drehen sich nur, wenn wirklich etwas läuft — eine Animation,
-    // die immer läuft, sagt nichts.
     var spin = working
       ? '<animateTransform attributeName="transform" type="rotate" from="0" to="360"' +
         ' dur="7s" repeatCount="indefinite"/>'
@@ -914,7 +767,7 @@
       '<path d="M28 62V40h44v22z" fill="var(--wood)"/>' +
       '<path d="M50 28 22 42h56z" fill="var(--wood-dark)"/>' +
       '<rect x="44" y="50" width="12" height="12" rx="1" fill="var(--soil-dark)" opacity=".55"/>';
-    // Stufe 1 ist ein leeres Gehege, ab Stufe 2 sitzen Hühner drin.
+
     if (level >= 2) {
       out += '<g transform="translate(16 56)">' +
         '<ellipse cx="0" cy="0" rx="7" ry="5.5" fill="var(--feather)"/>' +
@@ -939,19 +792,6 @@
     return out;
   }
 
-  /**
-   * Die Zeichnungen, nach Katalog-Kennung.
-   *
-   * DAS IST DIE STELLE FÜR EIGENE GRAFIK. Jeder Eintrag bekommt eine
-   * Platz-Ansicht (siehe `view.ts`) und gibt SVG-Inhalt zurück — was darin
-   * steht, ist völlig frei: gezeichnete Pfade wie hier, ein `<image>` mit
-   * eingebettetem PNG, was auch immer. Ein Muster (`field-`) greift für alle
-   * Kennungen mit diesem Anfang.
-   *
-   * Wer nichts einträgt, verliert nichts: Eine unbekannte Kennung bekommt
-   * `fallback`. Ein neues Gebäude ist damit sofort spielbar und sieht nur eine
-   * Version lang generisch aus.
-   */
   var ART = {
     'field-': function (p) {
       if (!p.busy && !p.done) return artField(0, null);
@@ -972,16 +812,6 @@
     return ART.fallback(p);
   }
 
-  // ── Zeichnen ──────────────────────────────────────────────────────
-  /**
-   * Zeichnen.
-   *
-   * Alles Inhaltliche kommt aus `NS.farmView` — ist ein Feld reif, ist ein
-   * Angebot bezahlbar, passt es ins Lager. Diese Datei entscheidet nur noch,
-   * WIE das aussieht und WIE es heißt. Damit ist eine zweite Oberfläche (oder
-   * eine native App) eine Frage der Darstellung und keine Neuimplementierung
-   * der halben Spiellogik.
-   */
   function render() {
     if (!client) return;
     client.localTick = tickNow();
@@ -994,9 +824,7 @@
     renderMail(v);
     renderMarket(v);
     renderMyOrders(v);
-    // Den Lagerbereich NICHT neu bauen, während jemand darin eine Zahl tippt.
-    // `render()` läuft jede Sekunde; ein Neuaufbau nähme dem Feld den Fokus,
-    // und man käme über die erste Ziffer nicht hinaus.
+
     var typing = document.activeElement
       && document.activeElement.tagName === 'INPUT'
       && $('view-store').contains(document.activeElement);
@@ -1009,7 +837,7 @@
     $('gold').textContent = v.currency.amount;
 
     var pct = v.xp.atMax ? 1 : v.xp.into / v.xp.span;
-    // 2πr bei r=17 ≈ 107. Der Ring läuft von leer (Umfang) auf voll (0).
+
     $('ring-fill').setAttribute(
       'stroke-dashoffset',
       String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))),
@@ -1023,28 +851,17 @@
     $('silo').className = 'silo' + (v.silo.full ? ' full' : '');
   }
 
-  /**
-   * Die Plätze. Nur noch Darstellung: WAS gilt, steht im Anzeigemodell.
-   *
-   * Deshalb sind die Textbausteine hier zusammen an einer Stelle — wer die
-   * Sprache tauschen oder anders formulieren will, fasst nur diese Funktion an.
-   */
   function plotStatus(p) {
     if (p.done) return 'fertig · ' + nameOf(p.producing);
     if (p.busy) return timeText(p.remaining);
     if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
     if (p.blocked === 'inputs') return 'Zutaten fehlen';
     if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
-    // Kann der Platz mehreres, steht das drauf statt einer der Möglichkeiten.
-    // Eine von zwei Zeilen anzuzeigen wäre schlechter als keine: Man hielte
-    // sie für die einzige.
+
     if (p.options.length > 1) {
       return p.options.map(function (o) { return nameOf(o.id); }).join(' oder ');
     }
     if (p.tap === 'start') {
-      // Was das Starten KOSTET, gehört auf die Kachel. Ein Feld, das ein Korn
-      // frisst und zwei zurückgibt, ist ein gutes Geschäft — aber nur, wenn
-      // beide Zahlen dastehen.
       var n = p.next;
       if (!n) return 'antippen zum Starten';
       if (n.inputs.length === 0) return 'antippen · +' + n.output.amount + ' ' + itemName(n.output.item);
@@ -1098,8 +915,6 @@
       tile.addEventListener('click', function () { tapPlot(p.index); });
       box.appendChild(tile);
 
-      // Ausbau eines Platzes, der schon arbeiten kann — ein eigener Knopf,
-      // damit ein Fehltipp nicht versehentlich Gold kostet.
       if (p.upgrade && !p.idle && !p.busy && !p.done) {
         var up = document.createElement('button');
         up.className = 'upgrade';
@@ -1113,13 +928,6 @@
     });
   }
 
-  /**
-   * Kundenaufträge (M6).
-   *
-   * Die vorderen `requestSlots` sind annehmbar, danach kommt der Vorrat — und
-   * genau dieser Vorrat ist der Grund, warum offline nicht die Luft ausgeht:
-   * Er liegt schon auf dem Gerät.
-   */
   function renderRequests(v) {
     var box = $('requests');
     box.textContent = '';
@@ -1162,14 +970,6 @@
       }
       box.appendChild(card);
 
-      /**
-       * Wegschicken — bezahlt mit Wartezeit, nicht mit Geld.
-       *
-       * Nur an den vorderen Plätzen, und nur wenn das Regelwerk es überhaupt
-       * kennt: Ein Knopf, der nie etwas tut, ist schlimmer als keiner. Beim
-       * Warten steht die Restzeit dran statt eines stummen grauen Knopfes —
-       * sonst hält man ihn für kaputt.
-       */
       if (v.skip.enabled && !r.waiting) {
         var skip = document.createElement('button');
         skip.type = 'button';
@@ -1212,13 +1012,6 @@
     box.appendChild(card);
   }
 
-  /**
-   * Die Auslage des Marktes (M5).
-   *
-   * Der einzige Teil dieser Oberfläche, der ohne Netz nicht bedienbar ist —
-   * und deshalb der einzige, der ausgegraut wird statt zu verschwinden (§6).
-   * Wer im Funkloch hinsieht, soll erkennen, dass es den Markt gibt.
-   */
   function renderMarket(v) {
     var box = $('market-list');
     var online = navigator.onLine;
@@ -1259,8 +1052,7 @@
         if (!navigator.onLine) return;
         var res = client.buyOffer(o.id);
         act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res);
-        // Sofort syncen: Das Fenster, in dem jemand schneller sein kann, soll
-        // eine Rundreise bleiben und keine Sitzung.
+
         if (res.ok) attempt(true);
       });
       box.appendChild(card);
@@ -1285,9 +1077,7 @@
       top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
       var sub = document.createElement('div');
       sub.className = 'sub';
-      // Kein Countdown mehr: Die Ware bleibt stehen, bis jemand kauft oder der
-      // Verkäufer sie zurückholt. Bezahlt wurde schon beim Einstellen. Sollte
-      // ein Regelwerk die Frist wieder einschalten, steht sie hier wieder.
+
       sub.textContent = o.expiresIn === null
         ? 'steht seit ' + timeText(o.listedFor) + ' · läuft nicht ab'
         : 'in ' + timeText(o.expiresIn) + ' zurück ins Postfach';
@@ -1303,21 +1093,11 @@
     });
   }
 
-  /**
-   * Was der Spieler gerade eingestellt hat — Menge und Preis, je Ware.
-   *
-   * Muss AUSSERHALB des Zeichnens leben: `render()` läuft jede Sekunde, und
-   * eine Auswahl, die dabei zurückspringt, ist unbenutzbar. Geclamped wird
-   * erst bei der Benutzung, nicht beim Tippen — sonst kann man eine Zahl nicht
-   * mehr korrigieren, sobald man einmal zu weit war.
-   */
   var picks = {};
 
   function pickOf(entry) {
     var p = picks[entry.item];
     if (!p) {
-      // Vorschlag beim ersten Mal: alles verkaufen, am oberen Bandrand
-      // anbieten. Das ist in beiden Fällen die häufigste Absicht.
       p = { amount: entry.amount, price: entry.bandMax };
       picks[entry.item] = p;
     }
@@ -1329,13 +1109,6 @@
     return Math.max(lo, Math.min(hi, Math.round(n)));
   }
 
-  /**
-   * Ein Zahlenwähler: −, Eingabefeld, +, optional „alle".
-   *
-   * Das Eingabefeld ist Absicht und nicht nur Bequemlichkeit: Wer 40 Stück
-   * verkaufen will, tippt keine 40 Mal auf Plus. Die Knöpfe daneben sind für
-   * die kleinen Korrekturen da, für die ein Zahlenfeld auf dem Handy nervt.
-   */
   function numberPick(label, get, lo, hi, set, maxLabel) {
     var row = document.createElement('div');
     row.className = 'pick';
@@ -1346,12 +1119,6 @@
     lbl.textContent = label;
     row.appendChild(lbl);
 
-    // Alle Knöpfe rechnen mit `get()`, nicht mit dem Wert von eben.
-    //
-    // Der Unterschied fällt erst bei schnellen Tipps auf: Jede Änderung
-    // zeichnet neu, und ein Tipp, der noch auf dem alten Knopf landet, würde
-    // sonst denselben Schritt ein zweites Mal machen — dreimal Plus ergäbe
-    // eine Erhöhung um eins. Mit `get()` ist es egal, wie alt der Knopf ist.
     var step = function (delta) {
       return function () { set(clamp(get() + delta, lo, hi)); };
     };
@@ -1369,9 +1136,7 @@
     input.value = String(value);
     input.min = String(lo);
     input.max = String(hi);
-    // Beim Tippen NICHT neu zeichnen — der Fokus wäre weg und man käme nie
-    // über die erste Ziffer hinaus. Gemerkt wird trotzdem sofort; die Anzeige
-    // zieht nach, sobald das Feld verlassen wird.
+
     input.addEventListener('input', function () { set(clamp(Number(input.value), lo, hi), true); });
     input.addEventListener('blur', function () { render(); });
     row.appendChild(input);
@@ -1420,7 +1185,6 @@
       var pick = pickOf(entry);
       var amount = clamp(pick.amount, 1, entry.amount);
 
-      // ── An den Händler: nur die Menge. Der Preis steht fest. ──
       var sell = document.createElement('div');
       sell.className = 'card trade';
       var sellHead = document.createElement('div');
@@ -1444,9 +1208,6 @@
       sellGo.className = 'done';
       sellGo.textContent = 'Verkaufen · ' + amount * entry.npcPrice + ' ' + itemName(v.currency.item);
       sellGo.addEventListener('click', function () {
-        // Frisch aus `picks` lesen, nicht aus der Closure: Während jemand im
-        // Zahlenfeld tippt, wird bewusst nicht neu gezeichnet — die Beschriftung
-        // wäre dann von vorhin, und verkauft würde die alte Menge.
         var n = clamp(picks[entry.item].amount, 1, client.preview().items[entry.item] || 0);
         if (n <= 0) return;
         act('Verkauft · ' + n + ' ' + nameOf(entry.id), client.sellNpc(entry.item, n));
@@ -1454,11 +1215,6 @@
       sell.appendChild(sellGo);
       sellBox.appendChild(sell);
 
-      // ── Am Markt: Menge UND Preis. ──
-      //
-      // Der Preis muss ins Band (§8), und das Band steht im Anzeigemodell —
-      // die Oberfläche rechnet es nicht selbst aus. Was hier geclamped wird,
-      // kann die Sim gar nicht erst ablehnen.
       var price = clamp(pick.price, entry.bandMin, entry.bandMax);
       var fee = NS.listingFee(rules, entry.item, amount);
       var free = v.orderSlotsFree;
@@ -1521,17 +1277,6 @@
     }
   }
 
-  /**
-   * Der Händler in der Gegenrichtung — vor allem der Saatgutladen.
-   *
-   * Es gibt ihn, weil Saatgut verbraucht wird: Wer seinen letzten Weizen
-   * verkauft hat, säte sonst nie wieder. Der Hof wäre tot, und zwar endgültig.
-   * Deshalb ist dieser Kasten kein Komfort, sondern der Notausgang.
-   *
-   * Er verlangt mehr, als er zahlt. Das ist kein Versehen: Ein Händler, der zum
-   * selben Preis kauft und verkauft, wäre ein Nullsummen-Automat; einer, der
-   * billiger verkauft als er zahlt, wäre eine Geldpresse.
-   */
   function renderSeedShop(v) {
     var box = $('buy');
     box.textContent = '';
@@ -1541,7 +1286,6 @@
       if (entry.npcBuyPrice <= 0) return;
       any = true;
 
-      // Wie viel geht überhaupt? Gold und Lagerplatz begrenzen beide.
       var canPay = Math.floor(v.currency.amount / entry.npcBuyPrice);
       var fits = entry.item === v.currency.item ? canPay : Math.min(canPay, v.silo.free);
       var buyCard = document.createElement('button');
@@ -1565,7 +1309,6 @@
     if (!any) box.innerHTML = '<p class="empty">Der Händler hat gerade nichts im Angebot.</p>';
   }
 
-  /** Zahlen an der Navigation: nur, wenn es wirklich etwas zu tun gibt. */
   function renderBadges(v) {
     var todo = v.requests.filter(function (r) { return r.deliverable; }).length
       + v.mail.entries.length;
@@ -1578,11 +1321,6 @@
     dotMarket.textContent = v.buyable;
   }
 
-  // ── Aktionen ──────────────────────────────────────────────────────
-  //
-  // Jede Aktion läuft durch denselben Sim-Kern, den der Server gleich benutzt.
-  // Eine unzulässige Aktion wird deshalb schon hier abgelehnt und landet nicht
-  // im Log — kein Rollback, keine Enttäuschung nach dem Sync.
   var CODES = {
     SILO_FULL: 'Lager voll',
     CANT_AFFORD: 'Zu wenig Gold',
@@ -1602,22 +1340,6 @@
     MAX_LEVEL: 'Voll ausgebaut',
   };
 
-  /**
-   * Kurz nach einer Aktion syncen, statt auf den Takt zu warten.
-   *
-   * Vorher lief das ausschließlich über den Vier-Sekunden-Timer: Eine Ernte
-   * lag im Schnitt zwei, schlimmstenfalls vier Sekunden herum, bevor der
-   * Server sie überhaupt zu sehen bekam. Gemessen im Browser waren es ~3 s —
-   * und alles, was daran hängt (Erlös beim Verkäufer, Angebot im Buch, der
-   * Anstoß an die anderen), kam entsprechend später.
-   *
-   * Die 250 ms Verzögerung sind Absicht und kein Kompromiss: Wer sechs Felder
-   * hintereinander abklickt, soll EINEN Sync auslösen und nicht sechs.
-   *
-   * Bewusst ohne `force`: Die Warteschlange ist nach einer Aktion ohnehin
-   * nicht leer, es wird also gesendet — aber das Backoff bleibt wirksam. Sonst
-   * hämmerte ein Spieler im Funkloch mit jedem Tipp gegen eine tote Leitung.
-   */
   var syncSoon = null;
   function scheduleSync() {
     if (syncSoon) return;
@@ -1634,14 +1356,6 @@
     render();
   }
 
-  /**
-   * Ein Tipp auf einen Platz.
-   *
-   * WAS er auslöst, entscheidet das Anzeigemodell (`p.tap`) — dieselbe Antwort,
-   * die auch die Kachel beschriftet hat. Vorher stand die Reihenfolge zweimal
-   * da: einmal beim Zeichnen, einmal hier. Zwei Stellen, die dasselbe wissen
-   * müssen, sind zwei Stellen, die auseinanderlaufen können.
-   */
   function tapPlot(i) {
     if (!isActive) return;
     client.localTick = tickNow();
@@ -1652,20 +1366,12 @@
       return;
     }
     if (p.tap === 'buy') { tapBuy(i); return; }
-    // Kann der Platz mehr als eins, wird gefragt statt geraten.
-    //
-    // Auch dann, wenn gerade nur ein Rezept startbar wäre: Sonst hinge das
-    // Verhalten eines Tipps am Lagerbestand — mal öffnet sich etwas, mal
-    // passiert direkt etwas. Ein Knopf, der zweierlei tut, ist ein Knopf, dem
-    // man nicht mehr traut.
+
     if (p.options.length > 1 && (p.tap === 'start' || p.blocked === 'inputs')) {
       openPicker(p);
       return;
     }
     if (p.tap === 'start') {
-      // Welches Rezept, sagt das Anzeigemodell — dasselbe, das eben schon die
-      // Kachel beschriftet hat. Die Suche danach stand hier früher ein zweites
-      // Mal; zwei Stellen mit derselben Regel laufen irgendwann auseinander.
       act('Gestartet · ' + nameOf(p.next.id) +
             (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
           client.start(i, p.next.recipe));
@@ -1676,17 +1382,6 @@
     else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
   }
 
-  /**
-   * Der Rezeptwähler.
-   *
-   * Er zeigt ALLES, was der Platz auf seiner Stufe kann — auch das, wofür die
-   * Zutaten fehlen. Ein Mais, den man gerade nicht säen kann, ist eine
-   * Information („kauf Saatgut"); ein Mais, der einfach nicht dasteht, ist ein
-   * Rätsel.
-   *
-   * Welche Rezepte das sind, sagt das Anzeigemodell. Diese Funktion sucht
-   * nichts zusammen und prüft keine Regel — sie beschriftet.
-   */
   var pickerPlot = null;
 
   function openPicker(p) {
@@ -1727,7 +1422,7 @@
   }
 
   $('pick-close').addEventListener('click', closePicker);
-  // Neben den Kasten tippen schließt ihn — auf dem Handy die erwartete Geste.
+
   $('pick-bg').addEventListener('click', function (e) {
     if (e.target === $('pick-bg')) closePicker();
   });
@@ -1743,14 +1438,6 @@
     act(level.label + ' gekauft', client.buy(i));
   }
 
-  /**
-   * Der Verbindungszustand ist eine ANZEIGE, kein Spielmodus (§10) — gespielt
-   * wird in allen dreien gleich.
-   *
-   * „Netz zu schwach" steht bewusst neben „ohne Netz": Eine hängende Leitung
-   * fühlt sich für den Spieler anders an als ein Funkloch, und wer den
-   * Unterschied nicht zu sehen bekommt, hält sein Handy für kaputt.
-   */
   function setConn(state, weak) {
     var el = $('conn');
     if (state === 'live') { el.className = 'conn live'; $('conn-text').textContent = 'verbunden'; }
@@ -1778,7 +1465,7 @@
         setLease(data.isActiveDevice !== false, data.activeSince);
         if (wasActive && !isActive) toast('Anderes Gerät hat übernommen', true);
       })
-      .catch(function () { /* offline: Status bleibt, wie er war */ });
+      .catch(function () {  });
   }
 
   function attempt(force) {
@@ -1796,13 +1483,9 @@
         if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') afterSync(r.snapshot, r.serverTime);
         if (r.ok) { setLease(true, null); client.takeover = false; }
       } else if (outcome.kind === 'failed') {
-        // Nichts verloren — nur nicht durchgekommen. Die Warteschlange bleibt,
-        // der nächste Versuch läuft von allein.
         setConn('offline', outcome.timedOut);
         return;
       } else if (outcome.kind === 'dropped') {
-        // Präfix-Commit: Der Server hat einen Teil nicht übernommen. Beim Markt
-        // ist das der Normalfall „jemand war schneller" und keine Panik wert.
         toast(/OFFER_GONE/.test(outcome.reason || '') ? 'Jemand war schneller' : 'Teil verworfen', true);
         afterSync(outcome.snapshot, outcome.serverTime);
       }
@@ -1810,7 +1493,6 @@
     }).catch(function () { setConn('offline'); });
   }
 
-  // ── Ansichten ─────────────────────────────────────────────────────
   function show(next) {
     view = next;
     ['farm', 'orders', 'market', 'store'].forEach(function (name) {
@@ -1826,13 +1508,11 @@
     b.addEventListener('click', function () { show(b.dataset.view); });
   });
 
-  // ── Start ─────────────────────────────────────────────────────────
   function begin(restored) {
     client = restored;
     rules = NS.getRuleset(client.rulesetVersion);
     engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
 
-    // Zeitanker VOR dem ersten Zeichnen — `tickNow()` rechnet damit.
     client.snapshotMeta = {
       tick: client.baseSnapshot.state.tick,
       serverTs: client.baseSnapshot.serverTs,
@@ -1848,8 +1528,6 @@
     setInterval(refreshLease, 15000);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
-        // Im Hintergrund braucht niemand eine offene Leitung. Handys machen sie
-        // ohnehin irgendwann zu — dann lieber selbst und sauber.
         stopLive();
       } else {
         attempt(true);
@@ -1871,12 +1549,6 @@
     render();
   }
 
-  /**
-   * Start aus dem Gespeicherten — ohne eine einzige Netzanfrage.
-   *
-   * Das ist der Unterschied zwischen „offline weiterspielen" und „offline
-   * spielen": Wer im Tunnel neu lädt, sieht seinen Hof und kein Eingabefeld.
-   */
   function startOffline(saved) {
     clockOffsetMs = saved.clockOffsetMs;
     accountId = saved.accountId || null;
@@ -1949,39 +1621,14 @@
     location.reload();
   });
 
-  // ── Startreihenfolge: Gerät zuerst, Netz danach ───────────────────
-  //
-  // Umgekehrt wäre die App ohne Netz nicht startbar — und genau das ist der
-  // Kern des Versprechens.
   var saved = token ? loadSaved() : null;
   if (saved) startOffline(saved);
   else if (token) { $('key').value = token; connect(); }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(function () {
-      // Ohne sicheren Kontext (HTTPS oder localhost) registriert er sich nicht.
-      // Das Spiel läuft trotzdem — nur ein Neuladen im Funkloch scheitert.
     });
 
-    /**
-     * Neue Version übernommen → einmal neu laden.
-     *
-     * Die Hülle kommt aus dem Cache, damit die App ohne Netz startet. Der Preis
-     * dafür: Beim ersten Aufruf nach einem Deploy sieht man noch die alte
-     * Seite, während im Hintergrund die neue geholt wird. Ohne diese Zeilen
-     * bräuchte es ein zweites, manuelles Neuladen — und wer nicht weiß, dass
-     * ein Service Worker existiert, hält das Spiel schlicht für kaputt.
-     *
-     * Zwei Vorsichtsmaßnahmen:
-     *
-     *  - **Nur einmal.** Ein Neuladen, das ein weiteres auslöst, wäre eine
-     *    Schleife, aus der niemand mehr herauskommt.
-     *  - **Nicht mit offener Warteschlange.** Der Stand überlebt ein Neuladen
-     *    zwar (er liegt im Gerät, und der Feldtest prüft genau das), aber
-     *    mitten in eine ungesicherte Aktion hineinzuladen ist unnötiges Risiko
-     *    für nichts. Ist noch etwas offen, wartet der Wechsel — spätestens beim
-     *    nächsten Start greift er ohnehin.
-     */
     var reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (reloading) return;

@@ -1,22 +1,3 @@
-/**
- * Ruleset-Migration (Risiko R2).
- *
- * Das Szenario, das über die Live-Service-Tauglichkeit entscheidet:
- *
- *   Spieler geht offline → wir shippen einen Patch → Spieler synct.
- *
- * Rechnet der Server den Log unter den NEUEN Regeln nach, weicht er garantiert
- * vom Client ab und ein ehrlicher Spieler bekommt einen Rollback (R1). Rechnet
- * er unter den alten, muss er alte Versionen vorhalten und den Zustand danach
- * sauber hochheben.
- *
- * Zwei Sorten Patch werden geprüft:
- *   **Zahlen** — Zeiten und Preise ändern sich, die Form bleibt (v1 → v2).
- *   **Inhalt** — der Zustand WÄCHST. Der Basis-Kreislauf hat davon noch keinen
- *   ausgeliefert; der Pfad wird deshalb mit synthetischen Katalogen geprüft,
- *   damit er nicht ungetestet verrottet, bis er gebraucht wird.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
@@ -42,11 +23,9 @@ const EGGS = 3;
 const R_WHEAT = 0;
 const MILL = 6;
 
-/** Wachstumsdauer von Weizen unter einer Version — die Zahl, die sich ändert. */
 const wheatTicks = (r: Ruleset) => r.recipes[R_WHEAT]!.durationTicks;
 
 test('das Testszenario ist überhaupt aussagekräftig — V2 ändert das Ergebnis', () => {
-  // Wären die Versionen gleichwertig, würde der Rest hier nichts beweisen.
   assert.notEqual(wheatTicks(V1), wheatTicks(V2));
   assert.notEqual(V1.items[WHEAT]!.npcPrice, V2.items[WHEAT]!.npcPrice);
   assert.notEqual(V1.siloCapacity, V2.siloCapacity);
@@ -60,14 +39,13 @@ test('offline unter V1 gespielt, Patch kommt, Sync rechnet trotzdem unter V1', (
   client.advanceClock(wheatTicks(V1));
   assert.equal(client.collect(0).ok, true);
 
-  // ── Während er offline war, shippen wir den Patch ──
   server.targetRulesetVersion = 2;
 
   const res = server.sync(client.buildSyncRequest(), T0 + wheatTicks(V1) * 1000);
 
   assert.equal(res.ok, true);
   if (!res.ok) return;
-  // Kein Rollback, kein Divergenz-Alarm: unter V1 nachgerechnet war alles korrekt.
+
   assert.equal(res.kind, 'applied');
   assert.equal(res.divergence, false);
   const seed = V1.recipes[R_WHEAT]!.inputs.find((i) => i.item === WHEAT)?.amount ?? 0;
@@ -77,7 +55,6 @@ test('offline unter V1 gespielt, Patch kommt, Sync rechnet trotzdem unter V1', (
     startWheat - seed + V1.recipes[R_WHEAT]!.output.amount,
   );
 
-  // Und erst JETZT ist der Spieler auf V2.
   assert.equal(res.snapshot.rulesetVersion, 2);
 });
 
@@ -107,9 +84,9 @@ test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Gesche
     ...base,
     tick,
     plots: base.plots.map((p, i) => {
-      if (i === 0) return { ...p, recipe: R_WHEAT, startedAt: 0 }; // 60 von 120 → 60 übrig
-      if (i === 1) return { ...p, recipe: R_WHEAT, startedAt: tick }; // frisch → 120 übrig
-      if (i === 2) return { ...p, recipe: R_WHEAT, startedAt: -500 }; // längst fertig
+      if (i === 0) return { ...p, recipe: R_WHEAT, startedAt: 0 };
+      if (i === 1) return { ...p, recipe: R_WHEAT, startedAt: tick };
+      if (i === 2) return { ...p, recipe: R_WHEAT, startedAt: -500 };
       return p;
     }),
   };
@@ -118,22 +95,17 @@ test('laufende Produktion überlebt den Patch fair — kein Verlust, kein Gesche
   const remaining = (i: number) =>
     Math.max(0, migrated.plots[i]!.startedAt + wheatTicks(V2) - migrated.tick);
 
-  // Halb gewachsen: Restzeit bleibt exakt erhalten.
   assert.equal(remaining(0), 60);
 
-  // Frisch gestartet: startet neu mit der KÜRZEREN neuen Dauer, profitiert also
-  // vom Buff, statt auf der alten langen Zeit sitzen zu bleiben.
   assert.equal(remaining(1), wheatTicks(V2));
   assert.ok(remaining(1) < wheatTicks(V1));
 
-  // Fertig bleibt fertig.
   assert.equal(remaining(2), 0);
 
   assertInvariants(migrated, V2);
 });
 
 test('kein Platz wird durch die Migration schlechter gestellt als ein Neuanfang', () => {
-  // Die Leitregel als Eigenschaft über den ganzen Wertebereich geprüft.
   for (let elapsed = 0; elapsed <= wheatTicks(V1); elapsed++) {
     const tick = 100_000;
     const base = initialState(V1);
@@ -156,8 +128,6 @@ test('kein Platz wird durch die Migration schlechter gestellt als ein Neuanfang'
 });
 
 test('Ausbaustufen überstehen den Patch unverändert', () => {
-  // Wer eine Mühle gekauft hat, hat sie auch nach dem Patch. Alles andere wäre
-  // ein stiller Diebstahl.
   const base = fuzzStart(V1, 500);
   const built = {
     ...base,
@@ -171,9 +141,6 @@ test('Ausbaustufen überstehen den Patch unverändert', () => {
 });
 
 test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
-  // Der Basis-Kreislauf hat noch keinen Inhalts-Patch ausgeliefert. Der Pfad
-  // muss trotzdem geprüft sein — sonst ist er beim ersten echten Patch
-  // ungetesteter Code an der empfindlichsten Stelle des Systems.
   const grown: Ruleset = {
     ...V1,
     version: 99,
@@ -205,11 +172,9 @@ test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
   const after = GROW_AND_RETIME(before, V1, grown);
   assertInvariants(after, grown);
 
-  // Bestehende Indizes behalten ihre Bedeutung — das ist die Append-only-Regel.
   assert.equal(count(after, 0), 500);
   assert.equal(count(after, WHEAT), 40);
 
-  // Und was neu ist, startet leer.
   assert.equal(after.items.length, grown.items.length);
   assert.equal(after.items[4], 0, 'Honig beginnt bei null');
   assert.equal(after.plots.length, grown.plots.length);
@@ -217,7 +182,6 @@ test('Inhalts-Patch: der Zustand wächst, nichts geht verloren', () => {
   assert.equal(after.passives.length, 1);
   assert.equal(after.passives[0], 0);
 
-  // Laufende Produktion, Aufträge und Postfach überstehen den Umbau.
   assert.equal(after.plots[0]!.recipe, R_WHEAT);
   assert.equal(after.orders.length, 1);
   assert.equal(after.mail.length, 1);
@@ -239,8 +203,6 @@ test('ein Patch, der einen Platz geschenkt dazugibt, gibt ihn auch bestehenden H
 });
 
 test('Migration erhält Invarianten für zufällige echte Spielstände', () => {
-  // Handgebaute Fälle treffen nie alles. Also: echte Sitzungen spielen und
-  // jeden erreichten Zustand durch die Migration schicken.
   for (let seed = 1; seed <= 120; seed++) {
     const rnd = mulberry32(seed);
     const server = new Server(fuzzStart(V1, seed % 2 === 0 ? 4000 : 0), T0, 1);
@@ -254,9 +216,8 @@ test('Migration erhält Invarianten für zufällige echte Spielstände', () => {
     const migrated = migrateState(client.state, 1, 2);
     assertInvariants(migrated, V2);
 
-    // Migration ist eine reine Funktion: zweimal dasselbe Ergebnis.
     assert.deepEqual(migrateState(client.state, 1, 2), migrated, `seed=${seed} nicht reproduzierbar`);
-    // Sie fasst weder Bestände noch Ausbaustufen an.
+
     assert.deepEqual(migrated.items, client.state.items, `seed=${seed}: Bestände`);
     assert.deepEqual(
       migrated.plots.map((p) => p.level),
@@ -267,7 +228,6 @@ test('Migration erhält Invarianten für zufällige echte Spielstände', () => {
 });
 
 test('der Client darf sich seine Regelversion nicht aussuchen', () => {
-  // Sonst bliebe man dauerhaft auf günstigen alten Preisen sitzen.
   const server = new Server(initialState(V1), T0, 1, 2);
   const client = new Client(server.snapshot);
   client.start(0, R_WHEAT);
@@ -276,7 +236,6 @@ test('der Client darf sich seine Regelversion nicht aussuchen', () => {
   server.sync(client.buildSyncRequest(), T0 + 10_000);
   assert.equal(server.snapshot.rulesetVersion, 2);
 
-  // Der Client behauptet jetzt, weiter unter V1 zu spielen.
   const sneaky = client.buildSyncRequest();
   sneaky.rulesetVersion = 1;
   sneaky.baseSeq = server.snapshot.seq;
@@ -292,7 +251,7 @@ test('der Client darf sich seine Regelversion nicht aussuchen', () => {
 
 test('unbekannte Zielversion beschädigt keinen Spielstand', () => {
   const server = new Server(initialState(V1), T0, 1);
-  server.targetRulesetVersion = 99; // Patch mit fehlender Migration
+  server.targetRulesetVersion = 99;
 
   const client = new Client(server.snapshot);
   client.start(0, R_WHEAT);
@@ -300,8 +259,6 @@ test('unbekannte Zielversion beschädigt keinen Spielstand', () => {
 
   const res = server.sync(client.buildSyncRequest(), T0 + 10_000);
 
-  // Der Log wird übernommen, die Migration nicht — der Spieler verliert nichts
-  // und bleibt einfach auf seiner Version, bis der Fix da ist.
   assert.equal(res.ok, true);
   if (!res.ok) return;
   assert.equal(res.snapshot.rulesetVersion, 1);
@@ -314,9 +271,6 @@ test('Downgrades werden abgelehnt statt geraten', () => {
 });
 
 test('das Dev-Regelwerk ist kein Migrationsziel', () => {
-  // Ein Dev-Ruleset mit Sekundenuhren darf niemals einen echten Spielstand
-  // erreichen. Es steht bewusst außerhalb der Produktionsreihe — es gibt also
-  // schlicht keinen Schritt dorthin.
   assert.throws(() => migrateState(initialState(V1), 1, 1001), MigrationError);
 });
 
@@ -333,15 +287,12 @@ test('die Invariantenprüfung hat Zähne', () => {
   };
   assert.throws(() => assertInvariants(future, V2), MigrationError);
 
-  // Eine Stufe, die es nicht gibt.
   const overLevel = {
     ...base,
     plots: base.plots.map((p, i) => (i === 0 ? { ...p, level: 9 } : p)),
   };
   assert.throws(() => assertInvariants(overLevel, V2), MigrationError, 'Stufe 9');
 
-  // Ein Rezept, das auf dieser Stufe gar nicht erlaubt wäre — genau der
-  // Zustand, den ein schlampiger Ausbau hinterlassen würde.
   const wrongLevel = {
     ...base,
     plots: base.plots.map((p, i) =>
@@ -350,7 +301,6 @@ test('die Invariantenprüfung hat Zähne', () => {
   };
   assert.throws(() => assertInvariants(wrongLevel, V2), MigrationError, 'Rezept auf Stufe 0');
 
-  // Zustand und Katalog passen nicht zusammen.
   const shortInventory = { ...base, items: [0, 0, 0] };
   assert.throws(() => assertInvariants(shortInventory, V2), MigrationError);
 });

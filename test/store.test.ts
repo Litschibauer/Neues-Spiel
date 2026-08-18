@@ -1,11 +1,3 @@
-/**
- * Persistenz des Feldtest-Servers.
- *
- * Ein Spielstand trägt Fortschritt. Ein halb geschriebener wäre schlimmer als
- * ein alter — deshalb wird atomar geschrieben, und deshalb wird das hier auch
- * geprüft statt angenommen.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
@@ -60,7 +52,6 @@ test('ein gespielter Stand überlebt Speichern und Laden unverändert', () => {
     assert.deepEqual(loaded.appliedLog, server.appliedLog);
     assert.deepEqual(loaded.snapshot.state.items, server.snapshot.state.items);
 
-    // Ein Server, der daraus hochfährt, macht nahtlos weiter.
     const restarted = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
     restarted.snapshot = loaded.snapshot;
     restarted.appliedLog = loaded.appliedLog;
@@ -91,7 +82,6 @@ test('Schreiben hinterlässt keine Nebendatei', () => {
     save(path, snapshotOf(server));
     save(path, snapshotOf(server));
 
-    // Die `.tmp`-Datei muss durch das Umbenennen verschwunden sein.
     assert.deepEqual(readdirSync(dir), ['save.json']);
   } finally {
     rmSync(dir, { recursive: true, force: true });

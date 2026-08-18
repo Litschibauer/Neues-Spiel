@@ -1,11 +1,3 @@
-/**
- * Die eigene SHA-256-Fassung muss exakt das liefern, was `node:crypto` liefert.
- *
- * Sie ersetzt die Plattform-API, damit Client und Server denselben Weg nehmen —
- * das ist nur zulässig, wenn sie nachweislich dasselbe rechnet. Sonst hätten
- * wir uns genau die Gabelung eingebaut, die wir vermeiden wollten.
- */
-
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -30,7 +22,6 @@ test('bekannte Testvektoren', () => {
 });
 
 test('stimmt mit node:crypto überein — Längen rund um die Blockgrenzen', () => {
-  // 55/56/63/64 sind die Stellen, an denen das Padding kippt.
   for (let len = 0; len <= 200; len++) {
     const input = 'a'.repeat(len);
     assert.equal(sha256Hex(input), reference(input), `Länge ${len}`);

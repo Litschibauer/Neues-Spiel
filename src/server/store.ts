@@ -1,16 +1,3 @@
-/**
- * Persistenz für den Feldtest-Server.
- *
- * Bewusst schlicht: eine JSON-Datei, atomar geschrieben. Für einen Mini-Server
- * mit 1 GB RAM und einem Spielstand ist eine Datenbank Overkill — und der Punkt
- * dieses Servers ist das Netzwerkverhalten, nicht die Speicherschicht.
- *
- * Atomar heißt hier: erst in eine Nebendatei schreiben, dann umbenennen. Ein
- * Stromausfall mitten im Schreiben hinterlässt damit den alten Stand statt
- * einer halben Datei — bei einem Spielstand, der Fortschritt trägt, ist das
- * der Unterschied zwischen „nichts passiert" und „alles weg".
- */
-
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Command } from '../sim/commands.ts';
@@ -23,13 +10,6 @@ export type Persisted = {
   appliedLog: Command[];
   pendingDeliveries: MailItem[];
   targetRulesetVersion: number;
-  /**
-   * Nächste Kundenauftrags-Nummer.
-   *
-   * Muss mitgespeichert werden: Fiele der Zähler beim Neustart auf 1 zurück,
-   * bekäme ein neuer Auftrag dieselbe Nummer wie einer, der noch in der
-   * Schlange steht — und `FILL_REQUEST` wüsste nicht mehr, welcher gemeint ist.
-   */
   nextRequestId?: number;
 };
 

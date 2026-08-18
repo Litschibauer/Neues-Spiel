@@ -98,7 +98,6 @@
 
   .hint { color: var(--muted); font-size: .82rem; margin: .5rem 0 0; }
 
-  /* Sperre, solange ein anderes Gerät die Schreibrechte hält (R3). */
   .lease {
     border: 1px solid var(--wait); background: var(--wait-bg); color: var(--wait);
     border-radius: 4px; padding: .8rem .9rem;
@@ -118,7 +117,6 @@
   .request .pay { color: var(--live); white-space: nowrap; }
   .request.next { opacity: .45; border-style: dashed; cursor: default; }
 
-  /* Der Markt. Ohne Netz ausgegraut — die Regel aus §6, sichtbar gemacht. */
   .offer {
     display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left;
     margin-bottom: .35rem; font-family: var(--mono); font-size: .74rem;
@@ -130,7 +128,6 @@
   .field .upgrade { display: block; margin-top: .3rem; font-size: .7rem; opacity: .75; text-decoration: underline; }
   .setup { display: flex; flex-direction: column; gap: .6rem; }
 
-  /* Der Schlüssel wird genau einmal gezeigt — also groß und lesbar. */
   .keybox { display: flex; flex-direction: column; gap: .7rem; border-color: var(--wait); }
   .keybox code {
     font-family: var(--mono); font-size: 1rem; letter-spacing: .06em; word-break: break-all;
@@ -139,7 +136,6 @@
   }
   .keybox .warn { margin: 0; font-size: .82rem; color: var(--wait); }
 
-  /* Levelleiste (M8): Erfahrung ist die einzige Zahl, die nur steigt. */
   .levelbar { display: flex; flex-direction: column; gap: .35rem; }
   .levelbar-head {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -203,7 +199,7 @@
 
     <div class="card">
       <h2>Hof</h2>
-      <!-- Bestände kommen aus dem Katalog des Regelwerks, nicht aus dem HTML. -->
+
       <dl class="stats" id="inventory"></dl>
       <dl class="stats" style="margin-top:.5rem">
         <div class="stat"><dt>Lager</dt><dd id="s-silo">0</dd></div>
@@ -266,7 +262,6 @@
 </div>
 
 <script>
-/* Sim-Kern, Client und SyncEngine — erzeugt aus src/, siehe scripts/build-conformance.ts */
 <!--BUNDLE-->
 </script>
 
@@ -276,22 +271,10 @@
   var $ = function (id) { return document.getElementById(id); };
   var NS = globalThis.NeuesSpiel;
 
-  /**
-   * Sicherheitsabstand zur Serverzeit.
-   *
-   * Der Server gewährt höchstens die Zeit, die er selbst gemessen hat (§4).
-   * Läuft die Geräteuhr auch nur eine Sekunde vor, würde er die eigenen
-   * Commands des Spielers als „Uhr vorgestellt" ablehnen. Ein paar Sekunden
-   * Rückstand kosten nichts und verhindern genau das.
-   */
   var CLOCK_SAFETY_TICKS = 3;
 
   var token = localStorage.getItem('ns-token') || '';
 
-  /**
-   * Kennung dieses Geräts (R3). Bleibt lokal und identifiziert nur, WELCHES
-   * Gerät gerade die Offline-Schreibrechte hält.
-   */
   var deviceId = localStorage.getItem('ns-device');
   if (!deviceId) {
     deviceId = 'd-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -299,26 +282,11 @@
   }
   var isActive = true;
   var client = null, engine = null, rules = null, accountId = null;
-  /** Serveruhr minus Geräteuhr. Die Geräteuhr allein ist wertlos (§4). */
+
   var clockOffsetMs = 0;
 
-  /**
-   * Wo der Spielstand auf diesem Gerät liegt.
-   *
-   * Der Schlüssel trägt den Server mit: Ein Dev-Stand auf dem Produktions-
-   * Server wäre ein Fork mit Ansage — gleiche Sequenznummern, andere
-   * Geschichte (R3).
-   */
   var SAVE_KEY = NS.storageKeyFor(location.origin);
 
-  /**
-   * Nach JEDER Änderung sichern.
-   *
-   * Ohne das lebt die ganze Offline-Sitzung nur im Speicher der Seite. Ein
-   * Neustart, ein Tab, den iOS unter Speicherdruck wegwirft — und alles seit
-   * dem letzten Sync ist weg. Ausgerechnet im Funkloch, wo man am längsten
-   * nicht syncen kann.
-   */
   function save() {
     if (!client) return;
     try {
@@ -327,8 +295,6 @@
         JSON.stringify(NS.serializeClient(client, clockOffsetMs, accountId)),
       );
     } catch (e) {
-      // Speicher voll oder gesperrt (privater Modus). Weiterspielen geht,
-      // ein Neustart kostet dann eben die Sitzung — sagen statt verschweigen.
       log('Konnte nicht lokal sichern: ' + e.message, 'bad');
     }
   }
@@ -384,13 +350,6 @@
     });
   };
 
-  /**
-   * Spielzeit aus der SERVERZEIT ableiten, nicht aus der Geräteuhr.
-   *
-   * Der Snapshot trägt `serverTs` passend zu seinem `tick` — der Server
-   * schreibt seinen Zustand bewusst nicht bis „jetzt" fort. Damit ist die
-   * Rechnung hier exakt dieselbe wie die des Servers beim nächsten Sync.
-   */
   function tickNow() {
     var snap = client.snapshotMeta;
     var serverNow = Date.now() + clockOffsetMs;
@@ -398,10 +357,6 @@
     return snap.tick + Math.max(0, elapsed - CLOCK_SAFETY_TICKS);
   }
 
-  /**
-   * Sperre setzen. Der Punkt des Ganzen: Der Spieler erfährt es, BEVOR er
-   * Arbeit investiert — nicht hinterher per FORK_DETECTED.
-   */
   function setLease(active, since) {
     isActive = active;
     $('lease').hidden = active;
@@ -415,14 +370,6 @@
     }
   }
 
-  /**
-   * Rechtestatus nachfragen, ohne den Zustand anzufassen.
-   *
-   * Nötig, weil ein Gerät mit leerer Warteschlange gar nichts sendet — es
-   * würde sonst nie erfahren, dass ein anderes Gerät übernommen hat, und den
-   * Spieler munter weiterspielen lassen, bis alles verworfen wird. Genau der
-   * Verlust, den das Verfahren verhindern soll.
-   */
   function refreshLease() {
     return api('/api/state?deviceId=' + encodeURIComponent(deviceId))
       .then(function (data) {
@@ -430,14 +377,9 @@
         setLease(data.isActiveDevice !== false, data.activeSince);
         if (wasActive && !isActive) log('Anderes Gerät hat übernommen — gesperrt', 'bad');
       })
-      .catch(function () { /* offline: Status bleibt, wie er war */ });
+      .catch(function () {  });
   }
 
-  /**
-   * Snapshot übernehmen — nur beim Verbindungsaufbau.
-   *
-   * Wirft die Warteschlange weg, und das ist hier richtig: Es gibt noch keine.
-   */
   function adopt(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.adopt(snapshot);
@@ -445,30 +387,12 @@
     save();
   }
 
-  /**
-   * Nach einem Sync: Uhr und Zeitanker nachziehen — **mehr nicht.**
-   *
-   * Der Client wurde von der Sync-Maschine bereits übernommen, und zwar mit
-   * der Grenze, bis zu der gesendet wurde: Was der Spieler WÄHREND der
-   * Rundreise angetippt hat, bleibt erhalten (siehe `Client.adopt`).
-   *
-   * Hier noch einmal `client.adopt(snapshot)` aufzurufen, machte genau das
-   * zunichte — ohne zweites Argument wirft es die ganze Warteschlange weg.
-   * Der Fehler war von außen kaum zu greifen: Die Ernte wurde angezeigt, kurz
-   * darauf stand das Lager wieder auf dem alten Wert, und nichts meldete
-   * einen Fehler. Im Browser-Test fiel etwa jeder dritte Lauf darüber.
-   */
   function afterSync(snapshot, serverTime) {
     if (typeof serverTime === 'number') clockOffsetMs = serverTime - Date.now();
     client.snapshotMeta = { tick: snapshot.state.tick, serverTs: snapshot.serverTs };
     save();
   }
 
-  /**
-   * Anzeigenamen. Bewusst NUR hier — der Sim-Kern kennt keine Namen, und die
-   * Oberfläche kennt keine Regeln. Fehlt einer, steht die Katalog-Kennung da;
-   * ein neuer Gegenstand macht die Seite also nicht kaputt.
-   */
   var NAMES = {
     gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
     mill: 'Mühle'
@@ -482,22 +406,18 @@
     return nameOf(id);
   }
 
-  /** Kosten als Text, z.B. „300 Gold". */
   function costText(cost) {
     return cost.map(function (c) { return c.amount + ' ' + itemName(c.item); }).join(' + ');
   }
 
-  /** Nächste Ausbaustufe eines Platzes — oder null, wenn voll ausgebaut. */
   function nextLevelOf(i, level) {
     return rules.plots[i].levels[level] || null;
   }
 
-  /** Welche Rezepte auf diesem Platz und dieser Stufe laufen dürfen. */
   function recipesAt(i, level) {
     return level <= 0 ? [] : (rules.plots[i].levels[level - 1].recipes || []);
   }
 
-  /** Erstes auf diesem Platz erlaubtes Rezept, dessen Zutaten vorhanden sind. */
   function startableRecipe(s, plot) {
     var allowed = recipesAt(plot, s.plots[plot].level);
     for (var k = 0; k < allowed.length; k++) {
@@ -558,7 +478,6 @@
           value.textContent = left < 90 ? left + ' s' : Math.ceil(left / 60) + ' min';
         }
       } else if (recipesAt(i, p.level).length === 0 && upgrade) {
-        // Noch nicht gekauft, oder gekauft aber leer (Gehege ohne Hühner).
         var need = upgrade.minPlayerLevel || 1;
         if (NS.levelOf(rules, s.xp) < need) {
           value.textContent = 'ab Stufe ' + need;
@@ -576,7 +495,6 @@
 
       btn.appendChild(label); btn.appendChild(value);
 
-      // Ein zweiter, kleiner Knopf für den Ausbau, wenn der Platz schon läuft.
       if (upgrade && recipesAt(i, p.level).length > 0 && !busy) {
         var up = document.createElement('span');
         up.className = 'upgrade';
@@ -599,10 +517,6 @@
     renderLevel(s);
   }
 
-  /**
-   * Levelleiste. Beide Enden kommen aus dem Regelwerk — die Seite rechnet
-   * nichts nach, was der Sim-Kern schon weiß.
-   */
   function renderLevel(s) {
     var level = NS.levelOf(rules, s.xp);
     var from = NS.levelStartedAt(rules, s.xp);
@@ -621,11 +535,6 @@
     $('lvl-fill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  /**
-   * Kundenaufträge: die vorderen Plätze sind annehmbar, danach kommt der
-   * Vorrat. Genau dieser Vorrat ist der Grund, warum offline nicht die Luft
-   * ausgeht — er liegt schon auf dem Gerät.
-   */
   function renderRequests(s) {
     var box = $('requests');
     box.textContent = '';
@@ -670,15 +579,6 @@
     }
   }
 
-  /**
-   * Die Auslage des Marktes (M5).
-   *
-   * Der einzige Ort in dieser Oberfläche, der ohne Netz nicht bedienbar ist —
-   * und deshalb der einzige, der ausgegraut wird statt zu verschwinden. Die
-   * Regel aus §6 lautet: Was die geteilte Welt braucht, ist online-only und
-   * wird ausgegraut; alles andere geht offline. Wer die Angebote im Funkloch
-   * ansieht, soll sehen, dass es sie gibt — nur eben nicht zugreifen können.
-   */
   function renderMarket(s) {
     var box = $('market');
     var hint = $('market-hint');
@@ -723,9 +623,7 @@
         client.localTick = tickNow();
         var res = client.buyOffer(o.id);
         act('Gekauft: ' + o.amount + ' ' + itemName(o.item), res);
-        // Sofort syncen. Das Zeitfenster, in dem jemand schneller sein kann,
-        // soll eine Rundreise sein und keine Sitzung — verliert man es, kostet
-        // der Präfix-Commit alles, was danach kam.
+
         if (res.ok) attempt('kauf', true);
       });
       box.appendChild(btn);
@@ -769,7 +667,6 @@
       return;
     }
 
-    // Kann dieser Platz auf seiner Stufe noch gar nichts, ist der Tap ein Kauf.
     if (recipesAt(i, p.level).length === 0) {
       tapBuy(i);
       return;
@@ -803,7 +700,6 @@
           if (r.kind === 'applied') log('Sync ok — bestätigt bis seq ' + r.snapshot.seq, 'good');
           else if (r.kind === 'duplicate') log('Antwort war verloren — Server hatte alles schon', 'good');
         } else if (r.reason === 'NOT_ACTIVE_DEVICE') {
-          // Die Rechte sind woanders hingewandert, während wir spielten.
           log('Anderes Gerät hat übernommen — Aktionen gesperrt', 'bad');
           setLease(false, null);
         } else {
@@ -824,14 +720,11 @@
     });
   }
 
-  /** Gemeinsamer Aufbau, egal ob aus dem Netz oder vom Gerät. */
   function begin(restored) {
     client = restored;
     rules = NS.getRuleset(client.rulesetVersion);
     engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
 
-    // Zeitanker aus dem Snapshot, den der Client ohnehin hält. Muss VOR dem
-    // ersten Zeichnen stehen — `tickNow()` rechnet damit.
     client.snapshotMeta = {
       tick: client.baseSnapshot.state.tick,
       serverTs: client.baseSnapshot.serverTs,
@@ -849,11 +742,10 @@
     });
     window.addEventListener('online', function () { log('Netz zurück'); render(); attempt('online', true); });
     window.addEventListener('offline', function () { log('Netz weg'); setPill('offline'); render(); });
-    // Letzte Gelegenheit zu sichern, bevor die Seite weg ist.
+
     window.addEventListener('pagehide', save);
   }
 
-  /** Frischer Start mit einem Snapshot vom Server. */
   function start(snapshot, serverTime, id) {
     accountId = id || accountId;
     begin(new NS.Client(snapshot, deviceId));
@@ -863,12 +755,6 @@
     render();
   }
 
-  /**
-   * Start aus dem Gespeicherten — ohne eine einzige Netzanfrage.
-   *
-   * DAS ist der Unterschied zwischen „offline weiterspielen" und „offline
-   * spielen": Wer im Tunnel neu lädt, sieht seinen Hof, nicht ein Tokenfeld.
-   */
   function startOffline(saved) {
     clockOffsetMs = saved.clockOffsetMs;
     accountId = saved.accountId || null;
@@ -881,7 +767,7 @@
     );
     if (saved.queueDropped) log('Warteschlange war unlesbar und wurde verworfen', 'bad');
     render();
-    // Und dann im Hintergrund versuchen, das Netz einzuholen.
+
     attempt('start', true);
     refreshLease();
   }
@@ -905,14 +791,6 @@
     });
   }
 
-  /**
-   * Neuen Hof anlegen.
-   *
-   * Der Schlüssel kommt genau einmal über die Leitung — danach kennt der
-   * Server nur noch seinen Hash. Deshalb wird er hier angehalten und gezeigt,
-   * statt ihn stillschweigend wegzuspeichern: Wer das Gerät verliert, hat
-   * sonst keine Chance mehr.
-   */
   var pendingStart = null;
   function createFarm() {
     $('create').disabled = true;
@@ -960,8 +838,7 @@
   $('takeover').addEventListener('click', function () {
     if (!confirm('Auf diesem Gerät weiterspielen? Nicht synchronisierte Arbeit auf dem anderen Gerät geht dabei verloren.')) return;
     client.takeover = true;
-    // Ein leerer Log wird nicht gesendet — ein Platzhalter-Sync erzwingt die
-    // Übernahme also nicht. Stattdessen gilt sie ab dem nächsten echten Sync.
+
     setLease(true, null);
     log('Übernahme angemeldet — gilt ab der nächsten Aktion', 'good');
   });
@@ -976,8 +853,6 @@
     if (!isActive) return;
     var s = client.preview();
 
-    // Die größte handelbare Menge einstellen — was genau das ist, sagt der
-    // Katalog, nicht diese Seite.
     var best = -1;
     var have = 0;
     rules.items.forEach(function (item, i) {
@@ -995,10 +870,6 @@
     act('Postfach geleert', client.collectMail());
   });
 
-  // ── Startreihenfolge: Gerät zuerst, Netz danach ─────────────────────
-  //
-  // Umgekehrt wäre die App ohne Netz nicht startbar — und genau das war die
-  // letzte Lücke im Offline-Versprechen.
   var saved = token ? loadSaved() : null;
   if (saved) {
     startOffline(saved);
@@ -1007,10 +878,6 @@
     connect();
   }
 
-  // Service Worker: sorgt dafür, dass ÜBERHAUPT eine Seite da ist, wenn man
-  // im Funkloch neu lädt. Braucht einen sicheren Kontext (HTTPS oder
-  // localhost) — über einfaches HTTP im LAN registriert er sich schlicht
-  // nicht, und die Seite läuft trotzdem.
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(function (e) {
       log('App-Hülle nicht offline-fähig: ' + e.message);

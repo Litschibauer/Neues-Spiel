@@ -1,64 +1,13 @@
-/**
- * Accounts — bewusst so einfach wie möglich.
- *
- * Ein Account ist **ein langer Zufallsschlüssel**, den der Server einmal
- * ausgibt. Kein Benutzername, kein Passwort, keine E-Mail.
- *
- *     hof_7K2M9-QXP4T-RB6NH-2WFDG-8YSVC
- *
- * ── Warum nicht Benutzername und Passwort ───────────────────────────────────
- *
- * Weil daran ein ganzer Rattenschwanz hängt, der mit dem Spiel nichts zu tun
- * hat: Passwörter richtig hashen, Registrierung, „Passwort vergessen", also
- * E-Mail-Versand, also Bounce-Handling, also Missbrauchsschutz. Jedes Stück
- * davon ist eine eigene Baustelle mit eigenen Sicherheitsfehlern.
- *
- * Ein 128-Bit-Zufallsschlüssel erledigt dieselbe Aufgabe — „bist du derselbe
- * wie beim letzten Mal" — ohne davon irgendetwas zu brauchen. Er lässt sich
- * nicht erraten, er lässt sich nicht wiederverwenden, und er kann nirgendwo
- * schwach gewählt werden.
- *
- * ── Der Preis, klar gesagt ──────────────────────────────────────────────────
- *
- * **Schlüssel weg heißt Hof weg.** Es gibt keine Wiederherstellung, weil es
- * nichts gibt, worüber man wiederherstellen könnte. Das ist für den Anfang
- * vertretbar und muss vor der ersten echten Spielerschaft gelöst werden — dann
- * aber bewusst, mit einem zweiten Faktor, nicht nebenbei.
- *
- * ── Speicherform ────────────────────────────────────────────────────────────
- *
- * Eine SQLite-Datei (siehe `db.ts`), eine Zeile je Hof. Vorher war es eine
- * JSON-Datei je Hof — lesbar und ohne Installation, aber nicht tragfähig:
- * Jeder Sync schrieb eine ganze Datei, und bei ein paar tausend gleichzeitigen
- * Spielern sind das Tausende kleiner Schreibvorgänge in Sekunden.
- *
- * Alte Verzeichnisse werden beim Start einmalig übernommen. Niemand soll seinen
- * Hof verlieren, weil sich der Speicher darunter geändert hat.
- */
-
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteStorage } from './storage.ts';
 import type { AccountRecord, GameBlob, Storage } from './storage.ts';
 
-/**
- * Crockford-Base32: ohne I, L, O und U.
- *
- * Der Schlüssel wird abgeschrieben und abgetippt — von Zetteln, aus
- * Screenshots. Buchstaben, die wie Ziffern aussehen, sind dabei die häufigste
- * Fehlerquelle, und `U` fliegt raus, damit versehentlich keine Wörter entstehen.
- */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 export const KEY_PREFIX = 'hof_';
 
-/**
- * Ein neuer Schlüssel: 120 Bit, in vier Sechsergruppen zum Abschreiben.
- *
- * 15 Bytes ergeben genau 24 Base32-Zeichen — vier saubere Gruppen ohne
- * Restsilbe. Vom Erraten sind 120 Bit genauso weit entfernt wie 128.
- */
 export function generateKey(): string {
   const bytes = randomBytes(15);
   let bits = 0;
@@ -79,14 +28,6 @@ export function generateKey(): string {
   return KEY_PREFIX + groups.join('-');
 }
 
-/**
- * Schreibfehler ausbügeln, bevor verglichen wird.
- *
- * Wer den Schlüssel von einem Zettel abtippt, macht genau diese Fehler:
- * Kleinbuchstaben, fehlende Bindestriche, O statt 0, I oder l statt 1.
- * Ein Account, den man wegen eines O nicht mehr aufmacht, wäre eine
- * vermeidbare Grausamkeit.
- */
 export function normalizeKey(input: string): string {
   const body = input
     .trim()
@@ -104,7 +45,6 @@ function hashKey(key: string): string {
 
 export type { AccountRecord, GameBlob } from './storage.ts';
 
-/** Was von einem Account auf der Platte liegt: Kennung plus Spielstand. */
 export type AccountFile = GameBlob & { version: 1; account: AccountRecord };
 
 export class AccountError extends Error {
@@ -114,37 +54,13 @@ export class AccountError extends Error {
   }
 }
 
-/**
- * Der Index über alle Accounts.
- *
- * Hält Kennungen im Speicher (ein paar hundert Byte je Hof) und die
- * Spielstände im `Storage`. Welcher Speicher das ist — SQLite, später etwas
- * anderes — weiß diese Klasse nicht und soll es nicht wissen; sie redet
- * ausschließlich über die Schnittstelle aus `storage.ts`.
- *
- * ── Gesammelt schreiben ─────────────────────────────────────────────────────
- *
- * `save` schreibt NICHT sofort, sondern merkt sich den Hof als geändert.
- * `flush` gibt dann alle gemerkten in EINEM Aufruf an den Speicher. Das ist
- * der eigentliche Gewinn: Zweitausend geänderte Spielstände kosten einen
- * Schreibvorgang statt zweitausend.
- *
- * Der Preis ist ein Zeitfenster, in dem eine Änderung nur im Speicher steht.
- * Deshalb ruft der Server `flush` in kurzem Takt und beim Beenden auf — und
- * deshalb ist das Fenster in Sekunden gemessen und nicht in Minuten.
- */
 export class AccountStore {
   private readonly store: Storage;
   private readonly byId = new Map<string, AccountRecord>();
   private readonly byKeyHash = new Map<string, string>();
-  /** Geänderte Höfe samt ihrem Stand, bis zum nächsten `flush`. */
+
   private readonly dirty = new Map<string, GameBlob>();
 
-  /**
-   * `where` ist entweder ein fertiger Speicher oder ein Pfad (dann SQLite).
-   * Zeigt daneben noch ein altes Account-Verzeichnis, wird es einmalig
-   * übernommen.
-   */
   constructor(where: Storage | string, legacyDir?: string) {
     this.store = typeof where === 'string' ? new SqliteStorage(where) : where;
     if (legacyDir && existsSync(legacyDir)) this.importLegacy(legacyDir);
@@ -155,12 +71,6 @@ export class AccountStore {
     }
   }
 
-  /**
-   * Alte Ein-Datei-je-Hof-Stände übernehmen. Läuft genau einmal.
-   *
-   * Das Verzeichnis wird danach umbenannt, nicht gelöscht: Falls beim Umzug
-   * etwas schiefgeht, ist der alte Stand noch da. Löschen darf der Betreiber.
-   */
   private importLegacy(dir: string): void {
     const files = readdirSync(dir).filter((n) => n.endsWith('.json'));
     if (files.length === 0) return;
@@ -173,7 +83,6 @@ export class AccountStore {
         const { version, account, ...game } = file;
         batch.push({ account, game });
       } catch {
-        // Eine kaputte Datei kostet einen Hof, nicht den Umzug.
         console.error(`Account-Datei unlesbar, übersprungen: ${name}`);
       }
     }
@@ -182,7 +91,6 @@ export class AccountStore {
     try {
       renameSync(dir, `${dir}.uebernommen`);
     } catch {
-      /* Umbenennen ist Komfort, kein Muss. */
     }
     console.log(`${batch.length} Höfe aus Einzeldateien übernommen → Datenbank.`);
   }
@@ -191,12 +99,10 @@ export class AccountStore {
     return this.byId.size;
   }
 
-  /** Wie viele Höfe gerade auf das Schreiben warten — Kennzahl fürs Monitoring. */
   get pendingWrites(): number {
     return this.dirty.size;
   }
 
-  /** Der Speicher darunter — der Markt benutzt denselben. */
   get storage(): Storage {
     return this.store;
   }
@@ -213,14 +119,6 @@ export class AccountStore {
     return this.byId.get(id) ?? null;
   }
 
-  /**
-   * Schlüssel zu Account auflösen.
-   *
-   * Der Vergleich läuft über den Hash und eine Map — es gibt also keinen
-   * Zeichen-für-Zeichen-Vergleich, aus dessen Laufzeit sich etwas ablesen
-   * ließe. Der abschließende `timingSafeEqual` ist trotzdem drin: Er kostet
-   * nichts und macht die Absicht explizit.
-   */
   resolve(key: string): AccountRecord | null {
     if (!key) return null;
     const hash = hashKey(key);
@@ -235,17 +133,9 @@ export class AccountStore {
     return account;
   }
 
-  /**
-   * Neuen Hof anlegen. Der Schlüssel wird **genau einmal** zurückgegeben —
-   * danach kennt der Server nur noch seinen Hash.
-   *
-   * Wird sofort geschrieben, nicht gesammelt: Ein Hof, den es nach einem
-   * Neustart nicht mehr gibt, wäre ein verlorener Schlüssel.
-   */
   create(now: number, initial: GameBlob): { account: AccountRecord; key: string } {
     let key = generateKey();
-    // Praktisch unmöglich bei 120 Bit, aber eine Kollision würde zwei Spieler
-    // in denselben Hof setzen — das ist die Zeile wert.
+
     while (this.byKeyHash.has(hashKey(key))) key = generateKey();
 
     const account: AccountRecord = {
@@ -261,7 +151,6 @@ export class AccountStore {
     return { account, key };
   }
 
-  /** Spielstand laden. Ungeschriebene Änderungen gewinnen — sie sind neuer. */
   load(id: string): AccountFile | null {
     const account = this.byId.get(id);
     if (!account) return null;
@@ -273,19 +162,12 @@ export class AccountStore {
     return game ? { version: 1, account, ...game } : null;
   }
 
-  /** Merken, nicht schreiben. Geschrieben wird gesammelt in `flush`. */
   save(account: AccountRecord, game: GameBlob): void {
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);
     this.dirty.set(account.id, game);
   }
 
-  /**
-   * Alles Gemerkte in einem Aufruf schreiben. Gibt zurück, wie viele.
-   *
-   * Schlägt das Schreiben fehl, bleiben die Änderungen gemerkt: Beim nächsten
-   * Versuch geht es weiter, statt sie zu verlieren.
-   */
   flush(): number {
     if (this.dirty.size === 0) return 0;
     const batch: Array<{ account: AccountRecord; game: GameBlob }> = [];
@@ -298,7 +180,6 @@ export class AccountStore {
     return batch.length;
   }
 
-  /** Übernimmt einen Account samt Schlüssel-Hash — für den Import alter Stände. */
   adopt(account: AccountRecord, game: GameBlob): void {
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);
@@ -311,19 +192,10 @@ export class AccountStore {
   }
 }
 
-/** Hash zu einem bekannten Schlüssel — nur für Import und Tests. */
 export function keyHashOf(key: string): string {
   return hashKey(key);
 }
 
-/**
- * Ganz einfache Missbrauchsbremse fürs Anlegen (R4).
- *
- * Ohne sie kann jemand in einer Minute zehntausend Höfe erzeugen und die
- * Platte füllen. Der Zähler steht im Speicher: Ein Neustart setzt ihn zurück,
- * was für den Anfang reicht — es geht um Versehen und Skriptkiddies, nicht um
- * einen entschlossenen Angreifer.
- */
 export class CreateLimiter {
   private readonly hits = new Map<string, number[]>();
   private readonly perHour: number;
@@ -334,7 +206,6 @@ export class CreateLimiter {
     this.totalCap = totalCap;
   }
 
-  /** Darf von dieser Herkunft gerade ein Hof angelegt werden? */
   allow(origin: string, nowMs: number, existing: number): { ok: true } | { ok: false; reason: string } {
     if (existing >= this.totalCap) return { ok: false, reason: 'SERVER_FULL' };
 
