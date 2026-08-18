@@ -81,6 +81,14 @@ export class Client {
     return this.apply({ type: 'SEND_TRUCK' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  openChest(chestId: number): ActionResult {
+    return this.apply({ type: 'OPEN_CHEST', chestId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  upgradeSilo(): ActionResult {
+    return this.apply({ type: 'UPGRADE_SILO' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buy(plot: number): ActionResult {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }

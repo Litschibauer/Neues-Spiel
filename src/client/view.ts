@@ -9,7 +9,7 @@ import {
   recipeUnlocked,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
-import { EMPTY_PLOT, count, stored } from '../sim/state.ts';
+import { EMPTY_PLOT, capacityOf, count, stored } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
@@ -106,6 +106,20 @@ export type StockView = {
   feePerUnit: number;
 };
 
+export type ChestView = {
+  id: number;
+  kind: string;
+  ready: boolean;
+  readyIn: number;
+};
+
+export type SiloUpgradeView = {
+  label: string;
+  cost: readonly Stack[];
+  capacity: number;
+  affordable: boolean;
+} | null;
+
 export type SlipView = {
   slot: number;
   id: number;
@@ -150,7 +164,14 @@ export type FarmView = {
   level: number;
   xp: { total: number; into: number; span: number; atMax: boolean };
   currency: { item: number; amount: number };
-  silo: { used: number; capacity: number; full: boolean; free: number };
+  silo: {
+    used: number;
+    capacity: number;
+    full: boolean;
+    free: number;
+    level: number;
+    upgrade: SiloUpgradeView;
+  };
   plots: readonly PlotView[];
   requests: readonly RequestView[];
   offers: readonly OfferView[];
@@ -167,6 +188,8 @@ export type FarmView = {
   };
   truck: TruckView;
   notkauf: boolean;
+  chests: readonly ChestView[];
+  openBoxes: number;
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -299,7 +322,8 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
 
 export function farmView(state: State, rules: Ruleset, online = true): FarmView {
   const used = stored(state, rules);
-  const free = rules.siloCapacity - used;
+  const capacity = capacityOf(state, rules);
+  const free = capacity - used;
   const at = nextLevelAt(rules, state.xp);
   const from = levelStartedAt(rules, state.xp);
 
@@ -340,7 +364,14 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       atMax: at === null,
     },
     currency: { item: rules.currency, amount: count(state, rules.currency) },
-    silo: { used, capacity: rules.siloCapacity, full: free <= 0, free },
+    silo: {
+      used,
+      capacity,
+      full: free <= 0,
+      free,
+      level: state.siloLevel,
+      upgrade: siloUpgrade(state, rules),
+    },
     plots: state.plots.map((_, i) => plotView(state, rules, i)),
     requests: state.requests.slice(0, rules.requestSlots + 2).map((r, i) => ({
       id: r.id,
@@ -378,6 +409,24 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     },
     truck: truckView(state, rules, skipEnabled && skipReady),
     notkauf: rules.emergencyBuyOnly === true,
+    chests: state.chests.map((c) => ({
+      id: c.id,
+      kind: rules.chestKinds?.[c.kind]?.label ?? '',
+      ready: state.tick >= c.readyAt,
+      readyIn: Math.max(0, c.readyAt - state.tick),
+    })),
+    openBoxes: state.pendingBoxes.length,
+  };
+}
+
+function siloUpgrade(state: State, rules: Ruleset): SiloUpgradeView {
+  const naechste = rules.siloLevels?.[state.siloLevel + 1];
+  if (!naechste) return null;
+  return {
+    label: naechste.label,
+    cost: naechste.cost.map((c) => ({ item: c.item, amount: c.amount })),
+    capacity: naechste.capacity,
+    affordable: naechste.cost.every((c) => count(state, c.item) >= c.amount),
   };
 }
 

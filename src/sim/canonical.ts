@@ -30,6 +30,10 @@ export function canonicalize(state: State): string {
     `requests=[${requests}]`,
     `skipReadyAt=${state.skipReadyAt}`,
     `truck=${state.truck.loaded.join('/')}@${state.truck.awayUntil}`,
+    `silo=${state.siloLevel}`,
+    `chests=[${state.chests.map((c) => `${c.id}:${c.kind}@${c.readyAt}`).join(',')}]`,
+    `nextChestId=${state.nextChestId}`,
+    `boxes=[${state.pendingBoxes.join(',')}]`,
   ].join('|');
 }
 
@@ -53,6 +57,10 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|SEND_TRUCK`;
     case 'SEND_SLIP':
       return `${c.seq}|${c.tick}|SEND_SLIP|${c.slot}`;
+    case 'OPEN_CHEST':
+      return `${c.seq}|${c.tick}|OPEN_CHEST|${c.chestId}`;
+    case 'UPGRADE_SILO':
+      return `${c.seq}|${c.tick}|UPGRADE_SILO`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

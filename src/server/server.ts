@@ -8,6 +8,7 @@ import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
 import { topUpRequests } from './requests.ts';
+import { rollChest, topUpChests } from './chests.ts';
 
 export const TICK_MS = 1000;
 
@@ -56,6 +57,7 @@ export class Server {
   nextRequestId = 1;
 
   rollRequest: () => number = Math.random;
+  rollChest: () => number = Math.random;
   offerSource: (limit: number) => Offer[] = () => [];
   claimOffer: (offerId: number) => boolean = () => true;
 
@@ -136,6 +138,25 @@ export class Server {
 
   private applyExternal(input: State, rules: Ruleset): State {
     let state = input;
+
+    if (state.pendingBoxes.length > 0) {
+      const geoeffnet = cloneState(state);
+      for (const art of state.pendingBoxes) {
+        for (const beute of rollChest(art, rules, this.rollChest)) {
+          this.pendingDeliveries.push({ ...beute, arrivedAt: Date.now() });
+        }
+      }
+      geoeffnet.pendingBoxes = [];
+      state = geoeffnet;
+    }
+
+    const kisten = topUpChests(state, rules, this.rollChest);
+    if (kisten.chests.length !== state.chests.length) {
+      const withChests = cloneState(state);
+      withChests.chests = kisten.chests;
+      withChests.nextChestId = kisten.nextChestId;
+      state = withChests;
+    }
 
     const topped = topUpRequests(state, rules, this.nextRequestId, this.rollRequest);
     if (topped.requests.length !== state.requests.length) {

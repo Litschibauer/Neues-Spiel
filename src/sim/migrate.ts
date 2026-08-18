@@ -1,7 +1,7 @@
 import type { Ruleset } from './rules.ts';
 import { getRuleset, levelRecipes, slotsAt } from './rules.ts';
 import type { Slot, State } from './state.ts';
-import { EMPTY_PLOT, cloneState, emptySlots, stored } from './state.ts';
+import { EMPTY_PLOT, capacityOf, cloneState, emptySlots, stored } from './state.ts';
 
 export class MigrationError extends Error {
   constructor(message: string) {
@@ -124,6 +124,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['5->6', RETIME],
   ['6->7', GROW_AND_RETIME],
   ['7->8', GROW_AND_RETIME],
+  ['8->9', GROW_AND_RETIME],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -139,8 +140,20 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     problems.push(`Passive ${state.passives.length} != Regelwerk ${rules.passives.length}`);
   }
 
-  if (stored(state, rules) > rules.siloCapacity) {
-    problems.push(`Lager über Limit: ${stored(state, rules)} > ${rules.siloCapacity}`);
+  const platz = capacityOf(state, rules);
+  if (stored(state, rules) > platz) {
+    problems.push(`Lager über Limit: ${stored(state, rules)} > ${platz}`);
+  }
+  const stufen = rules.siloLevels?.length ?? 1;
+  if (!Number.isInteger(state.siloLevel) || state.siloLevel < 0 || state.siloLevel >= stufen) {
+    problems.push(`Lagerstufe ${state.siloLevel} gibt es nicht`);
+  }
+  for (const kiste of state.chests) {
+    if (!rules.chestKinds?.[kiste.kind]) problems.push(`Kiste ${kiste.id}: Art unbekannt`);
+    if (kiste.id >= state.nextChestId) problems.push(`Kisten-Nummer ${kiste.id} nicht vergeben`);
+  }
+  for (const art of state.pendingBoxes) {
+    if (!rules.chestKinds?.[art]) problems.push(`offene Kiste: Art ${art} unbekannt`);
   }
 
   if (state.orders.length > rules.orderSlots) {

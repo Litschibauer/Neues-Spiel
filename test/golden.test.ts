@@ -47,11 +47,13 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
       'FILL_REQUEST',
       'LIST_ORDER',
       'LOAD_TRUCK',
+      'OPEN_CHEST',
       'SELL_NPC',
       'SEND_SLIP',
       'SEND_TRUCK',
       'SKIP_REQUEST',
       'START',
+      'UPGRADE_SILO',
     ],
     'Korpus deckt nicht alle Command-Typen ab',
   );

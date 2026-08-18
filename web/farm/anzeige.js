@@ -17,6 +17,7 @@ function render() {
     && document.activeElement.tagName === 'INPUT'
     && $('stand-bg').contains(document.activeElement);
   if (!typing) renderStore(v);
+  renderAusbau(v);
   renderBadges(v);
   renderSheet(v);
 }
@@ -178,8 +179,46 @@ function renderTruck(v) {
 function renderMoebel(v) {
   var bereit = v.truck.board.filter(function (z) { return z.deliverable; }).length;
   moebel($('brett'), artBrett(v.truck.board.length), 'Brett', bereit);
-  moebel($('lagerhaus'), artLager(v.silo.full), 'Lager', v.mail.entries.length);
+  moebel($('lagerhaus'), artLager(v.silo.full), 'Lager',
+    v.mail.entries.length + (v.silo.upgrade && v.silo.upgrade.affordable ? 1 : 0));
   moebel($('stand'), artStand(), 'Stand', v.buyable);
+
+  var offen = v.chests.filter(function (k) { return k.ready; });
+  var kiste = $('kiste');
+  kiste.hidden = offen.length === 0;
+  if (offen.length > 0) moebel(kiste, artKiste(), 'Kiste', offen.length);
+}
+
+function renderAusbau(v) {
+  var box = $('ausbau');
+  box.textContent = '';
+
+  var stand = document.createElement('div');
+  stand.className = 'note';
+  stand.textContent = 'Platz ' + v.silo.used + ' von ' + v.silo.capacity +
+    (v.silo.level > 0 ? ' · Stufe ' + (v.silo.level + 1) : '');
+  box.appendChild(stand);
+
+  if (!v.silo.upgrade) {
+    var fertig = document.createElement('p');
+    fertig.className = 'empty';
+    fertig.textContent = 'Voll ausgebaut.';
+    box.appendChild(fertig);
+    return;
+  }
+
+  var karte = document.createElement('button');
+  karte.className = 'card';
+  karte.disabled = !v.silo.upgrade.affordable;
+  karte.innerHTML =
+    '<div class="body"><div class="top">' + v.silo.upgrade.label + ' · auf ' +
+    v.silo.upgrade.capacity + ' Platz</div>' +
+    '<div class="sub">' + stacks(v.silo.upgrade.cost) + '</div></div>' +
+    '<span class="go">Bauen</span>';
+  karte.addEventListener('click', function () {
+    act('Lager ausgebaut · ' + v.silo.upgrade.capacity + ' Platz', client.upgradeSilo());
+  });
+  box.appendChild(karte);
 }
 
 function moebel(knopf, bild, name, zahl) {

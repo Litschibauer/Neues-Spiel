@@ -27,6 +27,26 @@ export type LevelDef = {
   slots?: number;
 };
 
+export type SiloLevel = {
+  label: string;
+  cost: readonly ItemStack[];
+  capacity: number;
+};
+
+export type ChestDrop = {
+  item: number;
+  min: number;
+  max: number;
+  weight: number;
+};
+
+export type ChestKind = {
+  id: string;
+  label: string;
+  picks: number;
+  drops: readonly ChestDrop[];
+};
+
 export type PlotPlace = {
   x: number;
   y: number;
@@ -79,6 +99,11 @@ export type Ruleset = {
   boardDeliveryOnly?: boolean;
   sellNpcDisabled?: boolean;
   emergencyBuyOnly?: boolean;
+  siloLevels?: readonly SiloLevel[];
+  chestKinds?: readonly ChestKind[];
+  chestEveryTicks?: number;
+  chestSpreadTicks?: number;
+  chestQueueMax?: number;
 };
 
 const GOLD = 0;
@@ -705,12 +730,67 @@ const V8: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const PLANK = 10;
+const NAIL = 11;
+
+const V9: Ruleset = {
   ...V8,
+  version: 9,
+
+  items: [
+    ...V8.items,
+    { id: 'plank', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'nail', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+  ],
+
+  siloLevels: [
+    { label: 'Lager', cost: [], capacity: 200 },
+    { label: 'Erste Erweiterung', cost: [want(PLANK, 8), want(NAIL, 4), want(GOLD, 300)], capacity: 280 },
+    { label: 'Zweite Erweiterung', cost: [want(PLANK, 16), want(NAIL, 10), want(GOLD, 900)], capacity: 380 },
+    { label: 'Dritte Erweiterung', cost: [want(PLANK, 28), want(NAIL, 20), want(GOLD, 2200)], capacity: 500 },
+    { label: 'Vierte Erweiterung', cost: [want(PLANK, 44), want(NAIL, 34), want(GOLD, 5000)], capacity: 650 },
+  ],
+
+  chestEveryTicks: 1800,
+  chestSpreadTicks: 1200,
+  chestQueueMax: 6,
+
+  chestKinds: [
+    {
+      id: 'holzkiste',
+      label: 'Holzkiste',
+      picks: 2,
+      drops: [
+        { item: PLANK, min: 1, max: 3, weight: 30 },
+        { item: NAIL, min: 1, max: 2, weight: 24 },
+        { item: GOLD, min: 20, max: 80, weight: 20 },
+        { item: WHEAT, min: 2, max: 6, weight: 14 },
+        { item: CORN, min: 2, max: 5, weight: 12 },
+      ],
+    },
+    {
+      id: 'eisenkiste',
+      label: 'Eisenkiste',
+      picks: 3,
+      drops: [
+        { item: PLANK, min: 2, max: 5, weight: 28 },
+        { item: NAIL, min: 2, max: 4, weight: 26 },
+        { item: GOLD, min: 60, max: 220, weight: 20 },
+        { item: FEED, min: 1, max: 3, weight: 13 },
+        { item: COW_FEED, min: 1, max: 3, weight: 13 },
+      ],
+    },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V9,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
-  recipes: V8.recipes.map((r) => {
+  chestEveryTicks: 180,
+  chestSpreadTicks: 120,
+  recipes: V9.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -725,14 +805,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [6, V6],
   [7, V7],
   [8, V8],
+  [9, V9],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 8;
+export const LATEST_RULESET_VERSION = 9;
 
 export const DEV_RULESET_VERSION = 1001;
 

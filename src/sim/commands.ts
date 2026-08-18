@@ -45,6 +45,10 @@ export type SendTruckCommand = CommandBase & { type: 'SEND_TRUCK' };
 
 export type SendSlipCommand = CommandBase & { type: 'SEND_SLIP'; slot: number };
 
+export type OpenChestCommand = CommandBase & { type: 'OPEN_CHEST'; chestId: number };
+
+export type UpgradeSiloCommand = CommandBase & { type: 'UPGRADE_SILO' };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -59,7 +63,9 @@ export type Command =
   | SkipRequestCommand
   | LoadTruckCommand
   | SendTruckCommand
-  | SendSlipCommand;
+  | SendSlipCommand
+  | OpenChestCommand
+  | UpgradeSiloCommand;
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
@@ -68,6 +74,11 @@ export type SimErrorCode =
   | 'USE_THE_BOARD'
   | 'NPC_DISABLED'
   | 'ONLY_WHEN_EMPTY'
+  | 'NO_SUCH_CHEST'
+  | 'CHEST_NOT_READY'
+  | 'TOO_MANY_BOXES'
+  | 'SILO_MAX'
+  | 'SILO_LOCKED'
   | 'TRUCK_AWAY'
   | 'NO_WAYBILL'
   | 'NO_SUCH_STACK'

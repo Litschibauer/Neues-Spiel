@@ -153,6 +153,10 @@ v.truck        {enabled, here, backIn, awayTicks, skippable, boardOnly,
                 board[] {slot, id, dest, wants, reward, xp,
                          deliverable, missing}}
 v.notkauf      true = kaufen geht nur bei leerem Fach
+v.chests[]     {id, kind, ready, readyIn}
+v.openBoxes    geöffnet, Inhalt noch beim Server
+v.silo         {used, capacity, full, free, level,
+                upgrade {label, cost, capacity, affordable}}
 v.requests[]   {wants, reward, xp, waiting, deliverable}
 v.offers[]     {item, amount, price, total, affordable, fits}
 v.orders[]     {item, amount, price, expiresIn}

@@ -50,6 +50,12 @@ export type Request = {
   dest: number;
 };
 
+export type Chest = {
+  id: number;
+  kind: number;
+  readyAt: number;
+};
+
 export type Truck = {
   loaded: readonly number[];
   awayUntil: number;
@@ -68,10 +74,21 @@ export type State = {
   requests: readonly Request[];
   skipReadyAt: number;
   truck: Truck;
+  siloLevel: number;
+  chests: readonly Chest[];
+  nextChestId: number;
+  pendingBoxes: readonly number[];
 };
 
 export function count(s: State, item: number): number {
   return s.items[item] ?? 0;
+}
+
+export function capacityOf(s: State, rules: Ruleset): number {
+  const stufen = rules.siloLevels;
+  if (!stufen || stufen.length === 0) return rules.siloCapacity;
+  const stufe = stufen[Math.min(s.siloLevel, stufen.length - 1)];
+  return stufe ? stufe.capacity : rules.siloCapacity;
 }
 
 export function stored(s: State, rules: Ruleset): number {
@@ -86,7 +103,7 @@ export function storedIn(items: readonly number[], rules: Ruleset): number {
 }
 
 export function spaceLeft(s: State, rules: Ruleset): number {
-  return rules.siloCapacity - stored(s, rules);
+  return capacityOf(s, rules) - stored(s, rules);
 }
 
 export function totalGoods(s: State, rules: Ruleset): number {
@@ -126,6 +143,10 @@ export function initialState(rules: Ruleset): State {
     nextOrderId: 1,
     requests: [],
     truck: { loaded: [], awayUntil: 0 },
+    siloLevel: 0,
+    chests: [],
+    nextChestId: 1,
+    pendingBoxes: [],
     skipReadyAt: 0,
   };
 }
@@ -150,6 +171,10 @@ export function normalizeState(s: State): State {
     requests: (s.requests ?? []).map((r) => (r.dest === undefined ? { ...r, dest: 0 } : r)),
     skipReadyAt: s.skipReadyAt ?? 0,
     truck: s.truck ?? { loaded: [], awayUntil: 0 },
+    siloLevel: s.siloLevel ?? 0,
+    chests: s.chests ?? [],
+    nextChestId: s.nextChestId ?? 1,
+    pendingBoxes: s.pendingBoxes ?? [],
   };
 }
 
@@ -166,6 +191,10 @@ export function cloneState(s: State): State {
     nextOrderId: s.nextOrderId,
     requests: s.requests,
     truck: s.truck,
+    siloLevel: s.siloLevel,
+    chests: s.chests,
+    nextChestId: s.nextChestId,
+    pendingBoxes: s.pendingBoxes,
     skipReadyAt: s.skipReadyAt,
   };
 }

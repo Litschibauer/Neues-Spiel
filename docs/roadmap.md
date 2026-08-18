@@ -124,8 +124,10 @@ nach „mehr davon" an: Alle paar Minuten geht etwas auf, das es vorher nicht ga
 
 Was noch fehlt:
 
-- **M9 Aufgeschobener Zufall** — für die Fälle, in denen Vorwissen ein Cheat wäre
-  (Mystery-Kisten). Der Vorwürfel-Fall ist mit M6 erledigt.
+- [x] ~~**M9 Aufgeschobener Zufall**~~ — erledigt mit v9: Schatzkisten. Wann eine
+      kommt, würfelt der Server vor (steht im Zustand, gilt offline); was drin
+      ist, erst beim Sync — `OPEN_CHEST` schüttet lokal nichts aus, die Beute
+      kommt durchs Postfach. Ein Test prüft, dass im Zustand kein Inhalt steht.
 - [x] ~~**Warteschlangenplätze** als Parameter von M1~~ — erledigt mit v5: Ein Platz
       hält eine Liste von Produktionen, wie viele steht als `LevelDef.slots` im
       Katalog. Ställe nutzen es für drei Tiere mit je eigener Uhr; wer keine Zahl

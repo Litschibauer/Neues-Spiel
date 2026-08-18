@@ -367,6 +367,49 @@ viermal säen und ernten → Zettel abschicken.
 Gebäude am Weg. Antippen öffnet sie als Blatt über dem Hof. Es gibt nur noch
 **eine** Ansicht, und das ist der Hof.
 
+#### v9: Schatzkisten, Baumaterial, ein Lager das wächst
+
+Das ist **M9 — aufgeschobener Zufall**, und es ist der erste Fall, in dem
+Vorwissen ein Cheat wäre. Bei einem Kundenwunsch ist es egal, ob der Client
+ihn vorher kennt; bei einer Mystery-Kiste ist genau das der ganze Reiz.
+
+**Die Lösung teilt die Kiste in zwei Hälften.** *Wann* eine Kiste kommt, würfelt
+der Server im Voraus und legt es in den Zustand — deshalb tauchen Kisten auch
+im Funkloch auf. *Was* drin ist, würfelt er erst, wenn er die geöffnete Kiste
+sieht.
+
+```
+Server plant vor:   chests [{id, kind, readyAt}, …]   ← im Zustand, offline sichtbar
+Spieler öffnet:     OPEN_CHEST → pendingBoxes [kind]  ← kein Inhalt, nirgends
+Server beim Sync:   würfelt die Tabelle → Postfach    ← erst hier entsteht die Beute
+```
+
+`OPEN_CHEST` schüttet **lokal nichts aus**. Ein Test prüft genau das: nach dem
+Öffnen ist im kanonisierten Zustand kein Gramm Beute zu finden, nur die Art der
+offenen Kiste. Ein manipulierter Client kann also nichts vorher sehen — es gibt
+nichts zu sehen. Und der Weg ins Postfach ist derselbe, den Marktverkäufe schon
+gehen: „etwas ist angekommen, während du nicht hingeschaut hast".
+
+**Baumaterial ist nicht lagerpflichtig.** Bretter und Nägel liegen wie Gold
+neben dem Lager statt darin — sonst müsste man Platz opfern, um Platz zu
+gewinnen. Nebenwirkung, die passt: Was nicht lagerpflichtig ist, ist auch nicht
+handelbar (`isTradable` verlangt beides), Material bleibt also am eigenen Hof.
+
+**Das Lager ist keine Konstante mehr.** `siloLevels` ist eine Tabelle im
+Katalog, `capacityOf(state, rules)` löst sie auf, und `UPGRADE_SILO` zahlt die
+nächste Stufe:
+
+| Stufe | Platz | Preis |
+| --- | --- | --- |
+| 1 | 200 | — |
+| 2 | 280 | 8 Bretter, 4 Nägel, 300 Gold |
+| 3 | 380 | 16 Bretter, 10 Nägel, 900 Gold |
+| 4 | 500 | 28 Bretter, 20 Nägel, 2200 Gold |
+| 5 | 650 | 44 Bretter, 34 Nägel, 5000 Gold |
+
+Ältere Regelwerke haben keine `siloLevels` — dort fällt `capacityOf` auf
+`siloCapacity` zurück, und alte Logs rechnen unverändert.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

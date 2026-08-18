@@ -9,6 +9,7 @@ import type { State } from '../../src/sim/state.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import type { Snapshot } from '../../src/server/server.ts';
 import { topUpRequests } from '../../src/server/requests.ts';
+import { topUpChests } from '../../src/server/chests.ts';
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -83,7 +84,11 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
     const platz = Math.floor(rules.siloCapacity / 4);
     let belegt = 0;
     rules.items.forEach((item, i) => {
-      if (!item.storable) return;
+      if (i === rules.currency) return;
+      if (!item.storable) {
+        items[i] = (items[i] ?? 0) + Math.floor(rnd() * 14);
+        return;
+      }
       const menge = Math.floor(rnd() * 6);
       if (belegt + menge > platz) return;
       items[i] = (items[i] ?? 0) + menge;
@@ -93,10 +98,20 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
 
   const requests = rnd ? topUpRequests({ ...base, items }, rules, 1, rnd).requests : [];
 
+  const kisten = rnd ? topUpChests({ ...base, items }, rules, rnd) : { chests: [], nextChestId: 1 };
+
   const offers = rnd ? fuzzOffers(rules, rnd) : [];
 
   const mail = rnd ? fuzzMail(rules, rnd) : [];
-  return { ...base, items, requests, offers, mail };
+  return {
+    ...base,
+    items,
+    requests,
+    offers,
+    mail,
+    chests: kisten.chests,
+    nextChestId: kisten.nextChestId,
+  };
 }
 
 function fuzzMail(rules: Ruleset, rnd: () => number): MailItem[] {
@@ -258,6 +273,16 @@ export function playRandomSession(
     }
 
     if (s.mail.length > 0) moves.push(() => client.collectMail());
+
+    for (const kiste of s.chests) {
+      if (s.tick >= kiste.readyAt) moves.push(() => client.openChest(kiste.id));
+    }
+    if ((rules.siloLevels?.length ?? 0) > s.siloLevel + 1) {
+      const naechste = rules.siloLevels![s.siloLevel + 1]!;
+      if (naechste.cost.every((c) => count(s, c.item) >= c.amount)) {
+        moves.push(() => client.upgradeSilo());
+      }
+    }
 
     if (!opts.hoard) {
       s.requests.slice(0, rules.requestSlots).forEach((request, slot) => {

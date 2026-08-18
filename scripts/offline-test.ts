@@ -1409,6 +1409,94 @@ try {
   await evaluate(cdp, `document.getElementById('brett-close').click()`);
   await sleep(200);
 
+
+  console.log('\n9d. Schatzkisten und der Lagerausbau');
+
+  const kistenStand = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { chests: Array<{ id: number; readyAt: number }>; tick: number };
+  };
+  check(
+    'Der Server plant Kisten voraus, ohne den Inhalt zu verraten',
+    kistenStand.state.chests.length >= 3 &&
+      kistenStand.state.chests.every((k) => typeof k.readyAt === 'number'),
+    `${kistenStand.state.chests.length} Kisten in der Warteschlange`,
+  );
+
+  const naechste = kistenStand.state.chests[0]!;
+  const wartezeit = Math.max(60, naechste.readyAt - kistenStand.state.tick + 30);
+  await api(`/api/admin/time?account=${status.accountId}&seconds=${wartezeit}`, 'POST');
+
+  try {
+    await waitFor(cdp, `!document.getElementById('kiste').hidden`, 'Kiste steht da', 20_000);
+  } catch {
+  }
+  check(
+    'Wenn ihre Zeit da ist, steht die Kiste auf dem Hof',
+    await evaluate<boolean>(cdp, `!document.getElementById('kiste').hidden`),
+  );
+
+  const vorKiste = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { items: number[]; mail: unknown[] };
+  };
+  await evaluate(cdp, `document.getElementById('kiste').click()`);
+  await sleep(1500);
+
+  const nachKiste = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { items: number[]; mail: Array<{ item: number; amount: number }>; pendingBoxes: number[] };
+  };
+  check(
+    'Geöffnet wird sie beim Server — die Beute kommt ins Postfach',
+    nachKiste.state.mail.length > vorKiste.state.mail.length &&
+      nachKiste.state.pendingBoxes.length === 0,
+    `Postfach ${vorKiste.state.mail.length} → ${nachKiste.state.mail.length}`,
+  );
+
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await sleep(400);
+  await evaluate(cdp, `var c = document.querySelector('#mail .card'); if (c) c.click()`);
+  await sleep(500);
+
+  const ausbau = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = document.querySelector('#ausbau .card');
+       return k ? k.textContent : 'kein Ausbau';
+     })()`,
+  );
+  check(
+    'Im Lager steht, was der nächste Ausbau kostet',
+    /Erweiterung/.test(ausbau) && /Bretter|Nägel/.test(ausbau),
+    ausbau.slice(0, 90),
+  );
+
+  const platzVorher = await evaluate<string>(cdp, `document.getElementById('silo-num').textContent`);
+  for (const zutat of ['plank', 'nail']) {
+    await api(`/api/admin/grant?account=${status.accountId}&item=${zutat}&amount=30`, 'POST');
+  }
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=600`, 'POST');
+  await sleep(1200);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Material im Postfach');
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(600);
+
+  await evaluate(
+    cdp,
+    `(function () {
+       var k = document.querySelector('#ausbau .card');
+       if (k && !k.disabled) k.click();
+     })()`,
+  );
+  await sleep(700);
+  const platzNachher = await evaluate<string>(cdp, `document.getElementById('silo-num').textContent`);
+  check(
+    'Mit Material wächst das Lager',
+    Number(platzNachher.split('/')[1]) > Number(platzVorher.split('/')[1]),
+    `${platzVorher} → ${platzNachher}`,
+  );
+
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);

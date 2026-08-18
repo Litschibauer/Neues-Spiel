@@ -96,6 +96,19 @@ function artStand() {
     '<circle cx="64" cy="58" r="5" fill="var(--corn)"/>';
 }
 
+function artKiste() {
+  return '<ellipse cx="50" cy="74" rx="34" ry="5" fill="var(--ink)" opacity=".2"/>' +
+    '<rect x="16" y="34" width="68" height="38" rx="4" fill="var(--wood)"/>' +
+    '<path d="M16 40a34 14 0 0168 0z" fill="var(--wood-dark)"/>' +
+    '<rect x="16" y="38" width="68" height="6" fill="var(--wood-dark)"/>' +
+    '<rect x="42" y="30" width="16" height="20" rx="2" fill="var(--gold)"/>' +
+    '<circle cx="50" cy="42" r="3.5" fill="var(--soil-dark)"/>' +
+    '<path d="M24 48v18M76 48v18" stroke="var(--wood-dark)" stroke-width="3"/>' +
+    '<g opacity=".9">' +
+    '<path d="M50 18l2.5 6 6 2.5-6 2.5L50 35l-2.5-6-6-2.5 6-2.5z" fill="var(--ripe)"/>' +
+    '</g>';
+}
+
 function artField(stage, crop) {
   var soil = '<rect x="2" y="6" width="96" height="70" rx="7" fill="var(--soil)"/>' +
     '<path d="M6 16h88v4H6zM6 30h88v3H6zM6 44h88v3H6zM6 58h88v3H6z" fill="var(--soil-dark)" opacity=".4"/>';

@@ -187,12 +187,20 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
   }
 
-  #wagen { left: 3%; top: 48%; width: 30%; height: 10%; z-index: 60; }
+  #wagen { left: 3%; top: 48%; width: 28%; height: 10%; z-index: 60; }
   #wagen.unterwegs { transform: translateX(-190%); transition: transform 2.2s ease-in; }
   #wagen:not(.unterwegs) { transition: transform 2.2s ease-out; }
-  #brett { left: 36%; top: 46%; width: 17%; height: 13%; z-index: 61; }
-  #lagerhaus { left: 57%; top: 46%; width: 19%; height: 13%; z-index: 62; }
-  #stand { left: 79%; top: 47%; width: 18%; height: 12%; z-index: 63; }
+  #brett { left: 34%; top: 46%; width: 16%; height: 13%; z-index: 61; }
+  #kiste { left: 52%; top: 50%; width: 9%; height: 9%; z-index: 64; }
+  #kiste .art { animation: wackeln 2.2s ease-in-out infinite; }
+  @keyframes wackeln {
+    0%, 88%, 100% { transform: rotate(0deg); }
+    92% { transform: rotate(-6deg); }
+    96% { transform: rotate(6deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { #kiste .art { animation: none; } }
+  #lagerhaus { left: 62%; top: 46%; width: 16%; height: 13%; z-index: 62; }
+  #stand { left: 80%; top: 47%; width: 16%; height: 12%; z-index: 63; }
 
   .zettel {
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px;

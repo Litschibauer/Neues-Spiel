@@ -2,6 +2,7 @@ var NAMES = {
   gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
   corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
   mill: 'Mühle', dairy: 'Molkerei', 'cow-feed': 'Kuhfutter',
+  plank: 'Bretter', nail: 'Nägel',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

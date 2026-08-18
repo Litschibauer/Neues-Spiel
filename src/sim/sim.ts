@@ -13,6 +13,7 @@ import {
 import type { Request, State } from './state.ts';
 import {
   EMPTY_PLOT,
+  capacityOf,
   emptySlots,
   addItem,
   addItems,
@@ -23,6 +24,8 @@ import {
   storedIn,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
+
+export const MAX_PENDING_BOXES = 20;
 
 export function truckAway(rules: Ruleset): number {
   return rules.truckAwayTicks ?? 0;
@@ -324,7 +327,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         const def = rules.items[entry.item];
 
         const fits =
-          !def?.storable || rules.siloCapacity - storedIn(items, rules) >= entry.amount;
+          !def?.storable || capacityOf(s, rules) - storedIn(items, rules) >= entry.amount;
         if (fits) {
           items = addItem(items, entry.item, entry.amount);
           collected++;
@@ -358,7 +361,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         for (const [item, menge] of geladenZurueck(s, request)) changes.push([item, menge]);
       }
       const items = addItems(s.items, changes);
-      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+      if (storedIn(items, rules) > capacityOf(s, rules)) throw new SimError('SILO_FULL');
 
       const next = cloneState(s);
       next.items = items;
@@ -384,7 +387,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       if (index === 0) {
         const items = addItems(s.items, geladenZurueck(s, s.requests[0]!));
-        if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+        if (storedIn(items, rules) > capacityOf(s, rules)) throw new SimError('SILO_FULL');
         next.items = items;
         next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.truck.awayUntil };
       }
@@ -409,7 +412,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const changes: [number, number][] = zettel.wants.map((w) => [w.item, -w.amount]);
       for (const r of zettel.reward) changes.push([r.item, r.amount]);
       const items = addItems(s.items, changes);
-      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+      if (storedIn(items, rules) > capacityOf(s, rules)) throw new SimError('SILO_FULL');
 
       const next = cloneState(s);
       next.items = items;
@@ -459,13 +462,47 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         s.items,
         waybill.reward.map((r): [number, number] => [r.item, r.amount]),
       );
-      if (storedIn(items, rules) > rules.siloCapacity) throw new SimError('SILO_FULL');
+      if (storedIn(items, rules) > capacityOf(s, rules)) throw new SimError('SILO_FULL');
 
       const next = cloneState(s);
       next.items = items;
       next.requests = s.requests.slice(1);
       next.xp = s.xp + waybill.xp;
       next.truck = { loaded: leereLadung(next.requests[0]), awayUntil: s.tick + away };
+      return next;
+    }
+
+    case 'OPEN_CHEST': {
+      const kisten = rules.chestKinds;
+      if (!kisten || kisten.length === 0) throw new SimError('NO_SUCH_CHEST');
+
+      const kiste = s.chests.find((c) => c.id === cmd.chestId);
+      if (!kiste) throw new SimError('NO_SUCH_CHEST');
+      if (s.tick < kiste.readyAt) throw new SimError('CHEST_NOT_READY');
+      if (s.pendingBoxes.length >= MAX_PENDING_BOXES) throw new SimError('TOO_MANY_BOXES');
+
+      const next = cloneState(s);
+      next.chests = s.chests.filter((c) => c.id !== cmd.chestId);
+      next.pendingBoxes = s.pendingBoxes.concat(kiste.kind);
+      return next;
+    }
+
+    case 'UPGRADE_SILO': {
+      const stufen = rules.siloLevels;
+      if (!stufen || stufen.length === 0) throw new SimError('SILO_LOCKED');
+
+      const naechste = stufen[s.siloLevel + 1];
+      if (!naechste) throw new SimError('SILO_MAX');
+      for (const preis of naechste.cost) {
+        if (count(s, preis.item) < preis.amount) throw new SimError('CANT_AFFORD');
+      }
+
+      const next = cloneState(s);
+      next.items = addItems(
+        s.items,
+        naechste.cost.map((c): [number, number] => [c.item, -c.amount]),
+      );
+      next.siloLevel = s.siloLevel + 1;
       return next;
     }
 

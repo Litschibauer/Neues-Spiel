@@ -257,6 +257,15 @@ function frachtInhalt(v, box) {
 
 $('wagen').addEventListener('click', openTruck);
 
+$('kiste').addEventListener('click', function () {
+  if (!isActive) return;
+  client.localTick = tickNow();
+  var offen = NS.farmView(client.preview(), rules, navigator.onLine).chests
+    .filter(function (k) { return k.ready; });
+  if (offen.length === 0) return;
+  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(offen[0].id));
+});
+
 function openPicker(p, slot) {
   sheet = { plot: p.index, mode: 'recipes', slot: slot || 0 };
   pickerPlot = p.index;
