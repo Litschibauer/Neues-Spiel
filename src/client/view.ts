@@ -31,7 +31,7 @@
  */
 
 import type { Ruleset } from '../sim/rules.ts';
-import { levelOf, levelStartedAt, listingFee, nextLevelAt } from '../sim/rules.ts';
+import { levelOf, levelStartedAt, listingFee, nextLevelAt, priceBand } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import { EMPTY_PLOT, count, stored } from '../sim/state.ts';
 
@@ -98,6 +98,13 @@ export type RequestView = {
   /** Steht noch im Vorrat und ist nicht annehmbar. */
   waiting: boolean;
   deliverable: boolean;
+  /**
+   * Darf JETZT weggeschickt werden — Platz vorn, Wartezeit abgelaufen.
+   *
+   * Getrennt von `skip.ready` weiter unten, weil die Oberfläche beides
+   * braucht: welcher Auftrag den Knopf bekommt, und warum er grau ist.
+   */
+  skippable: boolean;
 };
 
 export type OfferView = {
@@ -171,6 +178,20 @@ export type FarmView = {
   stock: readonly StockView[];
   /** Wie viele Angebote gerade wirklich kaufbar wären — für eine Zahl am Reiter. */
   buyable: number;
+  /**
+   * Der Zustand des Wegschickens (M6).
+   *
+   * `enabled: false` heißt: Das Regelwerk kennt es nicht — dann zeigt die
+   * Oberfläche den Knopf gar nicht erst, statt einen dauerhaft grauen.
+   */
+  skip: {
+    enabled: boolean;
+    ready: boolean;
+    /** Ticks bis zum nächsten Mal. 0, wenn es jetzt geht. */
+    readyIn: number;
+    /** Die volle Wartezeit — damit sich ein Fortschrittsbalken zeichnen lässt. */
+    cooldownTicks: number;
+  };
 };
 
 /** Rezepte, die auf diesem Platz und dieser Stufe laufen dürfen. */
@@ -273,6 +294,11 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
   const at = nextLevelAt(rules, state.xp);
   const from = levelStartedAt(rules, state.xp);
 
+  // Wegschicken kostet Wartezeit statt Geld (M6). Beides einmal ausrechnen,
+  // damit die Auftragsliste und die Anzeige darüber dieselbe Antwort geben.
+  const skipEnabled = rules.requestSkipCooldownTicks > 0;
+  const skipReady = state.tick >= state.skipReadyAt;
+
   const offers: OfferView[] = state.offers.map((o) => {
     const total = o.amount * o.price;
     return {
@@ -293,8 +319,8 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     sellable: item.storable && item.npcPrice > 0,
     npcPrice: item.npcPrice,
     npcBuyPrice: item.npcBuyPrice,
-    bandMax: Math.floor((item.npcPrice * rules.priceBandMaxPct) / 100),
-    bandMin: Math.floor((item.npcPrice * rules.priceBandMinPct) / 100),
+    bandMax: priceBand(rules, i).max,
+    bandMin: priceBand(rules, i).min,
     feePerUnit: listingFee(rules, i, 1),
   }));
 
@@ -317,6 +343,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       waiting: i >= rules.requestSlots,
       deliverable:
         i < rules.requestSlots && r.wants.every((w) => count(state, w.item) >= w.amount),
+      skippable: skipEnabled && skipReady && i < rules.requestSlots,
     })),
     offers,
     orders: state.orders.map((o) => ({
@@ -337,5 +364,11 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     // Ohne Netz ist nichts kaufbar (§6) — das gehört ins Modell, nicht in jede
     // Oberfläche einzeln.
     buyable: online ? offers.filter((o) => o.affordable && o.fits).length : 0,
+    skip: {
+      enabled: skipEnabled,
+      ready: skipEnabled && skipReady,
+      readyIn: skipEnabled ? Math.max(0, state.skipReadyAt - state.tick) : 0,
+      cooldownTicks: rules.requestSkipCooldownTicks,
+    },
   };
 }

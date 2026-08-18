@@ -22,7 +22,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
-import { initialState } from '../sim/state.ts';
+import { initialState, normalizeState } from '../sim/state.ts';
 import { RULESETS, getRuleset } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
@@ -170,7 +170,11 @@ function gameFor(account: AccountRecord): Server {
     TARGET_RULESET,
   );
   if (file) {
-    game.snapshot = file.snapshot;
+    // Durch `normalizeState`, weil ein Stand von der Platte älter sein kann als
+    // die heutige Zustandsform. Ein fehlendes Feld wäre sonst `undefined` in
+    // einem Zahlenvergleich — kein Absturz, sondern eine Regel, die stumm nicht
+    // mehr greift.
+    game.snapshot = { ...file.snapshot, state: normalizeState(file.snapshot.state) };
     game.appliedLog = file.appliedLog;
     game.logStartSeq = file.logStartSeq ?? 1;
     // Ein Stand aus der Zeit vor dem Fenster bringt seinen ganzen Log mit —

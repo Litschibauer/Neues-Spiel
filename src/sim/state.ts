@@ -150,6 +150,20 @@ export type State = {
    * Aufgefüllt wird beim Sync vom Server.
    */
   requests: readonly Request[];
+
+  /**
+   * Ab welchem Tick wieder ein Auftrag übersprungen werden darf.
+   *
+   * Gespeichert wird der **Zeitpunkt**, nicht die Restzeit — sonst müsste er
+   * bei jedem Zeitfortschritt mitgezählt werden, und das wäre eine zweite
+   * Stelle, an der Client und Server auseinanderlaufen können. So ist es ein
+   * Vergleich gegen `tick` und sonst nichts.
+   *
+   * Und deshalb steht hier ein Zeitpunkt und keine Regelzahl: Ändert ein Patch
+   * die Wartezeit, gilt sie ab dem nächsten Überspringen. Wer gerade wartet,
+   * wartet die Zeit zu Ende, die galt, als er sich entschieden hat.
+   */
+  skipReadyAt: number;
 };
 
 /** Bestand eines Gegenstands. Unbekannter Index → 0, nie `undefined`. */
@@ -224,6 +238,31 @@ export function initialState(rules: Ruleset): State {
     mail: [],
     nextOrderId: 1,
     requests: [],
+    skipReadyAt: 0,
+  };
+}
+
+/**
+ * Einen geladenen Zustand auf die heutige Form bringen.
+ *
+ * Ein Feld, das es beim Speichern noch nicht gab, fehlt beim Laden — und was
+ * dann herauskommt, ist kein Absturz, sondern etwas Schlimmeres: `undefined` in
+ * einem Zahlenvergleich, der stillschweigend `false` ergibt. Bei `skipReadyAt`
+ * wäre die Wirkung, dass alte Höfe nie wieder einen Auftrag überspringen
+ * dürfen, ohne dass irgendwo ein Fehler auftaucht.
+ *
+ * Deshalb geht jeder Zustand, der von der Platte oder aus dem Gerätespeicher
+ * kommt, hier durch. Für Zustände aus der Sim ist das ein No-op — die haben
+ * ihre Felder ohnehin.
+ */
+export function normalizeState(s: State): State {
+  return {
+    ...s,
+    xp: s.xp ?? 0,
+    offers: s.offers ?? [],
+    mail: s.mail ?? [],
+    requests: s.requests ?? [],
+    skipReadyAt: s.skipReadyAt ?? 0,
   };
 }
 
@@ -253,6 +292,7 @@ export function cloneState(s: State): State {
     mail: s.mail,
     nextOrderId: s.nextOrderId,
     requests: s.requests,
+    skipReadyAt: s.skipReadyAt,
   };
 }
 

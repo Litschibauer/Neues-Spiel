@@ -184,6 +184,48 @@
   .card .pay { text-align: right; flex: none; }
   .card .pay .amount { font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
   .card .pay .xp { font-size: .66rem; color: var(--accent); font-weight: 650; }
+
+  /* ── Mengen- und Preiswähler ─────────────────────────────────────────
+     Große Flächen, weil das mit dem Daumen bedient wird: 44 px ist die
+     Untergrenze, unter der man daneben tippt. */
+  .trade { display: block; }
+  .trade .head { display: flex; align-items: baseline; gap: .4rem; margin-bottom: .5rem; }
+  .trade .head .name { font-size: .85rem; font-weight: 620; }
+  .trade .head .have { font-size: .7rem; color: var(--muted); margin-left: auto; }
+  .pick { display: flex; align-items: center; gap: .35rem; margin-bottom: .4rem; }
+  .pick > .lbl { font-size: .7rem; color: var(--muted); width: 3.2rem; flex: none; }
+  .pick button {
+    width: 2.1rem; height: 2.1rem; flex: none; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); font-size: 1rem;
+    font-weight: 700; color: var(--ink); line-height: 1;
+  }
+  .pick button:disabled { opacity: .35; }
+  .pick input {
+    flex: 1; min-width: 0; height: 2.1rem; text-align: center;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+    color: var(--ink); font-size: .9rem; font-weight: 650;
+    font-variant-numeric: tabular-nums; -moz-appearance: textfield;
+  }
+  .pick input::-webkit-outer-spin-button,
+  .pick input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .pick .max {
+    width: auto; padding: 0 .55rem; font-size: .7rem; font-weight: 650; color: var(--muted);
+  }
+  .trade .done {
+    width: 100%; height: 2.4rem; border-radius: 12px; border: 0;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: .85rem;
+    margin-top: .15rem;
+  }
+  .trade .done:disabled { background: var(--line); color: var(--muted); }
+  .trade .note { font-size: .68rem; color: var(--muted); margin-top: .35rem; text-align: center; }
+
+  /* Wegschicken: klein und unauffällig — es ist ein Verzicht, keine Belohnung. */
+  .skip {
+    margin-top: .4rem; width: 100%; height: 2rem; border-radius: 10px;
+    border: 1px dashed var(--line); background: transparent;
+    color: var(--muted); font-size: .72rem; font-weight: 600;
+  }
+  .skip:disabled { opacity: .5; }
   .card[disabled] { opacity: .5; box-shadow: none; }
   .card.queued { border-style: dashed; box-shadow: none; opacity: .7; }
   .go {
@@ -830,7 +872,13 @@
     renderMail(v);
     renderMarket(v);
     renderMyOrders(v);
-    renderStore(v);
+    // Den Lagerbereich NICHT neu bauen, während jemand darin eine Zahl tippt.
+    // `render()` läuft jede Sekunde; ein Neuaufbau nähme dem Feld den Fokus,
+    // und man käme über die erste Ziffer nicht hinaus.
+    var typing = document.activeElement
+      && document.activeElement.tagName === 'INPUT'
+      && $('view-store').contains(document.activeElement);
+    if (!typing) renderStore(v);
     renderBadges(v);
   }
 
@@ -985,6 +1033,28 @@
         });
       }
       box.appendChild(card);
+
+      /**
+       * Wegschicken — bezahlt mit Wartezeit, nicht mit Geld.
+       *
+       * Nur an den vorderen Plätzen, und nur wenn das Regelwerk es überhaupt
+       * kennt: Ein Knopf, der nie etwas tut, ist schlimmer als keiner. Beim
+       * Warten steht die Restzeit dran statt eines stummen grauen Knopfes —
+       * sonst hält man ihn für kaputt.
+       */
+      if (v.skip.enabled && !r.waiting) {
+        var skip = document.createElement('button');
+        skip.type = 'button';
+        skip.className = 'skip';
+        skip.disabled = !r.skippable;
+        skip.textContent = r.skippable
+          ? 'Wegschicken'
+          : 'Wegschicken wieder in ' + timeText(v.skip.readyIn);
+        skip.addEventListener('click', function () {
+          act('Weggeschickt', client.skipRequest(r.id));
+        });
+        box.appendChild(skip);
+      }
     });
   }
 
@@ -1105,6 +1175,99 @@
     });
   }
 
+  /**
+   * Was der Spieler gerade eingestellt hat — Menge und Preis, je Ware.
+   *
+   * Muss AUSSERHALB des Zeichnens leben: `render()` läuft jede Sekunde, und
+   * eine Auswahl, die dabei zurückspringt, ist unbenutzbar. Geclamped wird
+   * erst bei der Benutzung, nicht beim Tippen — sonst kann man eine Zahl nicht
+   * mehr korrigieren, sobald man einmal zu weit war.
+   */
+  var picks = {};
+
+  function pickOf(entry) {
+    var p = picks[entry.item];
+    if (!p) {
+      // Vorschlag beim ersten Mal: alles verkaufen, am oberen Bandrand
+      // anbieten. Das ist in beiden Fällen die häufigste Absicht.
+      p = { amount: entry.amount, price: entry.bandMax };
+      picks[entry.item] = p;
+    }
+    return p;
+  }
+
+  function clamp(n, lo, hi) {
+    if (!isFinite(n)) return lo;
+    return Math.max(lo, Math.min(hi, Math.round(n)));
+  }
+
+  /**
+   * Ein Zahlenwähler: −, Eingabefeld, +, optional „alle".
+   *
+   * Das Eingabefeld ist Absicht und nicht nur Bequemlichkeit: Wer 40 Stück
+   * verkaufen will, tippt keine 40 Mal auf Plus. Die Knöpfe daneben sind für
+   * die kleinen Korrekturen da, für die ein Zahlenfeld auf dem Handy nervt.
+   */
+  function numberPick(label, get, lo, hi, set, maxLabel) {
+    var row = document.createElement('div');
+    row.className = 'pick';
+    var value = clamp(get(), lo, hi);
+
+    var lbl = document.createElement('span');
+    lbl.className = 'lbl';
+    lbl.textContent = label;
+    row.appendChild(lbl);
+
+    // Alle Knöpfe rechnen mit `get()`, nicht mit dem Wert von eben.
+    //
+    // Der Unterschied fällt erst bei schnellen Tipps auf: Jede Änderung
+    // zeichnet neu, und ein Tipp, der noch auf dem alten Knopf landet, würde
+    // sonst denselben Schritt ein zweites Mal machen — dreimal Plus ergäbe
+    // eine Erhöhung um eins. Mit `get()` ist es egal, wie alt der Knopf ist.
+    var step = function (delta) {
+      return function () { set(clamp(get() + delta, lo, hi)); };
+    };
+
+    var minus = document.createElement('button');
+    minus.type = 'button';
+    minus.textContent = '−';
+    minus.disabled = value <= lo;
+    minus.addEventListener('click', step(-1));
+    row.appendChild(minus);
+
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.value = String(value);
+    input.min = String(lo);
+    input.max = String(hi);
+    // Beim Tippen NICHT neu zeichnen — der Fokus wäre weg und man käme nie
+    // über die erste Ziffer hinaus. Gemerkt wird trotzdem sofort; die Anzeige
+    // zieht nach, sobald das Feld verlassen wird.
+    input.addEventListener('input', function () { set(clamp(Number(input.value), lo, hi), true); });
+    input.addEventListener('blur', function () { render(); });
+    row.appendChild(input);
+
+    var plus = document.createElement('button');
+    plus.type = 'button';
+    plus.textContent = '+';
+    plus.disabled = value >= hi;
+    plus.addEventListener('click', step(1));
+    row.appendChild(plus);
+
+    if (maxLabel) {
+      var max = document.createElement('button');
+      max.type = 'button';
+      max.className = 'max';
+      max.textContent = maxLabel;
+      max.disabled = value >= hi;
+      max.addEventListener('click', function () { set(hi); });
+      row.appendChild(max);
+    }
+
+    return row;
+  }
+
   function renderStore(v) {
     var chips = $('stock');
     chips.textContent = '';
@@ -1126,48 +1289,99 @@
     v.stock.forEach(function (entry) {
       if (!entry.sellable || entry.amount <= 0) return;
       any = true;
+      var pick = pickOf(entry);
+      var amount = clamp(pick.amount, 1, entry.amount);
 
-      var sell = document.createElement('button');
-      sell.className = 'card';
-      sell.innerHTML =
-        '<div class="body"><div class="top">' + entry.amount + ' ' + nameOf(entry.id) + '</div>' +
-        '<div class="sub">' + entry.npcPrice + ' ' + itemName(v.currency.item) + ' pro Stück</div></div>' +
-        '<span class="go">' + entry.amount * entry.npcPrice + ' ' + itemName(v.currency.item) + '</span>';
-      sell.addEventListener('click', function () {
-        var have = client.preview().items[entry.item] || 0;
-        if (have > 0) act('Verkauft · ' + have + ' ' + nameOf(entry.id), client.sellNpc(entry.item, have));
+      // ── An den Händler: nur die Menge. Der Preis steht fest. ──
+      var sell = document.createElement('div');
+      sell.className = 'card trade';
+      var sellHead = document.createElement('div');
+      sellHead.className = 'head';
+      sellHead.innerHTML =
+        '<span class="name">' + nameOf(entry.id) + '</span>' +
+        '<span class="have">' + entry.npcPrice + ' ' + itemName(v.currency.item) +
+        ' pro Stück · du hast ' + entry.amount + '</span>';
+      sell.appendChild(sellHead);
+      sell.appendChild(numberPick(
+        'Menge',
+        function () { return picks[entry.item].amount; },
+        1,
+        entry.amount,
+        function (n, typing) { picks[entry.item].amount = n; if (!typing) render(); },
+        'alle',
+      ));
+
+      var sellGo = document.createElement('button');
+      sellGo.type = 'button';
+      sellGo.className = 'done';
+      sellGo.textContent = 'Verkaufen · ' + amount * entry.npcPrice + ' ' + itemName(v.currency.item);
+      sellGo.addEventListener('click', function () {
+        // Frisch aus `picks` lesen, nicht aus der Closure: Während jemand im
+        // Zahlenfeld tippt, wird bewusst nicht neu gezeichnet — die Beschriftung
+        // wäre dann von vorhin, und verkauft würde die alte Menge.
+        var n = clamp(picks[entry.item].amount, 1, client.preview().items[entry.item] || 0);
+        if (n <= 0) return;
+        act('Verkauft · ' + n + ' ' + nameOf(entry.id), client.sellNpc(entry.item, n));
       });
+      sell.appendChild(sellGo);
       sellBox.appendChild(sell);
 
-      // Am Markt bringt Ware mehr als beim Händler — deshalb der Vorschlag am
-      // obersten Rand des Preisbandes.
+      // ── Am Markt: Menge UND Preis. ──
       //
-      // Die Gebühr steht VOR dem Tippen da, und sie steht da als Zahl, nicht
-      // als Prozentsatz: „5 %" muss man umrechnen, „4 Gold weg" nicht. Gerechnet
-      // wird sie mit derselben Funktion, die die Sim gleich abzieht.
+      // Der Preis muss ins Band (§8), und das Band steht im Anzeigemodell —
+      // die Oberfläche rechnet es nicht selbst aus. Was hier geclamped wird,
+      // kann die Sim gar nicht erst ablehnen.
+      var price = clamp(pick.price, entry.bandMin, entry.bandMax);
+      var fee = NS.listingFee(rules, entry.item, amount);
       var free = v.orderSlotsFree;
-      var fee = NS.listingFee(rules, entry.item, entry.amount);
       var canPayFee = v.currency.amount >= fee;
-      var offer = document.createElement('button');
-      offer.className = 'card';
-      offer.disabled = free <= 0 || !canPayFee;
-      offer.innerHTML =
-        '<div class="body"><div class="top">' + entry.amount + ' ' + nameOf(entry.id) + ' anbieten</div>' +
-        '<div class="sub">' + (free <= 0
-          ? 'alle Plätze belegt'
-          : !canPayFee
-          ? 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' — so viel hast du nicht'
-          : entry.bandMax + ' ' + itemName(v.currency.item) + ' pro Stück · Gebühr ' +
-            fee + ' ' + itemName(v.currency.item)) + '</div></div>' +
-        '<span class="go">' + entry.amount * entry.bandMax + ' ' + itemName(v.currency.item) + '</span>';
-      offer.addEventListener('click', function () {
-        var have = client.preview().items[entry.item] || 0;
-        if (have > 0) {
-          act('Angeboten · ' + have + ' ' + nameOf(entry.id) + ' · Gebühr ' +
-                NS.listingFee(rules, entry.item, have),
-              client.listOrder(entry.item, have, entry.bandMax));
-        }
+
+      var offer = document.createElement('div');
+      offer.className = 'card trade';
+      var offerHead = document.createElement('div');
+      offerHead.className = 'head';
+      offerHead.innerHTML =
+        '<span class="name">' + nameOf(entry.id) + ' anbieten</span>' +
+        '<span class="have">' + free + (free === 1 ? ' Platz' : ' Plätze') + ' frei</span>';
+      offer.appendChild(offerHead);
+      offer.appendChild(numberPick(
+        'Menge',
+        function () { return picks[entry.item].amount; },
+        1,
+        entry.amount,
+        function (n, typing) { picks[entry.item].amount = n; if (!typing) render(); },
+        'alle',
+      ));
+      offer.appendChild(numberPick(
+        'Preis',
+        function () { return picks[entry.item].price; },
+        entry.bandMin,
+        entry.bandMax,
+        function (n, typing) { picks[entry.item].price = n; if (!typing) render(); },
+      ));
+
+      var offerGo = document.createElement('button');
+      offerGo.type = 'button';
+      offerGo.className = 'done';
+      offerGo.disabled = free <= 0 || !canPayFee;
+      offerGo.textContent = 'Anbieten · bringt ' + amount * price + ' ' + itemName(v.currency.item);
+      offerGo.addEventListener('click', function () {
+        var n = clamp(picks[entry.item].amount, 1, client.preview().items[entry.item] || 0);
+        var p = clamp(picks[entry.item].price, entry.bandMin, entry.bandMax);
+        if (n <= 0) return;
+        act('Angeboten · ' + n + ' ' + nameOf(entry.id), client.listOrder(entry.item, n, p));
       });
+      offer.appendChild(offerGo);
+
+      var note = document.createElement('div');
+      note.className = 'note';
+      note.textContent = free <= 0
+        ? 'Alle Auslage-Plätze belegt'
+        : !canPayFee
+        ? 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' — so viel hast du nicht'
+        : 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' · Band ' +
+          entry.bandMin + '–' + entry.bandMax;
+      offer.appendChild(note);
       listBox.appendChild(offer);
     });
 
@@ -1251,6 +1465,10 @@
     NOTHING_TO_COLLECT: 'Postfach ist leer',
     NO_SUCH_OFFER: 'Angebot ist weg',
     NOT_BUYABLE: 'Das führt der Händler nicht',
+    SKIP_ON_COOLDOWN: 'Noch zu früh fürs Wegschicken',
+    REQUEST_NOT_ACTIVE: 'Der wartet noch hinten',
+    PRICE_OUT_OF_BAND: 'Preis außerhalb des Bandes',
+    BAD_AMOUNT: 'Ungültige Menge',
     OFFER_GONE: 'Jemand war schneller',
     PLOT_BUSY: 'Läuft noch',
     MAX_LEVEL: 'Voll ausgebaut',

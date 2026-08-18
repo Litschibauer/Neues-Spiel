@@ -22,6 +22,7 @@ import {
   levelRecipes,
   listingFee,
   nextLevel,
+  priceBand,
 } from './rules.ts';
 import type { State } from './state.ts';
 import {
@@ -266,18 +267,17 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
     case 'LIST_ORDER': {
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
       if (!Number.isInteger(cmd.price) || cmd.price <= 0) throw new SimError('BAD_AMOUNT');
-      const def = rules.items[cmd.item];
-      if (!def) throw new SimError('NO_SUCH_ITEM');
+      if (!rules.items[cmd.item]) throw new SimError('NO_SUCH_ITEM');
       if (!isTradable(rules, cmd.item)) throw new SimError('NOT_TRADABLE');
 
       // Der strukturelle Riegel gegen Escrow-als-Lager (§8).
       if (s.orders.length >= rules.orderSlots) throw new SimError('NO_ORDER_SLOTS');
 
       // Preisband: Was eingestellt wird, muss plausibel verkäuflich sein —
-      // sonst wäre der Auftrag nur ein Parkplatz für Ware.
-      const min = Math.floor((def.npcPrice * rules.priceBandMinPct) / 100);
-      const max = Math.floor((def.npcPrice * rules.priceBandMaxPct) / 100);
-      if (cmd.price < min || cmd.price > max) throw new SimError('PRICE_OUT_OF_BAND');
+      // sonst wäre der Auftrag nur ein Parkplatz für Ware. Gerechnet in
+      // `priceBand`, damit die Oberfläche exakt dieselben Grenzen anzeigt.
+      const band = priceBand(rules, cmd.item);
+      if (cmd.price < band.min || cmd.price > band.max) throw new SimError('PRICE_OUT_OF_BAND');
 
       if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
 
@@ -424,6 +424,33 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       next.items = items;
       next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
       next.xp = s.xp + request.xp;
+      return next;
+    }
+
+    /**
+     * Auftrag wegschicken (M6).
+     *
+     * Zwei Regeln, und beide halten die Warteschlange davon ab, ein Regal zu
+     * werden, aus dem man sich das Beste heraussucht:
+     *
+     *  1. Nur die vorderen Plätze — dieselbe Grenze wie beim Beliefern.
+     *  2. Danach eine Wartezeit, in der nichts weiter übersprungen wird.
+     *
+     * Der Nachrücker kommt aus dem Vorrat, der schon im Zustand liegt. Damit
+     * ist das hier offline gültig, obwohl Aufträge aus dem Zufall stammen: Es
+     * wird nichts gewürfelt, nur nach vorn gerückt (§5).
+     */
+    case 'SKIP_REQUEST': {
+      if (rules.requestSkipCooldownTicks <= 0) throw new SimError('SKIP_DISABLED');
+
+      const index = s.requests.findIndex((r) => r.id === cmd.requestId);
+      if (index < 0) throw new SimError('NO_SUCH_REQUEST');
+      if (index >= rules.requestSlots) throw new SimError('REQUEST_NOT_ACTIVE');
+      if (s.tick < s.skipReadyAt) throw new SimError('SKIP_ON_COOLDOWN');
+
+      const next = cloneState(s);
+      next.requests = s.requests.filter((r) => r.id !== cmd.requestId);
+      next.skipReadyAt = s.tick + rules.requestSkipCooldownTicks;
       return next;
     }
 

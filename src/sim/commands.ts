@@ -100,6 +100,20 @@ export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
  */
 export type FillRequestCommand = CommandBase & { type: 'FILL_REQUEST'; requestId: number };
 
+/**
+ * Einen Kundenauftrag wegschicken, ohne ihn zu erfüllen.
+ *
+ * Offline gültig, obwohl Aufträge aus dem Zufall kommen: Der Ersatz steht
+ * schon im Vorrat (§5). Übersprungen wird nur nach vorn gerückt, nicht neu
+ * gewürfelt — der Client bräuchte sonst einen Würfel, und genau den soll er
+ * nicht haben.
+ *
+ * Bezahlt wird mit Wartezeit statt mit Geld: `requestSkipCooldownTicks`. Eine
+ * Gebühr träfe den Falschen — wer wenig hat, säße seinen schlechten Auftrag ab,
+ * wer viel hat, kaufte sich die perfekte Auslage.
+ */
+export type SkipRequestCommand = CommandBase & { type: 'SKIP_REQUEST'; requestId: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -110,7 +124,8 @@ export type Command =
   | CancelOrderCommand
   | BuyOfferCommand
   | CollectMailCommand
-  | FillRequestCommand;
+  | FillRequestCommand
+  | SkipRequestCommand;
 
 /** Gründe, aus denen die Sim eine Aktion ablehnt. Client und Server nutzen dieselben. */
 export type SimErrorCode =
@@ -144,7 +159,11 @@ export type SimErrorCode =
   | 'OFFER_GONE'
   | 'NOTHING_TO_COLLECT'
   | 'NO_SUCH_REQUEST'
-  | 'REQUEST_NOT_ACTIVE';
+  | 'REQUEST_NOT_ACTIVE'
+  /** Der letzte übersprungene Auftrag ist noch zu frisch. */
+  | 'SKIP_ON_COOLDOWN'
+  /** Das Regelwerk erlaubt Überspringen gar nicht. */
+  | 'SKIP_DISABLED';
 
 export class SimError extends Error {
   code: SimErrorCode;

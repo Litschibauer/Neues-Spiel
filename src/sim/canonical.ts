@@ -46,6 +46,7 @@ export function canonicalize(state: State): string {
     `mail=[${mail}]`,
     `nextOrderId=${state.nextOrderId}`,
     `requests=[${requests}]`,
+    `skipReadyAt=${state.skipReadyAt}`,
   ].join('|');
 }
 
@@ -71,6 +72,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|COLLECT_MAIL`;
     case 'FILL_REQUEST':
       return `${c.seq}|${c.tick}|FILL_REQUEST|${c.requestId}`;
+    case 'SKIP_REQUEST':
+      return `${c.seq}|${c.tick}|SKIP_REQUEST|${c.requestId}`;
     default:
       throw new Error('unknown command type');
   }

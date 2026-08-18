@@ -322,3 +322,148 @@ test('zufällige Sitzungen mit Aufträgen bleiben invariant', () => {
     assert.equal(start.requests.length, rules.requestQueueMax);
   }
 });
+
+// ── Wegschicken (M6) ───────────────────────────────────────────────────────
+//
+// Die Mechanik ist klein, aber sie fasst die Warteschlange an — und die ist
+// das, was Offline-Spiel über Stunden trägt. Geprüft wird deshalb nicht nur
+// „geht", sondern vor allem: dass sie sich nicht missbrauchen lässt.
+
+const COOLDOWN = rules.requestSkipCooldownTicks;
+
+test('einen Auftrag wegschicken lässt den nächsten nachrücken', () => {
+  const state = stocked({ [WHEAT]: 40 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+
+  const before = client.state.requests.slice(0, rules.requestSlots).map((r) => r.id);
+  const vorrat = client.state.requests.length;
+
+  assert.equal(client.skipRequest(before[0]!).ok, true);
+
+  const after = client.state.requests.slice(0, rules.requestSlots).map((r) => r.id);
+  assert.ok(!after.includes(before[0]!), 'der weggeschickte Auftrag steht noch da');
+  assert.equal(client.state.requests.length, vorrat - 1, 'es ist genau einer verschwunden');
+  // Der Nachrücker kommt aus dem Vorrat, nicht aus dem Nichts: Die vorderen
+  // Plätze sind wieder voll, ohne dass jemand gewürfelt hätte.
+  assert.equal(after.length, Math.min(rules.requestSlots, vorrat - 1));
+  assert.equal(after[0], before[1], 'die Reihenfolge stimmt nicht');
+});
+
+test('DER PUNKT: bezahlt wird mit Wartezeit, nicht mit Geld', () => {
+  const state = stocked({ [WHEAT]: 40, [GOLD]: 100_000 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+  const goldBefore = count(client.state, GOLD);
+
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+  assert.equal(count(client.state, GOLD), goldBefore, 'Wegschicken hat Gold gekostet');
+
+  // Und alles Gold der Welt kauft den zweiten Versuch nicht frei.
+  const second = client.skipRequest(client.state.requests[0]!.id);
+  assert.equal(second.ok, false);
+  if (!second.ok) assert.equal(second.code, 'SKIP_ON_COOLDOWN');
+});
+
+test('nach der Wartezeit geht es wieder — auf die Sekunde genau', () => {
+  const state = stocked({ [WHEAT]: 40 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+
+  // Eine Sekunde zu früh.
+  client.advanceClock(COOLDOWN - 1);
+  const early = client.skipRequest(client.state.requests[0]!.id);
+  assert.equal(early.ok, false);
+  if (!early.ok) assert.equal(early.code, 'SKIP_ON_COOLDOWN');
+
+  // Genau auf der Grenze.
+  client.advanceClock(1);
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+});
+
+test('der Vorrat ist kein Regal: hinten wird nicht ausgesucht', () => {
+  // Ohne diese Grenze könnte man sich durch die Schlange bis zum besten
+  // Auftrag durchgraben, ohne je einen der vorderen anzufassen.
+  const state = stocked({ [WHEAT]: 40 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+
+  const hinten = client.state.requests[rules.requestSlots]!;
+  const res = client.skipRequest(hinten.id);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.code, 'REQUEST_NOT_ACTIVE');
+});
+
+test('einen Auftrag, den es nicht gibt, kann man auch nicht wegschicken', () => {
+  const state = stocked({ [WHEAT]: 40 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+
+  const res = client.skipRequest(9999);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.code, 'NO_SUCH_REQUEST');
+  // Und der Fehlschlag darf die Wartezeit nicht angestoßen haben.
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+});
+
+test('Wegschicken geht offline — der Server rechnet es kommentarlos nach', () => {
+  // Der eigentliche Anspruch: Es braucht keinen Würfel und keine Verbindung.
+  const server = new Server(fuzzStart(rules, 0, mulberry32(7)), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot);
+
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+  client.advanceClock(COOLDOWN);
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+
+  const res = server.sync(client.buildSyncRequest(), T0 + COOLDOWN * 1000);
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  assert.equal(res.divergence, false, 'Kanarienvogel meldet Abweichung');
+  assert.deepEqual(server.divergenceAlerts, []);
+});
+
+test('die Wartezeit überlebt einen Sync — sie steht im Zustand, nicht im Client', () => {
+  // Läge sie nur im Client, wäre sie mit einem Neuladen weg. Sie gehört in den
+  // Zustand, damit der Server sie nachrechnen kann — sonst wäre sie keine Regel,
+  // sondern eine Bitte an die Oberfläche.
+  const server = new Server(fuzzStart(rules, 0, mulberry32(9)), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot);
+
+  assert.equal(client.skipRequest(client.state.requests[0]!.id).ok, true);
+  const res = server.sync(client.buildSyncRequest(), T0 + 1000);
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+
+  assert.ok(res.snapshot.state.skipReadyAt > res.snapshot.state.tick, 'Wartezeit ist nicht gesetzt');
+
+  // Ein frischer Client auf demselben Snapshot erbt sie.
+  const zweiter = new Client(res.snapshot);
+  const sofort = zweiter.skipRequest(zweiter.state.requests[0]!.id);
+  assert.equal(sofort.ok, false);
+  if (!sofort.ok) assert.equal(sofort.code, 'SKIP_ON_COOLDOWN');
+});
+
+test('ein Regelwerk ohne Wartezeit kennt das Wegschicken gar nicht', () => {
+  // 0 heißt aus. Dann soll es eine klare Absage geben statt eines
+  // Überspringens ohne jede Bremse.
+  const ohne = { ...rules, requestSkipCooldownTicks: 0 };
+  const state = stocked({ [WHEAT]: 40 });
+  const cmd = { seq: 1, tick: 0, type: 'SKIP_REQUEST' as const, requestId: state.requests[0]!.id };
+
+  assert.throws(() => simulate(state, cmd, ohne), { code: 'SKIP_DISABLED' });
+});
+
+test('Wegschicken verändert nichts außer der Schlange und der Uhr', () => {
+  // Die Absicherung gegen versehentliche Nebenwirkungen: kein Gold, keine Ware,
+  // keine Erfahrung. Es ist ein Verzicht, keine Aktion mit Ertrag.
+  const state = stocked({ [WHEAT]: 40, [GOLD]: 500 });
+  const client = new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 1 });
+
+  const vorher = client.state;
+  assert.equal(client.skipRequest(vorher.requests[0]!.id).ok, true);
+  const nachher = client.state;
+
+  assert.deepEqual(nachher.items, vorher.items);
+  assert.equal(nachher.xp, vorher.xp);
+  assert.deepEqual(nachher.plots, vorher.plots);
+  assert.deepEqual(nachher.orders, vorher.orders);
+  assert.deepEqual(nachher.mail, vorher.mail);
+  assertInvariants(nachher, rules);
+});

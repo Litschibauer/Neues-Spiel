@@ -868,6 +868,108 @@ try {
     `${offersBefore} → ${offersAfter} Angebote`,
   );
 
+  // ── 8b. Menge, Preis und Wegschicken über echte Klicks ────────────────
+  //
+  // Drei Bedienelemente, die es vorher nicht gab. Sie sind der einzige Weg,
+  // wie ein Spieler eine ANDERE Menge als „alles" verkauft — und wenn sie
+  // nicht funktionieren, merkt das kein Node-Test, weil die Sim sie längst
+  // kann. Geprüft wird deshalb der Klick, nicht die Regel.
+  console.log('\n8b. Menge und Preis wählen, Auftrag wegschicken');
+
+  await evaluate(cdp, `document.querySelector('nav button[data-view="store"]').click()`);
+
+  const wheatStock = await evaluate<number>(
+    cdp,
+    `(function () {
+       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+         return x.textContent.indexOf('Weizen') === 0;
+       });
+       return c ? Number(c.querySelector('.n').textContent) : -1;
+     })()`,
+  );
+
+  // Zweimal auf Minus: aus „alles" wird „alles minus zwei".
+  await evaluate(
+    cdp,
+    `(function () {
+       var pick = document.querySelector('#sell .pick');
+       pick.querySelectorAll('button')[0].click();
+       pick.querySelectorAll('button')[0].click();
+     })()`,
+  );
+  const chosen = await evaluate<number>(cdp, `Number(document.querySelector('#sell .pick input').value)`);
+  check(
+    'Die Menge lässt sich herunterzählen, statt immer alles zu verkaufen',
+    chosen === wheatStock - 2,
+    `${wheatStock} → ${chosen}`,
+  );
+
+  const goldBefore = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  await evaluate(cdp, `document.querySelector('#sell .done').click()`);
+  await sleep(400);
+  const leftOver = await evaluate<number>(
+    cdp,
+    `(function () {
+       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+         return x.textContent.indexOf('Weizen') === 0;
+       });
+       return c ? Number(c.querySelector('.n').textContent) : -1;
+     })()`,
+  );
+  const goldAfter = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  check(
+    'Verkauft wird genau die gewählte Menge — der Rest bleibt liegen',
+    leftOver === 2 && goldAfter > goldBefore,
+    `${wheatStock} → ${leftOver} Weizen, ${goldBefore} → ${goldAfter} Gold`,
+  );
+
+  // Der Preiswähler beim Anbieten: bis ans obere Bandende und keinen weiter.
+  const band = await evaluate<{ value: number; max: number; dip: number }>(
+    cdp,
+    `(function () {
+       // Zwischen den Tipps neu abfragen: Jede Änderung zeichnet den Bereich
+       // neu, und ein Mensch tippt auch auf den Knopf, der dann dasteht.
+       var priceRow = function () { return document.querySelectorAll('#list .trade .pick')[1]; };
+       // Erst herunter, dann weit über das Band hinaus — das prüft beide
+       // Richtungen UND die Grenze, statt auf dem Höchstwert sitzen zu bleiben,
+       // auf dem der Vorschlag ohnehin startet.
+       for (var i = 0; i < 2; i++) priceRow().querySelectorAll('button')[0].click();
+       var dip = Number(priceRow().querySelector('input').value);
+       for (var j = 0; j < 50; j++) priceRow().querySelectorAll('button')[1].click();
+       var after = priceRow().querySelector('input');
+       return { value: Number(after.value), max: Number(after.max), dip: dip };
+     })()`,
+  );
+  check(
+    'Der Preis lässt sich frei wählen und nicht über das Band hinaus',
+    band.dip < band.max && band.value === band.max && band.max > 0,
+    `runter auf ${band.dip}, hoch bis höchstens ${band.max} → ${band.value}`,
+  );
+
+  // Und Wegschicken: einmal geht, sofort danach nicht mehr.
+  await evaluate(cdp, `document.querySelector('nav button[data-view="orders"]').click()`);
+  const requestsBefore = await evaluate<number>(cdp, `document.querySelectorAll('#requests .card').length`);
+  const skipLabel = await evaluate<string>(cdp, `document.querySelector('#requests .skip').textContent`);
+  await evaluate(cdp, `document.querySelector('#requests .skip').click()`);
+  await sleep(400);
+  const afterSkip = await evaluate<{ count: number; label: string; disabled: boolean }>(
+    cdp,
+    `(function () {
+       var s = document.querySelector('#requests .skip');
+       return {
+         count: document.querySelectorAll('#requests .card').length,
+         label: s ? s.textContent : '',
+         disabled: s ? s.disabled : false,
+       };
+     })()`,
+  );
+  check('Ein Auftrag lässt sich wegschicken', skipLabel === 'Wegschicken' && afterSkip.count <= requestsBefore);
+  check(
+    'Danach ist der Knopf gesperrt und sagt, wie lange noch',
+    afterSkip.disabled && /in \d/.test(afterSkip.label),
+    afterSkip.label,
+  );
+
   // ── 9. Neustart des Servers, mitten im Spiel ──────────────────────────
   //
   // Der Fall, den es im Betrieb garantiert gibt: neue Version ausrollen,

@@ -153,6 +153,16 @@ export class Client {
     return this.apply({ type: 'FILL_REQUEST', requestId } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  /**
+   * Kundenauftrag wegschicken. Kostet Wartezeit, kein Geld.
+   *
+   * Ebenfalls offline gültig: Der Nachrücker liegt schon im Vorrat, es wird
+   * nichts gewürfelt.
+   */
+  skipRequest(requestId: number): ActionResult {
+    return this.apply({ type: 'SKIP_REQUEST', requestId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   /** Beim Reconnect: nur der Log geht hoch, nie der Zustand. Winzige Payload. */
   buildSyncRequest(): SyncRequest {
     return {

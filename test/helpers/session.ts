@@ -11,7 +11,7 @@
  */
 
 import { Client } from '../../src/client/client.ts';
-import { getRuleset, levelOf, levelRecipes, nextLevel } from '../../src/sim/rules.ts';
+import { getRuleset, levelOf, levelRecipes, nextLevel, priceBand } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
 import type { MailItem, Offer } from '../../src/sim/state.ts';
@@ -156,9 +156,7 @@ function fuzzOffers(rules: Ruleset, rnd: () => number): Offer[] {
   const offers: Offer[] = [];
   for (let i = 0; i < Math.min(rules.offerSlots, sellable.length * 2); i++) {
     const item = sellable[Math.floor(rnd() * sellable.length)]!;
-    const ref = rules.items[item]!.npcPrice;
-    const min = Math.max(1, Math.floor((ref * rules.priceBandMinPct) / 100));
-    const max = Math.max(min, Math.floor((ref * rules.priceBandMaxPct) / 100));
+    const { min, max } = priceBand(rules, item);
     offers.push({
       id: i + 1,
       item,
@@ -261,6 +259,11 @@ export function playRandomSession(
           // Dasselbe für Angebote, die es nie gab oder nicht mehr gibt.
           client.buyOffer(pick(40));
           break;
+        case 5:
+          // Und für Aufträge, die man wegschicken will, ohne dass es sie gibt
+          // oder ohne dass die Wartezeit um wäre.
+          client.skipRequest(pick(40));
+          break;
         default:
           client.sellNpc(pick(rules.items.length + 1), 1 + pick(200));
           break;
@@ -297,10 +300,10 @@ export function playRandomSession(
         moves.push(() => client.sellNpc(item, 1 + pick(have)));
 
         // Preis innerhalb des Bandes wählen, sonst wäre die Aktion fast immer
-        // ungültig und der Auftragspfad bliebe ungetestet.
-        const ref = rules.items[item]!.npcPrice;
-        const min = Math.max(1, Math.floor((ref * rules.priceBandMinPct) / 100));
-        const max = Math.floor((ref * rules.priceBandMaxPct) / 100);
+        // ungültig und der Auftragspfad bliebe ungetestet. Dieselbe Funktion
+        // wie in der Sim — ein eigener Nachbau hier hätte irgendwann andere
+        // Grenzen als das, was tatsächlich gilt.
+        const { min, max } = priceBand(rules, item);
         moves.push(() => client.listOrder(item, 1 + pick(have), min + pick(max - min + 1)));
       }
 
@@ -343,6 +346,18 @@ export function playRandomSession(
           moves.push(() => client.fillRequest(request.id));
         }
       });
+    }
+
+    // Einen Auftrag wegschicken (M6). Auch der Hamster darf das — es gibt
+    // nichts aus der Hand. Nur EIN Zug, nicht einer je Auftrag: Sonst wären
+    // drei von wenigen Zügen Überspringen, und der Fuzz räumte die Schlange
+    // leer, statt zu spielen.
+    if (rules.requestSkipCooldownTicks > 0 && s.tick >= s.skipReadyAt) {
+      const open = s.requests.slice(0, rules.requestSlots);
+      if (open.length > 0) {
+        const target = open[pick(open.length)]!;
+        moves.push(() => client.skipRequest(target.id));
+      }
     }
 
     if (moves.length > 0) moves[pick(moves.length)]!();

@@ -113,7 +113,7 @@ Schicht 5 ist im Server angelegt:
 | — | `migration.test.ts` | Zwei Sorten Patch quer durch eine Offline-Phase: ein Zahlen-Patch (v1→v2) und ein **Inhalts-Patch (v2→v3), bei dem der Zustand wächst** — Log unter alter Version validiert, Zustand danach gehoben, laufende Produktion fair umgerechnet, Version nicht frei wählbar. |
 | — | `rules.test.ts` | Jeder Katalog ist widerspruchsfrei, und **Kataloge wachsen nur hinten** — die Invariante, ohne die gespeicherte Indizes ihre Bedeutung verlieren. |
 | — | `config.test.ts` | Die Betriebsregeln: Dev und Produktion teilen sich nichts, das Dev-Regelwerk kommt nicht in Produktion, die Werkbank ist dort aus. |
-| — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. |
+| — | `requests.test.ts` | Kundenaufträge: die Regel, und die Eigenschaft, die zählt — eine ganze Sitzung im Funkloch, ohne dass der Vorrat ausgeht. Dazu das Wegschicken: dass es Zeit kostet und **kein Gold**, dass die Wartezeit im Zustand steht statt im Client, und dass es hinten in der Schlange nicht greift. |
 | — | `levels.test.ts` | Erfahrung und Stufen: abgeleitet statt gespeichert, nie rückwärts, Schwellen dürfen über Versionen nur sinken — sonst würde ein Patch Spieler zurückstufen. |
 | — | `persist.test.ts` | Der Spielstand auf dem Gerät: derselbe Zustand nach dem Neustart, und der Server nimmt ihn ohne Divergenz an. |
 | — | `accounts.test.ts` | Höfe vermischen sich nicht — der Punkt, an dem ein Mehrspieler-Server steht oder fällt. Dazu: nur Hashes auf der Platte, Anlege-Bremse, kaputte Datei kostet einen Hof statt aller. |

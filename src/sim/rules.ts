@@ -239,6 +239,23 @@ export type Ruleset = {
    * verliert den Bonus, nicht das Spiel.
    */
   requestQueueMax: number;
+  /**
+   * Wartezeit zwischen zwei übersprungenen Aufträgen, in Ticks. **0 = aus.**
+   *
+   * Ein Auftrag, den man nicht erfüllen kann, blockiert sonst einen der drei
+   * Plätze, bis man ihn doch irgendwann bedient — und das ist kein
+   * interessanter Engpass, sondern nur Ärger. Also darf man ihn wegschicken.
+   *
+   * Bezahlt wird das mit **Zeit, nicht mit Geld.** Eine Gebühr träfe den
+   * falschen: Wer wenig hat, sitzt seinen schlechten Auftrag ab, wer viel hat,
+   * kauft sich die perfekte Auslage. Eine Wartezeit trifft alle gleich, lässt
+   * sich nicht umgehen und ist genau der Hebel, den ein Spiel ohne
+   * Bezahlvorteile haben darf (kein Pay2Win, Konzept-Map).
+   *
+   * Steht sie auf 0, ist Überspringen unbegrenzt möglich — dann wäre die
+   * Warteschlange allerdings ein Regal, aus dem man sich das Beste heraussucht.
+   */
+  requestSkipCooldownTicks: number;
 };
 
 // ── Katalog-Indizes ────────────────────────────────────────────────────────
@@ -441,6 +458,10 @@ const V1: Ruleset = {
   // Zwanzig auf Vorrat. Bei Produktionszeiten sind das mehrere Stunden
   // Offline-Spiel — im ersten Feldtest waren zwölf nach einer Sitzung leer.
   requestQueueMax: 20,
+  // Eine halbe Stunde. Lang genug, dass Überspringen eine Entscheidung ist,
+  // kurz genug, dass niemand einen unerfüllbaren Auftrag den ganzen Abend
+  // ansehen muss.
+  requestSkipCooldownTicks: 1800,
 };
 
 /**
@@ -501,6 +522,9 @@ const V2: Ruleset = {
 const DEV: Ruleset = {
   ...V1,
   version: 1001,
+  // Die Uhren laufen hier zehnmal schneller, also auch diese. Sonst wartete man
+  // beim Ausprobieren eine halbe Stunde auf etwas, das im Spiel Sekunden dauert.
+  requestSkipCooldownTicks: 180,
   recipes: [
     {
       id: 'wheat',
@@ -681,6 +705,24 @@ export function isTradable(rules: Ruleset, item: number): boolean {
  * einschleppen kann (§2.2). `(x + 99) / 100` abgerundet ist dasselbe wie
  * `x / 100` aufgerundet — für positive ganze Zahlen exakt.
  */
+/**
+ * Der erlaubte Preisbereich für ein Angebot — die eine Rechnung für Sim UND
+ * Oberfläche, aus demselben Grund wie bei `listingFee`.
+ *
+ * **Nie unter 1.** Das ist keine Kosmetik: Bei billiger Ware rundet das
+ * Prozentband auf 0 ab (3 × 25 % = 0,75 → 0), und ein Angebot zu 0 wäre kein
+ * Angebot, sondern ein Spieler, der seine Ware verschenkt und dafür auch noch
+ * Gebühr zahlt. Der Preiswähler in der Oberfläche stützt sich auf diese
+ * Untergrenze — was er anbietet, muss die Sim annehmen.
+ */
+export function priceBand(rules: Ruleset, item: number): { min: number; max: number } {
+  const def = rules.items[item];
+  if (!def) return { min: 1, max: 1 };
+  const min = Math.max(1, Math.floor((def.npcPrice * rules.priceBandMinPct) / 100));
+  const max = Math.max(min, Math.floor((def.npcPrice * rules.priceBandMaxPct) / 100));
+  return { min, max };
+}
+
 export function listingFee(rules: Ruleset, item: number, amount: number): number {
   const def = rules.items[item];
   if (!def) return 0;
@@ -811,6 +853,9 @@ export function validateRuleset(rules: Ruleset): string[] {
     }
   }
   if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
+  if (rules.requestSkipCooldownTicks < 0) {
+    problems.push(`Überspring-Wartezeit negativ: ${rules.requestSkipCooldownTicks}`);
+  }
   if (rules.requestQueueMax < rules.requestSlots) {
     problems.push('Auftragsvorrat kleiner als die Zahl der Slots');
   }

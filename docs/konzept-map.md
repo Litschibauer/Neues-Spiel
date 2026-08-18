@@ -156,6 +156,36 @@ Und sie ist der erste Ort, an dem **Zufall und Offline zusammenkommen**: Der Ser
 würfelt die Aufträge im Voraus und gibt einen Stapel mit dem Snapshot mit. Der
 Client verbraucht ihn, ohne je selbst zu würfeln — Falle 3 unten, in Code gegossen.
 
+#### Einen Auftrag wegschicken
+
+Ein Auftrag, den man nicht erfüllen kann, blockiert sonst einen der drei Plätze,
+bis man ihn irgendwann doch bedient. Das ist kein interessanter Engpass, sondern
+Ärger. Also darf man ihn wegschicken — und **bezahlt mit Zeit, nicht mit Geld**
+(`requestSkipCooldownTicks`, aktuell 30 Minuten).
+
+Das ist die wichtigste Zeile daran. Eine Gebühr träfe den Falschen: Wer wenig
+hat, sitzt seinen schlechten Auftrag ab; wer viel hat, kauft sich die perfekte
+Auslage. Eine Wartezeit trifft alle gleich und lässt sich nicht umgehen — genau
+der Hebel, den ein Spiel ohne Bezahlvorteile haben darf.
+
+Drei Regeln halten die Schlange davon ab, ein Regal zu werden:
+
+| Regel | Wogegen |
+| --- | --- |
+| Nur die vorderen `requestSlots` | Sonst gräbt man sich bis zum besten Auftrag durch |
+| Danach Wartezeit | Sonst ist Überspringen kostenlos und die Auslage immer perfekt |
+| Kein Ertrag — kein Gold, keine Ware, kein XP | Es ist ein Verzicht, keine Aktion |
+
+**Offline gültig**, obwohl Aufträge aus dem Zufall stammen: Der Nachrücker liegt
+schon im Vorrat (§5). Es wird nichts gewürfelt, nur nach vorn gerückt.
+
+Die Wartezeit steht als **Zeitpunkt** im Zustand (`skipReadyAt`), nicht als
+Restzeit. Sonst müsste sie bei jedem Zeitfortschritt mitgezählt werden — eine
+zweite Stelle, an der Client und Server auseinanderlaufen können. So ist es ein
+Vergleich gegen `tick` und sonst nichts. Nebeneffekt, der zufällig richtig ist:
+Ändert ein Patch die Wartezeit, wartet, wer schon wartet, die Zeit zu Ende, die
+galt, als er sich entschieden hat.
+
 ### M7 · Ausbauen und Freischalten 🟢 ✅ gebaut
 „Zahle Kosten, ändere dauerhaft einen Parameter." Steht als `BUY` samt Ausbaustufen
 je Platz. Trägt heute schon „Gehege kaufen" und „Hühner kaufen" — zwei Dinge, die

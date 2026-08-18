@@ -21,6 +21,7 @@ import { Client } from './client.ts';
 import type { Command } from '../sim/commands.ts';
 import { getRuleset } from '../sim/rules.ts';
 import { simulateAll } from '../sim/sim.ts';
+import { normalizeState } from '../sim/state.ts';
 import type { Snapshot } from '../server/server.ts';
 
 /** Was ein Neustart überleben muss. */
@@ -73,13 +74,16 @@ export type RestoreResult = {
 export function restoreClient(data: PersistedClient): RestoreResult {
   if (data.version !== 1) throw new Error(`unbekannter Client-Speicherstand: ${data.version}`);
 
-  const client = new Client(data.snapshot, data.deviceId);
-  const rules = getRuleset(data.snapshot.rulesetVersion);
+  // Derselbe Grund wie auf dem Server: Der Stand im Gerät kann aus einer Zeit
+  // stammen, in der es ein Feld noch nicht gab.
+  const snapshot = { ...data.snapshot, state: normalizeState(data.snapshot.state) };
+  const client = new Client(snapshot, data.deviceId);
+  const rules = getRuleset(snapshot.rulesetVersion);
 
   let queueDropped = false;
   if (data.queue.length > 0) {
     try {
-      client.state = simulateAll(data.snapshot.state, data.queue, rules);
+      client.state = simulateAll(snapshot.state, data.queue, rules);
       client.queue = [...data.queue];
       client.localTick = data.queue[data.queue.length - 1]!.tick;
     } catch {

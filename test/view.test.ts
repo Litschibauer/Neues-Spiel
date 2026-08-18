@@ -214,3 +214,91 @@ test('das Modell rechnet keine Regel nach, es liest sie ab', () => {
     assert.deepEqual(p.upgrade?.cost ?? null, next?.cost ?? null);
   });
 });
+
+// ── Wegschicken (M6) ───────────────────────────────────────────────────────
+
+test('Wegschicken ist erlaubt, solange die Wartezeit abgelaufen ist', () => {
+  const base = initialState(rules);
+  const withRequests = {
+    ...base,
+    requests: [1, 2, 3, 4, 5].map((id) => ({
+      id,
+      wants: [{ item: WHEAT, amount: 99 }],
+      reward: [{ item: GOLD, amount: 10 }],
+      xp: 1,
+    })),
+  };
+
+  const v = farmView(withRequests, rules);
+  assert.equal(v.skip.enabled, true);
+  assert.equal(v.skip.ready, true);
+  assert.equal(v.skip.readyIn, 0);
+  assert.equal(v.skip.cooldownTicks, rules.requestSkipCooldownTicks);
+
+  // Nur die vorderen Plätze — hinten ist Vorrat, kein Regal zum Aussuchen.
+  const skippable = v.requests.filter((r) => r.skippable);
+  assert.equal(skippable.length, rules.requestSlots);
+  assert.ok(v.requests.filter((r) => r.waiting).every((r) => !r.skippable));
+});
+
+test('während der Wartezeit sagt das Modell, WIE LANGE noch', () => {
+  // Ein grauer Knopf ohne Zahl sieht aus wie ein kaputter Knopf.
+  const base = initialState(rules);
+  const wartend = {
+    ...base,
+    tick: 100,
+    skipReadyAt: 400,
+    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1 }],
+  };
+
+  const v = farmView(wartend, rules);
+  assert.equal(v.skip.ready, false);
+  assert.equal(v.skip.readyIn, 300);
+  assert.ok(v.requests.every((r) => !r.skippable));
+});
+
+test('kennt ein Regelwerk das Wegschicken nicht, taucht es gar nicht erst auf', () => {
+  const ohne = { ...rules, requestSkipCooldownTicks: 0 };
+  const state = {
+    ...initialState(rules),
+    requests: [{ id: 1, wants: [{ item: WHEAT, amount: 1 }], reward: [], xp: 1 }],
+  };
+
+  const v = farmView(state, ohne);
+  assert.equal(v.skip.enabled, false);
+  assert.equal(v.skip.ready, false);
+  assert.ok(v.requests.every((r) => !r.skippable));
+});
+
+// ── Mengen und Preise beim Verkaufen ───────────────────────────────────────
+
+test('das Modell liefert die Grenzen, die eine Mengen- und Preiswahl braucht', () => {
+  // Die Oberfläche darf das Preisband nicht selbst ausrechnen — sonst gäbe es
+  // zwei Wahrheiten, und die Sim lehnte ab, was die Anzeige erlaubt hat.
+  const v = farmView(withItems({ [WHEAT]: 12 }), rules);
+  const wheat = v.stock.find((s) => s.item === WHEAT)!;
+
+  assert.equal(wheat.amount, 12, 'die Obergrenze der Menge steht im Modell');
+  assert.ok(wheat.bandMin >= 1, 'ein Mindestpreis unter 1 wäre kein Preis');
+  assert.ok(wheat.bandMax >= wheat.bandMin);
+  assert.ok(wheat.npcPrice > 0, 'der Festpreis des Händlers fehlt');
+
+  // Und jeder Preis im Band muss von der Sim akzeptiert werden — genau das ist
+  // die Zusage, auf die sich der Preiswähler stützt.
+  for (let price = wheat.bandMin; price <= wheat.bandMax; price++) {
+    const state = withItems({ [WHEAT]: 12, [GOLD]: 1000 });
+    const cmd = { seq: 1, tick: 0, type: 'LIST_ORDER' as const, item: WHEAT, amount: 1, price };
+    assert.doesNotThrow(() => simulate(state, cmd, rules), `Preis ${price} wurde abgelehnt`);
+  }
+
+  // Einen darüber lehnt sie ab — die Grenze ist also echt und nicht nur Zierde.
+  assert.throws(
+    () =>
+      simulate(
+        withItems({ [WHEAT]: 12, [GOLD]: 1000 }),
+        { seq: 1, tick: 0, type: 'LIST_ORDER', item: WHEAT, amount: 1, price: wheat.bandMax + 1 },
+        rules,
+      ),
+    { code: 'PRICE_OUT_OF_BAND' },
+  );
+});

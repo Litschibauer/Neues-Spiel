@@ -287,3 +287,39 @@ Auf dem Server steht dafür eine Obergrenze (`NEUES_SPIEL_MAX_EVENT_STREAMS`,
 Standard 2000): Jede offene Verbindung kostet Speicher, auch wenn stundenlang
 nichts passiert, und auf einer Kiste mit 1 GB ist das die Zahl, an der sie kippt.
 `/health` gibt sie als `streams` aus.
+
+
+## Menge und Preis — warum das mehr Arbeit war als es aussieht
+
+Lange verkaufte ein Tipp **alles** und bot **alles zum Höchstpreis** an. Das war
+kein Design, sondern eine Abkürzung: Die Sim konnte Mengen und Preise von Anfang
+an, nur die Oberfläche fragte nicht danach.
+
+Jetzt gibt es Zahlenwähler — beim Händler nur die Menge (der Preis steht fest),
+am Markt Menge **und** Preis. Drei Dinge daran sind nicht offensichtlich:
+
+**1. Die Auswahl darf nicht im Zeichnen leben.** `render()` läuft jede Sekunde.
+Läge die gewählte Menge im DOM, spränge sie jede Sekunde auf den Vorschlag
+zurück. Sie liegt deshalb in `picks`, außerhalb — das Zeichnen liest sie nur.
+
+**2. Während jemand tippt, wird nicht neu gezeichnet.** Ein Neuaufbau nähme dem
+Zahlenfeld den Fokus, und man käme über die erste Ziffer nicht hinaus. Solange
+ein `<input>` im Lagerbereich den Fokus hat, bleibt der Bereich stehen; beim
+Verlassen des Feldes zieht die Anzeige nach.
+
+**3. Jeder Knopf rechnet mit dem JETZIGEN Wert, nicht mit dem von eben.** Klingt
+nach Kleinigkeit, ist der Unterschied zwischen „drei Tipps auf Plus erhöhen um
+drei" und „um eins": Jede Änderung zeichnet neu, und ein Tipp, der noch auf dem
+alten Knopf landet, würde sonst denselben Schritt wiederholen. Dasselbe gilt für
+den Aktionsknopf — er liest Menge und Preis frisch aus `picks`, sonst verkaufte
+er die Zahl, die beim letzten Zeichnen dastand.
+
+Die Grenzen kommen aus dem Anzeigemodell, nicht aus der Seite: `amount` als
+Obergrenze, `bandMin`/`bandMax` fürs Preisband. Was der Wähler zulässt, muss die
+Sim annehmen — deshalb rechnet `priceBand()` beide Grenzen an genau einer Stelle
+für Sim und Oberfläche.
+
+Dabei fiel ein echter Fehler auf: Bei billiger Ware rundete das Prozentband nach
+unten auf **0** ab (3 × 25 % = 0,75 → 0). Ein Angebot zu 0 war also erlaubt —
+Ware verschenken und dafür Gebühr zahlen. `priceBand()` zieht jetzt eine
+Untergrenze von 1.
