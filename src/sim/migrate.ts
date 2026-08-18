@@ -97,6 +97,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['1->2', RETIME],
 
   ['2->3', GROW_AND_RETIME],
+  ['3->4', GROW_AND_RETIME],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

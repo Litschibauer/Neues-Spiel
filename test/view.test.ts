@@ -318,3 +318,51 @@ test('die Auswahl nennt Kosten, Dauer und Ertrag — alles aus dem Regelwerk', (
   assert.equal(corn.inputs[0]!.item, corn.output.item);
   assert.ok(corn.output.amount > corn.inputs[0]!.amount);
 });
+
+test('ein gesperrtes Rezept steht sichtbar in der Auswahl, statt zu fehlen', () => {
+  // Sonst rätselt der Spieler, wo die Butter geblieben ist — oder ob es sie
+  // überhaupt gibt.
+  const v4 = getRuleset(4);
+  const DAIRY = v4.plots.findIndex((p) => p.id === 'dairy');
+  const base = initialState(v4);
+  const plots = base.plots.slice();
+  plots[DAIRY] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+
+  const jung = farmView({ ...base, xp: v4.levelThresholds[4]!, plots }, v4).plots[DAIRY]!;
+  assert.equal(jung.options.length, 3, 'die Molkerei zeigt nicht alle drei Rezepte');
+  assert.deepEqual(
+    jung.options.map((o) => o.id),
+    ['cream', 'butter', 'cheese'],
+  );
+  assert.deepEqual(
+    jung.options.map((o) => o.unlocked),
+    [true, false, false],
+  );
+  assert.deepEqual(
+    jung.options.map((o) => o.minPlayerLevel),
+    [6, 8, 10],
+  );
+
+  // Und was gesperrt ist, gilt nie als startbar — auch mit allen Zutaten.
+  const items = base.items.slice();
+  items[v4.items.findIndex((i) => i.id === 'milk')] = 50;
+  const voll = farmView({ ...base, xp: v4.levelThresholds[4]!, items, plots }, v4).plots[DAIRY]!;
+  assert.equal(voll.options[1]!.affordable, false, 'Butter gilt als machbar');
+  assert.equal(voll.next?.id, 'cream');
+});
+
+test('ein Platz, dessen Rezepte alle noch gesperrt sind, sagt „Stufe" statt „Zutaten"', () => {
+  const v4 = getRuleset(4);
+  const DAIRY = v4.plots.findIndex((p) => p.id === 'dairy');
+  const gesperrt = {
+    ...v4,
+    recipes: v4.recipes.map((r) => (r.id === 'cream' ? { ...r, minPlayerLevel: 12 } : r)),
+  };
+  const base = initialState(v4);
+  const plots = base.plots.slice();
+  plots[DAIRY] = { level: 1, recipe: EMPTY_PLOT, startedAt: 0 };
+
+  const v = farmView({ ...base, xp: v4.levelThresholds[4]!, plots }, gesperrt).plots[DAIRY]!;
+  assert.equal(v.blocked, 'level');
+  assert.equal(v.tap, 'none');
+});

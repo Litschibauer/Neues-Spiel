@@ -16,6 +16,7 @@ export type RecipeDef = {
   output: ItemStack;
   durationTicks: number;
   xp: number;
+  minPlayerLevel?: number;
 };
 
 export type LevelDef = {
@@ -372,11 +373,67 @@ const V3: Ruleset = {
   siloCapacity: 150,
 };
 
-const DEV: Ruleset = {
+const CHEESE = 8;
+const R_CHEESE = 7;
+
+const LEVELS_V4: readonly number[] = [40, 120, 280, 560, 1000, 1700, 2800, 4400, 6800, 10000, 14500];
+
+const V4: Ruleset = {
   ...V3,
+  version: 4,
+  levelThresholds: LEVELS_V4,
+
+  items: [
+    ...V3.items,
+    { id: 'cheese', storable: true, npcPrice: 420, npcBuyPrice: 0 },
+  ],
+
+  recipes: [
+    ...V3.recipes.slice(0, 5),
+    { ...V3.recipes[5]!, minPlayerLevel: 6 },
+    { ...V3.recipes[6]!, minPlayerLevel: 8 },
+    {
+      id: 'cheese',
+      inputs: [{ item: MILK, amount: 3 }],
+      output: { item: CHEESE, amount: 1 },
+      durationTicks: 1800,
+      xp: 70,
+      minPlayerLevel: 10,
+    },
+  ],
+
+  plots: V3.plots.map((p) => {
+    if (p.id === 'dairy') {
+      return {
+        ...p,
+        levels: [
+          {
+            label: 'Molkerei',
+            cost: gold(2000),
+            recipes: [R_CREAM, R_BUTTER, R_CHEESE],
+            minPlayerLevel: 6,
+          },
+        ],
+      };
+    }
+    return p;
+  }),
+
+  requestTemplates: [
+    ...V3.requestTemplates,
+    { id: 'cheese-order', wants: [want(CHEESE, 1)], reward: gold(630), xp: 110 },
+    { id: 'cheese-big', wants: [want(CHEESE, 3)], reward: gold(1890), xp: 330 },
+    { id: 'mixed-cheese', wants: [want(CHEESE, 1), want(BUTTER, 1)], reward: gold(1020), xp: 190 },
+  ],
+
+  siloCapacity: 180,
+};
+
+const DEV: Ruleset = {
+  ...V4,
   version: 1001,
   requestSkipCooldownTicks: 180,
-  recipes: V3.recipes.map((r) => {
+  recipes: V4.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -386,14 +443,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
   [2, V2],
   [3, V3],
+  [4, V4],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 3;
+export const LATEST_RULESET_VERSION = 4;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -406,6 +464,14 @@ export function getRuleset(version: number): Ruleset {
 export function levelRecipes(rules: Ruleset, plot: number, level: number): readonly number[] {
   if (level <= 0) return [];
   return rules.plots[plot]?.levels[level - 1]?.recipes ?? [];
+}
+
+export function recipeMinLevel(rules: Ruleset, recipe: number): number {
+  return rules.recipes[recipe]?.minPlayerLevel ?? 1;
+}
+
+export function recipeUnlocked(rules: Ruleset, recipe: number, playerLevel: number): boolean {
+  return playerLevel >= recipeMinLevel(rules, recipe);
 }
 
 export function levelOf(rules: Ruleset, xp: number): number {
@@ -603,6 +669,26 @@ export function validateRuleset(rules: Ruleset): string[] {
       seen.add(stack.item);
     }
   }
+  rules.plots.forEach((plot, i) => {
+    plot.levels.forEach((level, li) => {
+      if (level.recipes.length === 0) return;
+      const openAt = level.minPlayerLevel ?? 1;
+      const usable = level.recipes.some((r) => recipeMinLevel(rules, r) <= openAt);
+      if (!usable) {
+        problems.push(
+          `Platz ${plot.id} Stufe ${li + 1} ist ab Stufe ${openAt} kaufbar, ` +
+            `aber kein Rezept darauf ist vor Stufe ` +
+            `${Math.min(...level.recipes.map((r) => recipeMinLevel(rules, r)))} erlaubt`,
+        );
+      }
+    });
+  });
+  rules.recipes.forEach((r, i) => {
+    const max = rules.levelThresholds.length + 1;
+    if ((r.minPlayerLevel ?? 1) > max) {
+      problems.push(`Rezept ${r.id} verlangt Stufe ${r.minPlayerLevel}, es gibt nur ${max}`);
+    }
+  });
   if (rules.requestSlots < 1) problems.push('Auftrags-Slots < 1');
   if (rules.requestSkipCooldownTicks < 0) {
     problems.push(`Überspring-Wartezeit negativ: ${rules.requestSkipCooldownTicks}`);

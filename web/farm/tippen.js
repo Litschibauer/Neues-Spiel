@@ -57,9 +57,11 @@ function openPicker(p) {
       '<div class="body">' +
       '<div class="top">' + nameOf(o.id) + '</div>' +
       '<div class="sub">' +
-      (o.inputs.length > 0 ? costText(o.inputs) + ' · ' : '') +
-      timeText(o.durationTicks) +
-      (o.affordable ? '' : ' · Zutaten fehlen') +
+      (!o.unlocked
+        ? 'ab Stufe ' + o.minPlayerLevel
+        : (o.inputs.length > 0 ? costText(o.inputs) + ' · ' : '') +
+          timeText(o.durationTicks) +
+          (o.affordable ? '' : ' · Zutaten fehlen')) +
       '</div></div>' +
       '<span class="yield">+' + o.output.amount + ' ' + itemName(o.output.item) + '</span>';
     card.addEventListener('click', function () {

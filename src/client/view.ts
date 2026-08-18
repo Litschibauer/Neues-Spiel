@@ -1,5 +1,13 @@
 import type { Ruleset } from '../sim/rules.ts';
-import { levelOf, levelStartedAt, listingFee, nextLevelAt, priceBand } from '../sim/rules.ts';
+import {
+  levelOf,
+  levelStartedAt,
+  listingFee,
+  nextLevelAt,
+  priceBand,
+  recipeMinLevel,
+  recipeUnlocked,
+} from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import { EMPTY_PLOT, count, stored } from '../sim/state.ts';
 
@@ -38,6 +46,8 @@ export type RecipeOption = {
   output: Stack;
   durationTicks: number;
   affordable: boolean;
+  unlocked: boolean;
+  minPlayerLevel: number;
 };
 
 export type RequestView = {
@@ -108,9 +118,11 @@ function recipesAt(rules: Ruleset, plot: number, level: number): readonly number
 }
 
 function startable(state: State, rules: Ruleset, plot: number): number {
+  const playerLevel = levelOf(rules, state.xp);
   for (const index of recipesAt(rules, plot, state.plots[plot]?.level ?? 0)) {
     const recipe = rules.recipes[index];
     if (!recipe) continue;
+    if (!recipeUnlocked(rules, index, playerLevel)) continue;
     if (recipe.inputs.every((input) => count(state, input.item) >= input.amount)) return index;
   }
   return -1;
@@ -155,7 +167,11 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
             inputs: def.inputs.map((x) => ({ item: x.item, amount: x.amount })),
             output: { item: def.output.item, amount: def.output.amount },
             durationTicks: def.durationTicks,
-            affordable: def.inputs.every((x) => count(state, x.item) >= x.amount),
+            affordable:
+              recipeUnlocked(rules, index, playerLevel) &&
+              def.inputs.every((x) => count(state, x.item) >= x.amount),
+            unlocked: recipeUnlocked(rules, index, playerLevel),
+            minPlayerLevel: recipeMinLevel(rules, index),
           },
         ];
       });
@@ -170,7 +186,7 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     if (upgrade && !upgrade.unlocked) blocked = 'level';
     else if (upgrade && !upgrade.affordable) blocked = 'cost';
   } else if (nextRecipe < 0) {
-    blocked = 'inputs';
+    blocked = options.some((o) => o.unlocked) ? 'inputs' : 'level';
   } else {
     tap = 'start';
   }

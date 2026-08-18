@@ -12,7 +12,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 | Lauscht auf | `0.0.0.0` — im LAN erreichbar | `127.0.0.1` — **nur lokal** |
 | Spielstand | `data/dev/save.json` | `data/prod/save.json` |
 | Token | `data/dev/token` | `data/prod/token` |
-| Regelwerk | v1001 — Sekundenuhren | v3 — echte Zeiten |
+| Regelwerk | v1001 — Sekundenuhren | v4 — echte Zeiten |
 | Werkbank `/admin` | an | **aus** |
 
 Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version
@@ -855,7 +855,7 @@ Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 | `NEUES_SPIEL_TLS_CERT` / `_KEY` | — | Eigenes Zertifikat; beide oder keins |
 | `NEUES_SPIEL_TLS_CA` | — | Zwischenzertifikate, falls nötig |
 | `NEUES_SPIEL_BEHIND_PROXY` | `0` | Ein TLS-Endpunkt steht davor; erlaubt `x-forwarded-for` |
-| `NEUES_SPIEL_RULESET` | dev 1001, prod 3 | Zielversion des Regelwerks |
+| `NEUES_SPIEL_RULESET` | dev 1001, prod 4 | Zielversion des Regelwerks |
 | `NEUES_SPIEL_ADMIN` | dev `1`, prod `0` | Werkbank an/aus (Riegel 3) |
 | `NEUES_SPIEL_VERSION` | `unbekannt` | Steht in `/health` |
 | `NEUES_SPIEL_DB` | `data/<umgebung>/spiel.db` | Pfad zur Datenbank |

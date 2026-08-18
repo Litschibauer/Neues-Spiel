@@ -45,7 +45,11 @@ function plotStatus(p) {
   if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
 
   if (p.options.length > 1) {
-    return p.options.map(function (o) { return nameOf(o.id); }).join(' oder ');
+    var offen = p.options.filter(function (o) { return o.unlocked; });
+    var spaeter = p.options.length - offen.length;
+    if (offen.length === 0) return 'ab Stufe ' + p.options[0].minPlayerLevel;
+    return offen.map(function (o) { return nameOf(o.id); }).join(' oder ')
+      + (spaeter > 0 ? ' · +' + spaeter + ' später' : '');
   }
   if (p.tap === 'start') {
     var n = p.next;

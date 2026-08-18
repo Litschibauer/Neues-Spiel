@@ -1,6 +1,6 @@
 var NAMES = {
   gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier',
-  corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter',
+  corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
   mill: 'Mühle', dairy: 'Molkerei',
 };
 function nameOf(id) { return NAMES[id] || id; }

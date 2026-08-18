@@ -10,6 +10,7 @@ import {
   levelOf,
   levelStartedAt,
   nextLevelAt,
+  validateRuleset,
 } from '../src/sim/rules.ts';
 import { initialState, count } from '../src/sim/state.ts';
 import { assertInvariants } from '../src/sim/migrate.ts';
@@ -230,4 +231,111 @@ test('sich hochspielen funktioniert wirklich — und in erträglicher Zeit', () 
   assert.equal(res.divergence, false);
   assert.equal(res.snapshot.state.xp, client.state.xp);
   assertInvariants(res.snapshot.state, rules);
+});
+
+const V4 = getRuleset(4);
+const DAIRY = V4.plots.findIndex((p) => p.id === 'dairy');
+const PASTURE = V4.plots.findIndex((p) => p.id === 'pasture-1');
+const MILK_ITEM = V4.items.findIndex((i) => i.id === 'milk');
+
+function withDairy(xp: number) {
+  const base = initialState(V4);
+  const items = base.items.slice();
+  items[V4.currency] = 100_000;
+  items[MILK_ITEM] = 20;
+  const plots = base.plots.slice();
+  plots[DAIRY] = { level: 1, recipe: -1, startedAt: 0 };
+  return { ...base, xp, items, plots };
+}
+
+const recipeIndex = (id: string) => V4.recipes.findIndex((r) => r.id === id);
+const levelFor = (xp: number) => levelOf(V4, xp);
+
+test('eine Kette schaltet auf EINER Stufe frei — Tiefe steckt in den Rezepten', () => {
+  const pasture = V4.plots[PASTURE]!.levels[0]!.minPlayerLevel;
+  const dairy = V4.plots[DAIRY]!.levels[0]!.minPlayerLevel;
+  assert.equal(pasture, dairy, 'Kuhgehege und Molkerei öffnen nicht zusammen');
+
+  const stufen = V4.plots[DAIRY]!.levels[0]!.recipes.map((r) => V4.recipes[r]!.minPlayerLevel ?? 1);
+  assert.deepEqual(
+    [...stufen].sort((a, b) => a - b),
+    stufen,
+    'die Rezepte der Molkerei sind nicht aufsteigend gestaffelt',
+  );
+  assert.ok(stufen[stufen.length - 1]! > stufen[0]!, 'alle Rezepte auf derselben Stufe');
+});
+
+test('ein gestaffeltes Rezept ist vor seiner Stufe gesperrt und danach erlaubt', () => {
+  const butter = recipeIndex('butter');
+  const need = V4.recipes[butter]!.minPlayerLevel!;
+  const thresholds = V4.levelThresholds;
+
+  const zuFrueh = new Client({
+    state: withDairy(thresholds[need - 3]!),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 4,
+  });
+  assert.ok(levelFor(zuFrueh.state.xp) < need);
+  const res = zuFrueh.start(DAIRY, butter);
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.code, 'PLAYER_LEVEL_TOO_LOW');
+
+  const reif = new Client({
+    state: withDairy(thresholds[need - 2]!),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 4,
+  });
+  assert.equal(levelFor(reif.state.xp), need);
+  assert.equal(reif.start(DAIRY, butter).ok, true);
+});
+
+test('DER PUNKT: Geld kauft kein Rezept frei', () => {
+  // Der Fall, für den das Stufentor überhaupt existiert — reich, aber neu.
+  const reich = new Client({
+    state: withDairy(0),
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 4,
+  });
+  for (const id of ['cream', 'butter', 'cheese']) {
+    const r = reich.start(DAIRY, recipeIndex(id));
+    assert.equal(r.ok, false, `${id} ließ sich mit Gold erkaufen`);
+    if (!r.ok) assert.equal(r.code, 'PLAYER_LEVEL_TOO_LOW');
+  }
+});
+
+test('was später kommt, zahlt besser — sonst wäre Warten sinnlos', () => {
+  const proMinute = (id: string) => {
+    const r = V4.recipes[recipeIndex(id)]!;
+    const ein = r.inputs.reduce((s, i) => s + i.amount * V4.items[i.item]!.npcPrice, 0);
+    const aus = r.output.amount * V4.items[r.output.item]!.npcPrice;
+    return (aus - ein) / (r.durationTicks / 60);
+  };
+  const kette = ['cream', 'butter', 'cheese'];
+  for (let i = 1; i < kette.length; i++) {
+    assert.ok(
+      proMinute(kette[i]!) > proMinute(kette[i - 1]!),
+      `${kette[i]} zahlt nicht besser als ${kette[i - 1]}`,
+    );
+  }
+});
+
+test('kein Gebäude, das man kaufen kann und nicht benutzen darf', () => {
+  // Die Regel steht in `validateRuleset`; hier die Gegenprobe, dass sie beißt.
+  const kaputt = {
+    ...V4,
+    plots: V4.plots.map((p) =>
+      p.id === 'dairy'
+        ? { ...p, levels: [{ ...p.levels[0]!, recipes: [recipeIndex('cheese')] }] }
+        : p,
+    ),
+  };
+  const problems = validateRuleset(kaputt);
+  assert.ok(
+    problems.some((m) => m.includes('dairy')),
+    `der Wächter schweigt: ${problems.join(' | ')}`,
+  );
+  assert.deepEqual(validateRuleset(V4), [], 'v4 selbst ist nicht sauber');
 });

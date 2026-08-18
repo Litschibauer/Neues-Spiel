@@ -7,6 +7,7 @@ import {
   listingFee,
   nextLevel,
   priceBand,
+  recipeUnlocked,
 } from './rules.ts';
 import type { State } from './state.ts';
 import {
@@ -84,6 +85,9 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       if (!levelRecipes(rules, cmd.plot, plot.level).includes(cmd.recipe)) {
         throw new SimError('RECIPE_NOT_ALLOWED');
+      }
+      if (!recipeUnlocked(rules, cmd.recipe, levelOf(rules, s.xp))) {
+        throw new SimError('PLAYER_LEVEL_TOO_LOW');
       }
 
       const recipe = rules.recipes[cmd.recipe];

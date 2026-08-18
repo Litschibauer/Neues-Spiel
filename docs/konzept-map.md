@@ -111,6 +111,53 @@ Tiefer heißt besser — aber Eier bleiben stark genug, dass die günstige Kette
 nicht wertlos wird. Kundenaufträge zahlen durchweg das Anderthalbfache des
 Händlerpreises, auch für die neuen Waren.
 
+#### v4: Ketten schalten zusammen frei, Tiefe steckt in den Rezepten
+
+In v3 lag das Kuhgehege auf Stufe 6 und die Molkerei auf 7. Nachgemessen war
+das sinnlos: **Kein einziges Stufentor greift jemals bei einem normalen
+Spieler.** Gold wird ausgegeben, XP nur gesammelt — nach jedem Kauf ist die
+Kasse leer, die Stufe bleibt. Deshalb liegt die Stufe strukturell immer vorn.
+
+| Platz | Stufe frei ab | tatsächlich gekauft | Differenz |
+| --- | --- | --- | --- |
+| Mühle | 25 min | 60 min | 35 min |
+| Gehege 1 | 40 min | 130 min | 90 min |
+| Kuhgehege | 185 min | 560 min | 375 min |
+| Molkerei (v3) | 310 min | 960 min | **650 min** |
+
+Ein Stufentor auf einem **Platz** kann nur bei einem Fall greifen: viel Geld,
+wenig Spielzeit. Als Tempo-Regler taugt es nicht.
+
+**Also andersherum.** Seit v4 schaltet eine Kette auf *einer* Stufe frei —
+Kuhgehege und Molkerei beide auf 6 —, und die Tiefe steckt in den Rezepten:
+
+| Rezept | ab Stufe | Gold/min |
+| --- | --- | --- |
+| Sahne | 6 | 5,5 |
+| Butter | 8 | 8,0 |
+| Käse | 10 | 11,0 |
+
+Das ist der bessere Hebel, weil er **gestaffelt** wirkt statt binär: Wer reich
+und neu ist, bekommt eine Molkerei, die Sahne macht — und muss trotzdem spielen,
+bis sie Käse kann. `RecipeDef.minPlayerLevel` ist dafür eine Zeile im Katalog;
+die Sim prüft sie in `START`, das Anzeigemodell reicht sie als
+`options[].unlocked` durch.
+
+Zwei Regeln kamen dazu, beide in `validateRuleset`:
+
+- **Kein Gebäude, das man kaufen kann und nicht benutzen darf.** Auf jeder
+  kaufbaren Stufe muss mindestens ein Rezept schon offen sein. Sonst zahlt
+  jemand 2000 Gold für ein Haus, das erst vier Stufen später etwas tut.
+- **Kein Rezept über dem Höchstlevel.** Eine Sperre bei Stufe 15 in einer Welt
+  mit zwölf Stufen ist kein Tor, sondern ein Loch.
+
+Die Leiter wurde dafür von neun auf zwölf Stufen verlängert. Anhängen ist
+erlaubt — bestehende Schwellen dürfen nur *sinken*, und keine tut das.
+
+**Und die gesperrten Rezepte bleiben sichtbar.** Im Wähler steht „Butter — ab
+Stufe 8", ausgegraut. Dieselbe Regel wie beim fehlenden Maiskorn: Was man nicht
+kann, ist eine Information; was fehlt, ist ein Rätsel.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 
