@@ -117,6 +117,35 @@ function artBoden(zeigeRaster) {
   return out;
 }
 
+function passtHin(plot, gx, gy) {
+  var g = rules.grid;
+  if (!g) return false;
+  var groesse = rules.plots[plot].size || { w: 1, h: 1 };
+  if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return false;
+
+  var andere = client.preview().plots;
+  for (var i = 0; i < andere.length; i++) {
+    if (i === plot || andere[i].gx < 0) continue;
+    var s2 = rules.plots[i].size || { w: 1, h: 1 };
+    var frei =
+      gx + groesse.w <= andere[i].gx ||
+      andere[i].gx + s2.w <= gx ||
+      gy + groesse.h <= andere[i].gy ||
+      andere[i].gy + s2.h <= gy;
+    if (!frei) return false;
+  }
+  return true;
+}
+
+function feldFuer(plot, feld) {
+  var g = rules.grid;
+  var groesse = rules.plots[plot].size || { w: 1, h: 1 };
+  return {
+    gx: Math.max(0, Math.min(g.w - groesse.w, feld.gx - (groesse.w >> 1))),
+    gy: Math.max(0, Math.min(g.h - groesse.h, feld.gy - (groesse.h >> 1))),
+  };
+}
+
 function zeigerAufFeld(e) {
   var kasten = $('hof').getBoundingClientRect();
   var px = ((e.clientX - kasten.left) / kasten.width) * 100;

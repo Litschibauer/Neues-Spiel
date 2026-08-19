@@ -138,6 +138,14 @@
     display: block; text-align: left; transition: transform .12s;
   }
   .plot:active { transform: scale(.96); }
+  .plot { touch-action: none; }
+  .plot.zieht {
+    z-index: 90 !important; transform: scale(1.06);
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35));
+    transition: none;
+  }
+  .plot.zieht .meta { opacity: 0; }
+  .plot.zieht.geht-nicht { filter: drop-shadow(0 0 0 var(--bad)) saturate(.4); opacity: .7; }
   .plot .art { display: block; width: 100%; height: 100%; }
   .plot .meta {
     position: absolute; left: 50%; bottom: -.1rem; transform: translateX(-50%);

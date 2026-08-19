@@ -1804,6 +1804,63 @@ try {
        return t.style.left + ',' + t.style.top;
      }).join(' ')`,
   );
+  const gezogen = await evaluate<string>(
+    cdp,
+    `(function () {
+       var tile = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+         return /^Feld 2/.test(x.querySelector('.name').textContent);
+       });
+       if (!tile) return Promise.resolve('kein Feld 2');
+       var vorher = tile.style.left + ',' + tile.style.top;
+       var r = tile.getBoundingClientRect();
+       var hof = document.getElementById('hof').getBoundingClientRect();
+
+       tile.dispatchEvent(new PointerEvent('pointerdown', {
+         clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, button: 0,
+       }));
+
+       var stellen = [[.75, .45], [.25, .4], [.5, .35], [.8, .6], [.15, .55], [.6, .85]];
+       return new Promise(function (fertig) {
+         setTimeout(function () {
+           var lang = document.getElementById('setzen').hidden === false
+             && tile.classList.contains('zieht');
+           var gefolgt = false;
+           var passt = false;
+
+           for (var i = 0; i < stellen.length; i++) {
+             document.dispatchEvent(new PointerEvent('pointermove', {
+               clientX: hof.left + hof.width * stellen[i][0],
+               clientY: hof.top + hof.height * stellen[i][1],
+               bubbles: true,
+             }));
+             if (tile.style.left + ',' + tile.style.top !== vorher) gefolgt = true;
+             if (!tile.classList.contains('geht-nicht')
+                 && tile.style.left + ',' + tile.style.top !== vorher) { passt = true; break; }
+           }
+           document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+
+           setTimeout(function () {
+             var jetzt = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+               return /^Feld 2/.test(x.querySelector('.name').textContent);
+             });
+             fertig([
+               lang ? 'lang' : 'kein-langdruck',
+               gefolgt ? 'folgt' : 'klebt',
+               passt ? 'frei-gefunden' : 'nur-besetzt',
+               jetzt && jetzt.style.left + ',' + jetzt.style.top !== vorher ? 'umgezogen' : 'zurück',
+               document.getElementById('setzen').hidden ? 'banner-zu' : 'banner-offen',
+             ].join(' '));
+           }, 500);
+         }, 600);
+       });
+     })()`,
+  );
+  check(
+    'Langes Drücken hebt ein Gebäude an, Ziehen setzt es woanders ab',
+    gezogen === 'lang folgt frei-gefunden umgezogen banner-zu',
+    gezogen,
+  );
+
   check(
     'Ein gebautes Feld lässt sich verschieben',
     konnteSchieben && nachherStellen !== vorherStellen,

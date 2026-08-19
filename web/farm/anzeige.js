@@ -79,6 +79,7 @@ function plotStatus(p) {
 }
 
 function renderPlots(v) {
+  if (ziehen && ziehen.aktiv) return;
   $('hof').classList.toggle('kein-raster', !hatRaster());
 
   var scene = $('scene');
@@ -144,7 +145,11 @@ function renderPlots(v) {
     meta.appendChild(name); meta.appendChild(status);
     tile.appendChild(meta);
 
-    tile.addEventListener('click', function () { tapPlot(p.index); });
+    tile.addEventListener('click', function () {
+      if (Date.now() - klickSchlucken < 400) return;
+      tapPlot(p.index);
+    });
+    tile.addEventListener('pointerdown', function (e) { ziehStart(e, p.index, tile); });
     box.appendChild(tile);
 
     if (p.upgrade && !p.idle) {

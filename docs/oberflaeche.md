@@ -136,6 +136,15 @@ schieben, und jedes hängt an einem Ding, das man sieht:
 | Kiste | öffnet sich sofort, kein Blatt |
 | Zahnrad (Ecke) | Hofdaten, Gerät abmelden, Feldtest-Ansicht |
 
+**Verschieben ist eine Geste, kein Menü.** Lange auf ein Gebäude drücken (420 ms),
+dann folgt es dem Finger — eingerastet aufs Raster, nicht pixelgenau, damit man
+sieht, wo es landet. Besetzte Felder färben es aus, Loslassen setzt es ab.
+Zwei Dinge machen das robust: Während eines Zuges zeichnet `renderPlots` nicht
+neu (sonst wäre die Kachel mitten im Ziehen weg), und der Klick direkt nach dem
+Loslassen wird 400 ms lang geschluckt, damit sich nicht noch das Blatt öffnet.
+Der Knopf „Verschieben" im Blatt bleibt als zweiter Weg — für Mäuse und für
+alle, die die Geste nicht finden.
+
 **Der Saat-Nachkauf steht nicht im Lager.** Er taucht dort auf, wo er gebraucht
 wird: im Anpflanz-Menü, direkt unter dem Rezept, das gerade nicht geht, und nur
 solange die Zutat wirklich ausgegangen ist. Ein Vorrat, den man kaufen kann,

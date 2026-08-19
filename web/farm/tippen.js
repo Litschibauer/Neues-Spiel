@@ -164,6 +164,91 @@ $('wagen').addEventListener('click', function () { show('brett'); });
 $('bauen').addEventListener('click', function () { show('bau'); });
 
 var setzePlot = -1;
+var ziehen = null;
+var klickSchlucken = 0;
+
+function ziehStart(e, plot, tile) {
+  if (!isActive || !hatRaster() || setzePlot >= 0) return;
+  if (rules.plots[plot] && rules.plots[plot].fixed) return;
+  if (e.button !== undefined && e.button !== 0) return;
+
+  ziehen = {
+    plot: plot,
+    tile: tile,
+    x: e.clientX,
+    y: e.clientY,
+    aktiv: false,
+    ziel: null,
+    timer: setTimeout(function () { ziehLos(e); }, 420),
+  };
+}
+
+function ziehLos(e) {
+  if (!ziehen) return;
+  ziehen.aktiv = true;
+  bauModus = true;
+  $('hof').classList.add('setzt');
+  ziehen.tile.classList.add('zieht');
+  $('setzen').hidden = false;
+  $('setzen-text').textContent = plotName(ziehen.plot) + ' verschieben';
+  if (navigator.vibrate) navigator.vibrate(12);
+  render();
+  ziehZu(e);
+}
+
+function ziehZu(e) {
+  if (!ziehen || !ziehen.aktiv) return;
+  var feld = zeigerAufFeld(e);
+  if (!feld) return;
+
+  var ziel = feldFuer(ziehen.plot, feld);
+  var geht = passtHin(ziehen.plot, ziel.gx, ziel.gy);
+  ziehen.ziel = geht ? ziel : null;
+  ziehen.tile.classList.toggle('geht-nicht', !geht);
+
+  var kasten = plotKasten(ziehen.plot, { gx: ziel.gx, gy: ziel.gy });
+  ziehen.tile.style.left = kasten.left + '%';
+  ziehen.tile.style.top = kasten.top + '%';
+  ziehen.tile.style.width = kasten.width + '%';
+  ziehen.tile.style.height = kasten.height + '%';
+}
+
+function ziehEnde() {
+  if (!ziehen) return;
+  clearTimeout(ziehen.timer);
+  var war = ziehen;
+  ziehen = null;
+
+  if (!war.aktiv) return;
+
+  klickSchlucken = Date.now();
+  war.tile.classList.remove('zieht', 'geht-nicht');
+  bauModus = false;
+  $('hof').classList.remove('setzt');
+  $('setzen').hidden = true;
+
+  if (war.ziel) {
+    client.localTick = tickNow();
+    var res = client.place(war.plot, war.ziel.gx, war.ziel.gy);
+    if (res.ok) { toast(plotName(war.plot) + ' steht jetzt hier'); save(); scheduleSync(); }
+    else toast(CODES[res.code] || res.code, true);
+  }
+  render();
+}
+
+document.addEventListener('pointermove', function (e) {
+  if (!ziehen) return;
+  if (!ziehen.aktiv) {
+    var weit = Math.abs(e.clientX - ziehen.x) + Math.abs(e.clientY - ziehen.y);
+    if (weit > 12) { clearTimeout(ziehen.timer); ziehen = null; }
+    return;
+  }
+  e.preventDefault();
+  ziehZu(e);
+}, { passive: false });
+
+document.addEventListener('pointerup', ziehEnde);
+document.addEventListener('pointercancel', ziehEnde);
 
 function starteSetzen(plot, text) {
   setzePlot = plot;
