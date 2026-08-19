@@ -82,6 +82,7 @@ export type State = {
   chests: readonly Chest[];
   nextChestId: number;
   pendingBoxes: readonly number[];
+  clearedObstacles: readonly number[];
 };
 
 export function count(s: State, item: number): number {
@@ -158,6 +159,7 @@ export function initialState(rules: Ruleset): State {
     chests: [],
     nextChestId: 1,
     pendingBoxes: [],
+    clearedObstacles: [],
     skipReadyAt: 0,
   };
 }
@@ -204,6 +206,7 @@ export function normalizeState(s: State): State {
     chests: (s.chests ?? []).map((k) => ({ ...k, gx: k.gx ?? -1, gy: k.gy ?? -1 })),
     nextChestId: s.nextChestId ?? 1,
     pendingBoxes: s.pendingBoxes ?? [],
+    clearedObstacles: s.clearedObstacles ?? [],
   };
 }
 
@@ -224,6 +227,7 @@ export function cloneState(s: State): State {
     chests: s.chests,
     nextChestId: s.nextChestId,
     pendingBoxes: s.pendingBoxes,
+    clearedObstacles: s.clearedObstacles,
     skipReadyAt: s.skipReadyAt,
   };
 }

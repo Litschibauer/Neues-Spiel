@@ -265,3 +265,40 @@ test('Kisten kommen öfter als früher', () => {
   );
   assert.ok(v11.chestQueueMax! >= v9.chestQueueMax!);
 });
+
+test('eine Kiste gibt genau ein Stück — Material oder Werkzeug', () => {
+  const v12 = getRuleset(12);
+  const erlaubt = new Set(['plank', 'nail', 'saw', 'shovel', 'pickaxe']);
+
+  for (const art of v12.chestKinds!) {
+    assert.equal(art.picks, 1, `${art.id} zieht mehr als einmal`);
+    for (const drop of art.drops) {
+      assert.equal(drop.min, 1, `${art.id}: ${drop.item} mit Mindestmenge ${drop.min}`);
+      assert.equal(drop.max, 1, `${art.id}: ${drop.item} mit Höchstmenge ${drop.max}`);
+      assert.ok(
+        erlaubt.has(v12.items[drop.item]!.id),
+        `${art.id} gibt ${v12.items[drop.item]!.id} — das gehört nicht in eine Kiste`,
+      );
+    }
+  }
+
+  for (let seed = 1; seed <= 40; seed++) {
+    for (const art of [0, 1]) {
+      const beute = rollChest(art, v12, mulberry32(seed * 17 + art));
+      assert.equal(beute.length, 1, 'eine Kiste, ein Stück');
+      assert.equal(beute[0]!.amount, 1, 'eine Kiste, ein Stück');
+    }
+  }
+});
+
+test('jedes Werkzeug kommt auch wirklich vor', () => {
+  const v12 = getRuleset(12);
+  const gesehen = new Set<string>();
+  for (let seed = 1; seed <= 200; seed++) {
+    const beute = rollChest(seed % 2, v12, mulberry32(seed));
+    if (beute[0]) gesehen.add(v12.items[beute[0].item]!.id);
+  }
+  for (const werkzeug of ['saw', 'shovel', 'pickaxe', 'plank', 'nail']) {
+    assert.ok(gesehen.has(werkzeug), `${werkzeug} kam in 200 Kisten nie vor`);
+  }
+});

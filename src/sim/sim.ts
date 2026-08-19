@@ -493,7 +493,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         throw new SimError('OFF_GRID');
       }
 
-      if (blockiert(rules, cmd.gx, cmd.gy, groesse.w, groesse.h)) {
+      if (blockiert(rules, cmd.gx, cmd.gy, groesse.w, groesse.h, s.clearedObstacles)) {
         throw new SimError('CELL_TAKEN');
       }
 
@@ -510,6 +510,22 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       const next = cloneState(s);
       next.plots = replaceAt(s.plots, cmd.plot, { ...plot, gx: cmd.gx, gy: cmd.gy });
+      return next;
+    }
+
+    case 'CLEAR_OBSTACLE': {
+      const hindernis = rules.obstacles?.[cmd.index];
+      if (!hindernis) throw new SimError('NO_SUCH_OBSTACLE');
+      if (s.clearedObstacles.includes(cmd.index)) throw new SimError('ALREADY_CLEARED');
+
+      const art = rules.obstacleKinds?.[hindernis.kind];
+      if (!art) throw new SimError('NEEDS_TOOL');
+      if (count(s, art.tool) < 1) throw new SimError('NEEDS_TOOL');
+
+      const next = cloneState(s);
+      next.items = addItem(s.items, art.tool, -1);
+      next.clearedObstacles = s.clearedObstacles.concat(cmd.index);
+      next.xp = s.xp + art.xp;
       return next;
     }
 

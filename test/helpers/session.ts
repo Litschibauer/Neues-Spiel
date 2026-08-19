@@ -175,7 +175,7 @@ function freiesFeld(s: State, rules: Ruleset, plot: number): { gx: number; gy: n
 
   for (let gy = 0; gy <= raster.h - groesse.h; gy++) {
     for (let gx = 0; gx <= raster.w - groesse.w; gx++) {
-      if (blockiert(rules, gx, gy, groesse.w, groesse.h)) continue;
+      if (blockiert(rules, gx, gy, groesse.w, groesse.h, s.clearedObstacles)) continue;
       const frei = s.plots.every((other, j) => {
         if (j === plot || other.gx < 0) return true;
         const andere = sizeOf(rules, j);
@@ -318,6 +318,12 @@ export function playRandomSession(
     for (const kiste of s.chests) {
       if (s.tick >= kiste.readyAt) moves.push(() => client.openChest(kiste.id));
     }
+
+    (rules.obstacles ?? []).forEach((h, i) => {
+      if (s.clearedObstacles.includes(i)) return;
+      const art = rules.obstacleKinds?.[h.kind];
+      if (art && count(s, art.tool) >= 1) moves.push(() => client.clearObstacle(i));
+    });
     if ((rules.siloLevels?.length ?? 0) > s.siloLevel + 1) {
       const naechste = rules.siloLevels![s.siloLevel + 1]!;
       if (naechste.cost.every((c) => count(s, c.item) >= c.amount)) {

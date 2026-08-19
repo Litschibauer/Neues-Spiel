@@ -127,6 +127,7 @@ export type Ruleset = {
   chestQueueMax?: number;
   grid?: GridDef;
   obstacles?: readonly Obstacle[];
+  obstacleKinds?: Record<string, { tool: number; xp: number }>;
 };
 
 const GOLD = 0;
@@ -845,14 +846,67 @@ const V11: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const SAW = 12;
+const SHOVEL = 13;
+const PICKAXE = 14;
+
+const V12: Ruleset = {
   ...V11,
+  version: 12,
+
+  items: [
+    ...V11.items,
+    { id: 'saw', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'shovel', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'pickaxe', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+  ],
+
+  chestEveryTicks: 420,
+  chestSpreadTicks: 480,
+  chestQueueMax: 12,
+
+  obstacleKinds: {
+    tree: { tool: SAW, xp: 15 },
+    rock: { tool: PICKAXE, xp: 25 },
+    pond: { tool: SHOVEL, xp: 40 },
+  },
+
+  chestKinds: [
+    {
+      id: 'holzkiste',
+      label: 'Holzkiste',
+      picks: 1,
+      drops: [
+        { item: PLANK, min: 1, max: 1, weight: 26 },
+        { item: NAIL, min: 1, max: 1, weight: 26 },
+        { item: SAW, min: 1, max: 1, weight: 18 },
+        { item: SHOVEL, min: 1, max: 1, weight: 15 },
+        { item: PICKAXE, min: 1, max: 1, weight: 15 },
+      ],
+    },
+    {
+      id: 'eisenkiste',
+      label: 'Eisenkiste',
+      picks: 1,
+      drops: [
+        { item: PLANK, min: 1, max: 1, weight: 20 },
+        { item: NAIL, min: 1, max: 1, weight: 20 },
+        { item: SAW, min: 1, max: 1, weight: 20 },
+        { item: SHOVEL, min: 1, max: 1, weight: 20 },
+        { item: PICKAXE, min: 1, max: 1, weight: 20 },
+      ],
+    },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V12,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 180,
   chestSpreadTicks: 120,
-  recipes: V11.recipes.map((r) => {
+  recipes: V12.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -870,14 +924,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [9, V9],
   [10, V10],
   [11, V11],
+  [12, V12],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+export const PRODUCTION_VERSIONS: readonly number[] = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 11;
+export const LATEST_RULESET_VERSION = 12;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -900,8 +957,16 @@ export function gridOf(rules: Ruleset): GridDef | null {
   return rules.grid ?? null;
 }
 
-export function blockiert(rules: Ruleset, gx: number, gy: number, w: number, h: number): boolean {
-  for (const hindernis of rules.obstacles ?? []) {
+export function blockiert(
+  rules: Ruleset,
+  gx: number,
+  gy: number,
+  w: number,
+  h: number,
+  geraeumt: readonly number[] = [],
+): boolean {
+  for (const [i, hindernis] of (rules.obstacles ?? []).entries()) {
+    if (geraeumt.includes(i)) continue;
     const frei =
       gx + w <= hindernis.gx ||
       hindernis.gx + hindernis.w <= gx ||
@@ -1216,6 +1281,19 @@ export function validateRuleset(rules: Ruleset): string[] {
         `Gebäude und Hindernisse brauchen ${flaeche + versperrt} Felder, das Raster hat ` +
           `${rules.grid.w * rules.grid.h}`,
       );
+    }
+
+    for (const h of rules.obstacles ?? []) {
+      const art = rules.obstacleKinds?.[h.kind];
+      if (rules.obstacleKinds && !art) {
+        problems.push(`Hindernis ${h.kind}: keine Regel zum Wegräumen`);
+      }
+      if (art) {
+        if (!itemOk(art.tool)) problems.push(`Hindernis ${h.kind}: Werkzeug unbekannt`);
+        if (!Number.isInteger(art.xp) || art.xp < 0) {
+          problems.push(`Hindernis ${h.kind}: XP ungültig`);
+        }
+      }
     }
 
     for (const [i, p] of rules.plots.entries()) {

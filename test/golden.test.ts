@@ -42,6 +42,7 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
       'BUY_NPC',
       'BUY_OFFER',
       'CANCEL_ORDER',
+      'CLEAR_OBSTACLE',
       'COLLECT',
       'COLLECT_MAIL',
       'FILL_REQUEST',

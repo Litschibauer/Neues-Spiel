@@ -49,6 +49,8 @@ export type OpenChestCommand = CommandBase & { type: 'OPEN_CHEST'; chestId: numb
 
 export type UpgradeSiloCommand = CommandBase & { type: 'UPGRADE_SILO' };
 
+export type ClearObstacleCommand = CommandBase & { type: 'CLEAR_OBSTACLE'; index: number };
+
 export type PlaceCommand = CommandBase & {
   type: 'PLACE';
   plot: number;
@@ -73,7 +75,8 @@ export type Command =
   | SendSlipCommand
   | OpenChestCommand
   | UpgradeSiloCommand
-  | PlaceCommand;
+  | PlaceCommand
+  | ClearObstacleCommand;
 
 export type SimErrorCode =
   | 'NO_SUCH_PLOT'
@@ -91,6 +94,9 @@ export type SimErrorCode =
   | 'OFF_GRID'
   | 'CELL_TAKEN'
   | 'NOT_PLACED'
+  | 'NO_SUCH_OBSTACLE'
+  | 'ALREADY_CLEARED'
+  | 'NEEDS_TOOL'
   | 'TRUCK_AWAY'
   | 'NO_WAYBILL'
   | 'NO_SUCH_STACK'

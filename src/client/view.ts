@@ -110,6 +110,18 @@ export type StockView = {
   feePerUnit: number;
 };
 
+export type ObstacleView = {
+  index: number;
+  kind: string;
+  gx: number;
+  gy: number;
+  w: number;
+  h: number;
+  tool: number;
+  xp: number;
+  removable: boolean;
+};
+
 export type ChestView = {
   id: number;
   kind: string;
@@ -198,6 +210,7 @@ export type FarmView = {
   openBoxes: number;
   grid: { w: number; h: number } | null;
   buildable: readonly BuildView[];
+  obstacles: readonly ObstacleView[];
 };
 
 export type BuildView = {
@@ -449,6 +462,23 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
           unlocked: level >= nötig,
           affordable: level >= nötig && stufe.cost.every((c) => count(state, c.item) >= c.amount),
           size: sizeOf(rules, i),
+        },
+      ];
+    }),
+    obstacles: (rules.obstacles ?? []).flatMap((h, i): ObstacleView[] => {
+      if (state.clearedObstacles.includes(i)) return [];
+      const art = rules.obstacleKinds?.[h.kind];
+      return [
+        {
+          index: i,
+          kind: h.kind,
+          gx: h.gx,
+          gy: h.gy,
+          w: h.w,
+          h: h.h,
+          tool: art?.tool ?? -1,
+          xp: art?.xp ?? 0,
+          removable: art !== undefined && count(state, art.tool) >= 1,
         },
       ];
     }),

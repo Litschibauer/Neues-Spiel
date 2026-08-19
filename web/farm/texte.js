@@ -3,6 +3,7 @@ var NAMES = {
   corn: 'Mais', milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
   mill: 'Mühle', dairy: 'Molkerei', 'cow-feed': 'Kuhfutter',
   plank: 'Bretter', nail: 'Nägel',
+  saw: 'Säge', shovel: 'Schaufel', pickaxe: 'Spitzhacke',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
@@ -26,6 +27,10 @@ function itemIcon(item, klasse) { return iconTag(rules.items[item].id, klasse); 
 function mengeMitBild(item, menge) {
   return itemIcon(item) + '<span>' + menge + ' ' + itemName(item) + '</span>';
 }
+function hindernisName(art) {
+  return art === 'tree' ? 'Baum' : art === 'rock' ? 'Stein' : 'Tümpel';
+}
+
 function animalOf(i) {
   var id = rules.plots[i].id;
   if (id.indexOf('coop-') === 0) return { one: 'Huhn', many: 'Hühner' };

@@ -99,17 +99,6 @@ function artBoden(zeigeRaster) {
     }
   }
 
-  var hindernisse = rules.obstacles || [];
-  for (var hi = 0; hi < hindernisse.length; hi++) {
-    var hind = hindernisse[hi];
-    var kasten = feldKasten(hind.gx, hind.gy, hind.w, hind.h);
-    var hoehe = (kasten.unten - kasten.oben) * (hind.kind === 'pond' ? 1 : 1.7);
-    var bild = hind.kind === 'tree' ? artBaum() : hind.kind === 'rock' ? artStein() : artTuempel();
-    out += '<svg x="' + kasten.left + '" y="' + (kasten.unten - hoehe) +
-      '" width="' + kasten.breite + '" height="' + hoehe +
-      '" viewBox="0 0 100 100" preserveAspectRatio="none">' + bild + '</svg>';
-  }
-
   if (zeigeRaster) {
     for (var gy = 0; gy <= g.h; gy++) {
       var l = projiziere(0, gy);
@@ -157,6 +146,18 @@ function passtHin(plot, gx, gy) {
     if (!frei) return false;
   }
   return true;
+}
+
+function hindernisKasten(h) {
+  var kasten = feldKasten(h.gx, h.gy, h.w, h.h);
+  var hoehe = (kasten.unten - kasten.oben) * (h.kind === 'pond' ? 1 : 1.7);
+  return {
+    left: kasten.left,
+    width: kasten.breite,
+    top: prozent(kasten.unten - hoehe, BODEN + 3),
+    height: prozent(hoehe, BODEN + 3),
+    tiefe: h.gy + h.h,
+  };
 }
 
 function feldFuer(plot, feld) {

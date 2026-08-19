@@ -488,6 +488,40 @@ und Nachbarn, aber nicht die Hindernisse — das Gebäude leuchtete grün über 
 Baum und sprang beim Loslassen zurück. Zwei Prüfungen derselben Regel an zwei
 Orten laufen auseinander; hier hat es der Browserlauf gefangen.
 
+#### v12: Werkzeug aus Kisten, Hindernisse zum Wegräumen
+
+Aus Deko wird Inhalt. Die Kisten geben jetzt **genau ein Stück**, und die
+Auswahl ist klein und lesbar: ein Brett, ein Nagel, eine Säge, eine Schaufel,
+eine Spitzhacke. Kein „2–5 Weizen" mehr — eine Kiste ist ein Fund, keine
+Lieferung.
+
+| Hindernis | Werkzeug | bringt |
+| --- | --- | --- |
+| Baum | Säge | 15 XP |
+| Stein | Spitzhacke | 25 XP |
+| Tümpel | Schaufel | 40 XP |
+
+**Damit wandern die Hindernisse in den Zustand** — bis v11 waren sie reine
+Katalogdaten und kosteten nichts. Jetzt merkt sich der Hof, was schon weg ist:
+
+```
+clearedObstacles: [0, 3]      Indizes in rules.obstacles
+CLEAR_OBSTACLE { index }      Werkzeug weg, Feld frei, XP dazu
+```
+
+Der Index bleibt gültig, weil die Hindernisliste wie jede Katalogtabelle nur
+hinten wächst. `blockiert()` bekam einen Parameter mehr und fragt jetzt, was
+geräumt ist — dieselbe Funktion, überall dieselbe Antwort: in der Sim, in der
+Migration, bei der Kistenplanung und in der Vorschau beim Verschieben.
+
+**XP fürs Aufräumen ist mehr als eine Zahl.** Es ist der einzige Weg im Spiel,
+Erfahrung zu bekommen, ohne etwas zu produzieren — und damit ein Grund, sich um
+den Hof selbst zu kümmern statt nur um die Produktionskette. Ein Tümpel bringt
+so viel wie eine ganze Stufe am Anfang.
+
+Kisten kommen dafür deutlich öfter: alle **7 Minuten** statt 15, zwölf statt
+acht im Vorrat, verteilt über das ganze Raster.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

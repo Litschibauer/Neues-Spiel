@@ -240,6 +240,12 @@
   #brett { left: 33%; top: 11%; width: 15%; height: 11%; z-index: 61; }
   #kiste { left: 50%; top: 14%; width: 8%; height: 8%; z-index: 64; }
   .schatz { position: absolute; }
+  .hindernis { position: absolute; }
+  .hindernis:not(.raeumbar) { cursor: default; }
+  .hindernis .badge {
+    background: var(--accent); color: var(--on-accent);
+    animation: hüpf 1.6s ease-in-out infinite;
+  }
   .schatz .art { animation: wackeln 2.2s ease-in-out infinite; }
   #kiste .art { animation: wackeln 2.2s ease-in-out infinite; }
   @keyframes wackeln {

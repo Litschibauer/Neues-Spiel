@@ -9,7 +9,7 @@ function freieFelder(state: State, rules: Ruleset, schon: readonly Chest[]): Arr
   const frei: Array<[number, number]> = [];
   for (let gy = 0; gy < raster.h; gy++) {
     for (let gx = 0; gx < raster.w; gx++) {
-      if (blockiert(rules, gx, gy, 1, 1)) continue;
+      if (blockiert(rules, gx, gy, 1, 1, state.clearedObstacles)) continue;
 
       const belegt = state.plots.some((p, i) => {
         if (p.gx < 0) return false;

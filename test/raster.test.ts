@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { RULESETS, getRuleset, sizeOf, validateRuleset } from '../src/sim/rules.ts';
-import { initialState } from '../src/sim/state.ts';
+import { count, initialState } from '../src/sim/state.ts';
 import { farmView } from '../src/client/view.ts';
 import { assertInvariants, migrateState } from '../src/sim/migrate.ts';
 import type { State } from '../src/sim/state.ts';
@@ -250,4 +250,74 @@ test('ein Regelwerk mit einem Hindernis auf einem Startplatz fällt auf', () => 
     validateRuleset(kaputt).some((x) => x.includes('Hindernis')),
     'ein blockierter Startplatz wird nicht erkannt',
   );
+});
+
+test('Hindernisse wegräumen kostet das richtige Werkzeug und bringt XP', () => {
+  const v12 = getRuleset(12);
+  const basis = initialState(v12);
+  const items = basis.items.slice();
+  const SAEGE = v12.items.findIndex((i) => i.id === 'saw');
+  const HACKE = v12.items.findIndex((i) => i.id === 'pickaxe');
+  items[SAEGE] = 1;
+
+  const c = new Client({ state: { ...basis, items }, seq: 0, serverTs: T0, rulesetVersion: 12 });
+  const baum = v12.obstacles!.findIndex((h) => h.kind === 'tree');
+  const stein = v12.obstacles!.findIndex((h) => h.kind === 'rock');
+
+  const ohne = c.clearObstacle(stein);
+  assert.equal(ohne.ok, false, 'Stein ohne Spitzhacke');
+  if (!ohne.ok) assert.equal(ohne.code, 'NEEDS_TOOL');
+
+  assert.equal(c.clearObstacle(baum).ok, true);
+  assert.equal(c.state.xp, v12.obstacleKinds!.tree!.xp, 'kein XP fürs Wegräumen');
+  assert.equal(count(c.state, SAEGE), 0, 'die Säge wurde nicht verbraucht');
+  assert.deepEqual(c.state.clearedObstacles, [baum]);
+
+  const nochmal = c.clearObstacle(baum);
+  assert.equal(nochmal.ok, false);
+  if (!nochmal.ok) assert.equal(nochmal.code, 'ALREADY_CLEARED');
+
+  assert.equal(count(c.state, HACKE), 0);
+});
+
+test('wo ein Hindernis weg ist, darf gebaut werden', () => {
+  const v12 = getRuleset(12);
+  const basis = initialState(v12);
+  const items = basis.items.slice();
+  items[v12.items.findIndex((i) => i.id === 'saw')] = 1;
+  items[GOLD] = 50_000;
+
+  const c = new Client({
+    state: { ...basis, items, xp: v12.levelThresholds[10]! },
+    seq: 0,
+    serverTs: T0,
+    rulesetVersion: 12,
+  });
+  const baumNr = v12.obstacles!.findIndex((h) => h.kind === 'tree');
+  const baum = v12.obstacles![baumNr]!;
+  const feld = v12.plots.findIndex((p) => p.id === 'field-4');
+
+  assert.equal(c.buy(feld).ok, true);
+  const vorher = c.place(feld, baum.gx, baum.gy);
+  assert.equal(vorher.ok, false, 'im Baum gebaut');
+
+  assert.equal(c.clearObstacle(baumNr).ok, true);
+  assert.equal(c.place(feld, baum.gx, baum.gy).ok, true, 'nach dem Fällen ist da Platz');
+});
+
+test('das Anzeigemodell sagt, was ein Hindernis kostet', () => {
+  const v12 = getRuleset(12);
+  const basis = initialState(v12);
+  const items = basis.items.slice();
+  items[v12.items.findIndex((i) => i.id === 'shovel')] = 1;
+
+  const v = farmView({ ...basis, items }, v12);
+  assert.equal(v.obstacles.length, v12.obstacles!.length);
+
+  const teich = v.obstacles.find((h) => h.kind === 'pond')!;
+  assert.equal(teich.removable, true, 'mit Schaufel muss der Tümpel weg können');
+  assert.equal(teich.xp, v12.obstacleKinds!.pond!.xp);
+
+  const baum = v.obstacles.find((h) => h.kind === 'tree')!;
+  assert.equal(baum.removable, false, 'ohne Säge geht kein Baum');
 });

@@ -8,6 +8,7 @@ function render() {
   renderPlots(v);
   renderTruck(v);
   renderMoebel(v);
+  renderHindernisse(v);
   renderKisten(v);
   renderRequests(v);
   renderMail(v);
@@ -198,6 +199,30 @@ function renderMoebel(v) {
   var ohneOrt = offen.filter(function (k) { return k.gx < 0 || !hatRaster(); });
   kiste.hidden = ohneOrt.length === 0;
   if (ohneOrt.length > 0) moebel(kiste, artKiste(), 'Kiste', ohneOrt.length);
+}
+
+function renderHindernisse(v) {
+  var box = $('hindernisse');
+  box.textContent = '';
+  if (!hatRaster()) return;
+
+  v.obstacles.forEach(function (h) {
+    var kasten = hindernisKasten(h);
+    var knopf = document.createElement('button');
+    knopf.className = 'moebel hindernis' + (h.removable ? ' raeumbar' : '');
+    knopf.style.left = kasten.left + '%';
+    knopf.style.top = kasten.top + '%';
+    knopf.style.width = kasten.width + '%';
+    knopf.style.height = kasten.height + '%';
+    knopf.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
+    knopf.innerHTML =
+      '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>' +
+      (h.removable ? '<span class="badge">✓</span>' : '');
+    knopf.setAttribute('aria-label', hindernisName(h.kind));
+    knopf.addEventListener('click', function () { tippeHindernis(h); });
+    box.appendChild(knopf);
+  });
 }
 
 function renderKisten(v) {

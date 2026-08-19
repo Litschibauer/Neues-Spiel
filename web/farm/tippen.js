@@ -153,6 +153,13 @@ function renderStall(p) {
 }
 
 function renderSheet(v) {
+  if (sheet.mode === 'hindernis') {
+    var h = null;
+    v.obstacles.forEach(function (x) { if (x.index === sheet.hindernis) h = x; });
+    if (h) zeichneHindernis(h);
+    else closePicker();
+    return;
+  }
   if (sheet.mode === null || sheet.plot === null) return;
   var p = v.plots[sheet.plot];
   if (!p) return;
@@ -315,6 +322,43 @@ $('hof').addEventListener('click', function (e) {
   scheduleSync();
   endeSetzen();
 });
+
+function tippeHindernis(h) {
+  if (!isActive) return;
+  sheet = { plot: null, mode: 'hindernis', slot: 0, hindernis: h.index };
+  pickerPlot = -1;
+  zeichneHindernis(h);
+  $('pick-bg').hidden = false;
+}
+
+function zeichneHindernis(h) {
+  $('pick-title').textContent = hindernisName(h.kind);
+
+  var box = $('pick-list');
+  box.textContent = '';
+
+  var text = document.createElement('p');
+  text.className = 'empty';
+  text.innerHTML = h.kind === 'pond'
+    ? 'Ein Tümpel. Mit einer Schaufel bekommst du ihn trocken.'
+    : h.kind === 'rock'
+    ? 'Ein Felsbrocken. Eine Spitzhacke macht daraus Platz.'
+    : 'Ein Baum. Mit einer Säge ist er schnell weg.';
+  box.appendChild(text);
+
+  var knopf = document.createElement('button');
+  knopf.className = 'abfahrt';
+  knopf.disabled = !h.removable;
+  knopf.innerHTML = h.removable
+    ? 'Wegräumen · ' + itemIcon(h.tool) + '1 ' + itemName(h.tool) + ' · +' + h.xp + ' XP'
+    : itemIcon(h.tool) + itemName(h.tool) + ' fehlt — steckt in den Kisten';
+  knopf.addEventListener('click', function () {
+    closePicker();
+    act(hindernisName(h.kind) + ' weggeräumt · +' + h.xp + ' XP',
+        client.clearObstacle(h.index));
+  });
+  box.appendChild(knopf);
+}
 
 function oeffneKiste(id) {
   if (!isActive) return;

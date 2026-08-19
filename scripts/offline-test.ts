@@ -1777,14 +1777,14 @@ try {
   const hindernisse = await evaluate<string>(
     cdp,
     `(function () {
-       var boden = document.getElementById('scene').innerHTML;
-       return [/6f9a5e/.test(boden) ? 'teich' : '', /9aa1a6/.test(boden) ? 'stein' : '']
-         .filter(Boolean).join('+');
+       var arten = [...document.querySelectorAll('#hindernisse .hindernis')]
+         .map(function (h) { return h.getAttribute('aria-label'); });
+       return [...new Set(arten)].sort().join('+');
      })()`,
   );
   check(
     'Bäume, Steine und ein Tümpel stehen auf dem Raster',
-    hindernisse === 'teich+stein',
+    hindernisse === 'Baum+Stein+Tümpel',
     hindernisse || 'keine Hindernisse gezeichnet',
   );
 
@@ -1894,6 +1894,98 @@ try {
     'Ein gebautes Feld lässt sich verschieben',
     konnteSchieben && nachherStellen !== vorherStellen,
     konnteSchieben ? 'Stellen haben sich geändert' : 'kein Verschieben-Knopf',
+  );
+
+
+  console.log('\n9g. Hindernisse wegräumen');
+
+  await evaluate(cdp, farmTab);
+  await sleep(300);
+
+  const stehen = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#hindernisse .hindernis').length`,
+  );
+  check('Bäume, Steine und Tümpel stehen als eigene Dinge auf dem Hof', stehen >= 5, `${stehen}`);
+
+  const stehenBaeume = await evaluate<number>(
+    cdp,
+    `[...document.querySelectorAll('#hindernisse .hindernis')].filter(function (h) {
+       return h.getAttribute('aria-label') === 'Baum';
+     }).length`,
+  );
+
+  const ohneWerkzeug = await evaluate<string>(
+    cdp,
+    `(function () {
+       var baum = [...document.querySelectorAll('#hindernisse .hindernis')].find(function (h) {
+         return h.getAttribute('aria-label') === 'Baum';
+       });
+       if (!baum) return 'kein Baum';
+       baum.click();
+       var knopf = document.querySelector('#pick-list .abfahrt');
+       var text = knopf ? knopf.textContent : '';
+       var gesperrt = knopf ? knopf.disabled : false;
+       document.getElementById('pick-close').click();
+       return (gesperrt ? 'gesperrt' : 'offen') + ': ' + text;
+     })()`,
+  );
+  check(
+    'Ohne Säge geht der Baum nicht weg — und die Seite sagt warum',
+    /^gesperrt/.test(ohneWerkzeug) && /Säge/.test(ohneWerkzeug),
+    ohneWerkzeug,
+  );
+
+  await api(`/api/admin/grant?account=${status.accountId}&item=saw&amount=1`, 'POST');
+  await sleep(1000);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Säge im Postfach');
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(300);
+
+  const xpVorher = await evaluate<string>(cdp, `document.getElementById('xp').textContent`);
+  const geraeumt = await evaluate<string>(
+    cdp,
+    `(function () {
+       var baum = [...document.querySelectorAll('#hindernisse .hindernis')].find(function (h) {
+         return h.getAttribute('aria-label') === 'Baum';
+       });
+       baum.click();
+       var knopf = document.querySelector('#pick-list .abfahrt');
+       if (!knopf || knopf.disabled) return 'immer noch gesperrt';
+       var text = knopf.textContent;
+       knopf.click();
+       return text;
+     })()`,
+  );
+  await sleep(700);
+
+  const danach = await evaluate<{ baeume: number; xp: string }>(
+    cdp,
+    `(function () {
+       return {
+         baeume: [...document.querySelectorAll('#hindernisse .hindernis')].filter(function (h) {
+           return h.getAttribute('aria-label') === 'Baum';
+         }).length,
+         xp: document.getElementById('xp').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Mit Säge ist der Baum weg und bringt XP',
+    /Wegräumen/.test(geraeumt) && danach.baeume === stehenBaeume - 1 && danach.xp !== xpVorher,
+    `${geraeumt} · ${xpVorher} → ${danach.xp}`,
+  );
+
+  const platzFrei = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { clearedObstacles: number[] };
+  };
+  check(
+    'Der Server weiß, dass da jetzt Platz ist',
+    platzFrei.state.clearedObstacles.length === 1,
+    `geräumt: ${JSON.stringify(platzFrei.state.clearedObstacles)}`,
   );
 
   console.log('\n10. Eine neue Version erreicht den Browser');
