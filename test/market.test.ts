@@ -366,7 +366,7 @@ test('ein eingestelltes Angebot überlebt einen Neustart ebenfalls', () => {
     assert.equal(again.size, 1);
     assert.equal(again.browse('ben', 10)[0]!.amount, 10);
 
-    again.reconcile('cem', [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 0 }], T0);
+    again.reconcile('cem', [{ id: 1, item: WHEAT, amount: 5, price: 3, listedAt: 0, verkauft: 0 }], T0);
     assert.notEqual(again.browse('anna', 10)[0]!.id, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });

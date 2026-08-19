@@ -101,6 +101,10 @@ export class Client {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  collectSale(orderId: number): ActionResult {
+    return this.apply({ type: 'COLLECT_SALE', orderId } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyAnimal(plot: number): ActionResult {
     return this.apply({ type: 'BUY_ANIMAL', plot } as Omit<Command, 'seq' | 'tick'>);
   }

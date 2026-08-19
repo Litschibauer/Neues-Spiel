@@ -432,6 +432,9 @@
   .kaestchen .rest { font-size: .62rem; color: var(--muted); }
   .kaestchen .p .ic { width: 1em; height: 1em; vertical-align: -.16em; margin: 0 0 0 .12em; }
   .kaestchen.anzeige { background: var(--gold-soft); border-color: var(--gold); }
+  .kaestchen.verkauft { background: var(--gold-soft); border-color: var(--gold); }
+  .kaestchen.verkauft .n { color: var(--gold); font-size: 1rem; }
+  .kaestchen.verkauft .p { color: var(--muted); font-weight: 600; }
   .kaestchen.fremd .p { color: var(--accent); }
   .kaestchen.leer {
     background: var(--sunk); border-style: dashed; box-shadow: none;

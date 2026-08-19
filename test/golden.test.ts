@@ -46,6 +46,7 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
       'CLEAR_OBSTACLE',
       'COLLECT',
       'COLLECT_MAIL',
+      'COLLECT_SALE',
       'FILL_REQUEST',
       'LIST_ORDER',
       'LOAD_TRUCK',

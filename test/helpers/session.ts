@@ -2,15 +2,17 @@ import { Client } from '../../src/client/client.ts';
 import {
   blockiert,
   getRuleset,
+  isTradable,
   levelOf,
   levelRecipes,
   nextLevel,
+  offerLimits,
   priceBand,
   sizeOf,
 } from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
-import type { MailItem, Offer, State } from '../../src/sim/state.ts';
+import type { MailItem, Offer, Order, State } from '../../src/sim/state.ts';
 import { simulate } from '../../src/sim/sim.ts';
 import { advancePassivesReference } from '../../src/sim/produce.ts';
 import type { State } from '../../src/sim/state.ts';
@@ -111,15 +113,37 @@ export function fuzzStart(rules: Ruleset, gold: number, rnd?: () => number): Sta
   const offers = rnd ? fuzzOffers(rules, rnd) : [];
 
   const mail = rnd ? fuzzMail(rules, rnd) : [];
+
+  const orders = rnd ? fuzzOrders(rules, rnd) : [];
   return {
     ...base,
     items,
     requests,
     offers,
+    orders,
+    nextOrderId: orders.length + 1,
     mail,
     chests: kisten.chests,
     nextChestId: kisten.nextChestId,
   };
+}
+
+function fuzzOrders(rules: Ruleset, rnd: () => number): Order[] {
+  const handelbar = rules.items
+    .map((_, i) => i)
+    .filter((i) => isTradable(rules, i));
+  if (handelbar.length === 0 || rules.orderSlots < 2) return [];
+
+  const orders: Order[] = [];
+  for (let i = 0; i < 2; i++) {
+    const item = handelbar[Math.floor(rnd() * handelbar.length)]!;
+    const grenzen = offerLimits(rules, item);
+    const menge = 1 + Math.floor(rnd() * Math.max(1, Math.min(grenzen.maxAmount || 5, 5)));
+    const preis = grenzen.minPrice;
+    const verkauft = rules.saleGoldInSlot && rnd() < 0.5 ? menge * preis : 0;
+    orders.push({ id: i + 1, item, amount: menge, price: preis, listedAt: 0, verkauft });
+  }
+  return orders;
 }
 
 function fuzzMail(rules: Ruleset, rnd: () => number): MailItem[] {
@@ -308,6 +332,10 @@ export function playRandomSession(
 
       if (s.orders.length > 0) {
         moves.push(() => client.cancelOrder(s.orders[pick(s.orders.length)]!.id));
+      }
+
+      for (const order of s.orders) {
+        if (order.verkauft > 0) moves.push(() => client.collectSale(order.id));
       }
 
       if (s.offers.length > 0) {

@@ -137,6 +137,7 @@ export type Ruleset = {
   maxOfferAmount?: number;
   maxOfferPrice?: number;
   animalsMustBeBought?: boolean;
+  saleGoldInSlot?: boolean;
 };
 
 const GOLD = 0;
@@ -972,17 +973,24 @@ const V16: Ruleset = {
   }),
 };
 
-const DEV: Ruleset = {
+const V17: Ruleset = {
   ...V16,
+  version: 17,
+
+  saleGoldInSlot: true,
+};
+
+const DEV: Ruleset = {
+  ...V17,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V16.recipes.map((r) => {
+  recipes: V17.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V16.plots.map((p) => {
+  plots: V17.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1006,16 +1014,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [14, V14],
   [15, V15],
   [16, V16],
+  [17, V17],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 16;
+export const LATEST_RULESET_VERSION = 17;
 
 export const DEV_RULESET_VERSION = 1001;
 

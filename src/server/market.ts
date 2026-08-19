@@ -80,7 +80,8 @@ export class Market {
   }
 
   reconcile(sellerId: string, orders: readonly Order[], nowMs: number): boolean {
-    const live = new Set(orders.map((o) => o.id));
+    const offen = orders.filter((o) => o.verkauft <= 0);
+    const live = new Set(offen.map((o) => o.id));
     let changed = false;
 
     for (const entry of [...this.book.values()]) {
@@ -96,7 +97,7 @@ export class Market {
       if (entry.sellerId === sellerId) known.add(entry.orderId);
     }
 
-    for (const order of orders) {
+    for (const order of offen) {
       if (known.has(order.id)) continue;
       const id = this.nextOfferId++;
       this.touched.add(id);

@@ -12,7 +12,7 @@ export function canonicalize(state: State): string {
     .join(',');
   const passives = state.passives.join(',');
   const orders = state.orders
-    .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
+    .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}+${o.verkauft}`)
     .join(',');
   const offers = state.offers
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}@${o.seller}${o.headline ? '!' : ''}`)
@@ -82,6 +82,9 @@ export function canonicalizeCommand(c: Command): string {
 
     case 'BUY_ANIMAL':
       return `${c.seq}|${c.tick}|BUY_ANIMAL|${c.plot}`;
+
+    case 'COLLECT_SALE':
+      return `${c.seq}|${c.tick}|COLLECT_SALE|${c.orderId}`;
     case 'COLLECT_MAIL':
       return `${c.seq}|${c.tick}|COLLECT_MAIL`;
     case 'FILL_REQUEST':

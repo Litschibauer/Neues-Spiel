@@ -209,6 +209,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['13->14', AUFS_RASTER],
   ['14->15', AUFS_RASTER],
   ['15->16', TIERE],
+  ['16->17', TIERE],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -252,6 +253,12 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   for (const o of state.orders) {
     if (o.amount <= 0) problems.push(`Auftrag ${o.id} ohne Ware`);
     if (o.listedAt > state.tick) problems.push(`Auftrag ${o.id} aus der Zukunft`);
+    if (!Number.isInteger(o.verkauft ?? 0) || (o.verkauft ?? 0) < 0) {
+      problems.push(`Auftrag ${o.id}: Verkaufserlös ist keine Zahl`);
+    }
+    if ((o.verkauft ?? 0) > 0 && !rules.saleGoldInSlot) {
+      problems.push(`Auftrag ${o.id}: Erlös im Kästchen, obwohl das Regelwerk das nicht kennt`);
+    }
     if (o.id >= state.nextOrderId) problems.push(`Auftrags-ID ${o.id} nicht vergeben`);
     if (!rules.items[o.item]) problems.push(`Auftrag ${o.id}: Gegenstand ${o.item} unbekannt`);
   }

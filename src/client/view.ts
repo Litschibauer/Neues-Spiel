@@ -124,6 +124,7 @@ export type OrderView = {
   price: number;
   expiresIn: number | null;
   listedFor: number;
+  sold: number;
 };
 
 export type StockView = {
@@ -514,8 +515,11 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       amount: o.amount,
       price: o.price,
       expiresIn:
-        rules.orderTtlTicks > 0 ? Math.max(0, rules.orderTtlTicks - (state.tick - o.listedAt)) : null,
+        rules.orderTtlTicks > 0 && o.verkauft <= 0
+          ? Math.max(0, rules.orderTtlTicks - (state.tick - o.listedAt))
+          : null,
       listedFor: Math.max(0, state.tick - o.listedAt),
+      sold: o.verkauft,
     })),
     orderSlots: rules.orderSlots,
     orderSlotsFree: rules.orderSlots - state.orders.length,

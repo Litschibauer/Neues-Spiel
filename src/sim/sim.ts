@@ -90,7 +90,7 @@ function expireOrders(s: State, rules: Ruleset): void {
   const survivors: typeof s.orders = [];
   let mail = s.mail;
   for (const order of s.orders) {
-    const expired = s.tick - order.listedAt >= rules.orderTtlTicks;
+    const expired = order.verkauft <= 0 && s.tick - order.listedAt >= rules.orderTtlTicks;
     if (expired && mail.length < rules.mailCapacity) {
       mail = mail.concat({ item: order.item, amount: order.amount, arrivedAt: s.tick });
     } else {
@@ -311,14 +311,27 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         amount: cmd.amount,
         price: cmd.price,
         listedAt: s.tick,
+        verkauft: 0,
       });
       next.nextOrderId = s.nextOrderId + 1;
+      return next;
+    }
+
+    case 'COLLECT_SALE': {
+      const order = s.orders.find((o) => o.id === cmd.orderId);
+      if (!order) throw new SimError('NO_SUCH_ORDER');
+      if (order.verkauft <= 0) throw new SimError('NOT_SOLD');
+
+      const next = cloneState(s);
+      next.orders = s.orders.filter((o) => o.id !== cmd.orderId);
+      next.items = addItem(s.items, rules.currency, order.verkauft);
       return next;
     }
 
     case 'CANCEL_ORDER': {
       const order = s.orders.find((o) => o.id === cmd.orderId);
       if (!order) throw new SimError('NO_SUCH_ORDER');
+      if (order.verkauft > 0) throw new SimError('ALREADY_SOLD');
 
       if (rules.items[order.item]?.storable && spaceLeft(s, rules) < order.amount) {
         throw new SimError('SILO_FULL');

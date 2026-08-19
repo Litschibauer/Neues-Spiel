@@ -9,7 +9,7 @@ import { initialState } from '../src/sim/state.ts';
 const T0 = 1_700_000_000_000;
 
 function auftrag(id: number, item: number, amount: number, price: number): Order {
-  return { id, item, amount, price, listedAt: 0 };
+  return { id, item, amount, price, listedAt: 0, verkauft: 0 };
 }
 
 function markt(hoefe: Record<string, Order[]>): Market {

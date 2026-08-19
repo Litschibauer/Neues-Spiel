@@ -74,10 +74,19 @@ export class Server {
   }
 
   applySale(orderId: number, gold: number, nowMs: number, currency: number): void {
+    const rules = getRuleset(this.snapshot.rulesetVersion);
     const state = cloneState(this.snapshot.state);
-    state.orders = state.orders.filter((o) => o.id !== orderId);
+
+    if (rules.saleGoldInSlot) {
+      state.orders = state.orders.map((o) =>
+        o.id === orderId ? { ...o, verkauft: o.verkauft + gold } : o,
+      );
+    } else {
+      state.orders = state.orders.filter((o) => o.id !== orderId);
+      if (gold > 0) this.pendingDeliveries.push({ item: currency, amount: gold, arrivedAt: nowMs });
+    }
+
     this.snapshot = { ...this.snapshot, state };
-    if (gold > 0) this.pendingDeliveries.push({ item: currency, amount: gold, arrivedAt: nowMs });
     this.soldSinceLastSync = true;
   }
 

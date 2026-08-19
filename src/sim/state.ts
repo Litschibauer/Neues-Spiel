@@ -30,6 +30,7 @@ export type Order = {
   amount: number;
   price: number;
   listedAt: number;
+  verkauft: number;
 };
 
 export type Offer = {
@@ -205,6 +206,7 @@ export function normalizeState(s: State): State {
     ...s,
     plots,
     xp: s.xp ?? 0,
+    orders: (s.orders ?? []).map((o) => ({ ...o, verkauft: o.verkauft ?? 0 })),
     offers: (s.offers ?? []).map((o) => ({
       ...o,
       seller: o.seller ?? 0,

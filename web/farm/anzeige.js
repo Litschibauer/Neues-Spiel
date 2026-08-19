@@ -626,8 +626,11 @@ function zeichneKaesten(v, box) {
 
   var kopf = document.createElement('div');
   kopf.className = 'stand-kopf';
+  var kasse = v.orders.reduce(function (n, o) { return n + (o.sold > 0 ? 1 : 0); }, 0);
   kopf.innerHTML = '<span>Deine Kästchen</span><span class="frei">' +
-    v.orderSlotsFree + ' von ' + v.orderSlots + ' frei</span>';
+    (kasse > 0
+      ? kasse + ' verkauft — abholen'
+      : v.orderSlotsFree + ' von ' + v.orderSlots + ' frei') + '</span>';
   box.appendChild(kopf);
 
   var raster = document.createElement('div');
@@ -657,6 +660,19 @@ function standLimit(v) {
 function vollesKaestchen(o) {
   var b = document.createElement('button');
   b.type = 'button';
+
+  if (o.sold > 0) {
+    b.className = 'kaestchen verkauft';
+    b.innerHTML = itemIcon(rules.currency, 'gross') +
+      '<span class="n">' + o.sold + '</span>' +
+      '<span class="p">verkauft</span>' +
+      '<span class="rest">abholen</span>';
+    b.addEventListener('click', function () {
+      act('Kasse · +' + o.sold + ' ' + itemName(rules.currency), client.collectSale(o.id));
+    });
+    return b;
+  }
+
   b.className = 'kaestchen voll';
   b.innerHTML = itemIcon(o.item, 'gross') +
     '<span class="n">' + o.amount + '×</span>' +
@@ -875,6 +891,8 @@ var CODES = {
   ANIMAL_TOO_YOUNG: 'Das Junge ist noch zu klein',
   NO_ANIMAL_SPACE: 'Der Stall ist voll',
   NOT_AN_ANIMAL_PLOT: 'Hier wohnt kein Tier',
+  ALREADY_SOLD: 'Schon verkauft — Gold abholen',
+  NOT_SOLD: 'Da ist noch nichts verkauft',
   BAD_AMOUNT: 'Ungültige Menge',
   OFFER_GONE: 'Jemand war schneller',
   PLOT_BUSY: 'Läuft noch',

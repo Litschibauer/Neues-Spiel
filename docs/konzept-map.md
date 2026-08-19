@@ -668,6 +668,35 @@ heißt — auf einem Hof, auf dem man alles frei hinstellt, sagt eine Nummer
 nichts. Jetzt heißt es „Hühnerstall". Nur in der Bauliste, wo man zwischen
 beiden wählt, steht „Zweiter Hühnerstall".
 
+#### v17: die Kasse steht im Kästchen
+
+Verkauftes Gold landete bisher im Postfach. Das war bequem zu bauen und
+falsch zu spielen: Das Kästchen verschwand von selbst, das Gold tauchte
+irgendwann woanders auf, und zwischen Verkauf und Geld lag keine Handlung.
+
+Jetzt bleibt das **Kästchen stehen und hält den Erlös**. Es zeigt Münzen statt
+Ware, ein Tipp holt sie ab — und erst dieser Tipp macht den Platz wieder frei.
+
+```
+Order.verkauft: number        Erlös im Kästchen, 0 = steht noch zum Verkauf
+COLLECT_SALE { orderId }      Gold aufs Konto, Kästchen weg
+```
+
+Drei Dinge hängen daran, und alle drei sind Regeln, keine Anzeige:
+
+- **Zurückholen geht nicht mehr**, sobald verkauft ist (`ALREADY_SOLD`). Die
+  Ware gehört jemand anderem.
+- **Ein verkauftes Kästchen läuft nicht ab.** Die Frist gilt fürs Anbieten,
+  nicht fürs Kassieren — sonst würde Geld verfallen, das schon verdient ist.
+- **Der Marktabgleich überspringt es.** `reconcile` sieht den Auftrag noch im
+  Zustand, darf ihn aber nicht wieder ins Buch stellen; sonst verkauft man
+  dieselben fünf Weizen zweimal.
+
+Der Server schreibt den Erlös beim Sync ins Kästchen, statt eine Lieferung
+ins Postfach zu legen — dieselbe Stelle wie vorher, nur ein anderes Ziel.
+Für Regelwerke ohne `saleGoldInSlot` bleibt der alte Weg, damit alte Logs
+sich unverändert abspielen.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

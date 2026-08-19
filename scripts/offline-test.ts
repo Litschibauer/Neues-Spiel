@@ -652,17 +652,17 @@ try {
     await fetch(`http://127.0.0.1:${PORT}/api/state`, {
       headers: { authorization: `Bearer ${second.key}` },
     })
-  ).json()) as { snapshot: { state: { orders: unknown[] } } };
-  check('Der verkaufte Auftrag ist beim Verkäufer weg', sellerState.snapshot.state.orders.length === 0);
+  ).json()) as {
+    snapshot: { seq: number; state: { orders: Array<{ id: number; verkauft: number }> } };
+  };
+  const verkauftesKaestchen = sellerState.snapshot.state.orders[0];
+  check(
+    'Das verkaufte Kästchen bleibt stehen — mit dem Erlös darin',
+    sellerState.snapshot.state.orders.length === 1 && (verkauftesKaestchen?.verkauft ?? 0) === 30,
+    JSON.stringify(sellerState.snapshot.state.orders),
+  );
 
-  const paid = await syncAs(second.key, 2, [{ seq: 3, tick: 0, type: 'COLLECT_MAIL' }]);
-  const sellerAfter = (await (
-    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
-      headers: { authorization: `Bearer ${second.key}` },
-    })
-  ).json()) as { snapshot: { state: { items: number[] } } };
-
-  const sellerPaid = (await (
+  const vorAbholung = (await (
     await fetch(`http://127.0.0.1:${PORT}/api/state`, {
       headers: { authorization: `Bearer ${second.key}` },
     })
@@ -670,12 +670,35 @@ try {
 
   const devRules = getRuleset(1001);
   const startGold = devRules.startingItems.find((x) => x.item === 0)?.amount ?? 0;
-  const expectedCoins = startGold - listingFee(devRules, 1, 10) + 10 * 3;
+  const vorErwartet = startGold - listingFee(devRules, 1, 10);
   check(
-    `Der Verkäufer hat sein Geld — 10 × 3 = 30, abzüglich Gebühr`,
-    paid.ok && sellerPaid.snapshot.state.items[0] === expectedCoins,
-    `${sellerPaid.snapshot.state.items[0]} statt ${expectedCoins} Münzen ` +
-      `(vor dem Postfach: ${sellerAfter.snapshot.state.items[0]})`,
+    'Vor dem Abholen ist das Gold noch nicht auf dem Konto',
+    vorAbholung.snapshot.state.items[0] === vorErwartet,
+    `${vorAbholung.snapshot.state.items[0]} statt ${vorErwartet} Münzen`,
+  );
+
+  const abgeholt = await syncAs(second.key, sellerState.snapshot.seq, [
+    {
+      seq: sellerState.snapshot.seq + 1,
+      tick: 0,
+      type: 'COLLECT_SALE',
+      orderId: verkauftesKaestchen?.id ?? 0,
+    },
+  ]);
+  const sellerPaid = (await (
+    await fetch(`http://127.0.0.1:${PORT}/api/state`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    })
+  ).json()) as { snapshot: { state: { items: number[]; orders: unknown[] } } };
+
+  const expectedCoins = vorErwartet + 10 * 3;
+  check(
+    `Ein Tipp holt den Erlös ab — 10 × 3 = 30 — und macht das Kästchen frei`,
+    abgeholt.ok &&
+      sellerPaid.snapshot.state.items[0] === expectedCoins &&
+      sellerPaid.snapshot.state.orders.length === 0,
+    `${sellerPaid.snapshot.state.items[0]} statt ${expectedCoins} Münzen, ` +
+      `${sellerPaid.snapshot.state.orders.length} Kästchen belegt`,
   );
 
   console.log('\n7. Die Spieloberfläche auf / (Telefonformat 390 × 844)');
@@ -1759,6 +1782,11 @@ try {
        document.getElementById('stand').click();
        var zurueck = document.querySelector('#stand-fuellen .zurueck');
        if (zurueck && !document.getElementById('stand-fuellen').hidden) zurueck.click();
+       for (var k = 0; k < 12; k++) {
+         var kasse = document.querySelector('#stand-kaesten .kaestchen.verkauft');
+         if (!kasse) break;
+         kasse.click();
+       }
        var frei = document.querySelector('#stand-kaesten .kaestchen.leer');
        if (!frei) return 'kein Kästchen frei';
        frei.click();
