@@ -219,6 +219,7 @@ function coreLoopBrett(version: number) {
         if (versuche({ type: 'PLACE', plot, gx, gy })) return;
       }
     }
+    return;
   };
 
   const saat = () => state.items[WHEAT] ?? 0;

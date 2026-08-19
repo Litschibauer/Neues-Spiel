@@ -5,6 +5,7 @@ import {
   levelOf,
   levelRecipes,
   listingFee,
+  blockiert,
   nextLevel,
   priceBand,
   sizeOf,
@@ -490,6 +491,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (cmd.gx < 0 || cmd.gy < 0) throw new SimError('OFF_GRID');
       if (cmd.gx + groesse.w > raster.w || cmd.gy + groesse.h > raster.h) {
         throw new SimError('OFF_GRID');
+      }
+
+      if (blockiert(rules, cmd.gx, cmd.gy, groesse.w, groesse.h)) {
+        throw new SimError('CELL_TAKEN');
       }
 
       for (const [i, other] of s.plots.entries()) {

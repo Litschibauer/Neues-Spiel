@@ -23,6 +23,14 @@ function hof(patch: Partial<State> = {}): State {
   return { ...base, items, xp: rules.levelThresholds[10]!, ...patch };
 }
 
+function hofV11(): State {
+  const v11 = getRuleset(11);
+  const base = initialState(v11);
+  const items = base.items.slice();
+  items[GOLD] = 50_000;
+  return { ...base, items, xp: v11.levelThresholds[10]! };
+}
+
 function client(state = hof()): Client {
   return new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 10 });
 }
@@ -183,5 +191,63 @@ test('ein Hof auf einem alten Regelwerk verliert seine Gebäude nicht', () => {
   assert.ok(
     gebaut.every((p) => V9.plots[p.index]!.place),
     'ein gebauter Platz ohne Ort ist auf dem Hof unsichtbar',
+  );
+});
+
+test('auf Bäumen, Steinen und Tümpeln baut niemand', () => {
+  const v11 = getRuleset(11);
+  const c = new Client({ state: hofV11(), seq: 0, serverTs: T0, rulesetVersion: 11 });
+  const baum = v11.obstacles!.find((h) => h.kind === 'tree')!;
+  const teich = v11.obstacles!.find((h) => h.kind === 'pond')!;
+  const feld = v11.plots.findIndex((p) => p.id === 'field-4');
+
+  c.buy(feld);
+  const aufDenBaum = c.place(feld, baum.gx, baum.gy);
+  assert.equal(aufDenBaum.ok, false, 'ein Feld mitten im Baum');
+  if (!aufDenBaum.ok) assert.equal(aufDenBaum.code, 'CELL_TAKEN');
+
+  const inDenTeich = c.place(feld, teich.gx, teich.gy);
+  assert.equal(inDenTeich.ok, false, 'ein Feld im Tümpel');
+
+  assert.equal(c.place(feld, 4, 8).ok, true, 'daneben muss frei sein');
+});
+
+test('die Hindernisse lassen genug Fläche zum Bauen', () => {
+  const v11 = getRuleset(11);
+  const felder = v11.grid!.w * v11.grid!.h;
+  const versperrt = v11.obstacles!.reduce((n, h) => n + h.w * h.h, 0);
+  const gebaeude = v11.plots.reduce((n, _, i) => {
+    const g = sizeOf(v11, i);
+    return n + g.w * g.h;
+  }, 0);
+
+  assert.ok(
+    gebaeude + versperrt <= felder,
+    `${gebaeude} + ${versperrt} passen nicht auf ${felder} Felder`,
+  );
+  assert.ok(
+    (felder - versperrt - gebaeude) / felder >= 0.2,
+    'unter 20 % Luft ist freies Platzieren keine Freiheit mehr',
+  );
+});
+
+test('ein Regelwerk mit einem Hindernis auf einem Startplatz fällt auf', () => {
+  const v11 = getRuleset(11);
+  const start = v11.plots.find((p) => p.startLevel > 0 && p.place)!;
+  const kaputt = {
+    ...v11,
+    obstacles: [
+      {
+        kind: 'rock' as const,
+        gx: Math.floor((start.place!.x * v11.grid!.w) / 100),
+        gy: Math.floor((start.place!.y * v11.grid!.h) / 100),
+        w: 1,
+        h: 1,
+      },
+    ],
+  };
+  assert.ok(
+    validateRuleset(kaputt).some((x) => x.includes('Hindernis')),
+    'ein blockierter Startplatz wird nicht erkannt',
   );
 });

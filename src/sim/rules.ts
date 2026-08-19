@@ -74,6 +74,14 @@ export type GridDef = {
   h: number;
 };
 
+export type Obstacle = {
+  kind: 'tree' | 'rock' | 'pond';
+  gx: number;
+  gy: number;
+  w: number;
+  h: number;
+};
+
 export type RequestTemplate = {
   id: string;
   wants: readonly ItemStack[];
@@ -118,6 +126,7 @@ export type Ruleset = {
   chestSpreadTicks?: number;
   chestQueueMax?: number;
   grid?: GridDef;
+  obstacles?: readonly Obstacle[];
 };
 
 const GOLD = 0;
@@ -815,14 +824,35 @@ const V10: Ruleset = {
   }),
 };
 
-const DEV: Ruleset = {
+const V11: Ruleset = {
   ...V10,
+  version: 11,
+
+  grid: { w: 9, h: 11 },
+
+  chestEveryTicks: 900,
+  chestSpreadTicks: 600,
+  chestQueueMax: 8,
+
+  obstacles: [
+    { kind: 'tree', gx: 0, gy: 0, w: 1, h: 1 },
+    { kind: 'tree', gx: 8, gy: 1, w: 1, h: 1 },
+    { kind: 'tree', gx: 3, gy: 2, w: 1, h: 1 },
+    { kind: 'rock', gx: 6, gy: 3, w: 1, h: 1 },
+    { kind: 'rock', gx: 1, gy: 5, w: 1, h: 1 },
+    { kind: 'pond', gx: 7, gy: 8, w: 2, h: 2 },
+    { kind: 'tree', gx: 0, gy: 10, w: 1, h: 1 },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V11,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 180,
   chestSpreadTicks: 120,
-  recipes: V10.recipes.map((r) => {
+  recipes: V11.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -839,14 +869,15 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [8, V8],
   [9, V9],
   [10, V10],
+  [11, V11],
   [1001, DEV],
 ]);
 
-export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const PRODUCTION_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 10;
+export const LATEST_RULESET_VERSION = 11;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -867,6 +898,18 @@ export function sizeOf(rules: Ruleset, plot: number): PlotSize {
 
 export function gridOf(rules: Ruleset): GridDef | null {
   return rules.grid ?? null;
+}
+
+export function blockiert(rules: Ruleset, gx: number, gy: number, w: number, h: number): boolean {
+  for (const hindernis of rules.obstacles ?? []) {
+    const frei =
+      gx + w <= hindernis.gx ||
+      hindernis.gx + hindernis.w <= gx ||
+      gy + h <= hindernis.gy ||
+      hindernis.gy + hindernis.h <= gy;
+    if (!frei) return true;
+  }
+  return false;
 }
 
 export function slotsAt(rules: Ruleset, plot: number, level: number): number {
@@ -1151,11 +1194,40 @@ export function validateRuleset(rules: Ruleset): string[] {
       }
       flaeche += groesse.w * groesse.h;
     }
-    if (flaeche > rules.grid.w * rules.grid.h) {
+    let versperrt = 0;
+    for (const h of rules.obstacles ?? []) {
+      if (h.gx < 0 || h.gy < 0 || h.gx + h.w > rules.grid.w || h.gy + h.h > rules.grid.h) {
+        problems.push(`Hindernis ${h.kind} liegt außerhalb des Rasters`);
+      }
+      versperrt += h.w * h.h;
+    }
+    for (let a = 0; a < (rules.obstacles ?? []).length; a++) {
+      for (let b = a + 1; b < (rules.obstacles ?? []).length; b++) {
+        const x = rules.obstacles![a]!;
+        const y = rules.obstacles![b]!;
+        const frei =
+          x.gx + x.w <= y.gx || y.gx + y.w <= x.gx || x.gy + x.h <= y.gy || y.gy + y.h <= x.gy;
+        if (!frei) problems.push(`Hindernisse ${x.kind} und ${y.kind} liegen übereinander`);
+      }
+    }
+
+    if (flaeche + versperrt > rules.grid.w * rules.grid.h) {
       problems.push(
-        `Alle Gebäude zusammen brauchen ${flaeche} Felder, das Raster hat ` +
+        `Gebäude und Hindernisse brauchen ${flaeche + versperrt} Felder, das Raster hat ` +
           `${rules.grid.w * rules.grid.h}`,
       );
+    }
+
+    for (const [i, p] of rules.plots.entries()) {
+      if (p.startLevel <= 0 || !p.place) continue;
+      const groesse = p.size ?? { w: 1, h: 1 };
+      const gx = Math.max(0, Math.min(rules.grid.w - groesse.w,
+        Math.floor((p.place.x * rules.grid.w) / 100)));
+      const gy = Math.max(0, Math.min(rules.grid.h - groesse.h,
+        Math.floor((p.place.y * rules.grid.h) / 100)));
+      if (blockiert(rules, gx, gy, groesse.w, groesse.h)) {
+        problems.push(`Startplatz ${p.id} landet auf einem Hindernis`);
+      }
     }
   }
 

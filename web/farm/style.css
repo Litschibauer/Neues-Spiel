@@ -66,6 +66,11 @@
   }
 
   * { box-sizing: border-box; }
+  html {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
   html, body { height: 100%; }
   body {
     margin: 0; background: var(--ground); color: var(--ink);
@@ -234,6 +239,8 @@
   #wagen:not(.unterwegs) { transition: transform 2.2s ease-out; }
   #brett { left: 33%; top: 11%; width: 15%; height: 11%; z-index: 61; }
   #kiste { left: 50%; top: 14%; width: 8%; height: 8%; z-index: 64; }
+  .schatz { position: absolute; }
+  .schatz .art { animation: wackeln 2.2s ease-in-out infinite; }
   #kiste .art { animation: wackeln 2.2s ease-in-out infinite; }
   @keyframes wackeln {
     0%, 88%, 100% { transform: rotate(0deg); }

@@ -8,6 +8,7 @@ function render() {
   renderPlots(v);
   renderTruck(v);
   renderMoebel(v);
+  renderKisten(v);
   renderRequests(v);
   renderMail(v);
   renderMarket(v);
@@ -194,8 +195,33 @@ function renderMoebel(v) {
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');
-  kiste.hidden = offen.length === 0;
-  if (offen.length > 0) moebel(kiste, artKiste(), 'Kiste', offen.length);
+  var ohneOrt = offen.filter(function (k) { return k.gx < 0 || !hatRaster(); });
+  kiste.hidden = ohneOrt.length === 0;
+  if (ohneOrt.length > 0) moebel(kiste, artKiste(), 'Kiste', ohneOrt.length);
+}
+
+function renderKisten(v) {
+  var box = $('kisten');
+  box.textContent = '';
+  if (!hatRaster()) return;
+
+  v.chests.forEach(function (k) {
+    if (!k.ready || k.gx < 0) return;
+    var kasten = plotKasten(-1, { gx: k.gx, gy: k.gy });
+    var knopf = document.createElement('button');
+    knopf.className = 'moebel schatz';
+    knopf.style.left = kasten.left + '%';
+    knopf.style.top = kasten.top + '%';
+    knopf.style.width = kasten.width + '%';
+    knopf.style.height = kasten.height + '%';
+    knopf.style.zIndex = String(40 + Math.round(kasten.tiefe * 2));
+    knopf.innerHTML =
+      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
+      artKiste() + '</svg>';
+    knopf.setAttribute('aria-label', k.kind + ' öffnen');
+    knopf.addEventListener('click', function () { oeffneKiste(k.id); });
+    box.appendChild(knopf);
+  });
 }
 
 function renderAusbau(v) {

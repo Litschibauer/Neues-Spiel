@@ -56,9 +56,9 @@ function prozent(wert, gesamt) {
 }
 
 function plotKasten(i, plot) {
-  if (!hatRaster()) return altePlatzierung(i);
+  if (i >= 0 && !hatRaster()) return altePlatzierung(i);
   var g = raster();
-  var def = rules.plots[i];
+  var def = i >= 0 ? rules.plots[i] : null;
   var groesse = (def && def.size) || { w: 1, h: 1 };
   var k = feldKasten(plot.gx, plot.gy, groesse.w, groesse.h);
 
@@ -99,6 +99,17 @@ function artBoden(zeigeRaster) {
     }
   }
 
+  var hindernisse = rules.obstacles || [];
+  for (var hi = 0; hi < hindernisse.length; hi++) {
+    var hind = hindernisse[hi];
+    var kasten = feldKasten(hind.gx, hind.gy, hind.w, hind.h);
+    var hoehe = (kasten.unten - kasten.oben) * (hind.kind === 'pond' ? 1 : 1.7);
+    var bild = hind.kind === 'tree' ? artBaum() : hind.kind === 'rock' ? artStein() : artTuempel();
+    out += '<svg x="' + kasten.left + '" y="' + (kasten.unten - hoehe) +
+      '" width="' + kasten.breite + '" height="' + hoehe +
+      '" viewBox="0 0 100 100" preserveAspectRatio="none">' + bild + '</svg>';
+  }
+
   if (zeigeRaster) {
     for (var gy = 0; gy <= g.h; gy++) {
       var l = projiziere(0, gy);
@@ -122,6 +133,17 @@ function passtHin(plot, gx, gy) {
   if (!g) return false;
   var groesse = rules.plots[plot].size || { w: 1, h: 1 };
   if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return false;
+
+  var hindernisse = rules.obstacles || [];
+  for (var h = 0; h < hindernisse.length; h++) {
+    var hi = hindernisse[h];
+    var offen =
+      gx + groesse.w <= hi.gx ||
+      hi.gx + hi.w <= gx ||
+      gy + groesse.h <= hi.gy ||
+      hi.gy + hi.h <= gy;
+    if (!offen) return false;
+  }
 
   var andere = client.preview().plots;
   for (var i = 0; i < andere.length; i++) {

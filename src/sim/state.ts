@@ -56,6 +56,8 @@ export type Chest = {
   id: number;
   kind: number;
   readyAt: number;
+  gx: number;
+  gy: number;
 };
 
 export type Truck = {
@@ -199,7 +201,7 @@ export function normalizeState(s: State): State {
     skipReadyAt: s.skipReadyAt ?? 0,
     truck: s.truck ?? { loaded: [], awayUntil: 0 },
     siloLevel: s.siloLevel ?? 0,
-    chests: s.chests ?? [],
+    chests: (s.chests ?? []).map((k) => ({ ...k, gx: k.gx ?? -1, gy: k.gy ?? -1 })),
     nextChestId: s.nextChestId ?? 1,
     pendingBoxes: s.pendingBoxes ?? [],
   };

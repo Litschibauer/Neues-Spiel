@@ -1,3 +1,28 @@
+function artBaum() {
+  return '<g><ellipse cx="50" cy="88" rx="26" ry="6" fill="var(--ink)" opacity=".18"/>' +
+    '<rect x="44" y="52" width="12" height="36" rx="3" fill="var(--wood-dark)"/>' +
+    '<circle cx="50" cy="42" r="30" fill="var(--leaf-dark)"/>' +
+    '<circle cx="32" cy="50" r="20" fill="var(--leaf)"/>' +
+    '<circle cx="68" cy="50" r="18" fill="var(--leaf)"/>' +
+    '<circle cx="50" cy="28" r="18" fill="var(--leaf)"/></g>';
+}
+
+function artStein() {
+  return '<g><ellipse cx="50" cy="86" rx="30" ry="7" fill="var(--ink)" opacity=".18"/>' +
+    '<path d="M18 86c-4-16 4-30 16-36 12-6 28-4 36 6 8 10 10 22 6 30z" fill="#9aa1a6"/>' +
+    '<path d="M50 50c8-4 18-2 24 6 6 8 8 18 4 30H50z" fill="#7e858a"/>' +
+    '<path d="M30 60c4-6 10-8 14-6" stroke="#b7bec3" stroke-width="4" stroke-linecap="round" fill="none"/></g>';
+}
+
+function artTuempel() {
+  return '<g><ellipse cx="50" cy="60" rx="44" ry="26" fill="#6f9a5e"/>' +
+    '<ellipse cx="50" cy="58" rx="38" ry="21" fill="#4d86a8"/>' +
+    '<ellipse cx="50" cy="55" rx="30" ry="15" fill="#63a3c4"/>' +
+    '<path d="M28 50c8-4 16-4 24 0" stroke="#a7d3e6" stroke-width="3" stroke-linecap="round" fill="none" opacity=".8"/>' +
+    '<ellipse cx="66" cy="63" rx="7" ry="4" fill="#4f8f4a"/>' +
+    '<ellipse cx="36" cy="66" rx="5" ry="3" fill="#4f8f4a"/></g>';
+}
+
 function artScene() {
   var out = '<rect x="0" y="0" width="100" height="130" fill="var(--meadow)"/>' +
     '<rect x="0" y="0" width="100" height="13" fill="var(--sky)"/>' +

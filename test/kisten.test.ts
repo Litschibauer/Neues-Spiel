@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
-import { getRuleset, validateRuleset } from '../src/sim/rules.ts';
+import { blockiert, getRuleset, sizeOf, validateRuleset } from '../src/sim/rules.ts';
 import { capacityOf, initialState, count, stored } from '../src/sim/state.ts';
 import { farmView } from '../src/client/view.ts';
 import { assertInvariants, migrateState } from '../src/sim/migrate.ts';
@@ -220,4 +220,48 @@ test('das Regelwerk v9 ist in sich stimmig', () => {
       assert.ok(rules.items[drop.item], `${art.id}: Gegenstand ${drop.item} unbekannt`);
     }
   }
+});
+
+test('Kisten landen auf freien Rasterfeldern, nicht in Gebäuden oder im Teich', () => {
+  const v11 = getRuleset(11);
+  const start = initialState(v11);
+  const { chests } = topUpChests(start, v11, mulberry32(11));
+
+  assert.ok(chests.length >= 6, `nur ${chests.length} Kisten geplant`);
+
+  const stellen = new Set<string>();
+  for (const kiste of chests) {
+    assert.ok(kiste.gx >= 0 && kiste.gy >= 0, 'Kiste ohne Stelle');
+    assert.ok(kiste.gx < v11.grid!.w && kiste.gy < v11.grid!.h, 'Kiste außerhalb des Rasters');
+
+    assert.ok(
+      !blockiert(v11, kiste.gx, kiste.gy, 1, 1),
+      `Kiste ${kiste.id} liegt auf einem Hindernis`,
+    );
+
+    const inGebaeude = start.plots.some((p, i) => {
+      if (p.gx < 0) return false;
+      const g = sizeOf(v11, i);
+      return (
+        kiste.gx >= p.gx && kiste.gx < p.gx + g.w && kiste.gy >= p.gy && kiste.gy < p.gy + g.h
+      );
+    });
+    assert.ok(!inGebaeude, `Kiste ${kiste.id} liegt in einem Gebäude`);
+
+    const stelle = `${kiste.gx},${kiste.gy}`;
+    assert.ok(!stellen.has(stelle), `zwei Kisten auf ${stelle}`);
+    stellen.add(stelle);
+  }
+
+  assert.ok(stellen.size > 3, 'die Kisten liegen alle am selben Fleck');
+});
+
+test('Kisten kommen öfter als früher', () => {
+  const v9 = getRuleset(9);
+  const v11 = getRuleset(11);
+  assert.ok(
+    v11.chestEveryTicks! < v9.chestEveryTicks!,
+    `v11 wartet ${v11.chestEveryTicks}s, v9 wartete ${v9.chestEveryTicks}s`,
+  );
+  assert.ok(v11.chestQueueMax! >= v9.chestQueueMax!);
 });

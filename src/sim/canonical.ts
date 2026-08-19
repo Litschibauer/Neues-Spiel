@@ -34,7 +34,9 @@ export function canonicalize(state: State): string {
     `skipReadyAt=${state.skipReadyAt}`,
     `truck=${state.truck.loaded.join('/')}@${state.truck.awayUntil}`,
     `silo=${state.siloLevel}`,
-    `chests=[${state.chests.map((c) => `${c.id}:${c.kind}@${c.readyAt}`).join(',')}]`,
+    `chests=[${state.chests
+      .map((c) => `${c.id}:${c.kind}@${c.readyAt}/${c.gx},${c.gy}`)
+      .join(',')}]`,
     `nextChestId=${state.nextChestId}`,
     `boxes=[${state.pendingBoxes.join(',')}]`,
   ].join('|');

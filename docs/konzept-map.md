@@ -455,6 +455,39 @@ platzieren" eine Lüge. Die Migration 9 → 10 setzt bestehende Höfe an die
 Stellen, die ihren alten Prozentkoordinaten am nächsten kommen, und packt
 Kollisionen deterministisch in die erste freie Lücke.
 
+#### v11: Hindernisse auf dem Raster, Kisten mittendrin
+
+Ein leeres 8 × 10-Feld ist ein Parkplatz, kein Hof. v11 stellt **Bäume, Steine
+und einen Tümpel** darauf — als Katalogdaten, nicht als Zustand:
+
+```
+obstacles: [{ kind: 'tree', gx: 0, gy: 0, w: 1, h: 1 }, …]
+```
+
+Damit kosten sie nichts: kein Command, keine Migration, kein Feld im Zustand.
+Die Sim fragt bei `PLACE` einmal `blockiert()` ab, und `validateRuleset` rechnet
+nach, dass Gebäude **und** Hindernisse zusammen aufs Raster passen und dass kein
+Startplatz auf einem Stein landet. Das Raster wuchs dafür auf 9 × 11.
+
+Ein Test verlangt darüber hinaus **20 % Luft** nach Abzug von allem — sonst wäre
+„frei platzieren" wieder nur eine Behauptung.
+
+**Die Kisten liegen jetzt auf dem Hof statt neben der Scheune.** Der Server
+würfelt beim Einplanen nicht nur *wann*, sondern auch *wo*: ein freies Feld,
+das weder ein Gebäude noch ein Hindernis belegt. Und sie kommen doppelt so oft
+(alle 15 statt 30 Minuten, acht statt sechs im Vorrat).
+
+> Ehrlich dabei: Eine Kiste, die für in zwei Stunden eingeplant ist, kann bis
+> dahin unter einem neu gebauten Stall liegen. Sie wird dann darüber gezeichnet
+> statt zu verschwinden — sichtbar bleibt sie, hübsch ist es nicht. Blockieren
+> lassen wollte ich sie nicht: Dann könnte eine unsichtbare Kiste einen Bauplatz
+> sperren, und *das* wäre wirklich ärgerlich.
+
+**Was der Ziehen-Test gefunden hat:** Die Vorschau beim Verschieben prüfte Rand
+und Nachbarn, aber nicht die Hindernisse — das Gebäude leuchtete grün über einem
+Baum und sprang beim Loslassen zurück. Zwei Prüfungen derselben Regel an zwei
+Orten laufen auseinander; hier hat es der Browserlauf gefangen.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

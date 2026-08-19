@@ -316,13 +316,19 @@ $('hof').addEventListener('click', function (e) {
   endeSetzen();
 });
 
+function oeffneKiste(id) {
+  if (!isActive) return;
+  client.localTick = tickNow();
+  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(id));
+}
+
 $('kiste').addEventListener('click', function () {
   if (!isActive) return;
   client.localTick = tickNow();
   var offen = NS.farmView(client.preview(), rules, navigator.onLine).chests
     .filter(function (k) { return k.ready; });
   if (offen.length === 0) return;
-  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(offen[0].id));
+  oeffneKiste(offen[0].id);
 });
 
 function openPicker(p, slot) {

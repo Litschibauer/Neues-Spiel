@@ -1,5 +1,5 @@
 import type { Ruleset } from './rules.ts';
-import { getRuleset, levelRecipes, sizeOf, slotsAt } from './rules.ts';
+import { blockiert, getRuleset, levelRecipes, sizeOf, slotsAt } from './rules.ts';
 import type { Slot, State } from './state.ts';
 import { EMPTY_PLOT, capacityOf, cloneState, emptySlots, startPlatz, stored } from './state.ts';
 
@@ -119,13 +119,20 @@ export const AUFS_RASTER: MigrationStep = (state, from, to) => {
   const gewachsen = GROW_AND_RETIME(state, from, to);
   const raster = to.grid;
   if (!raster) return gewachsen;
-  if (gewachsen.plots.every((p) => p.level <= 0 || p.gx >= 0)) return gewachsen;
+  const stimmt = gewachsen.plots.every((p, i) => {
+    if (p.level <= 0) return true;
+    if (p.gx < 0) return false;
+    const g = sizeOf(to, i);
+    return !blockiert(to, p.gx, p.gy, g.w, g.h);
+  });
+  if (stimmt) return gewachsen;
 
   const belegt: boolean[][] = [];
   for (let y = 0; y < raster.h; y++) belegt.push(new Array<boolean>(raster.w).fill(false));
 
   const passt = (gx: number, gy: number, w: number, h: number): boolean => {
     if (gx < 0 || gy < 0 || gx + w > raster.w || gy + h > raster.h) return false;
+    if (blockiert(to, gx, gy, w, h)) return false;
     for (let y = gy; y < gy + h; y++) {
       for (let x = gx; x < gx + w; x++) if (belegt[y]![x]) return false;
     }
@@ -177,6 +184,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['7->8', GROW_AND_RETIME],
   ['8->9', GROW_AND_RETIME],
   ['9->10', AUFS_RASTER],
+  ['10->11', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -303,6 +311,9 @@ export function assertInvariants(state: State, rules: Ruleset): void {
       const groesse = sizeOf(rules, i);
       if (p.gx + groesse.w > raster.w || p.gy + groesse.h > raster.h || p.gy < 0) {
         problems.push(`Platz ${i} steht außerhalb des Rasters: ${p.gx},${p.gy}`);
+      }
+      if (blockiert(rules, p.gx, p.gy, groesse.w, groesse.h)) {
+        problems.push(`Platz ${i} steht auf einem Hindernis`);
       }
       for (const [j, other] of state.plots.entries()) {
         if (j <= i || other.gx < 0) continue;

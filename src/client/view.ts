@@ -115,6 +115,8 @@ export type ChestView = {
   kind: string;
   ready: boolean;
   readyIn: number;
+  gx: number;
+  gy: number;
 };
 
 export type SiloUpgradeView = {
@@ -455,6 +457,8 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       kind: rules.chestKinds?.[c.kind]?.label ?? '',
       ready: state.tick >= c.readyAt,
       readyIn: Math.max(0, c.readyAt - state.tick),
+      gx: c.gx,
+      gy: c.gy,
     })),
     openBoxes: state.pendingBoxes.length,
   };

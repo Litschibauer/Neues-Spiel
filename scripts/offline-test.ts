@@ -1505,18 +1505,33 @@ try {
   await api(`/api/admin/time?account=${status.accountId}&seconds=${wartezeit}`, 'POST');
 
   try {
-    await waitFor(cdp, `!document.getElementById('kiste').hidden`, 'Kiste steht da', 20_000);
+    await waitFor(
+      cdp,
+      `document.querySelectorAll('#kisten .schatz').length > 0`,
+      'Kiste steht da',
+      20_000,
+    );
   } catch {
   }
+  const kistenAufDemRaster = await evaluate<{ aufRaster: number; ecke: boolean }>(
+    cdp,
+    `(function () {
+       return {
+         aufRaster: document.querySelectorAll('#kisten .schatz').length,
+         ecke: !document.getElementById('kiste').hidden,
+       };
+     })()`,
+  );
   check(
-    'Wenn ihre Zeit da ist, steht die Kiste auf dem Hof',
-    await evaluate<boolean>(cdp, `!document.getElementById('kiste').hidden`),
+    'Wenn ihre Zeit da ist, steht die Kiste irgendwo auf dem Raster',
+    kistenAufDemRaster.aufRaster > 0,
+    `${kistenAufDemRaster.aufRaster} auf dem Raster, Ecke ${kistenAufDemRaster.ecke}`,
   );
 
   const vorKiste = (await api(`/api/admin/status?account=${status.accountId}`)) as {
     state: { items: number[]; mail: unknown[] };
   };
-  await evaluate(cdp, `document.getElementById('kiste').click()`);
+  await evaluate(cdp, `document.querySelector('#kisten .schatz').click()`);
   await sleep(1500);
 
   const nachKiste = (await api(`/api/admin/status?account=${status.accountId}`)) as {
@@ -1757,6 +1772,20 @@ try {
     'Ein Tipp aufs Raster setzt das Gebäude hin',
     nachSetzen.plots === gebautVorher + 1 && !nachSetzen.banner,
     `${gebautVorher} → ${nachSetzen.plots} Gebäude`,
+  );
+
+  const hindernisse = await evaluate<string>(
+    cdp,
+    `(function () {
+       var boden = document.getElementById('scene').innerHTML;
+       return [/6f9a5e/.test(boden) ? 'teich' : '', /9aa1a6/.test(boden) ? 'stein' : '']
+         .filter(Boolean).join('+');
+     })()`,
+  );
+  check(
+    'Bäume, Steine und ein Tümpel stehen auf dem Raster',
+    hindernisse === 'teich+stein',
+    hindernisse || 'keine Hindernisse gezeichnet',
   );
 
   const serverWeiss = (await api(`/api/admin/status?account=${status.accountId}`)) as {

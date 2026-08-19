@@ -1,5 +1,13 @@
 import { Client } from '../../src/client/client.ts';
-import { getRuleset, levelOf, levelRecipes, nextLevel, priceBand, sizeOf } from '../../src/sim/rules.ts';
+import {
+  blockiert,
+  getRuleset,
+  levelOf,
+  levelRecipes,
+  nextLevel,
+  priceBand,
+  sizeOf,
+} from '../../src/sim/rules.ts';
 import type { Ruleset } from '../../src/sim/rules.ts';
 import { EMPTY_PLOT, cloneState, count, initialState, stored } from '../../src/sim/state.ts';
 import type { MailItem, Offer, State } from '../../src/sim/state.ts';
@@ -167,6 +175,7 @@ function freiesFeld(s: State, rules: Ruleset, plot: number): { gx: number; gy: n
 
   for (let gy = 0; gy <= raster.h - groesse.h; gy++) {
     for (let gx = 0; gx <= raster.w - groesse.w; gx++) {
+      if (blockiert(rules, gx, gy, groesse.w, groesse.h)) continue;
       const frei = s.plots.every((other, j) => {
         if (j === plot || other.gx < 0) return true;
         const andere = sizeOf(rules, j);

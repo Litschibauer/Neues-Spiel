@@ -1,5 +1,29 @@
 import type { Ruleset } from '../sim/rules.ts';
+import { blockiert, sizeOf } from '../sim/rules.ts';
 import type { Chest, MailItem, State } from '../sim/state.ts';
+
+function freieFelder(state: State, rules: Ruleset, schon: readonly Chest[]): Array<[number, number]> {
+  const raster = rules.grid;
+  if (!raster) return [];
+
+  const frei: Array<[number, number]> = [];
+  for (let gy = 0; gy < raster.h; gy++) {
+    for (let gx = 0; gx < raster.w; gx++) {
+      if (blockiert(rules, gx, gy, 1, 1)) continue;
+
+      const belegt = state.plots.some((p, i) => {
+        if (p.gx < 0) return false;
+        const g = sizeOf(rules, i);
+        return gx >= p.gx && gx < p.gx + g.w && gy >= p.gy && gy < p.gy + g.h;
+      });
+      if (belegt) continue;
+      if (schon.some((k) => k.gx === gx && k.gy === gy)) continue;
+
+      frei.push([gx, gy]);
+    }
+  }
+  return frei;
+}
 
 export function topUpChests(
   state: State,
@@ -21,7 +45,15 @@ export function topUpChests(
 
   while (chests.length < max) {
     letzte += takt + Math.floor(rnd() * (streuung + 1));
-    chests.push({ id, kind: Math.floor(rnd() * arten.length), readyAt: letzte });
+    const frei = freieFelder(state, rules, chests);
+    const stelle = frei.length > 0 ? frei[Math.floor(rnd() * frei.length)]! : [-1, -1];
+    chests.push({
+      id,
+      kind: Math.floor(rnd() * arten.length),
+      readyAt: letzte,
+      gx: stelle[0]!,
+      gy: stelle[1]!,
+    });
     id++;
   }
 
