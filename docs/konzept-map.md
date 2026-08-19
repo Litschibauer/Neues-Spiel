@@ -542,6 +542,44 @@ löst sich damit von selbst.
 > hatte — mehr als die 60 Sekunden Wartezeit im Dev-Regelwerk. Das Spiel hatte
 > recht, der Test hatte unrecht.
 
+#### v14: der Verkaufsstand hat Kästchen
+
+Bis v13 war das Anbieten ein Formular: für jede Ware im Lager eine Karte mit
+zwei Zahlenfeldern. Wer acht Waren hatte, scrollte durch acht Karten, und die
+Frage „was steht eigentlich gerade in meiner Auslage?" beantwortete ein
+zweiter Abschnitt weiter unten.
+
+v14 dreht das um. Der Stand ist jetzt das, was er im Spiel auch ist: **eine
+Reihe Kästchen**, sechs Stück, leer oder voll. Ein leeres tippt man an und
+wird gefragt — erst welche Ware, dann Menge und Preis. Ein volles zeigt, was
+drinsteht, und gibt es mit einem Tipp zurück.
+
+Dazu zwei Grenzen, beide als Regelwerksdaten:
+
+```
+maxOfferAmount: 10     höchstens zehn Stück je Kästchen
+maxOfferPrice: 500     harter Deckel über dem Preisband
+```
+
+`offerLimits()` rechnet beides zu einer Antwort zusammen, und alle drei
+Stellen fragen dieselbe Funktion: die Sim beim `LIST_ORDER`, das Ansichts-
+modell für die Regler, die Prüfung beim Laden eines Regelwerks. Der Deckel
+liegt über dem Band und schneidet es nur dort ab, wo es teuer wird — heute
+allein beim Käse (Band bis 630, Deckel 500). Alles darunter merkt nichts
+davon, und `validateRuleset` schlägt an, sobald ein Deckel unter den
+Mindestpreis einer handelbaren Ware rutschen würde.
+
+Die alten Regelwerke bleiben ohne die beiden Felder, also ohne Grenze — ein
+Log aus v13 spielt sich unverändert ab. Aufträge, die vor der Migration
+eingestellt wurden, bleiben stehen, wie sie sind: Sie waren legal, als sie
+entstanden. Die Grenze gilt beim Hinstellen, nicht als Zustandsbedingung.
+
+> Der Testlauf war hier der ehrlichste Kritiker: Die alte Prüfung „leergespielt"
+> hat den ganzen Weizen mit einem Tipp auf *alle* in ein einziges Kästchen
+> geschoben. Das geht jetzt nicht mehr — und genau das ist der Punkt der
+> Änderung. Der Test verkauft den Hof seitdem in Zehnerschritten an den
+> zweiten Hof, also über den Markt, den es dafür gibt.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

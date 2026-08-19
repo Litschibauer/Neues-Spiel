@@ -408,6 +408,40 @@
   }
   .ic.gross { width: 1.7em; height: 1.7em; vertical-align: -.4em; }
 
+  .stand-kopf {
+    display: flex; align-items: baseline; gap: .5rem;
+    font-size: .78rem; font-weight: 650; margin: .2rem 0 .5rem;
+  }
+  .stand-kopf .frei { margin-left: auto; font-size: .7rem; color: var(--muted); font-weight: 600; }
+  .stand-kopf .zurueck {
+    border: 0; background: transparent; color: var(--accent);
+    font-size: .78rem; font-weight: 650; padding: 0; margin-right: .2rem;
+  }
+  .stand-raster {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem;
+  }
+  .kaestchen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: .1rem; min-height: 5.2rem; padding: .5rem .3rem;
+    border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
+    box-shadow: var(--shadow); text-align: center; transition: transform .12s;
+  }
+  .kaestchen:active { transform: scale(.97); }
+  .kaestchen .n { font-size: .8rem; font-weight: 700; }
+  .kaestchen .p { font-size: .66rem; color: var(--gold); font-weight: 700; }
+  .kaestchen .rest { font-size: .62rem; color: var(--muted); }
+  .kaestchen.leer {
+    background: var(--sunk); border-style: dashed; box-shadow: none;
+  }
+  .kaestchen.leer .plus { font-size: 1.6rem; font-weight: 300; color: var(--muted); line-height: 1; }
+  .kaestchen[disabled] { opacity: .45; }
+  .preisknoepfe { display: flex; gap: .35rem; margin: .1rem 0 .5rem; }
+  .preisknoepfe button {
+    flex: 1; height: 1.9rem; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--muted); font-size: .68rem; font-weight: 650;
+  }
+  .preisknoepfe button.an { border-color: var(--accent); color: var(--accent); }
+
   .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
   .chip .ic { width: 1.5em; height: 1.5em; vertical-align: -.42em; }
   .chip {

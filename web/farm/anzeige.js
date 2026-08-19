@@ -13,12 +13,12 @@ function render() {
   renderRequests(v);
   renderMail(v);
   renderMarket(v);
-  renderMyOrders(v);
+  renderVorrat(v);
 
   var typing = document.activeElement
     && document.activeElement.tagName === 'INPUT'
     && $('stand-bg').contains(document.activeElement);
-  if (!typing) renderStore(v);
+  if (!typing) renderStand(v);
   renderAusbau(v);
   renderHofinfo(v);
   renderBadges(v);
@@ -427,51 +427,6 @@ function renderMarket(v) {
   });
 }
 
-function renderMyOrders(v) {
-  var box = $('my-orders');
-  box.textContent = '';
-  if (v.orders.length === 0) {
-    box.innerHTML = '<p class="empty">Du bietest nichts an — alle ' +
-      v.orderSlotsFree + ' Plätze sind frei. Einstellen geht unter Lager, auch ohne Netz.</p>';
-    return;
-  }
-  v.orders.forEach(function (o) {
-    var card = document.createElement('button');
-    card.className = 'card';
-    var body = document.createElement('div');
-    body.className = 'body';
-    var top = document.createElement('div');
-    top.className = 'top';
-    top.textContent = o.amount + ' ' + itemName(o.item) + ' à ' + o.price;
-    var sub = document.createElement('div');
-    sub.className = 'sub';
-
-    sub.textContent = o.expiresIn === null
-      ? 'steht seit ' + timeText(o.listedFor) + ' · läuft nicht ab'
-      : 'in ' + timeText(o.expiresIn) + ' zurück ins Postfach';
-    body.appendChild(top); body.appendChild(sub);
-    var go = document.createElement('span');
-    go.className = 'go';
-    go.textContent = 'Zurück';
-    card.appendChild(body); card.appendChild(go);
-    card.addEventListener('click', function () {
-      act('Zurückgeholt · ' + o.amount + ' ' + itemName(o.item), client.cancelOrder(o.id));
-    });
-    box.appendChild(card);
-  });
-}
-
-var picks = {};
-
-function pickOf(entry) {
-  var p = picks[entry.item];
-  if (!p) {
-    p = { amount: entry.amount, price: entry.bandMax };
-    picks[entry.item] = p;
-  }
-  return p;
-}
-
 function clamp(n, lo, hi) {
   if (!isFinite(n)) return lo;
   return Math.max(lo, Math.min(hi, Math.round(n)));
@@ -529,7 +484,7 @@ function numberPick(label, get, lo, hi, set, maxLabel) {
   return row;
 }
 
-function renderStore(v) {
+function renderVorrat(v) {
   var chips = $('stock');
   chips.textContent = '';
   v.stock.forEach(function (entry) {
@@ -541,72 +496,224 @@ function renderStore(v) {
       '</span><span class="n">' + entry.amount + '</span>';
     chips.appendChild(chip);
   });
+}
 
-  var listBox = $('list');
-  listBox.textContent = '';
-  var any = false;
+var stand = null;
 
-  v.stock.forEach(function (entry) {
-    if (!entry.sellable || entry.amount <= 0) return;
-    any = true;
-    var pick = pickOf(entry);
-    var amount = clamp(pick.amount, 1, entry.amount);
-    var price = clamp(pick.price, entry.bandMin, entry.bandMax);
-    var fee = NS.listingFee(rules, entry.item, amount);
-    var free = v.orderSlotsFree;
-    var canPayFee = v.currency.amount >= fee;
+function standZu() { stand = null; }
 
-    var offer = document.createElement('div');
-    offer.className = 'card trade';
-    var offerHead = document.createElement('div');
-    offerHead.className = 'head';
-    offerHead.innerHTML =
-      '<span class="name">' + iconTag(entry.id) + nameOf(entry.id) + ' anbieten</span>' +
-      '<span class="have">du hast ' + entry.amount + ' · ' +
-      free + (free === 1 ? ' Platz' : ' Plätze') + ' frei</span>';
-    offer.appendChild(offerHead);
-    offer.appendChild(numberPick(
-      'Menge',
-      function () { return picks[entry.item].amount; },
-      1,
-      entry.amount,
-      function (n, typing) { picks[entry.item].amount = n; if (!typing) render(); },
-      'alle',
-    ));
-    offer.appendChild(numberPick(
-      'Preis',
-      function () { return picks[entry.item].price; },
-      entry.bandMin,
-      entry.bandMax,
-      function (n, typing) { picks[entry.item].price = n; if (!typing) render(); },
-    ));
+function standWaren(v) {
+  return v.stock.filter(function (e) { return e.sellable && e.amount > 0; });
+}
 
-    var offerGo = document.createElement('button');
-    offerGo.type = 'button';
-    offerGo.className = 'done';
-    offerGo.disabled = free <= 0 || !canPayFee;
-    offerGo.textContent = 'Anbieten · bringt ' + amount * price + ' ' + itemName(v.currency.item);
-    offerGo.addEventListener('click', function () {
-      var n = clamp(picks[entry.item].amount, 1, client.preview().items[entry.item] || 0);
-      var p = clamp(picks[entry.item].price, entry.bandMin, entry.bandMax);
-      if (n <= 0) return;
-      act('Angeboten · ' + n + ' ' + nameOf(entry.id), client.listOrder(entry.item, n, p));
+function standGrenzen(entry) {
+  var deckel = entry.maxAmount > 0 ? entry.maxAmount : entry.amount;
+  return {
+    menge: Math.max(1, Math.min(entry.amount, deckel)),
+    min: entry.bandMin,
+    max: entry.bandMax,
+  };
+}
+
+function renderStand(v) {
+  var kaesten = $('stand-kaesten');
+  var fuellen = $('stand-fuellen');
+
+  if (stand && !v.stock[stand.item] && stand.item !== null) stand = null;
+
+  if (!stand) {
+    fuellen.hidden = true;
+    fuellen.textContent = '';
+    kaesten.hidden = false;
+    zeichneKaesten(v, kaesten);
+    return;
+  }
+
+  kaesten.hidden = true;
+  kaesten.textContent = '';
+  fuellen.hidden = false;
+  zeichneFuellen(v, fuellen);
+}
+
+function zeichneKaesten(v, box) {
+  box.textContent = '';
+
+  var kopf = document.createElement('div');
+  kopf.className = 'stand-kopf';
+  kopf.innerHTML = '<span>Deine Kästchen</span><span class="frei">' +
+    v.orderSlotsFree + ' von ' + v.orderSlots + ' frei</span>';
+  box.appendChild(kopf);
+
+  var raster = document.createElement('div');
+  raster.className = 'stand-raster';
+  var waren = standWaren(v);
+
+  for (var i = 0; i < v.orderSlots; i++) {
+    raster.appendChild(v.orders[i] ? vollesKaestchen(v.orders[i]) : leeresKaestchen(waren));
+  }
+  box.appendChild(raster);
+
+  var hinweis = document.createElement('p');
+  hinweis.className = 'note';
+  hinweis.textContent = waren.length === 0
+    ? 'Noch nichts zu verkaufen — erst ernten.'
+    : 'Höchstens ' + standLimit(v) + ' Stück je Kästchen.';
+  box.appendChild(hinweis);
+}
+
+function standLimit(v) {
+  for (var i = 0; i < v.stock.length; i++) {
+    if (v.stock[i].sellable && v.stock[i].maxAmount > 0) return v.stock[i].maxAmount;
+  }
+  return 0;
+}
+
+function vollesKaestchen(o) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'kaestchen voll';
+  b.innerHTML = itemIcon(o.item, 'gross') +
+    '<span class="n">' + o.amount + '×</span>' +
+    '<span class="p">' + o.price + ' je Stück</span>' +
+    '<span class="rest">' + (o.expiresIn === null
+      ? 'steht seit ' + timeText(o.listedFor)
+      : 'noch ' + timeText(o.expiresIn)) + '</span>';
+  b.addEventListener('click', function () {
+    act('Zurückgeholt · ' + o.amount + ' ' + itemName(o.item), client.cancelOrder(o.id));
+  });
+  return b;
+}
+
+function leeresKaestchen(waren) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'kaestchen leer';
+  b.disabled = waren.length === 0;
+  b.innerHTML = '<span class="plus">+</span><span class="rest">frei</span>';
+  b.addEventListener('click', function () {
+    stand = { item: null, amount: 1, price: 1 };
+    render();
+  });
+  return b;
+}
+
+function zeichneFuellen(v, box) {
+  box.textContent = '';
+
+  var kopf = document.createElement('div');
+  kopf.className = 'stand-kopf';
+  var zurueck = document.createElement('button');
+  zurueck.type = 'button';
+  zurueck.className = 'zurueck';
+  zurueck.textContent = '‹ Zurück';
+  zurueck.addEventListener('click', function () { standZu(); render(); });
+  var titel = document.createElement('span');
+  titel.textContent = stand.item === null ? 'Was soll rein?' : 'Menge und Preis';
+  kopf.appendChild(zurueck);
+  kopf.appendChild(titel);
+  box.appendChild(kopf);
+
+  if (stand.item === null) {
+    zeichneWarenwahl(v, box);
+    return;
+  }
+  zeichnePreiswahl(v, box);
+}
+
+function zeichneWarenwahl(v, box) {
+  var waren = standWaren(v);
+  var raster = document.createElement('div');
+  raster.className = 'stand-raster';
+
+  waren.forEach(function (entry) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kaestchen wahl';
+    b.innerHTML = iconTag(entry.id, 'gross') +
+      '<span class="n">' + nameOf(entry.id) + '</span>' +
+      '<span class="rest">du hast ' + entry.amount + '</span>';
+    b.addEventListener('click', function () {
+      var g = standGrenzen(entry);
+      stand = { item: entry.item, amount: g.menge, price: g.max };
+      render();
     });
-    offer.appendChild(offerGo);
-
-    var note = document.createElement('div');
-    note.className = 'note';
-    note.textContent = free <= 0
-      ? 'Alle Auslage-Plätze belegt'
-      : !canPayFee
-      ? 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' — so viel hast du nicht'
-      : 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' · Band ' +
-        entry.bandMin + '–' + entry.bandMax;
-    offer.appendChild(note);
-    listBox.appendChild(offer);
+    raster.appendChild(b);
   });
 
-  if (!any) listBox.innerHTML = '<p class="empty">Nichts anzubieten — erst ernten.</p>';
+  box.appendChild(raster);
+}
+
+function zeichnePreiswahl(v, box) {
+  var entry = v.stock[stand.item];
+  var g = standGrenzen(entry);
+  var amount = clamp(stand.amount, 1, g.menge);
+  var price = clamp(stand.price, g.min, g.max);
+  var fee = NS.listingFee(rules, entry.item, amount);
+  var canPayFee = v.currency.amount >= fee;
+  var free = v.orderSlotsFree;
+
+  var karte = document.createElement('div');
+  karte.className = 'card trade';
+
+  var head = document.createElement('div');
+  head.className = 'head';
+  head.innerHTML =
+    '<span class="name">' + iconTag(entry.id, 'gross') + nameOf(entry.id) + '</span>' +
+    '<span class="have">du hast ' + entry.amount + '</span>';
+  karte.appendChild(head);
+
+  karte.appendChild(numberPick(
+    'Menge',
+    function () { return stand.amount; },
+    1,
+    g.menge,
+    function (n, typing) { stand.amount = n; if (!typing) render(); },
+    'max ' + g.menge,
+  ));
+
+  karte.appendChild(numberPick(
+    'Preis',
+    function () { return stand.price; },
+    g.min,
+    g.max,
+    function (n, typing) { stand.price = n; if (!typing) render(); },
+  ));
+
+  var schnell = document.createElement('div');
+  schnell.className = 'preisknoepfe';
+  var mitte = Math.round((g.min + g.max) / 2);
+  [['günstig', g.min], ['mittel', mitte], ['Höchstpreis', g.max]].forEach(function (paar) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = paar[0];
+    if (price === paar[1]) b.className = 'an';
+    b.addEventListener('click', function () { stand.price = paar[1]; render(); });
+    schnell.appendChild(b);
+  });
+  karte.appendChild(schnell);
+
+  var go = document.createElement('button');
+  go.type = 'button';
+  go.className = 'done';
+  go.disabled = free <= 0 || !canPayFee;
+  go.textContent = 'Hinstellen · bringt ' + amount * price + ' ' + itemName(v.currency.item);
+  go.addEventListener('click', function () {
+    var res = client.listOrder(entry.item, amount, price);
+    act('Hingestellt · ' + amount + ' ' + nameOf(entry.id), res);
+    if (res.ok) { standZu(); render(); }
+  });
+  karte.appendChild(go);
+
+  var note = document.createElement('div');
+  note.className = 'note';
+  note.textContent = free <= 0
+    ? 'Alle Kästchen sind belegt'
+    : !canPayFee
+    ? 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' — so viel hast du nicht'
+    : 'Gebühr ' + fee + ' ' + itemName(v.currency.item) + ' · Preis ' + g.min + '–' + g.max;
+  karte.appendChild(note);
+
+  box.appendChild(karte);
 }
 
 function renderBadges() {}
@@ -677,6 +784,7 @@ var CODES = {
   SKIP_ON_COOLDOWN: 'Noch zu früh fürs Wegschicken',
   REQUEST_NOT_ACTIVE: 'Der wartet noch hinten',
   PRICE_OUT_OF_BAND: 'Preis außerhalb des Bandes',
+  TOO_MANY_PER_SLOT: 'Zu viel für ein Kästchen',
   BAD_AMOUNT: 'Ungültige Menge',
   OFFER_GONE: 'Jemand war schneller',
   PLOT_BUSY: 'Läuft noch',

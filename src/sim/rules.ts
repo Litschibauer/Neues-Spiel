@@ -128,6 +128,8 @@ export type Ruleset = {
   grid?: GridDef;
   obstacles?: readonly Obstacle[];
   obstacleKinds?: Record<string, { tool: number; xp: number }>;
+  maxOfferAmount?: number;
+  maxOfferPrice?: number;
 };
 
 const GOLD = 0;
@@ -908,13 +910,21 @@ const V13: Ruleset = {
   chestSpreadTicks: 0,
 };
 
-const DEV: Ruleset = {
+const V14: Ruleset = {
   ...V13,
+  version: 14,
+
+  maxOfferAmount: 10,
+  maxOfferPrice: 500,
+};
+
+const DEV: Ruleset = {
+  ...V14,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V13.recipes.map((r) => {
+  recipes: V14.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -934,16 +944,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [11, V11],
   [12, V12],
   [13, V13],
+  [14, V14],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 13;
+export const LATEST_RULESET_VERSION = 14;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1075,6 +1086,19 @@ export function priceBand(rules: Ruleset, item: number): { min: number; max: num
   const min = Math.max(1, Math.floor((def.npcPrice * rules.priceBandMinPct) / 100));
   const max = Math.max(min, Math.floor((def.npcPrice * rules.priceBandMaxPct) / 100));
   return { min, max };
+}
+
+export function offerLimits(
+  rules: Ruleset,
+  item: number,
+): { maxAmount: number; minPrice: number; maxPrice: number } {
+  const band = priceBand(rules, item);
+  const cap = rules.maxOfferPrice ?? 0;
+  return {
+    maxAmount: rules.maxOfferAmount ?? 0,
+    minPrice: band.min,
+    maxPrice: cap > 0 && cap < band.max ? cap : band.max,
+  };
 }
 
 export function listingFee(rules: Ruleset, item: number, amount: number): number {
@@ -1352,6 +1376,19 @@ export function validateRuleset(rules: Ruleset): string[] {
   if (rules.mailCapacity < 1) problems.push('Postfachkapazität < 1');
   if (rules.priceBandMinPct > rules.priceBandMaxPct) problems.push('Preisband verkehrt herum');
   if (rules.offerSlots < 0) problems.push('Angebots-Slots negativ');
+  if (rules.maxOfferAmount !== undefined && rules.maxOfferAmount < 1) {
+    problems.push(`Kästchen-Limit unter 1: ${rules.maxOfferAmount}`);
+  }
+  if (rules.maxOfferPrice !== undefined && rules.maxOfferPrice < 1) {
+    problems.push(`Preisdeckel unter 1: ${rules.maxOfferPrice}`);
+  }
+  for (const [i, item] of rules.items.entries()) {
+    if (!isTradable(rules, i)) continue;
+    const limits = offerLimits(rules, i);
+    if (limits.minPrice > limits.maxPrice) {
+      problems.push(`${item.id}: Preisdeckel unter dem Mindestpreis des Bandes`);
+    }
+  }
   if (rules.listingFeePct < 0 || rules.listingFeePct > 100) {
     problems.push(`Einstellgebühr außerhalb 0…100: ${rules.listingFeePct}`);
   }

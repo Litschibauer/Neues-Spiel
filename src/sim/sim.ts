@@ -7,7 +7,7 @@ import {
   listingFee,
   blockiert,
   nextLevel,
-  priceBand,
+  offerLimits,
   sizeOf,
   recipeUnlocked,
   slotsAt,
@@ -260,8 +260,13 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       if (s.orders.length >= rules.orderSlots) throw new SimError('NO_ORDER_SLOTS');
 
-      const band = priceBand(rules, cmd.item);
-      if (cmd.price < band.min || cmd.price > band.max) throw new SimError('PRICE_OUT_OF_BAND');
+      const limits = offerLimits(rules, cmd.item);
+      if (limits.maxAmount > 0 && cmd.amount > limits.maxAmount) {
+        throw new SimError('TOO_MANY_PER_SLOT');
+      }
+      if (cmd.price < limits.minPrice || cmd.price > limits.maxPrice) {
+        throw new SimError('PRICE_OUT_OF_BAND');
+      }
 
       if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
 

@@ -122,6 +122,7 @@ export type SimErrorCode =
   | 'UNKNOWN_COMMAND'
   | 'NO_ORDER_SLOTS'
   | 'PRICE_OUT_OF_BAND'
+  | 'TOO_MANY_PER_SLOT'
   | 'NO_SUCH_ORDER'
   | 'NO_SUCH_OFFER'
   | 'OFFER_GONE'

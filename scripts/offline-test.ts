@@ -549,7 +549,7 @@ try {
 
   await syncAs(second.key, 0, [{ seq: 1, tick: 0, type: 'COLLECT_MAIL' }]);
   const listed = await syncAs(second.key, 1, [
-    { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 20, price: 3 },
+    { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 10, price: 3 },
   ]);
   check('Der zweite Hof stellt einen Auftrag ein', listed.ok, listed.reason ?? listed.kind);
   check(
@@ -572,7 +572,7 @@ try {
     cdp,
     `document.querySelector('#market .offer').textContent`,
   );
-  check('Der Käufer sieht das fremde Angebot', /20 Weizen/.test(shelfText), shelfText);
+  check('Der Käufer sieht das fremde Angebot', /10 Weizen/.test(shelfText), shelfText);
 
   await cdp.send('Network.emulateNetworkConditions', {
     offline: true,
@@ -641,7 +641,7 @@ try {
       ),
     );
   }
-  check('Die gekaufte Ware ist da', wheatAfter === wheatBefore + 20, `${wheatBefore} → ${wheatAfter}`);
+  check('Die gekaufte Ware ist da', wheatAfter === wheatBefore + 10, `${wheatBefore} → ${wheatAfter}`);
   check(
     'Und aus dem Buch verschwunden',
     ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number })
@@ -670,9 +670,9 @@ try {
 
   const devRules = getRuleset(1001);
   const startGold = devRules.startingItems.find((x) => x.item === 0)?.amount ?? 0;
-  const expectedCoins = startGold - listingFee(devRules, 1, 20) + 20 * 3;
+  const expectedCoins = startGold - listingFee(devRules, 1, 10) + 10 * 3;
   check(
-    `Der Verkäufer hat sein Geld — 20 × 3 = 60, abzüglich Gebühr`,
+    `Der Verkäufer hat sein Geld — 10 × 3 = 30, abzüglich Gebühr`,
     paid.ok && sellerPaid.snapshot.state.items[0] === expectedCoins,
     `${sellerPaid.snapshot.state.items[0]} statt ${expectedCoins} Münzen ` +
       `(vor dem Postfach: ${sellerAfter.snapshot.state.items[0]})`,
@@ -999,7 +999,7 @@ try {
     `${offersBefore} → ${offersAfter} Angebote`,
   );
 
-  console.log('\n8b. Menge und Preis wählen, Auftrag wegschicken');
+  console.log('\n8b. Kästchen füllen: Ware, Menge, Preis');
 
   await evaluate(cdp, `document.getElementById('stand').click()`);
 
@@ -1013,55 +1013,85 @@ try {
      })()`,
   );
 
+  const kaesten = await evaluate<{ gesamt: number; leer: number; voll: number }>(
+    cdp,
+    `(function () {
+       return {
+         gesamt: document.querySelectorAll('#stand-kaesten .kaestchen').length,
+         leer: document.querySelectorAll('#stand-kaesten .kaestchen.leer').length,
+         voll: document.querySelectorAll('#stand-kaesten .kaestchen.voll').length,
+       };
+     })()`,
+  );
+  check(
+    'Der Stand steht als Reihe von Kästchen da, nicht als Formular',
+    kaesten.gesamt > 0 && kaesten.gesamt === kaesten.leer + kaesten.voll,
+    `${kaesten.gesamt} Kästchen, ${kaesten.leer} frei`,
+  );
+
+  await evaluate(cdp, `document.querySelector('#stand-kaesten .kaestchen.leer').click()`);
+  const warenwahl = await evaluate<{ offen: boolean; waren: number; weizen: boolean }>(
+    cdp,
+    `(function () {
+       var wahl = [...document.querySelectorAll('#stand-fuellen .kaestchen.wahl')];
+       return {
+         offen: !document.getElementById('stand-fuellen').hidden,
+         waren: wahl.length,
+         weizen: wahl.some(function (b) { return b.textContent.indexOf('Weizen') >= 0; }),
+       };
+     })()`,
+  );
+  check(
+    'Ein leeres Kästchen fragt zuerst, welche Ware hinein soll',
+    warenwahl.offen && warenwahl.waren > 0 && warenwahl.weizen,
+    `${warenwahl.waren} Waren zur Auswahl`,
+  );
+
+  await evaluate(
+    cdp,
+    `[...document.querySelectorAll('#stand-fuellen .kaestchen.wahl')]
+       .find(function (b) { return b.textContent.indexOf('Weizen') >= 0; }).click()`,
+  );
+
+  const grenze = await evaluate<{ vorschlag: number; max: number; label: string }>(
+    cdp,
+    `(function () {
+       var input = document.querySelector('#stand-fuellen .pick input');
+       return {
+         vorschlag: Number(input.value),
+         max: Number(input.max),
+         label: document.querySelector('#stand-fuellen .pick .max').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Mehr als zehn Stück passen nicht in ein Kästchen',
+    grenze.max === 10 && grenze.vorschlag <= 10 && grenze.label === 'max 10',
+    `Vorrat ${wheatStock}, Kästchen fasst ${grenze.max} (${grenze.label})`,
+  );
+
   await evaluate(
     cdp,
     `(function () {
-       var pick = document.querySelector('#list .pick');
+       var pick = document.querySelector('#stand-fuellen .pick');
        pick.querySelectorAll('button')[0].click();
        pick.querySelectorAll('button')[0].click();
      })()`,
   );
-  const chosen = await evaluate<number>(cdp, `Number(document.querySelector('#list .pick input').value)`);
+  const chosen = await evaluate<number>(
+    cdp,
+    `Number(document.querySelector('#stand-fuellen .pick input').value)`,
+  );
   check(
     'Die Menge lässt sich herunterzählen, statt immer alles anzubieten',
-    chosen === wheatStock - 2,
-    `${wheatStock} → ${chosen}`,
-  );
-
-  const eigeneVorher = await evaluate<number>(
-    cdp,
-    `document.querySelectorAll('#my-orders .card').length`,
-  );
-  await evaluate(cdp, `document.querySelector('#list .done').click()`);
-  await sleep(400);
-  const leftOver = await evaluate<number>(
-    cdp,
-    `(function () {
-       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
-         return x.textContent.indexOf('Weizen') === 0;
-       });
-       return c ? Number(c.querySelector('.n').textContent) : -1;
-     })()`,
-  );
-  const eigeneNachher = await evaluate<number>(
-    cdp,
-    `document.querySelectorAll('#my-orders .card').length`,
-  );
-  check(
-    'Angeboten wird genau die gewählte Menge — der Rest bleibt liegen',
-    leftOver === 2 && eigeneNachher > eigeneVorher,
-    `${wheatStock} → ${leftOver} Weizen, Auslage ${eigeneVorher} → ${eigeneNachher}`,
+    chosen === Math.min(wheatStock, 10) - 2,
+    `${grenze.vorschlag} → ${chosen}`,
   );
 
   const band = await evaluate<{ value: number; max: number; dip: number }>(
     cdp,
     `(function () {
-       // Zwischen den Tipps neu abfragen: Jede Änderung zeichnet den Bereich
-       // neu, und ein Mensch tippt auch auf den Knopf, der dann dasteht.
-       var priceRow = function () { return document.querySelectorAll('#list .trade .pick')[1]; };
-       // Erst herunter, dann weit über das Band hinaus — das prüft beide
-       // Richtungen UND die Grenze, statt auf dem Höchstwert sitzen zu bleiben,
-       // auf dem der Vorschlag ohnehin startet.
+       var priceRow = function () { return document.querySelectorAll('#stand-fuellen .pick')[1]; };
        for (var i = 0; i < 2; i++) priceRow().querySelectorAll('button')[0].click();
        var dip = Number(priceRow().querySelector('input').value);
        for (var j = 0; j < 50; j++) priceRow().querySelectorAll('button')[1].click();
@@ -1070,9 +1100,68 @@ try {
      })()`,
   );
   check(
-    'Der Preis lässt sich frei wählen und nicht über das Band hinaus',
+    'Der Preis lässt sich frei wählen und nicht über den Deckel hinaus',
     band.dip < band.max && band.value === band.max && band.max > 0,
     `runter auf ${band.dip}, hoch bis höchstens ${band.max} → ${band.value}`,
+  );
+
+  const schnellpreis = await evaluate<{ knoepfe: number; guenstig: number; hoch: number }>(
+    cdp,
+    `(function () {
+       var wert = function () {
+         return Number(document.querySelectorAll('#stand-fuellen .pick')[1].querySelector('input').value);
+       };
+       var knopf = function (text) {
+         return [...document.querySelectorAll('#stand-fuellen .preisknoepfe button')]
+           .find(function (b) { return b.textContent === text; });
+       };
+       var anzahl = document.querySelectorAll('#stand-fuellen .preisknoepfe button').length;
+       knopf('günstig').click();
+       var tief = wert();
+       knopf('Höchstpreis').click();
+       return { knoepfe: anzahl, guenstig: tief, hoch: wert() };
+     })()`,
+  );
+  check(
+    'Drei Knöpfe setzen den Preis, ohne dass jemand tippen muss',
+    schnellpreis.knoepfe === 3 && schnellpreis.guenstig < schnellpreis.hoch,
+    `günstig ${schnellpreis.guenstig}, Höchstpreis ${schnellpreis.hoch}`,
+  );
+
+  await evaluate(cdp, `document.querySelector('#stand-fuellen .done').click()`);
+  await sleep(400);
+  const standDanach = await evaluate<{ leftOver: number; voll: number; zurueck: boolean }>(
+    cdp,
+    `(function () {
+       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+         return x.textContent.indexOf('Weizen') === 0;
+       });
+       return {
+         leftOver: c ? Number(c.querySelector('.n').textContent) : -1,
+         voll: document.querySelectorAll('#stand-kaesten .kaestchen.voll').length,
+         zurueck: document.getElementById('stand-fuellen').hidden,
+       };
+     })()`,
+  );
+  check(
+    'Hingestellt wird genau die gewählte Menge — der Rest bleibt liegen',
+    standDanach.leftOver === wheatStock - chosen &&
+      standDanach.voll === kaesten.voll + 1 &&
+      standDanach.zurueck,
+    `${wheatStock} → ${standDanach.leftOver} Weizen, ${kaesten.voll} → ${standDanach.voll} belegte Kästchen`,
+  );
+
+  const zurueckgeholt = await evaluate<number>(
+    cdp,
+    `(function () {
+       document.querySelector('#stand-kaesten .kaestchen.voll').click();
+       return document.querySelectorAll('#stand-kaesten .kaestchen.voll').length;
+     })()`,
+  );
+  check(
+    'Ein volles Kästchen holt die Ware mit einem Tipp zurück',
+    zurueckgeholt === standDanach.voll - 1,
+    `${standDanach.voll} → ${zurueckgeholt} belegt`,
   );
 
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
@@ -1615,34 +1704,66 @@ try {
   await evaluate(cdp, harvestAll);
   await sleep(400);
 
-  for (let runde = 0; runde < 4; runde++) {
-    await evaluate(
-      cdp,
-      `(function () {
-         document.getElementById('stand').click();
-         var karten = [...document.querySelectorAll('#list .trade')];
-         karten.forEach(function (k) {
-           var alle = [...k.querySelectorAll('.pick button')].find(function (b) {
-             return b.textContent === 'alle';
-           });
-           if (alle) alle.click();
-         });
-       })()`,
-    );
-    await sleep(350);
-    await evaluate(
-      cdp,
-      `(function () {
-         var los = [...document.querySelectorAll('#list .done')].filter(function (b) {
-           return !b.disabled;
-         });
-         if (los[0]) los[0].click();
-       })()`,
-    );
-    await sleep(350);
+  const ausraeumen = `(function (name) {
+       document.getElementById('stand').click();
+       var zurueck = document.querySelector('#stand-fuellen .zurueck');
+       if (zurueck && !document.getElementById('stand-fuellen').hidden) zurueck.click();
+       var frei = document.querySelector('#stand-kaesten .kaestchen.leer');
+       if (!frei) return 'kein Kästchen frei';
+       frei.click();
+       var wahl = [...document.querySelectorAll('#stand-fuellen .kaestchen.wahl')]
+         .find(function (x) { return x.textContent.indexOf(name) >= 0; });
+       if (!wahl) return 'nichts mehr da';
+       wahl.click();
+       var go = document.querySelector('#stand-fuellen .done');
+       if (!go || go.disabled) return 'gesperrt';
+       go.click();
+       return 'hingestellt';
+     })`;
+
+  await api(`/api/admin/grant?account=${second.accountId}&item=gold&amount=100000`, 'POST');
+
+  const zweiterKauftAlles = async (): Promise<number> => {
+    let gekauft = 0;
+    for (let versuch = 0; versuch < 8; versuch++) {
+      const drin = await stateAs(second.key);
+      const shelf = (drin.snapshot.state as { offers?: { id: number }[] }).offers ?? [];
+      if (shelf.length === 0) break;
+      const commands = shelf.map((o, i) => ({
+        seq: drin.snapshot.seq + 1 + i,
+        tick: 0,
+        type: 'BUY_OFFER' as const,
+        offerId: o.id,
+      }));
+      const res = await syncAs(second.key, drin.snapshot.seq, commands);
+      if (!res.ok) break;
+      gekauft += commands.length;
+      await syncAs(second.key, res.snapshot.seq, [
+        { seq: res.snapshot.seq + 1, tick: 0, type: 'COLLECT_MAIL' },
+      ]);
+    }
+    return gekauft;
+  };
+
+  for (let runde = 0; runde < 8; runde++) {
+    let hingestellt = 0;
+    for (const ware of ['Mais', 'Weizen']) {
+      for (let i = 0; i < 8; i++) {
+        const wie = await evaluate<string>(cdp, `${ausraeumen}(${JSON.stringify(ware)})`);
+        await sleep(200);
+        if (wie !== 'hingestellt') break;
+        hingestellt++;
+      }
+    }
+    if (hingestellt === 0) break;
+
+    await evaluate(cdp, `document.getElementById('stand-close').click()`);
+    await sleep(1400);
+    await zweiterKauftAlles();
+    await sleep(1400);
   }
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
-  await sleep(300);
+  await sleep(400);
 
   const imLager = await evaluate<string>(
     cdp,

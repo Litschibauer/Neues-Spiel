@@ -4,7 +4,7 @@ import {
   levelStartedAt,
   listingFee,
   nextLevelAt,
-  priceBand,
+  offerLimits,
   recipeMinLevel,
   recipeUnlocked,
   sizeOf,
@@ -107,6 +107,7 @@ export type StockView = {
   npcBuyPrice: number;
   bandMax: number;
   bandMin: number;
+  maxAmount: number;
   feePerUnit: number;
 };
 
@@ -194,6 +195,7 @@ export type FarmView = {
   requests: readonly RequestView[];
   offers: readonly OfferView[];
   orders: readonly OrderView[];
+  orderSlots: number;
   orderSlotsFree: number;
   mail: { entries: readonly Stack[]; capacity: number };
   stock: readonly StockView[];
@@ -378,17 +380,21 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     };
   });
 
-  const stock: StockView[] = rules.items.map((item, i) => ({
-    item: i,
-    id: item.id,
-    amount: count(state, i),
-    sellable: item.storable && item.npcPrice > 0,
-    npcPrice: item.npcPrice,
-    npcBuyPrice: item.npcBuyPrice,
-    bandMax: priceBand(rules, i).max,
-    bandMin: priceBand(rules, i).min,
-    feePerUnit: listingFee(rules, i, 1),
-  }));
+  const stock: StockView[] = rules.items.map((item, i) => {
+    const limits = offerLimits(rules, i);
+    return {
+      item: i,
+      id: item.id,
+      amount: count(state, i),
+      sellable: item.storable && item.npcPrice > 0,
+      npcPrice: item.npcPrice,
+      npcBuyPrice: item.npcBuyPrice,
+      bandMax: limits.maxPrice,
+      bandMin: limits.minPrice,
+      maxAmount: limits.maxAmount,
+      feePerUnit: listingFee(rules, i, 1),
+    };
+  });
 
   return {
     level: levelOf(rules, state.xp),
@@ -428,6 +434,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
         rules.orderTtlTicks > 0 ? Math.max(0, rules.orderTtlTicks - (state.tick - o.listedAt)) : null,
       listedFor: Math.max(0, state.tick - o.listedAt),
     })),
+    orderSlots: rules.orderSlots,
     orderSlotsFree: rules.orderSlots - state.orders.length,
     mail: {
       entries: state.mail.map((m) => ({ item: m.item, amount: m.amount })),
