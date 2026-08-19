@@ -2,7 +2,7 @@ function render() {
   if (!client) return;
   client.localTick = tickNow();
   var s = client.preview();
-  var v = NS.farmView(s, rules, navigator.onLine);
+  var v = NS.farmView(s, rules, marktLive());
 
   renderPurse(v);
   renderPlots(v);
@@ -405,11 +405,23 @@ var fremderHof = null;
 
 function zeitungZu() { fremderHof = null; }
 
+function marktLive() {
+  if (!navigator.onLine) return false;
+  return !engine || engine.view !== 'offline';
+}
+
 function renderMarket(v) {
-  var online = navigator.onLine;
+  var online = marktLive();
   var blatt = $('zeitung');
   var laden = $('fremd-stand');
   $('market-note').hidden = online;
+  if (!online) {
+    $('market-note').textContent = navigator.onLine
+      ? 'Der Server antwortet gerade nicht. Kaufen geht erst wieder, wenn die '
+        + 'Verbindung steht — sonst hättest du die Ware nur auf diesem Gerät.'
+      : 'Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich '
+        + 'nicht auf diesem Gerät. Anschauen geht trotzdem.';
+  }
 
   if (fremderHof !== null && !v.zeitung.some(function (z) { return z.seller === fremderHof; })) {
     fremderHof = null;
@@ -456,7 +468,7 @@ function zeichneZeitung(v, box, online) {
       '<span class="p">' + a.price + itemIcon(v.currency.item) + '</span>' +
       '<span class="rest">' + hofName(hof.seller) + '</span>';
     b.addEventListener('click', function () {
-      if (!navigator.onLine) return;
+      if (!marktLive()) return;
       fremderHof = hof.seller;
       render();
     });
@@ -502,7 +514,7 @@ function zeichneFremdenStand(v, box, online) {
         : !o.affordable ? 'zu teuer'
         : o.price + ' je Stück') + '</span>';
     b.addEventListener('click', function () {
-      if (!navigator.onLine) return;
+      if (!marktLive()) return;
       var res = client.buyOffer(o.id);
       act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res);
       if (res.ok) attempt(true);

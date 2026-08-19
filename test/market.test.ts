@@ -152,8 +152,12 @@ test('zwei Käufer, ein Angebot — genau einer gewinnt', () => {
   assert.equal(first.ok, true);
   assert.equal(count(ben.snapshot.state, WHEAT), 10, 'der Gewinner hat die Ware nicht');
 
-  assert.equal(second.ok, false);
-  if (!second.ok) assert.match(second.reason, /OFFER_GONE/);
+  assert.equal(second.ok, true, 'der Verlierer bekommt keine verwertbare Antwort');
+  if (second.ok) {
+    assert.equal(second.kind, 'partial');
+    assert.match(second.reason ?? '', /OFFER_GONE/);
+    assert.deepEqual(second.dropped, [1], 'genau der Kauf fällt weg, nichts sonst');
+  }
   assert.equal(count(cem.snapshot.state, WHEAT), 0, 'der Verlierer hat Ware bekommen');
   assert.equal(
     count(cem.snapshot.state, GOLD),
@@ -195,6 +199,97 @@ test('was vor dem verlorenen Kauf lag, bleibt bestehen', () => {
     STARTING_WHEAT - 1 + rules.recipes[R_WHEAT]!.output.amount,
     'Cems eigene Ernte ist mit verworfen worden',
   );
+});
+
+test('was NACH dem verlorenen Kauf lag, überlebt ihn — solange es allein steht', () => {
+  const { market, live } = setup();
+  const anna = farm(market, live, 'anna', 0, 20);
+  const ben = farm(market, live, 'ben', 500);
+  const cem = farm(market, live, 'cem', 500, STARTING_WHEAT);
+
+  play(anna, (c) => c.listOrder(WHEAT, 10, 3));
+  publishOrders(market, 'anna', anna);
+  ben.stockOffers();
+  cem.stockOffers();
+  const offerId = cem.snapshot.state.offers[0]!.id;
+
+  play(ben, (c) => c.buyOffer(offerId));
+
+  const client = new Client(cem.snapshot);
+  client.buyOffer(offerId);
+  client.start(0, R_WHEAT);
+  client.advanceClock(rules.recipes[R_WHEAT]!.durationTicks);
+  client.collect(0);
+  const result = cem.sync(client.buildSyncRequest(), T0 + 600_000);
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.kind, 'partial');
+    assert.deepEqual(result.dropped, [1], 'es fiel mehr weg als der Kauf');
+  }
+
+  assert.equal(
+    count(cem.snapshot.state, WHEAT),
+    STARTING_WHEAT - 1 + rules.recipes[R_WHEAT]!.output.amount,
+    'die Ernte nach dem verlorenen Kauf ist mit verworfen worden',
+  );
+  assert.equal(
+    count(cem.snapshot.state, GOLD),
+    500 + FEE_BUDGET,
+    'der verlorene Kauf hat doch Geld gekostet',
+  );
+});
+
+test('was auf dem verlorenen Kauf aufbaute, fällt mit — aber nur das', () => {
+  const { market, live } = setup();
+  const anna = farm(market, live, 'anna', 0, 20);
+  const ben = farm(market, live, 'ben', 500);
+  const cem = farm(market, live, 'cem', 500, 0);
+
+  play(anna, (c) => c.listOrder(WHEAT, 10, 3));
+  publishOrders(market, 'anna', anna);
+  ben.stockOffers();
+  cem.stockOffers();
+  const offerId = cem.snapshot.state.offers[0]!.id;
+
+  play(ben, (c) => c.buyOffer(offerId));
+
+  const client = new Client(cem.snapshot);
+  client.buyOffer(offerId);
+  client.start(0, R_WHEAT);
+  const result = cem.sync(client.buildSyncRequest(), T0 + 600_000);
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.dropped, [1, 2], 'die Saat aus gekauftem Weizen wurde gutgeschrieben');
+  }
+  assert.equal(count(cem.snapshot.state, WHEAT), 0);
+});
+
+test('nach einem verlorenen Kauf gilt der Stapel als erledigt — kein zweiter Anlauf', () => {
+  const { market, live } = setup();
+  const anna = farm(market, live, 'anna', 0, 20);
+  const ben = farm(market, live, 'ben', 500);
+  const cem = farm(market, live, 'cem', 500, STARTING_WHEAT);
+
+  play(anna, (c) => c.listOrder(WHEAT, 10, 3));
+  publishOrders(market, 'anna', anna);
+  ben.stockOffers();
+  cem.stockOffers();
+  const offerId = cem.snapshot.state.offers[0]!.id;
+  play(ben, (c) => c.buyOffer(offerId));
+
+  const client = new Client(cem.snapshot);
+  client.buyOffer(offerId);
+  const anfrage = client.buildSyncRequest();
+
+  const erst = cem.sync(anfrage, T0 + 600_000);
+  assert.equal(erst.ok, true);
+
+  const nochmal = cem.sync(anfrage, T0 + 600_001);
+  assert.equal(nochmal.ok, true, 'die verlorene Antwort löst einen Fork-Alarm aus');
+  if (nochmal.ok) assert.equal(nochmal.kind, 'duplicate');
+  assert.equal(count(cem.snapshot.state, GOLD), 500 + FEE_BUDGET);
 });
 
 test('offline zurückziehen verliert gegen einen echten Kauf', () => {

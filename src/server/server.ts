@@ -39,6 +39,7 @@ export type SyncResult =
       divergence: boolean | null;
       rejectedFrom?: number;
       reason?: string;
+      dropped?: number[];
     }
   | { ok: false; kind: 'rejected'; reason: string; snapshot: Snapshot };
 
@@ -264,6 +265,8 @@ export class Server {
 
     let state = snap.state;
     const accepted: Command[] = [];
+    const verarbeitet: Command[] = [];
+    const dropped: number[] = [];
     let rejectedFrom: number | undefined;
     let rejectReason: string | undefined;
 
@@ -272,28 +275,41 @@ export class Server {
         const after = simulate(state, cmd, rules);
 
         if (cmd.type === 'BUY_OFFER' && !this.claimOffer(cmd.offerId)) {
-          rejectedFrom = cmd.seq;
-          rejectReason = 'ILLEGAL_COMMAND:OFFER_GONE';
-          break;
+          if (rejectedFrom === undefined) {
+            rejectedFrom = cmd.seq;
+            rejectReason = 'ILLEGAL_COMMAND:OFFER_GONE';
+          }
+          dropped.push(cmd.seq);
+          verarbeitet.push(cmd);
+          continue;
         }
 
         state = after;
         accepted.push(cmd);
+        verarbeitet.push(cmd);
       } catch (err) {
+        const grund = err instanceof SimError ? `ILLEGAL_COMMAND:${err.code}` : 'SIM_FAILURE';
+
+        if (dropped.length > 0) {
+          dropped.push(cmd.seq);
+          verarbeitet.push(cmd);
+          continue;
+        }
+
         rejectedFrom = cmd.seq;
-        rejectReason = err instanceof SimError ? `ILLEGAL_COMMAND:${err.code}` : 'SIM_FAILURE';
+        rejectReason = grund;
         break;
       }
     }
 
-    if (accepted.length === 0) {
+    if (verarbeitet.length === 0) {
       return { ok: false, kind: 'rejected', reason: rejectReason ?? 'SIM_FAILURE', snapshot: snap };
     }
 
     const fullyApplied = rejectedFrom === undefined;
     let divergence: boolean | null = null;
 
-    if (fullyApplied && !this.soldSinceLastSync && req.clientHash !== undefined) {
+    if (fullyApplied && accepted.length > 0 && !this.soldSinceLastSync && req.clientHash !== undefined) {
       const serverHash = hashState(state);
       divergence = serverHash !== req.clientHash;
       if (divergence) {
@@ -329,11 +345,11 @@ export class Server {
       this.activeDevice = { id: req.deviceId, lastSyncMs: nowMs };
     }
 
-    this.appliedLog.push(...accepted);
+    this.appliedLog.push(...verarbeitet);
     this.trimLog();
     this.snapshot = {
       state,
-      seq: accepted[accepted.length - 1]!.seq,
+      seq: verarbeitet[verarbeitet.length - 1]!.seq,
       serverTs: alignedServerTs,
       rulesetVersion: newVersion,
     };
@@ -348,6 +364,7 @@ export class Server {
         divergence: null,
         rejectedFrom,
         reason: rejectReason,
+        dropped,
       };
     }
 

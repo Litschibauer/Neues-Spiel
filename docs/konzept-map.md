@@ -697,6 +697,36 @@ ins Postfach zu legen — dieselbe Stelle wie vorher, nur ein anderes Ziel.
 Für Regelwerke ohne `saleGoldInSlot` bleibt der alte Weg, damit alte Logs
 sich unverändert abspielen.
 
+#### Der verlorene Kauf reißt nichts mehr mit
+
+Ein Kauf ist die einzige Handlung, die von einem zweiten Spieler abhängt.
+Bis hierher galt dafür der harte Präfix-Commit: Ist das Angebot weg, fällt
+der Kauf **und alles danach**. Wer im Laden stand, während der Server wegging,
+kaufte, lieferte danach noch einen Zettel aus und erntete drei Felder — und
+bekam beim nächsten Sync alles davon zurückgedreht, obwohl nur der Kauf
+strittig war.
+
+Das ist jetzt anders, und der Unterschied ist eine Zeile Regel:
+
+> Ein **verlorenes Angebot** ist kein Regelbruch, sondern ein verlorenes
+> Rennen. Der Server überspringt den Kauf und rechnet den Rest einzeln
+> nach. Was ohne die gekaufte Ware noch legal ist, bleibt stehen.
+
+Ein **echter** Regelbruch schneidet weiter hart ab — dort ist der Präfix-Commit
+richtig, weil dahinter ein Fehler oder ein Angriff steckt.
+
+Damit ein zweiter Anlauf nach einer verlorenen Antwort nicht als `FORK_DETECTED`
+endet, wandern die übersprungenen Commands **trotzdem ins Protokoll**. Sie
+haben den Zustand nicht verändert, aber der Server hat sie gesehen — und das
+Protokoll muss lückenlos bleiben, weil die Doppel-Erkennung darin über den
+`seq` indiziert. Die Antwort nennt in `dropped` genau, was weggefallen ist.
+
+**Und der Laden macht vorher zu.** Bisher hing der Kauf-Knopf an
+`navigator.onLine` — das sagt nur, ob das Gerät ein Netz hat, nicht, ob der
+Server antwortet. Jetzt fragt er die Sync-Maschine: Sobald ein Sync
+fehlschlägt, ist die Zeitung ausgegraut und der Hinweis sagt, warum. Der Fall
+oben wird damit selten; wenn er doch eintritt, kostet er nur noch den Kauf.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 
