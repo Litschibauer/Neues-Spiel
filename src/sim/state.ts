@@ -38,7 +38,8 @@ export type Offer = {
   item: number;
   amount: number;
   price: number;
-  seller: number;
+  seller: string;
+  hof: string;
   headline: boolean;
 };
 
@@ -209,7 +210,8 @@ export function normalizeState(s: State): State {
     orders: (s.orders ?? []).map((o) => ({ ...o, verkauft: o.verkauft ?? 0 })),
     offers: (s.offers ?? []).map((o) => ({
       ...o,
-      seller: o.seller ?? 0,
+      seller: o.seller ?? '',
+      hof: o.hof ?? '',
       headline: o.headline ?? false,
     })),
     mail: s.mail ?? [],

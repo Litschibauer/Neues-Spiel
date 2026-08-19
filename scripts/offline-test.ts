@@ -532,12 +532,21 @@ try {
       })
     ).json()) as { ok: boolean; kind?: string; reason?: string; snapshot: { seq: number } };
 
+  const tickFuer = (snap: { seq: number; serverTs: number; state: { tick: number } }) =>
+    snap.state.tick + Math.max(0, Math.floor((Date.now() - snap.serverTs) / 1000) - 2);
+
   const stateAs = async (key: string) =>
     (await (
       await fetch(`http://127.0.0.1:${PORT}/api/state`, {
         headers: { authorization: `Bearer ${key}` },
       })
-    ).json()) as { snapshot: { seq: number; state: { items: number[]; orders: unknown[] } } };
+    ).json()) as {
+      snapshot: {
+        seq: number;
+        serverTs: number;
+        state: { tick: number; items: number[]; orders: unknown[] };
+      };
+    };
 
   await api(`/api/admin/grant?account=${second.accountId}&item=wheat&amount=30`, 'POST');
 
@@ -1015,7 +1024,7 @@ try {
   await evaluate(cdp, `document.getElementById('stand').click()`);
   const offersBefore = await evaluate<number>(
     cdp,
-    `document.querySelectorAll('#zeitung .kaestchen.anzeige').length`,
+    `document.querySelectorAll('#zeitung .card.anzeige').length`,
   );
 
   await api(`/api/admin/grant?account=${second.accountId}&item=eggs&amount=6`, 'POST');
@@ -1030,7 +1039,7 @@ try {
     await sleep(250);
     offersAfter = await evaluate<number>(
       cdp,
-      `document.querySelectorAll('#zeitung .kaestchen.anzeige').length`,
+      `document.querySelectorAll('#zeitung .card.anzeige').length`,
     );
   }
   check(
@@ -1444,7 +1453,16 @@ try {
   );
 
   await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
-  await sleep(600);
+  try {
+    await waitFor(
+      cdp,
+      `[...document.querySelectorAll('#pick-list .tierplatz')]
+         .filter(function (z) { return z.dataset.tier === 'grown'; }).length === 2`,
+      'Küken erwachsen',
+      15_000,
+    );
+  } catch {
+  }
   const erwachsen = await evaluate<{ gross: number; namen: string }>(
     cdp,
     `(function () {
@@ -2241,131 +2259,256 @@ try {
     `geräumt: ${JSON.stringify(platzFrei.state.clearedObstacles)}`,
   );
 
-  console.log('\n9h. Die Zeitung — ein Aushang je Hof, dahinter der ganze Laden');
+  console.log('\n9h. Die Zeitung — ein Aushang je Hof');
 
-  const schonImBlatt = await evaluate<number>(
-    cdp,
-    `(function () {
-       document.getElementById('stand').click();
-       var karte = document.querySelector('#zeitung .kaestchen.anzeige');
-       if (!karte) return 0;
-       karte.click();
-       var n = document.querySelectorAll('#fremd-stand .kaestchen.fremd').length;
-       document.querySelector('#fremd-stand .zurueck').click();
-       document.getElementById('stand-close').click();
-       return n;
-     })()`,
-  );
-
-  const zweiterStand = await stateAs(second.key);
-  await syncAs(second.key, zweiterStand.snapshot.seq, [
-    { seq: zweiterStand.snapshot.seq + 1, tick: 0, type: 'LIST_ORDER', item: 1, amount: 6, price: 4 },
-    { seq: zweiterStand.snapshot.seq + 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 3, price: 5 },
-    { seq: zweiterStand.snapshot.seq + 3, tick: 0, type: 'LIST_ORDER', item: 1, amount: 10, price: 6 },
+  const zeitungStand = await stateAs(second.key);
+  await syncAs(second.key, zeitungStand.snapshot.seq, [
+    { seq: zeitungStand.snapshot.seq + 1, tick: 0, type: 'LIST_ORDER', item: 1, amount: 6, price: 4 },
+    { seq: zeitungStand.snapshot.seq + 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 3, price: 5 },
   ]);
   await sleep(500);
 
   await evaluate(cdp, farmTab);
   await sleep(1600);
   await evaluate(cdp, `document.getElementById('stand').click()`);
-  await sleep(400);
+  await sleep(600);
 
   const blatt = await evaluate<{ hoefe: number; bilder: number; name: string; titel: string }>(
     cdp,
     `(function () {
-       var karten = [...document.querySelectorAll('#zeitung .kaestchen.anzeige')];
+       var karten = [...document.querySelectorAll('#zeitung .card.anzeige')];
        return {
          hoefe: karten.length,
          bilder: karten.filter(function (k) { return !!k.querySelector('img.ic'); }).length,
-         name: karten[0] ? karten[0].querySelector('.rest').textContent : '',
+         name: karten[0] ? karten[0].querySelector('.top').textContent : '',
          titel: document.getElementById('zeitung-titel').textContent,
        };
      })()`,
   );
   check(
-    'Drei Angebote, aber nur ein Aushang — die Zeitung zeigt Höfe, nicht Kisten',
+    'Mehrere Angebote, aber nur ein Eintrag — die Zeitung zeigt Höfe, nicht Kästchen',
     blatt.hoefe === 1 && blatt.bilder === 1 && blatt.titel === 'Die Zeitung',
-    `${blatt.hoefe} Aushang(e), Hof „${blatt.name}"`,
+    `${blatt.hoefe} Eintrag/Einträge, Hof „${blatt.name}"`,
   );
   check(
-    'Der fremde Hof hat einen Namen statt einer Kontonummer',
-    /^[A-ZÄÖÜ][a-zäöüß]+$/.test(blatt.name),
+    'Der fremde Hof steht mit Namen da, nicht mit einer Kontonummer',
+    blatt.name.length > 3 && !/hof_/.test(blatt.name),
     blatt.name,
   );
 
-  await evaluate(cdp, `document.querySelector('#zeitung .kaestchen.anzeige').click()`);
-  await sleep(300);
-  const fremderLaden = await evaluate<{ kisten: number; bilder: number; titel: string; zurueck: boolean }>(
+  const zurBesuch = await evaluate<string>(
     cdp,
     `(function () {
-       var k = [...document.querySelectorAll('#fremd-stand .kaestchen.fremd')];
-       return {
-         kisten: k.length,
-         bilder: k.filter(function (x) { return !!x.querySelector('img.ic'); }).length,
-         titel: document.getElementById('zeitung-titel').textContent,
-         zurueck: !!document.querySelector('#fremd-stand .zurueck'),
-       };
+       var karte = document.querySelector('#zeitung .card.anzeige');
+       if (!karte) return 'keine Anzeige';
+       karte.click();
+       return document.getElementById('besuch-bg').hidden ? 'nichts passiert' : 'unterwegs';
      })()`,
   );
-  check(
-    'Hinter dem Aushang steht der ganze Stand — mit Bild an jedem Kästchen',
-    fremderLaden.kisten === schonImBlatt + 3 &&
-      fremderLaden.bilder === fremderLaden.kisten &&
-      fremderLaden.zurueck,
-    `${fremderLaden.kisten} Kästchen, ${fremderLaden.bilder} mit Bild, Titel „${fremderLaden.titel}"`,
+  await sleep(1200);
+  const beimNachbarn = await evaluate<string>(
+    cdp,
+    `document.getElementById('besuch-titel').textContent + '|' +
+     document.querySelectorAll('#besuch-stand .kaestchen').length`,
   );
   check(
-    'Über dem Laden steht, bei wem man gerade ist',
-    fremderLaden.titel === blatt.name,
-    `${fremderLaden.titel} statt ${blatt.name}`,
+    'Aus der Zeitung geht es auf den Hof, nicht in eine Einkaufsliste',
+    zurBesuch === 'unterwegs' && Number(beimNachbarn.split('|')[1]) >= 2,
+    `${zurBesuch}, dort: ${beimNachbarn}`,
   );
 
-  const weizenVorKauf = await evaluate<number>(
+  await evaluate(cdp, `document.getElementById('besuch-close').click()`);
+  await sleep(200);
+  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  await sleep(200);
+
+  console.log('\n9i. Nachbarn: Code, Besuch, Helfen, Kaufen beim anderen');
+
+  const zweiterCode = await (async () => {
+    const antwort = await fetch(`http://127.0.0.1:${PORT}/api/hof`, {
+      headers: { authorization: `Bearer ${second.key}` },
+    });
+    return (await antwort.json()) as { code: string; name: string };
+  })();
+  check(
+    'Jeder Hof hat einen Code und einen lesbaren Namen',
+    /^[A-Z0-9]{6}$/.test(zweiterCode.code) && zweiterCode.name.length > 3,
+    `${zweiterCode.code} — ${zweiterCode.name}`,
+  );
+
+  await fetch(
+    `http://127.0.0.1:${PORT}/api/hof?name=${encodeURIComponent('Bens Bauernhof')}`,
+    { method: 'POST', headers: { authorization: `Bearer ${second.key}` } },
+  );
+
+  await api(`/api/admin/grant?account=${second.accountId}&item=wheat&amount=20`, 'POST');
+  await sleep(400);
+
+  const zweiterStand2 = await stateAs(second.key);
+  const jetztTick = tickFuer(zweiterStand2.snapshot);
+  const saeen = await syncAs(second.key, zweiterStand2.snapshot.seq, [
+    { seq: zweiterStand2.snapshot.seq + 1, tick: jetztTick, type: 'COLLECT_MAIL' },
+    { seq: zweiterStand2.snapshot.seq + 2, tick: jetztTick, type: 'START', plot: 0, recipe: 0, slot: 0 },
+    {
+      seq: zweiterStand2.snapshot.seq + 3,
+      tick: jetztTick,
+      type: 'LIST_ORDER',
+      item: 1,
+      amount: 4,
+      price: 4,
+    },
+  ]);
+  check('Der Nachbar hat etwas am Laufen und etwas im Stand', saeen.ok, saeen.reason ?? saeen.kind);
+  await sleep(600);
+
+  await evaluate(cdp, farmTab);
+  await sleep(300);
+  const eigener = await evaluate<string>(
     cdp,
     `(function () {
-       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
-         return x.textContent.indexOf('Weizen') === 0;
-       });
-       return c ? Number(c.querySelector('.n').textContent) : -1;
+       document.getElementById('nachbarn').click();
+       return 'auf';
      })()`,
   );
+  await sleep(700);
+  const hofkarte = await evaluate<string>(
+    cdp,
+    `(function () {
+       var feld = document.getElementById('hofnamefeld');
+       var code = document.querySelector('#eigenerhof .have');
+       return (feld ? feld.value : 'kein Feld') + '|' + (code ? code.textContent : 'kein Code');
+     })()`,
+  );
+  check(
+    'Der eigene Hof zeigt Name und Code zum Weitergeben',
+    eigener === 'auf' && /Code [A-Z0-9]{6}/.test(hofkarte) && hofkarte.split('|')[0]!.length > 3,
+    hofkarte,
+  );
+
   await evaluate(
     cdp,
-    `[...document.querySelectorAll('#fremd-stand .kaestchen.fremd')]
-       .find(function (k) { return !k.disabled && k.dataset.ware === 'wheat'; }).click()`,
+    `(function () {
+       document.getElementById('freundcode').value = ${JSON.stringify(zweiterCode.code)};
+       document.getElementById('freundadd').click();
+     })()`,
   );
-  await sleep(1600);
-  const nachZeitungsKauf = await evaluate<{ weizen: number; kisten: number }>(
+  await sleep(900);
+  const nachbarliste = await evaluate<string>(
+    cdp,
+    `[...document.querySelectorAll('#freundeliste .card')]
+       .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.top').textContent; })
+       .join(', ')`,
+  );
+  check(
+    'Ein Hof lässt sich über seinen Code als Nachbar merken',
+    nachbarliste.indexOf(zweiterCode.code) >= 0 && /Bens Bauernhof/.test(nachbarliste),
+    nachbarliste,
+  );
+
+  await api(`/api/admin/grant?account=${second.accountId}&item=corn&amount=10`, 'POST');
+  await sleep(400);
+  const vorBesuch = await stateAs(second.key);
+  const saatTick = tickFuer(vorBesuch.snapshot);
+  const gesaet = await syncAs(second.key, vorBesuch.snapshot.seq, [
+    { seq: vorBesuch.snapshot.seq + 1, tick: saatTick, type: 'COLLECT_MAIL' },
+    { seq: vorBesuch.snapshot.seq + 2, tick: saatTick, type: 'START', plot: 1, recipe: 3, slot: 0 },
+  ]);
+  check('Der Nachbar pflanzt kurz vor dem Besuch etwas Langsames', gesaet.ok, gesaet.reason ?? gesaet.kind);
+
+  await evaluate(cdp, `document.querySelector('#freundeliste .card').click()`);
+  await sleep(1200);
+  const besuchBild = await evaluate<{ titel: string; plots: number; stand: number; offen: boolean }>(
     cdp,
     `(function () {
-       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
-         return x.textContent.indexOf('Weizen') === 0;
-       });
        return {
-         weizen: c ? Number(c.querySelector('.n').textContent) : -1,
-         kisten: document.querySelectorAll('#fremd-stand .kaestchen.fremd').length,
+         titel: document.getElementById('besuch-titel').textContent,
+         plots: document.querySelectorAll('#besuch-plots .plot').length,
+         stand: document.querySelectorAll('#besuch-stand .kaestchen').length,
+         offen: !document.getElementById('besuch-bg').hidden,
        };
      })()`,
   );
   check(
-    'Ein Tipp aufs Kästchen kauft — die Ware liegt im Lager, das Kästchen ist weg',
-    nachZeitungsKauf.weizen > weizenVorKauf &&
-      nachZeitungsKauf.kisten === fremderLaden.kisten - 1,
-    `${weizenVorKauf} → ${nachZeitungsKauf.weizen} Weizen, ` +
-      `${fremderLaden.kisten} → ${nachZeitungsKauf.kisten} Kästchen`,
+    'Ein Tipp führt auf seinen Hof — mit seinem Stand daneben',
+    besuchBild.offen && besuchBild.titel === 'Bens Bauernhof' && besuchBild.stand >= 1 &&
+      besuchBild.plots > 0,
+    JSON.stringify(besuchBild),
   );
 
-  await evaluate(cdp, `document.querySelector('#fremd-stand .zurueck').click()`);
-  await sleep(300);
-  const zurueckImBlatt = await evaluate<boolean>(
+  const helferVorher = Number(await evaluate<string>(cdp, `document.getElementById('xp').textContent`)
+    .then((t) => t.split(' ')[0]));
+
+  const zweiterHof = (await api(`/api/admin/status?account=${second.accountId}`)) as {
+    state: { plots: Array<{ level: number; slots: Array<{ recipe: number; startedAt: number }> }> };
+  };
+  const laufend = zweiterHof.state.plots.findIndex((p) =>
+    p.slots.some((s) => s.recipe !== -1),
+  );
+  check(
+    'Auf dem besuchten Hof läuft etwas, dem man helfen kann',
+    laufend >= 0,
+    `Platz ${laufend}`,
+  );
+
+  const geholfen = await evaluate<string>(
     cdp,
-    `document.getElementById('fremd-stand').hidden
-       && !document.getElementById('zeitung').hidden
-       && document.getElementById('zeitung-titel').textContent === 'Die Zeitung'`,
+    `(function () {
+       var kachel = [...document.querySelectorAll('#besuch-plots .plot')]
+         .find(function (p) { return !p.disabled; });
+       if (!kachel) return 'nichts zu tun: ' +
+         [...document.querySelectorAll('#besuch-plots .plot')]
+           .map(function (p) { return p.getAttribute('aria-label'); }).join(' / ');
+       kachel.click();
+       return 'getippt';
+     })()`,
   );
-  check('Zurück führt zurück in die Zeitung', zurueckImBlatt);
+  await sleep(1800);
+  const nachHilfe = await evaluate<string>(
+    cdp,
+    `document.getElementById('toast').textContent + '|' +
+     document.getElementById('besuch-kopf').textContent`,
+  );
+  check(
+    'Helfen gibt XP und zählt herunter, wie oft es heute noch geht',
+    geholfen === 'getippt' && /\+\d+ XP/.test(nachHilfe) && /2× heute möglich/.test(nachHilfe),
+    (geholfen === 'getippt' ? nachHilfe : geholfen).slice(0, 160),
+  );
 
-  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  const heuteDrin = (await api(`/api/admin/status?account=${status.accountId}`)) as { state: { xp: number } };
+  check(
+    'Die XP fürs Helfen steht auch beim Server',
+    heuteDrin.state.xp > helferVorher,
+    `${helferVorher} → ${heuteDrin.state.xp} XP`,
+  );
+
+  const standVorKauf = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#besuch-stand .kaestchen').length`,
+  );
+  const gekauftBeimNachbarn = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#besuch-stand .kaestchen')]
+         .find(function (x) { return !x.disabled; });
+       if (!k) return 'alles gesperrt';
+       k.click();
+       return 'gekauft';
+     })()`,
+  );
+  await sleep(2000);
+  const standDanach2 = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#besuch-stand .kaestchen').length`,
+  );
+  check(
+    'Gekauft wird direkt in seinem Stand, nicht mehr aus der Zeitung',
+    gekauftBeimNachbarn === 'gekauft' && standDanach2 === standVorKauf - 1,
+    `${gekauftBeimNachbarn}, ${standVorKauf} → ${standDanach2} Kästchen`,
+  );
+
+  await evaluate(cdp, `document.getElementById('besuch-close').click()`);
+  await sleep(200);
+  await evaluate(cdp, `document.getElementById('freunde-close').click()`);
   await sleep(200);
 
   console.log('\n10. Eine neue Version erreicht den Browser');

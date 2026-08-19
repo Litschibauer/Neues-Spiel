@@ -256,6 +256,8 @@
   @media (prefers-reduced-motion: reduce) { #kiste .art { animation: none; } }
   #lagerhaus { left: 60%; top: 11%; width: 15%; height: 11%; z-index: 62; }
   #stand { left: 78%; top: 12%; width: 15%; height: 10%; z-index: 63; }
+  #nachbarn { left: 5%; top: 8%; width: 16%; height: 11%; z-index: 60; }
+  .kein-raster #nachbarn { top: 30%; }
 
   .zettel {
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
@@ -431,6 +433,14 @@
   .kaestchen .p { font-size: .66rem; color: var(--gold); font-weight: 700; }
   .kaestchen .rest { font-size: .62rem; color: var(--muted); }
   .kaestchen .p .ic { width: 1em; height: 1em; vertical-align: -.16em; margin: 0 0 0 .12em; }
+  .card.anzeige .ic.gross { width: 2.2em; height: 2.2em; flex: none; }
+  .sheet.gross { max-width: 34rem; }
+  .hof.fremd {
+    position: relative; width: 100%; aspect-ratio: 5 / 4; border-radius: 14px;
+    overflow: hidden; margin-bottom: .6rem; isolation: isolate;
+  }
+  .hof.fremd .plot { cursor: pointer; }
+  .hof.fremd .plot:disabled { opacity: .75; }
   .kaestchen.anzeige { background: var(--gold-soft); border-color: var(--gold); }
   .kaestchen.verkauft { background: var(--gold-soft); border-color: var(--gold); }
   .kaestchen.verkauft .n { color: var(--gold); font-size: 1rem; }

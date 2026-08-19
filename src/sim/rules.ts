@@ -138,6 +138,9 @@ export type Ruleset = {
   maxOfferPrice?: number;
   animalsMustBeBought?: boolean;
   saleGoldInSlot?: boolean;
+  helpPerFarmPerDay?: number;
+  helpSpeedupPct?: number;
+  helpXp?: number;
 };
 
 const GOLD = 0;
@@ -980,17 +983,26 @@ const V17: Ruleset = {
   saleGoldInSlot: true,
 };
 
-const DEV: Ruleset = {
+const V18: Ruleset = {
   ...V17,
+  version: 18,
+
+  helpPerFarmPerDay: 3,
+  helpSpeedupPct: 20,
+  helpXp: 12,
+};
+
+const DEV: Ruleset = {
+  ...V18,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V17.recipes.map((r) => {
+  recipes: V18.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V17.plots.map((p) => {
+  plots: V18.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1015,16 +1027,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [15, V15],
   [16, V16],
   [17, V17],
+  [18, V18],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 17;
+export const LATEST_RULESET_VERSION = 18;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1156,6 +1169,13 @@ export function priceBand(rules: Ruleset, item: number): { min: number; max: num
   const min = Math.max(1, Math.floor((def.npcPrice * rules.priceBandMinPct) / 100));
   const max = Math.max(min, Math.floor((def.npcPrice * rules.priceBandMaxPct) / 100));
   return { min, max };
+}
+
+export function helpSpeedup(rules: Ruleset, recipe: number): number {
+  const pct = rules.helpSpeedupPct ?? 0;
+  const def = rules.recipes[recipe];
+  if (pct <= 0 || !def) return 0;
+  return Math.max(1, Math.floor((def.durationTicks * pct) / 100));
 }
 
 export function offerLimits(

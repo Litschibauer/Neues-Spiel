@@ -141,6 +141,7 @@ ${modules}
     restoreClient: restoreClient,
     storageKeyFor: storageKeyFor,
     farmView: farmView,
+    sizeOf: sizeOf,
   };
 })();
 `;

@@ -167,11 +167,15 @@ function fuzzOffers(rules: Ruleset, rnd: () => number): Offer[] {
   for (let i = 0; i < Math.min(rules.offerSlots, sellable.length * 2); i++) {
     const item = sellable[Math.floor(rnd() * sellable.length)]!;
     const { min, max } = priceBand(rules, item);
+    const hof = 'HOF' + (1 + (i % 4));
     offers.push({
       id: i + 1,
       item,
       amount: 1 + Math.floor(rnd() * 12),
       price: min + Math.floor(rnd() * (max - min + 1)),
+      seller: hof,
+      hof: hof,
+      headline: i % 4 === 0,
     });
   }
   return offers;

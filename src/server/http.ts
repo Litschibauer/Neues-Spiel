@@ -8,10 +8,13 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState, normalizeState } from '../sim/state.ts';
-import { RULESETS, getRuleset } from '../sim/rules.ts';
+import { LATEST_RULESET_VERSION, RULESETS, getRuleset } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
+import { SqliteStorage } from './storage.ts';
+import { NAME_MAX, Sozial } from './sozial.ts';
+import type { HofKarte } from './sozial.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
 
@@ -69,6 +72,11 @@ const limiter = new CreateLimiter(
 );
 
 const market = new Market(accounts.storage);
+const sozial = new Sozial((accounts.storage as SqliteStorage).database);
+market.hofInfo = (id) => {
+  const karte = sozial.karte(id);
+  return karte ? { code: karte.code, name: karte.name } : { code: '', name: 'Unbekannt' };
+};
 
 const live = new Map<string, Server>();
 
@@ -87,6 +95,54 @@ function freshGame(): Server {
 
   game.stockRequests();
   return game;
+}
+
+function zielKonto(id: string): AccountRecord {
+  const konto = accounts.get(id);
+  if (!konto) throw new Error(`Hof ${id} ist verschwunden`);
+  return konto;
+}
+
+function hofZeile(karte: HofKarte, wer: string) {
+  const rules = getRuleset(LATEST_RULESET_VERSION);
+  const proTag = rules.helpPerFarmPerDay ?? 0;
+  return {
+    code: karte.code,
+    name: karte.name,
+    freund: sozial.istFreund(wer, karte.id),
+    heute: sozial.hilfenHeute(wer, karte.id, Date.now()),
+    proTag,
+  };
+}
+
+function besuchsBild(karte: HofKarte, wer: string) {
+  const spiel = gameFor(zielKonto(karte.id));
+  spiel.receiveExternal();
+  const rules = getRuleset(spiel.snapshot.rulesetVersion);
+
+  return {
+    ...hofZeile(karte, wer),
+    rulesetVersion: spiel.snapshot.rulesetVersion,
+    tick: spiel.snapshot.state.tick,
+    serverTs: spiel.snapshot.serverTs,
+    xp: spiel.snapshot.state.xp,
+    plots: spiel.snapshot.state.plots.map((p) => ({
+      level: p.level,
+      gx: p.gx,
+      gy: p.gy,
+      tiere: p.tiere.length,
+      slots: p.slots.map((x) => ({ recipe: x.recipe, startedAt: x.startedAt })),
+    })),
+    clearedObstacles: spiel.snapshot.state.clearedObstacles,
+    stand: spiel.snapshot.state.orders.map((o) => ({
+      id: o.id,
+      item: o.item,
+      amount: o.amount,
+      price: o.price,
+      verkauft: o.verkauft,
+    })),
+    grid: rules.grid ? { w: rules.grid.w, h: rules.grid.h } : null,
+  };
 }
 
 function snapshotOf(game: Server) {
@@ -503,6 +559,84 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       });
     }
 
+    if (url.pathname === '/api/hof') {
+      if (req.method === 'POST') {
+        const wunsch = url.searchParams.get('name') ?? '';
+        if (!sozial.benenne(account.id, wunsch)) return json(res, 400, { error: 'BAD_NAME' });
+      }
+      return json(res, 200, { ...sozial.karte(account.id), maxName: NAME_MAX });
+    }
+
+    if (url.pathname === '/api/freunde' && req.method === 'GET') {
+      return json(res, 200, { freunde: sozial.freunde(account.id).map((f) => hofZeile(f, account.id)) });
+    }
+
+    if (url.pathname === '/api/freunde' && req.method === 'POST') {
+      const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+      const ziel = sozial.perCode(code);
+      if (!ziel) return json(res, 404, { error: 'NO_SUCH_FARM' });
+      if (ziel.id === account.id) return json(res, 400, { error: 'THATS_YOU' });
+      sozial.merke(account.id, ziel.id, Date.now());
+      return json(res, 200, { hof: hofZeile(ziel, account.id) });
+    }
+
+    if (url.pathname === '/api/freunde' && req.method === 'DELETE') {
+      const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+      const ziel = sozial.perCode(code);
+      if (ziel) sozial.vergiss(account.id, ziel.id);
+      return json(res, 200, { ok: true });
+    }
+
+    if (url.pathname === '/api/besuch' && req.method === 'GET') {
+      const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+      const ziel = sozial.perCode(code);
+      if (!ziel || ziel.id === account.id) return json(res, 404, { error: 'NO_SUCH_FARM' });
+      return json(res, 200, besuchsBild(ziel, account.id));
+    }
+
+    if (url.pathname === '/api/helfen' && req.method === 'POST') {
+      const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+      const plot = Number(url.searchParams.get('plot'));
+      const slot = Number(url.searchParams.get('slot') ?? '0');
+      const ziel = sozial.perCode(code);
+      if (!ziel || ziel.id === account.id) return json(res, 404, { error: 'NO_SUCH_FARM' });
+      if (!Number.isInteger(plot) || !Number.isInteger(slot)) {
+        return json(res, 400, { error: 'BAD_SPOT' });
+      }
+
+      const rules = getRuleset(game.snapshot.rulesetVersion);
+      const proTag = rules.helpPerFarmPerDay ?? 0;
+      if (proTag <= 0) return json(res, 400, { error: 'HELP_DISABLED' });
+
+      const jetzt = Date.now();
+      if (sozial.hilfenHeute(account.id, ziel.id, jetzt) >= proTag) {
+        return json(res, 429, { error: 'HELPED_ENOUGH' });
+      }
+
+      const zielSpiel = gameFor(zielKonto(ziel.id));
+      zielSpiel.receiveExternal();
+      const getan = zielSpiel.helfen(plot, slot);
+      if (!getan.ok) return json(res, 409, { error: 'NOTHING_TO_HELP' });
+
+      sozial.zaehleHilfe(account.id, ziel.id, jetzt);
+      persist(zielKonto(ziel.id), zielSpiel);
+      events.nudge(ziel.id, 'farm');
+
+      const lohn = rules.helpXp ?? 0;
+      game.grantXp(lohn);
+      game.receiveExternal();
+      persist(account, game);
+
+      return json(res, 200, {
+        ok: true,
+        ticks: getan.ticks,
+        xp: lohn,
+        heute: sozial.hilfenHeute(account.id, ziel.id, jetzt),
+        proTag,
+        besuch: besuchsBild(ziel, account.id),
+      });
+    }
+
     if (url.pathname === '/api/events' && req.method === 'GET') {
       const stop = events.subscribe(account.id, {
         write: (chunk) => {
@@ -555,6 +689,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
       settle(account, game);
       if (parsed.neueZeitung) market.neueAusgabe(account.id);
+
+      const gast = typeof parsed.besuch === 'string' ? sozial.perCode(parsed.besuch) : null;
+      game.besuch = gast && gast.id !== account.id ? gast.id : null;
 
       const result = game.sync(parsed, Date.now());
 

@@ -117,6 +117,16 @@ function artStand() {
     '<circle cx="64" cy="58" r="5" fill="var(--corn)"/>';
 }
 
+function artNachbarn() {
+  return '<ellipse cx="50" cy="72" rx="40" ry="6" fill="var(--ink)" opacity=".18"/>' +
+    '<path d="M14 66V46h26v20z" fill="var(--wood)"/>' +
+    '<path d="M27 34 8 48h38z" fill="var(--wood-dark)"/>' +
+    '<path d="M52 66V50h30v16z" fill="var(--wood)"/>' +
+    '<path d="M67 38 46 52h42z" fill="var(--wood-dark)"/>' +
+    '<rect x="23" y="54" width="8" height="12" fill="var(--soil-dark)" opacity=".5"/>' +
+    '<rect x="63" y="56" width="8" height="10" fill="var(--soil-dark)" opacity=".5"/>';
+}
+
 function artKiste() {
   return '<ellipse cx="50" cy="74" rx="34" ry="5" fill="var(--ink)" opacity=".2"/>' +
     '<rect x="16" y="34" width="68" height="38" rx="4" fill="var(--wood)"/>' +

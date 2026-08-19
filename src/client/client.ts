@@ -143,6 +143,8 @@ export class Client {
 
   neueZeitung = false;
 
+  besuch: string | null = null;
+
   buildSyncRequest(): SyncRequest {
     return {
       baseSeq: this.baseSeq,
@@ -152,6 +154,7 @@ export class Client {
       deviceId: this.deviceId,
       takeover: this.takeover || undefined,
       neueZeitung: this.neueZeitung || undefined,
+      besuch: this.besuch ?? undefined,
     };
   }
 

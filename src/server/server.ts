@@ -1,8 +1,8 @@
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { MailItem, Offer, State } from '../sim/state.ts';
-import { cloneState } from '../sim/state.ts';
-import { getRuleset } from '../sim/rules.ts';
+import { EMPTY_PLOT, cloneState } from '../sim/state.ts';
+import { getRuleset, helpSpeedup } from '../sim/rules.ts';
 import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
@@ -29,6 +29,7 @@ export type SyncRequest = {
   deviceId?: string;
   takeover?: boolean;
   neueZeitung?: boolean;
+  besuch?: string;
 };
 
 export type SyncResult =
@@ -58,6 +59,8 @@ export class Server {
 
   nextRequestId = 1;
 
+  besuch: string | null = null;
+
   rollRequest: () => number = Math.random;
   rollChest: () => number = Math.random;
   offerSource: (limit: number) => Offer[] = () => [];
@@ -72,6 +75,44 @@ export class Server {
 
   deliver(item: MailItem): void {
     this.pendingDeliveries.push(item);
+  }
+
+  pendingXp = 0;
+
+  grantXp(xp: number): void {
+    if (!Number.isInteger(xp) || xp <= 0) return;
+    this.pendingXp += xp;
+    this.soldSinceLastSync = true;
+  }
+
+  helfen(plot: number, slot: number): { ok: false } | { ok: true; ticks: number } {
+    const rules = getRuleset(this.snapshot.rulesetVersion);
+    const state = this.snapshot.state;
+    const platz = state.plots[plot];
+    const stelle = platz?.slots[slot];
+    if (!platz || !stelle || stelle.recipe === EMPTY_PLOT) return { ok: false };
+
+    const dauer = rules.recipes[stelle.recipe]?.durationTicks ?? 0;
+    const gelaufen = state.tick - stelle.startedAt;
+    if (gelaufen >= dauer) return { ok: false };
+
+    const schub = Math.min(helpSpeedup(rules, stelle.recipe), dauer - gelaufen);
+    if (schub <= 0) return { ok: false };
+
+    const next = cloneState(state);
+    next.plots = state.plots.map((p, i) =>
+      i === plot
+        ? {
+            ...p,
+            slots: p.slots.map((x, j) =>
+              j === slot ? { ...x, startedAt: x.startedAt - schub } : x,
+            ),
+          }
+        : p,
+    );
+    this.snapshot = { ...this.snapshot, state: next };
+    this.soldSinceLastSync = true;
+    return { ok: true, ticks: schub };
   }
 
   applySale(orderId: number, gold: number, nowMs: number, currency: number): void {
@@ -149,6 +190,13 @@ export class Server {
 
   private applyExternal(input: State, rules: Ruleset): State {
     let state = input;
+
+    if (this.pendingXp > 0) {
+      const belohnt = cloneState(state);
+      belohnt.xp = state.xp + this.pendingXp;
+      this.pendingXp = 0;
+      state = belohnt;
+    }
 
     if (state.pendingBoxes.length > 0) {
       const geoeffnet = cloneState(state);

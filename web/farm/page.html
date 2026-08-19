@@ -109,6 +109,7 @@
         <button class="moebel" id="kiste" hidden></button>
         <button class="moebel" id="lagerhaus"></button>
         <button class="moebel" id="stand"></button>
+        <button class="moebel" id="nachbarn"></button>
       </div>
       <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
     </section>
@@ -139,6 +140,35 @@
       <h3 id="bau-titel">Bauen</h3>
       <div id="bauliste"></div>
       <button class="sheet-close" id="bau-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="freunde-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="freunde-titel">
+      <h3 id="freunde-titel">Nachbarn</h3>
+      <div id="eigenerhof"></div>
+      <h2>Hof hinzufügen</h2>
+      <div class="pick">
+        <input id="freundcode" type="text" inputmode="latin" autocapitalize="characters"
+               maxlength="6" placeholder="Code, z. B. K7QD3M" aria-label="Hofcode">
+        <button type="button" id="freundadd">Suchen</button>
+      </div>
+      <h2>Deine Nachbarn</h2>
+      <div id="freundeliste"></div>
+      <button class="sheet-close" id="freunde-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="besuch-bg" hidden>
+    <div class="sheet gross" role="dialog" aria-modal="true" aria-labelledby="besuch-titel">
+      <h3 id="besuch-titel">Zu Besuch</h3>
+      <div class="hof fremd" id="besuch-hof">
+        <div class="scene" id="besuch-scene"></div>
+        <div id="besuch-plots"></div>
+      </div>
+      <div id="besuch-kopf"></div>
+      <div id="besuch-stand"></div>
+      <button class="sheet-close" id="besuch-close">Zurück</button>
     </div>
   </div>
 
@@ -176,7 +206,6 @@
       <div id="stand-fuellen" hidden></div>
       <h2 id="zeitung-titel">Die Zeitung</h2>
       <div id="zeitung"></div>
-      <div id="fremd-stand" hidden></div>
       <button class="sheet-close" id="stand-close">Schließen</button>
     </div>
   </div>
@@ -205,6 +234,8 @@
   <!--INCLUDE:farm/bilder.js-->
 
   <!--INCLUDE:farm/anzeige.js-->
+
+  <!--INCLUDE:farm/nachbarn.js-->
 
   <!--INCLUDE:farm/tippen.js-->
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Market, ZEITUNG_HOEFE, hofNummer } from '../src/server/market.ts';
+import { Market, ZEITUNG_HOEFE } from '../src/server/market.ts';
 import type { Order } from '../src/sim/state.ts';
 import { farmView } from '../src/client/view.ts';
 import { getRuleset, LATEST_RULESET_VERSION } from '../src/sim/rules.ts';
@@ -50,8 +50,8 @@ test('der eigene Hof steht nie in der eigenen Zeitung', () => {
 
   const annasBlatt = market.browse('anna', 60);
   assert.equal(annasBlatt.length, 1);
-  assert.notEqual(annasBlatt[0]!.seller, hofNummer('anna'));
-  assert.equal(annasBlatt[0]!.seller, hofNummer('ben'));
+  assert.notEqual(annasBlatt[0]!.seller, 'anna');
+  assert.equal(annasBlatt[0]!.seller, 'ben');
 });
 
 test('innerhalb einer Ausgabe bleibt der Aushang stehen — beim Aufschlagen wechselt er', () => {
@@ -148,7 +148,7 @@ test('das Ansichtsmodell macht aus dem Regal eine Zeitung', () => {
   const v = farmView({ ...base, offers: shelf }, rules);
 
   assert.equal(v.zeitung.length, 2);
-  const annasSeite = v.zeitung.find((z) => z.seller === hofNummer('anna'))!;
+  const annasSeite = v.zeitung.find((z) => z.seller === 'anna')!;
   assert.equal(annasSeite.offers.length, 2);
   assert.ok(annasSeite.offers.some((o) => o.id === annasSeite.aushang.id));
   assert.equal(annasSeite.aushang.headline, true);

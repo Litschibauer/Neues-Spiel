@@ -128,15 +128,17 @@ test('Profil „busy": jede Version mehrfach — Client == Referenz == Server', 
   }
 });
 
-test('Profil „idle": 150 Sitzungen mit langen Offline-Sprüngen', () => {
-  const s = runProfile(IDLE, 150);
-  assert.ok(s.sessions > 120, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
+test('Profil „idle": jede Version mehrfach mit langen Offline-Sprüngen', () => {
+  const laeufe = Math.max(150, VERSIONS.length * 10);
+  const s = runProfile(IDLE, laeufe);
+  assert.ok(s.sessions > laeufe * 0.8, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
 });
 
-test('Profil „hoard": 150 Sitzungen — läuft bis ans Lagerlimit', () => {
-  const s = runProfile(HOARD, 150);
+test('Profil „hoard": jede Version mehrfach — läuft bis ans Lagerlimit', () => {
+  const laeufe = Math.max(150, VERSIONS.length * 10);
+  const s = runProfile(HOARD, laeufe);
 
-  assert.ok(s.sessions > 120, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
+  assert.ok(s.sessions > laeufe * 0.8, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
 
   assert.ok(s.siloFull > 10, `Lager zu selten voll: ${s.siloFull} (max ${s.maxStored})`);
 });

@@ -214,7 +214,8 @@ function renderMoebel(v) {
   moebel($('brett'), artBrett(v.truck.board.length), 'Brett', bereit);
   moebel($('lagerhaus'), artLager(v.silo.full), 'Lager',
     v.mail.entries.length + (v.silo.upgrade && v.silo.upgrade.affordable ? 1 : 0));
-  moebel($('stand'), artStand(), 'Stand', v.buyable);
+  moebel($('stand'), artStand(), 'Stand', v.orders.filter(function (o) { return o.sold > 0; }).length);
+  moebel($('nachbarn'), artNachbarn(), 'Nachbarn', 0);
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');
@@ -404,10 +405,6 @@ function renderMail(v) {
   box.appendChild(card);
 }
 
-var fremderHof = null;
-
-function zeitungZu() { fremderHof = null; }
-
 function marktLive() {
   if (!navigator.onLine) return false;
   return !engine || engine.view !== 'offline';
@@ -416,34 +413,15 @@ function marktLive() {
 function renderMarket(v) {
   var online = marktLive();
   var blatt = $('zeitung');
-  var laden = $('fremd-stand');
   $('market-note').hidden = online;
   if (!online) {
     $('market-note').textContent = navigator.onLine
-      ? 'Der Server antwortet gerade nicht. Kaufen geht erst wieder, wenn die '
-        + 'Verbindung steht — sonst hättest du die Ware nur auf diesem Gerät.'
-      : 'Kaufen braucht Verbindung — wer ein Angebot bekommt, entscheidet sich '
+      ? 'Der Server antwortet gerade nicht. Besuchen und kaufen geht erst wieder, '
+        + 'wenn die Verbindung steht.'
+      : 'Nachbarn brauchen Verbindung — wer ein Angebot bekommt, entscheidet sich '
         + 'nicht auf diesem Gerät. Anschauen geht trotzdem.';
   }
-
-  if (fremderHof !== null && !v.zeitung.some(function (z) { return z.seller === fremderHof; })) {
-    fremderHof = null;
-  }
-
-  if (fremderHof === null) {
-    laden.hidden = true;
-    laden.textContent = '';
-    blatt.hidden = false;
-    $('zeitung-titel').textContent = 'Die Zeitung';
-    zeichneZeitung(v, blatt, online);
-    return;
-  }
-
-  blatt.hidden = true;
-  blatt.textContent = '';
-  laden.hidden = false;
-  $('zeitung-titel').textContent = hofName(fremderHof);
-  zeichneFremdenStand(v, laden, online);
+  zeichneZeitung(v, blatt, online);
 }
 
 function zeichneZeitung(v, box, online) {
@@ -457,75 +435,25 @@ function zeichneZeitung(v, box, online) {
     return;
   }
 
-  var raster = document.createElement('div');
-  raster.className = 'stand-raster';
-
   v.zeitung.forEach(function (hof) {
     var a = hof.aushang;
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'kaestchen anzeige';
-    b.disabled = !online;
-    b.innerHTML = itemIcon(a.item, 'gross') +
-      '<span class="n">' + a.amount + '×</span>' +
-      '<span class="p">' + a.price + itemIcon(v.currency.item) + '</span>' +
-      '<span class="rest">' + hofName(hof.seller) + '</span>';
-    b.addEventListener('click', function () {
+    var karte = document.createElement('button');
+    karte.className = 'card anzeige';
+    karte.dataset.hof = hof.seller;
+    karte.disabled = !online;
+    karte.innerHTML =
+      itemIcon(a.item, 'gross') +
+      '<div class="body"><div class="top">' + hof.hof + '</div>' +
+      '<div class="sub">' + a.amount + ' ' + itemName(a.item) + ' · ' +
+      a.price + ' je Stück · ' + hof.offers.length +
+      (hof.offers.length === 1 ? ' Kästchen' : ' Kästchen') + '</div></div>' +
+      '<span class="go">Besuchen</span>';
+    karte.addEventListener('click', function () {
       if (!marktLive()) return;
-      fremderHof = hof.seller;
-      render();
+      besuche(hof.seller);
     });
-    raster.appendChild(b);
+    box.appendChild(karte);
   });
-
-  box.appendChild(raster);
-}
-
-function zeichneFremdenStand(v, box, online) {
-  box.textContent = '';
-  box.className = online ? '' : 'no-net';
-
-  var hof = v.zeitung.find(function (z) { return z.seller === fremderHof; });
-
-  var kopf = document.createElement('div');
-  kopf.className = 'stand-kopf';
-  var zurueck = document.createElement('button');
-  zurueck.type = 'button';
-  zurueck.className = 'zurueck';
-  zurueck.textContent = '‹ Zeitung';
-  zurueck.addEventListener('click', function () { zeitungZu(); render(); });
-  kopf.appendChild(zurueck);
-  var frei = document.createElement('span');
-  frei.className = 'frei';
-  frei.textContent = hof.offers.length + (hof.offers.length === 1 ? ' Kästchen' : ' Kästchen');
-  kopf.appendChild(frei);
-  box.appendChild(kopf);
-
-  var raster = document.createElement('div');
-  raster.className = 'stand-raster';
-
-  hof.offers.forEach(function (o) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'kaestchen voll fremd';
-    b.dataset.ware = rules.items[o.item].id;
-    b.disabled = !online || !o.affordable || !o.fits;
-    b.innerHTML = itemIcon(o.item, 'gross') +
-      '<span class="n">' + o.amount + '×</span>' +
-      '<span class="p">' + o.total + itemIcon(v.currency.item) + '</span>' +
-      '<span class="rest">' + (!o.fits ? 'kein Platz'
-        : !o.affordable ? 'zu teuer'
-        : o.price + ' je Stück') + '</span>';
-    b.addEventListener('click', function () {
-      if (!marktLive()) return;
-      var res = client.buyOffer(o.id);
-      act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res, 'kauf');
-      if (res.ok) attempt(true);
-    });
-    raster.appendChild(b);
-  });
-
-  box.appendChild(raster);
 }
 
 function clamp(n, lo, hi) {

@@ -800,6 +800,56 @@ Fallen steckten darin, und beide hat erst der Browsertest gezeigt:
 Wer `prefers-reduced-motion` gesetzt hat, bekommt keine fliegenden Zahlen —
 doppelt abgesichert, im CSS und in der Funktion selbst.
 
+#### v18: Nachbarn — Code, Besuch, Helfen
+
+Bis hierher war der Markt anonym: eine Zeitung mit Pseudonymen, ein Kauf per
+Tipp aus der Liste. Es gab andere Höfe, aber keine anderen *Leute*.
+
+**Jeder Hof bekommt jetzt einen Code und einen Namen.** Der Code ist sechs
+Zeichen aus einem Alphabet ohne Verwechslungen (kein `O`/`0`, kein `I`/`1`),
+eindeutig in der Datenbank, und er ist **öffentlich** — genau dafür gemacht,
+weitergegeben zu werden. Der Schlüssel bleibt geheim wie bisher; die beiden
+haben nichts miteinander zu tun. Wer keinen Namen setzt, bekommt einen aus
+seinem Code gerechnet, damit kein Hof namenlos in der Zeitung steht.
+
+**Besuchen ersetzt das Einkaufen aus der Liste.** Die Zeitung zeigt jetzt
+Höfe, nicht Kästchen: ein Eintrag je Hof mit dem ausgehängten Stück und einem
+Knopf „Besuchen". Erst auf seinem Hof — sein Raster, seine Gebäude, was gerade
+bei ihm läuft — steht auch sein Stand, und dort kauft man.
+
+Damit das ohne Sonderweg funktioniert, reist beim Sync ein `besuch: <code>`
+mit: Der Server stellt die Angebote *dieses* Hofs vorne ins Regal. `BUY_OFFER`
+prüft danach wie immer gegen `state.offers` — der Kauf beim Nachbarn ist
+derselbe Kauf wie vorher, nur mit einem anderen Weg dorthin.
+
+**Helfen, dreimal am Tag je Hof.** Ein Tipp auf etwas, das bei ihm läuft, kürzt
+die Restzeit um 20 % der Rezeptdauer; der Helfer bekommt XP. Beides sind
+**externe Ereignisse**, keine Commands:
+
+```
+helfen(plot, slot)   verschiebt startedAt auf dem besuchten Hof
+grantXp(n)           legt XP für den eigenen Hof bereit
+```
+
+Beide setzen dieselbe Marke wie ein Verkauf, damit der Kanarienvogel nicht
+anschlägt: Der Zustand hat sich geändert, ohne dass ein Command daran schuld
+war. Der besuchte Spieler bekommt einen Nudge und sieht es beim nächsten Sync.
+
+Die Tagesgrenze steht in einer eigenen Tabelle, gezählt pro `(Helfer, Hof,
+Tag)` — nicht als Zeitstempel im Spielstand, denn sie ist eine Beziehung
+zwischen zwei Höfen und gehört keinem von beiden. Zähler älter als zwei Tage
+werden weggeräumt.
+
+**Live ist ein Poll.** Solange man auf einem fremden Hof steht, wird alle drei
+Sekunden nachgefragt. Kein Stream, keine Abos, kein Zustand auf dem Server —
+und wenn niemand zu Besuch ist, kostet es nichts.
+
+> Der Browsertest hat mir hier eine Lehrstunde gegeben: Der zweite Hof im Test
+> synchronisierte immer mit `tick: 0`, während seine `serverTs` real
+> weiterlief. Auf dem Besuchsbild war deshalb jede Frucht längst reif — nicht
+> weil die Uhr falsch rechnet, sondern weil ein Testklient sich verhielt, wie
+> kein echter es tut.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

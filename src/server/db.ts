@@ -60,6 +60,29 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       alter table accounts add column owner_until integer not null default 0;
     `);
   },
+
+  (db) => {
+    db.exec(`
+      alter table accounts add column code text;
+      alter table accounts add column hofname text;
+      create unique index accounts_code on accounts (code) where code is not null;
+
+      create table freunde (
+        wer      text not null,
+        freund   text not null,
+        seit_ms  integer not null,
+        primary key (wer, freund)
+      );
+
+      create table hilfen (
+        helfer text not null,
+        hof    text not null,
+        tag    integer not null,
+        wie    integer not null,
+        primary key (helfer, hof, tag)
+      );
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

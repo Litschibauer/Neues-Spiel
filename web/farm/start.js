@@ -55,14 +55,15 @@ function attempt(force) {
 
 function show(next) {
   view = next;
-  if (next !== 'stand') { standZu(); zeitungZu(); }
-  ['brett', 'lager', 'stand', 'rest', 'bau'].forEach(function (name) {
+  if (next !== 'stand') standZu();
+  if (next !== 'besuch') besuchEnde();
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch'].forEach(function (name) {
   $(name + '-close').addEventListener('click', function () { show('farm'); });
   $(name + '-bg').addEventListener('click', function (e) {
     if (e.target === $(name + '-bg')) show('farm');
@@ -76,6 +77,15 @@ $('stand').addEventListener('click', function () {
   attempt(true);
 });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
+$('nachbarn').addEventListener('click', function () {
+  show('freunde');
+  hofLaden();
+  freundeLaden();
+});
+$('freundadd').addEventListener('click', freundHinzu);
+$('freundcode').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') freundHinzu();
+});
 
 function begin(restored) {
   client = restored;

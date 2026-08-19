@@ -15,6 +15,8 @@ function mische(text: string, salz: number): number {
   return (h >>> 0) % 1_000_003;
 }
 
+export type HofInfo = { code: string; name: string };
+
 export function hofNummer(sellerId: string): number {
   return mische(sellerId, 0) % 4096;
 }
@@ -159,7 +161,9 @@ export class Market {
     return gewaehlt;
   }
 
-  browse(viewerId: string, limit: number): Offer[] {
+  hofInfo: (sellerId: string) => HofInfo = (id) => ({ code: id, name: id });
+
+  browse(viewerId: string, limit: number, extra?: string | null): Offer[] {
     const hoefe = new Map<string, BookEntry[]>();
     for (const e of this.book.values()) {
       if (e.sellerId === viewerId) continue;
@@ -171,15 +175,21 @@ export class Market {
     const gewaehlt = this.waehleHoefe(viewerId, [...hoefe.keys()]);
     const ausgabe = this.nonce.get(viewerId) ?? 0;
 
+    const reihe =
+      extra && extra !== viewerId && hoefe.has(extra)
+        ? [extra, ...gewaehlt.filter((id) => id !== extra)]
+        : gewaehlt;
+
     const shelf: Offer[] = [];
-    const vergeben = new Set<number>();
-    for (const sellerId of gewaehlt) {
+    const vergeben = new Set<string>();
+    for (const sellerId of reihe) {
       const eintraege = hoefe.get(sellerId);
       if (!eintraege || shelf.length >= limit) continue;
       eintraege.sort((a, b) => a.listedMs - b.listedMs || a.id - b.id);
       const platz = limit - shelf.length;
-      let seller = hofNummer(sellerId);
-      while (vergeben.has(seller)) seller = (seller + 1) % 4096;
+      const info = this.hofInfo(sellerId);
+      const seller = info.code;
+      if (vergeben.has(seller)) continue;
       vergeben.add(seller);
       const aushang = eintraege[mische(sellerId, ausgabe) % eintraege.length]!;
       for (const e of eintraege.slice(0, platz)) {
@@ -189,6 +199,7 @@ export class Market {
           amount: e.amount,
           price: e.price,
           seller,
+          hof: info.name,
           headline: e.id === aushang.id,
         });
       }
@@ -273,7 +284,7 @@ export function connectMarket(
   liveGame: (id: string) => Server | null = () => null,
   onSold: (sellerId: string) => void = () => {},
 ): void {
-  game.offerSource = (limit) => market.browse(accountId, limit);
+  game.offerSource = (limit) => market.browse(accountId, limit, game.besuch);
   game.claimOffer = (offerId) => {
     const entry = market.claim(offerId, accountId, Date.now());
     if (!entry) return false;

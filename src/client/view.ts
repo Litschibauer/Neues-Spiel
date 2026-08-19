@@ -107,12 +107,14 @@ export type OfferView = {
   total: number;
   affordable: boolean;
   fits: boolean;
-  seller: number;
+  seller: string;
+  hof: string;
   headline: boolean;
 };
 
 export type ZeitungView = {
-  seller: number;
+  seller: string;
+  hof: string;
   aushang: OfferView;
   offers: readonly OfferView[];
 };
@@ -448,6 +450,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       affordable: count(state, rules.currency) >= total,
       fits: !rules.items[o.item]?.storable || free >= o.amount,
       seller: o.seller,
+      hof: o.hof,
       headline: o.headline,
     };
   });
@@ -456,7 +459,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
   for (const o of offers) {
     let hof = zeitung.find((z) => z.seller === o.seller);
     if (!hof) {
-      hof = { seller: o.seller, aushang: o, offers: [] };
+      hof = { seller: o.seller, hof: o.hof, aushang: o, offers: [] };
       zeitung.push(hof);
     }
     (hof.offers as OfferView[]).push(o);
