@@ -19,7 +19,7 @@ function tapPlot(i) {
   client.localTick = tickNow();
   var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
 
-  if (p.capacity > 1) { openStall(p); return; }
+  if (p.stall || p.capacity > 1) { openStall(p); return; }
 
   if (p.tap === 'collect') {
     act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item), client.collect(i));
@@ -74,7 +74,37 @@ function stallRow(p, s) {
   var tier = animalOf(p.index);
   var card = document.createElement('button');
   card.type = 'button';
-  card.className = 'card opt';
+  card.className = 'card opt tierplatz';
+  card.dataset.tier = s.animal || 'egal';
+
+  if (s.animal === 'none') {
+    var kosten = p.stall.cost;
+    card.disabled = !p.stall.affordable;
+    card.innerHTML =
+      '<div class="body">' +
+      '<div class="top">Leerer Platz</div>' +
+      '<div class="sub">' + tier.jung + ' dazukaufen' +
+      (p.stall.affordable ? '' : ' · Gold fehlt') + '</div>' +
+      '</div>' +
+      '<span class="yield">' + kosten + ' ' + itemName(rules.currency) + '</span>';
+    card.addEventListener('click', function () {
+      act(tier.jung + ' gekauft', client.buyAnimal(p.index));
+    });
+    return card;
+  }
+
+  if (s.animal === 'young') {
+    card.disabled = true;
+    card.innerHTML =
+      '<div class="body">' +
+      '<div class="top">' + tier.jung + ' ' + (s.index + 1) + '</div>' +
+      '<div class="sub">wird in ' + timeText(s.grownIn) + ' ' + tier.artikel + ' ' +
+      tier.one + '</div>' +
+      '</div>' +
+      '<span class="yield">' + timeText(s.grownIn) + '</span>';
+    return card;
+  }
+
   card.disabled = s.busy || (!s.done && !p.options.some(function (o) { return o.affordable; }));
   card.innerHTML =
     '<div class="body">' +
@@ -108,14 +138,18 @@ function verschiebeKnopf(p, box) {
 
 function renderStall(p) {
   var tier = animalOf(p.index);
-  $('pick-title').textContent = plotName(p.index) + ' — ' + p.capacity + ' ' +
-    (p.capacity === 1 ? tier.one : tier.many);
+  $('pick-title').textContent = p.stall
+    ? plotName(p.index) + ' — ' + p.stall.animals + ' von ' + p.stall.places + ' Plätzen'
+    : plotName(p.index) + ' — ' + p.capacity + ' ' +
+      (p.capacity === 1 ? tier.one : tier.many);
 
   var box = $('pick-list');
   box.textContent = '';
 
   var ready = p.slots.filter(function (s) { return s.done; });
-  var hungry = p.slots.filter(function (s) { return !s.done && !s.busy; });
+  var hungry = p.slots.filter(function (s) {
+    return !s.done && !s.busy && s.animal !== 'none' && s.animal !== 'young';
+  });
 
   if (ready.length > 1) {
     var all = document.createElement('button');

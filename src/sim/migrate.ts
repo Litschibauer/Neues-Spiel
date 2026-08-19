@@ -31,7 +31,7 @@ function rescaleDurations(state: State, from: Ruleset, to: Ruleset): State {
     });
     if (!slotChanged) return p;
     changed = true;
-    return { level: p.level, slots };
+    return { ...p, slots };
   });
 
   if (!changed) return state;
@@ -101,7 +101,7 @@ export const GROW: MigrationStep = (state, from, to) => {
   while (plots.length < to.plots.length) {
     const i = plots.length;
     const level = to.plots[i]!.startLevel;
-    plots.push({ level, slots: emptySlots(slotsAt(to, i, level)) });
+    plots.push({ level, slots: emptySlots(slotsAt(to, i, level)), gx: -1, gy: -1, tiere: [] });
   }
   next.plots = plots;
 
@@ -173,6 +173,25 @@ export const AUFS_RASTER: MigrationStep = (state, from, to) => {
   return next;
 };
 
+export const TIERE: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (!to.animalsMustBeBought) return gewachsen;
+
+  const plots = gewachsen.plots.map((p, i) => {
+    const tier = to.plots[i]?.animal;
+    if (!tier || p.level <= 0 || (p.tiere ?? []).length > 0) return p;
+    const hatte = slotsAt(from, i, p.level);
+    const geboren = gewachsen.tick - tier.growTicks;
+    const tiere: number[] = [];
+    for (let n = 0; n < hatte; n++) tiere.push(geboren);
+    return { ...p, tiere };
+  });
+
+  const next = cloneState(gewachsen);
+  next.plots = plots;
+  return next;
+};
+
 export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['1->2', RETIME],
 
@@ -189,6 +208,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['12->13', AUFS_RASTER],
   ['13->14', AUFS_RASTER],
   ['14->15', AUFS_RASTER],
+  ['15->16', TIERE],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -332,6 +352,19 @@ export function assertInvariants(state: State, rules: Ruleset): void {
           other.gy + andere.h <= p.gy;
         if (!frei) problems.push(`Platz ${i} und ${j} stehen auf demselben Feld`);
       }
+    }
+
+    const tier = rules.plots[i]?.animal;
+    const tiere = p.tiere ?? [];
+    if (tiere.length > slotsAt(rules, i, p.level)) {
+      problems.push(`Platz ${i}: ${tiere.length} Tiere auf ${slotsAt(rules, i, p.level)} Plätzen`);
+    }
+    if (tiere.length > 0 && !(rules.animalsMustBeBought && tier)) {
+      problems.push(`Platz ${i}: Tiere auf einem Platz, der keine hält`);
+    }
+    for (const geboren of tiere) {
+      if (!Number.isInteger(geboren)) problems.push(`Platz ${i}: Tier ohne ganze Geburtszeit`);
+      else if (geboren > state.tick) problems.push(`Platz ${i}: Tier aus der Zukunft`);
     }
 
     const capacity = slotsAt(rules, i, p.level);

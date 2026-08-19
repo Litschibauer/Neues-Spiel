@@ -238,7 +238,8 @@ export function playRandomSession(
           client.collect(pick(rules.plots.length + 1));
           break;
         case 3:
-          client.buy(pick(rules.plots.length + 1));
+          if (rnd() < 0.5) client.buyAnimal(pick(rules.plots.length + 1));
+          else client.buy(pick(rules.plots.length + 1));
           break;
         case 4:
 
@@ -275,6 +276,16 @@ export function playRandomSession(
 
     for (const plot of affordableUpgrades(s, rules)) {
       moves.push(() => client.buy(plot));
+    }
+
+    if (rules.animalsMustBeBought) {
+      s.plots.forEach((plot, idx) => {
+        const tier = rules.plots[idx]?.animal;
+        if (!tier || plot.level <= 0 || plot.gx < 0) return;
+        if (plot.tiere.length >= plot.slots.length) return;
+        if (count(s, rules.currency) < tier.cost) return;
+        moves.push(() => client.buyAnimal(idx));
+      });
     }
 
     if (rules.grid) {

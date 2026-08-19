@@ -28,6 +28,7 @@ export type SyncRequest = {
   clientHash?: string;
   deviceId?: string;
   takeover?: boolean;
+  neueZeitung?: boolean;
 };
 
 export type SyncResult =

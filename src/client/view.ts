@@ -14,7 +14,15 @@ import { EMPTY_PLOT, capacityOf, count, stored } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
-export type Blocker = 'level' | 'cost' | 'inputs' | 'space' | 'slots' | 'offline' | null;
+export type Blocker =
+  | 'level'
+  | 'cost'
+  | 'inputs'
+  | 'space'
+  | 'slots'
+  | 'young'
+  | 'offline'
+  | null;
 
 export type SlotView = {
   index: number;
@@ -25,7 +33,9 @@ export type SlotView = {
   producing: string | null;
   output: Stack | null;
   next: RecipeOption | null;
-  tap: 'collect' | 'start' | 'none';
+  tap: 'collect' | 'start' | 'none' | 'buy-animal';
+  animal: 'none' | 'young' | 'grown' | null;
+  grownIn: number;
 };
 
 export type PlotView = {
@@ -49,6 +59,7 @@ export type PlotView = {
   free: number;
   tap: 'collect' | 'start' | 'buy' | 'none';
   blocked: Blocker;
+  stall: StallView | null;
   upgrade: {
     label: string;
     cost: readonly Stack[];
@@ -56,6 +67,15 @@ export type PlotView = {
     unlocked: boolean;
     affordable: boolean;
   } | null;
+};
+
+export type StallView = {
+  cost: number;
+  growTicks: number;
+  places: number;
+  animals: number;
+  free: number;
+  affordable: boolean;
 };
 
 export type RecipeOption = {
@@ -293,7 +313,30 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
 
   const startOption = nextRecipe >= 0 ? options.find((o) => o.recipe === nextRecipe) ?? null : null;
 
+  const tiere = plot.tiere ?? [];
+  const tierDef = rules.animalsMustBeBought ? def.animal ?? null : null;
+  const stall: StallView | null = tierDef
+    ? {
+        cost: tierDef.cost,
+        growTicks: tierDef.growTicks,
+        places: plot.slots.length,
+        animals: tiere.length,
+        free: plot.slots.length - tiere.length,
+        affordable: count(state, rules.currency) >= tierDef.cost,
+      }
+    : null;
+
   const slots: SlotView[] = plot.slots.map((slot, j) => {
+    const geboren = tiere[j];
+    const tier: SlotView['animal'] = !tierDef
+      ? null
+      : geboren === undefined
+        ? 'none'
+        : state.tick - geboren >= tierDef.growTicks
+          ? 'grown'
+          : 'young';
+    const grownIn =
+      tier === 'young' ? Math.max(0, tierDef!.growTicks - (state.tick - geboren!)) : 0;
     const running = slot.recipe !== EMPTY_PLOT;
     const recipe = running ? rules.recipes[slot.recipe] : undefined;
     const duration = recipe?.durationTicks ?? 0;
@@ -307,12 +350,25 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
       remaining: running && !ready ? Math.max(0, duration - elapsed) : 0,
       producing: recipe ? recipe.id : null,
       output: recipe ? { item: recipe.output.item, amount: recipe.output.amount } : null,
-      next: running ? null : startOption,
-      tap: ready ? 'collect' : running ? 'none' : startOption ? 'start' : 'none',
+      next: running || tier !== 'grown' ? null : startOption,
+      tap: ready
+        ? 'collect'
+        : running
+          ? 'none'
+          : tier === 'none'
+            ? 'buy-animal'
+            : tier === 'young'
+              ? 'none'
+              : startOption
+                ? 'start'
+                : 'none',
+      animal: tier,
+      grownIn,
     };
   });
 
-  const free = slots.filter((s) => !s.busy && !s.done).length;
+  const free = slots.filter((s) => !s.busy && !s.done && s.animal !== 'none' && s.animal !== 'young')
+    .length;
   const lead =
     slots.find((s) => s.done) ??
     slots
@@ -333,8 +389,11 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     tap = upgrade ? 'buy' : 'none';
     if (upgrade && !upgrade.unlocked) blocked = 'level';
     else if (upgrade && !upgrade.affordable) blocked = 'cost';
+  } else if (stall && stall.animals === 0) {
+    tap = 'buy-animal';
+    if (!stall.affordable) blocked = 'cost';
   } else if (free === 0) {
-    blocked = 'slots';
+    blocked = slots.some((s) => s.animal === 'young') ? 'young' : 'slots';
   } else if (nextRecipe < 0) {
     blocked = options.some((o) => o.unlocked) ? 'inputs' : 'level';
   } else {
@@ -362,6 +421,7 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     free,
     tap,
     blocked,
+    stall,
     upgrade,
   };
 }

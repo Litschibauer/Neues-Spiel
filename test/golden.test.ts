@@ -39,6 +39,7 @@ test('der Korpus ist substanziell — sonst beweist er nichts', () => {
     [...types].sort(),
     [
       'BUY',
+      'BUY_ANIMAL',
       'BUY_NPC',
       'BUY_OFFER',
       'CANCEL_ORDER',

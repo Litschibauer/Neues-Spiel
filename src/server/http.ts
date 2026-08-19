@@ -554,6 +554,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       }
 
       settle(account, game);
+      if (parsed.neueZeitung) market.neueAusgabe(account.id);
 
       const result = game.sync(parsed, Date.now());
 

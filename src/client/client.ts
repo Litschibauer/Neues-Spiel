@@ -101,6 +101,10 @@ export class Client {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  buyAnimal(plot: number): ActionResult {
+    return this.apply({ type: 'BUY_ANIMAL', plot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   sellNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
@@ -133,6 +137,8 @@ export class Client {
     return this.apply({ type: 'SKIP_REQUEST', requestId } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  neueZeitung = false;
+
   buildSyncRequest(): SyncRequest {
     return {
       baseSeq: this.baseSeq,
@@ -141,6 +147,7 @@ export class Client {
       clientHash: this.queue.length > 0 ? hashState(this.state) : undefined,
       deviceId: this.deviceId,
       takeover: this.takeover || undefined,
+      neueZeitung: this.neueZeitung || undefined,
     };
   }
 
@@ -156,6 +163,7 @@ export class Client {
     const pending = this.queue.filter((c) => c.seq > boundary);
 
     this.baseSnapshot = snapshot;
+    this.neueZeitung = false;
     this.state = snapshot.state;
     this.baseSeq = snapshot.seq;
     this.rulesetVersion = snapshot.rulesetVersion;

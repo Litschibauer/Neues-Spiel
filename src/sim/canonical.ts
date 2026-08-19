@@ -6,7 +6,8 @@ export function canonicalize(state: State): string {
   const plots = state.plots
     .map(
       (p) =>
-        `${p.level}@${p.gx},${p.gy}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}`,
+        `${p.level}@${p.gx},${p.gy}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}` +
+        `~${p.tiere.join('/')}`,
     )
     .join(',');
   const passives = state.passives.join(',');
@@ -78,6 +79,9 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':
       return `${c.seq}|${c.tick}|BUY_OFFER|${c.offerId}`;
+
+    case 'BUY_ANIMAL':
+      return `${c.seq}|${c.tick}|BUY_ANIMAL|${c.plot}`;
     case 'COLLECT_MAIL':
       return `${c.seq}|${c.tick}|COLLECT_MAIL`;
     case 'FILL_REQUEST':

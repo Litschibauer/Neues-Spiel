@@ -46,6 +46,27 @@ function renderPurse(v) {
 }
 
 function plotStatus(p) {
+  if (p.stall) {
+    var art = animalOf(p.index);
+    if (p.stall.animals === 0) return 'leer · ' + art.jung + ' kaufen';
+    var fertig = 0;
+    var laeuft = 0;
+    var jung = 0;
+    p.slots.forEach(function (s) {
+      if (s.animal === 'young') jung++;
+      else if (s.done) fertig++;
+      else if (s.busy) laeuft++;
+    });
+    var hunger = p.stall.animals - fertig - laeuft - jung;
+    var teile = [];
+    if (fertig > 0) teile.push(fertig + ' fertig');
+    if (laeuft > 0) teile.push(laeuft + ' beschäftigt · ' + timeText(p.remaining));
+    if (hunger > 0) teile.push(hunger + ' hungrig');
+    if (jung > 0) teile.push(jung + ' ' + art.jung);
+    if (p.stall.free > 0) teile.push(p.stall.free + ' frei');
+    return p.stall.animals + ' ' + (p.stall.animals === 1 ? art.one : art.many) +
+      ' · ' + teile.join(' · ');
+  }
   if (p.capacity > 1) {
     var tier = animalOf(p.index);
     var ready = 0;
@@ -850,6 +871,10 @@ var CODES = {
   REQUEST_NOT_ACTIVE: 'Der wartet noch hinten',
   PRICE_OUT_OF_BAND: 'Preis außerhalb des Bandes',
   TOO_MANY_PER_SLOT: 'Zu viel für ein Kästchen',
+  NO_ANIMAL: 'Auf dem Platz steht kein Tier',
+  ANIMAL_TOO_YOUNG: 'Das Junge ist noch zu klein',
+  NO_ANIMAL_SPACE: 'Der Stall ist voll',
+  NOT_AN_ANIMAL_PLOT: 'Hier wohnt kein Tier',
   BAD_AMOUNT: 'Ungültige Menge',
   OFFER_GONE: 'Jemand war schneller',
   PLOT_BUSY: 'Läuft noch',

@@ -11,6 +11,7 @@ export type Plot = {
   slots: readonly Slot[];
   gx: number;
   gy: number;
+  tiere: readonly number[];
 };
 
 export const EMPTY_SLOT: Slot = { recipe: -1, startedAt: 0 };
@@ -140,6 +141,7 @@ export function initialState(rules: Ruleset): State {
       slots: emptySlots(slotsAt(rules, i, def.startLevel)),
       gx: def.startLevel > 0 ? start.gx : -1,
       gy: def.startLevel > 0 ? start.gy : -1,
+      tiere: [],
     });
   }
 
@@ -185,15 +187,17 @@ export function normalizeState(s: State): State {
       ...x,
       gx: x.gx === undefined ? -1 : x.gx,
       gy: x.gy === undefined ? -1 : x.gy,
+      tiere: x.tiere ?? [],
     });
     if (Array.isArray((p as { slots?: unknown }).slots)) return mitRaster(p);
     const alt = p as unknown as { level: number; recipe?: number; startedAt?: number };
-    if (alt.level <= 0) return { level: alt.level, slots: [], gx: -1, gy: -1 };
+    if (alt.level <= 0) return { level: alt.level, slots: [], gx: -1, gy: -1, tiere: [] };
     return mitRaster({
       level: alt.level,
       slots: [{ recipe: alt.recipe ?? EMPTY_PLOT, startedAt: alt.startedAt ?? 0 }],
       gx: -1,
       gy: -1,
+      tiere: [],
     });
   });
 

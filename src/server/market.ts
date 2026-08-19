@@ -4,7 +4,7 @@ export type { BookEntry, Settlement } from './storage.ts';
 import type { Offer, Order } from '../sim/state.ts';
 import type { Server } from './server.ts';
 
-export const ZEITUNG_MS = 10 * 60 * 1000;
+export const ZEITUNG_HOEFE = 6;
 
 function mische(text: string, salz: number): number {
   let h = 2166136261 ^ salz;
@@ -28,6 +28,14 @@ export class Market {
   private readonly settlements = new Map<string, Settlement[]>();
 
   private readonly touched = new Set<number>();
+
+  private readonly ausgaben = new Map<string, string[]>();
+
+  private readonly nonce = new Map<string, number>();
+
+  private readonly runde = new Map<string, number>();
+
+  private rundeNr = 1;
 
   constructor(store: Storage | null) {
     if (store === undefined) {
@@ -108,7 +116,49 @@ export class Market {
     return changed;
   }
 
-  browse(viewerId: string, limit: number, nowMs: number = Date.now()): Offer[] {
+  neueAusgabe(viewerId: string): void {
+    this.ausgaben.delete(viewerId);
+    this.nonce.set(viewerId, (this.nonce.get(viewerId) ?? 0) + 1);
+  }
+
+  private mischen(liste: string[], saat: number): string[] {
+    const out = [...liste];
+    let z = saat >>> 0;
+    for (let i = out.length - 1; i > 0; i--) {
+      z = (Math.imul(z, 1103515245) + 12345) >>> 0;
+      const j = z % (i + 1);
+      [out[i], out[j]] = [out[j]!, out[i]!];
+    }
+    return out;
+  }
+
+  private waehleHoefe(viewerId: string, verfuegbar: string[]): string[] {
+    const wieviele = Math.min(ZEITUNG_HOEFE, verfuegbar.length);
+    const alt = this.ausgaben.get(viewerId);
+    if (alt) {
+      const noch = alt.filter((id) => verfuegbar.includes(id));
+      if (noch.length >= wieviele) return noch;
+    }
+
+    const saat = mische(viewerId, this.nonce.get(viewerId) ?? 0);
+    let topf = this.mischen(
+      verfuegbar.filter((id) => (this.runde.get(id) ?? 0) < this.rundeNr),
+      saat,
+    );
+
+    if (topf.length < wieviele) {
+      this.rundeNr++;
+      const drin = new Set(topf);
+      topf = topf.concat(this.mischen(verfuegbar.filter((id) => !drin.has(id)), saat + 1));
+    }
+
+    const gewaehlt = topf.slice(0, wieviele);
+    for (const id of gewaehlt) this.runde.set(id, this.rundeNr);
+    this.ausgaben.set(viewerId, gewaehlt);
+    return gewaehlt;
+  }
+
+  browse(viewerId: string, limit: number): Offer[] {
     const hoefe = new Map<string, BookEntry[]>();
     for (const e of this.book.values()) {
       if (e.sellerId === viewerId) continue;
@@ -117,17 +167,14 @@ export class Market {
       hoefe.set(e.sellerId, list);
     }
 
-    const ausgabe = Math.floor(nowMs / ZEITUNG_MS);
-    const sortiert = [...hoefe.entries()].sort((a, b) => {
-      const aeltestA = Math.min(...a[1].map((e) => e.listedMs));
-      const aeltestB = Math.min(...b[1].map((e) => e.listedMs));
-      return aeltestA - aeltestB || (a[0] < b[0] ? -1 : 1);
-    });
+    const gewaehlt = this.waehleHoefe(viewerId, [...hoefe.keys()]);
+    const ausgabe = this.nonce.get(viewerId) ?? 0;
 
     const shelf: Offer[] = [];
     const vergeben = new Set<number>();
-    for (const [sellerId, eintraege] of sortiert) {
-      if (shelf.length >= limit) break;
+    for (const sellerId of gewaehlt) {
+      const eintraege = hoefe.get(sellerId);
+      if (!eintraege || shelf.length >= limit) continue;
       eintraege.sort((a, b) => a.listedMs - b.listedMs || a.id - b.id);
       const platz = limit - shelf.length;
       let seller = hofNummer(sellerId);
@@ -201,6 +248,12 @@ export class Market {
   }
 
   forget(sellerId: string): void {
+    this.runde.delete(sellerId);
+    this.ausgaben.delete(sellerId);
+    this.nonce.delete(sellerId);
+    for (const [wer, hoefe] of this.ausgaben) {
+      if (hoefe.includes(sellerId)) this.ausgaben.delete(wer);
+    }
     for (const entry of [...this.book.values()]) {
       if (entry.sellerId === sellerId) {
         this.book.delete(entry.id);

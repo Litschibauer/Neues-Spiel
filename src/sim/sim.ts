@@ -123,6 +123,12 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!slot) throw new SimError('NO_SUCH_SLOT');
       if (slot.recipe !== EMPTY_PLOT) throw new SimError('PLOT_BUSY');
 
+      if (rules.animalsMustBeBought && def.animal) {
+        const geboren = plot.tiere[slotIndex];
+        if (geboren === undefined) throw new SimError('NO_ANIMAL');
+        if (s.tick - geboren < def.animal.growTicks) throw new SimError('ANIMAL_TOO_YOUNG');
+      }
+
       if (!recipeUnlocked(rules, cmd.recipe, levelOf(rules, s.xp))) {
         throw new SimError('PLAYER_LEVEL_TOO_LOW');
       }
@@ -141,6 +147,27 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       next.plots = replaceAt(s.plots, cmd.plot, {
         ...plot,
         slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick }),
+      });
+      return next;
+    }
+
+    case 'BUY_ANIMAL': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (!rules.animalsMustBeBought || !def.animal) throw new SimError('NOT_AN_ANIMAL_PLOT');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
+      if (rules.grid && plot.gx < 0) throw new SimError('NOT_PLACED');
+      if (plot.tiere.length >= slotsAt(rules, cmd.plot, plot.level)) {
+        throw new SimError('NO_ANIMAL_SPACE');
+      }
+      if (count(s, rules.currency) < def.animal.cost) throw new SimError('CANT_AFFORD');
+
+      const next = cloneState(s);
+      next.items = addItem(s.items, rules.currency, -def.animal.cost);
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        ...plot,
+        tiere: plot.tiere.concat(s.tick),
       });
       return next;
     }

@@ -615,6 +615,59 @@ ist, sondern damit hinter jeder Anzeige auch wirklich der ganze Laden steht.
 nicht verschwunden. Das letzte Blatt ist noch lesbar, kaufen geht erst wieder
 mit Verbindung.
 
+#### v15a: die Zeitung rotiert fair
+
+Die erste Zeitung zeigte einfach alle Höfe und würfelte den Aushang nach der
+Uhr aus. Bei drei Höfen geht das; bei dreißig ist es eine Liste, keine
+Zeitung.
+
+Jetzt zeigt ein Blatt **höchstens sechs Höfe**, und die Auswahl folgt einer
+Runde: Wer schon dran war, taucht ab, bis alle anderen dran waren. Erst dann
+beginnt die nächste Runde. Innerhalb einer Runde ist die Reihenfolge
+gewürfelt, jeder Hof im Topf hat dieselbe Chance.
+
+**Ein neues Blatt gibt es beim Aufschlagen.** Wer den Stand öffnet, schickt
+`neueZeitung: true` mit dem nächsten Sync; der Server verwirft die
+gemerkte Auswahl und würfelt neu. Solange man drin blättert, bleibt das Blatt
+stehen — sonst würde es unter dem Finger wandern, weil im Hintergrund alle
+paar Sekunden synchronisiert wird.
+
+#### v16: der Stall kommt leer
+
+Bis v15 kaufte man Tiere als Stufen: „Zweites Huhn" für 250 Gold, „Drittes
+Huhn" für 250 Gold. Das stimmte rechnerisch, aber man sah nie ein Tier — man
+klickte auf „Ausbauen".
+
+Ab v16 ist der Stall ein **Ort mit Plätzen**. Man kauft ihn leer, tippt ihn
+an und sieht drei leere Plätze. Auf jeden davon kauft man einzeln ein Küken:
+
+```
+PlotDef.animal { cost, growTicks }
+Plot.tiere: readonly number[]     Geburtstick je Tier, in Platzreihenfolge
+BUY_ANIMAL { plot }               kostet Gold, braucht einen freien Platz
+```
+
+Ein frisch gekauftes Küken ist noch kein Huhn: `tick - geboren >= growTicks`
+entscheidet, ob der Platz gefüttert werden kann. Bis dahin steht im GUI, wie
+lange es noch dauert. Küken sind damit kein zweiter Timer-Mechanismus,
+sondern derselbe Vergleich, den auch jedes Rezept macht — nur ohne Slot.
+
+**Die Stufen bleiben, aber sie kaufen Platz statt Tiere.** „Vierter Platz",
+„Fünfter Platz": Der Stall wächst, die Bewohner kauft man weiter einzeln. Das
+musste so, denn Plätze dürfen nie verschwinden — `Kataloge wachsen nur
+hinten` gilt auch für Stufenlisten, und alte Logs müssen sich unverändert
+abspielen lassen.
+
+Wer schon Hühner hatte, behält sie: Die Migration setzt `tiere` auf die Zahl
+der Plätze, die der Hof vorher hatte, mit einem Geburtstick weit genug in der
+Vergangenheit, dass sie **erwachsen** ankommen. Niemand wacht auf und findet
+seine Kühe als Kälber wieder.
+
+Und die Zahl im Namen ist weg. „Gehege 1" hieß so, weil es intern `coop-1`
+heißt — auf einem Hof, auf dem man alles frei hinstellt, sagt eine Nummer
+nichts. Jetzt heißt es „Hühnerstall". Nur in der Bauliste, wo man zwischen
+beiden wählt, steht „Zweiter Hühnerstall".
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

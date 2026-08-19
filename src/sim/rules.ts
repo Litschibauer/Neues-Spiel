@@ -59,6 +59,11 @@ export type PlotSize = {
   h: number;
 };
 
+export type AnimalDef = {
+  cost: number;
+  growTicks: number;
+};
+
 export type PlotDef = {
   id: string;
   startLevel: number;
@@ -67,6 +72,7 @@ export type PlotDef = {
   size?: PlotSize;
   fixed?: boolean;
   flat?: boolean;
+  animal?: AnimalDef;
 };
 
 export type GridDef = {
@@ -130,6 +136,7 @@ export type Ruleset = {
   obstacleKinds?: Record<string, { tool: number; xp: number }>;
   maxOfferAmount?: number;
   maxOfferPrice?: number;
+  animalsMustBeBought?: boolean;
 };
 
 const GOLD = 0;
@@ -925,15 +932,60 @@ const V15: Ruleset = {
   offerSlots: 60,
 };
 
-const DEV: Ruleset = {
+const V16: Ruleset = {
   ...V15,
+  version: 16,
+
+  animalsMustBeBought: true,
+
+  plots: V15.plots.map((p) => {
+    if (p.id === 'coop-1' || p.id === 'coop-2') {
+      const bau = p.id === 'coop-1' ? gold(550) : gold(1050);
+      return {
+        ...p,
+        animal: { cost: 250, growTicks: 600 },
+        levels: [
+          {
+            label: p.id === 'coop-1' ? 'Hühnerstall' : 'Zweiter Hühnerstall',
+            cost: bau,
+            recipes: [R_EGGS],
+            minPlayerLevel: p.id === 'coop-1' ? 3 : 5,
+            slots: 3,
+          },
+          { label: 'Vierter Platz', cost: gold(400), recipes: [R_EGGS], slots: 4 },
+          { label: 'Fünfter Platz', cost: gold(700), recipes: [R_EGGS], slots: 5 },
+        ],
+      };
+    }
+    if (p.id === 'pasture-1') {
+      return {
+        ...p,
+        animal: { cost: 900, growTicks: 1800 },
+        levels: [
+          { label: 'Kuhweide', cost: gold(2100), recipes: [R_MILK], minPlayerLevel: 6, slots: 2 },
+          { label: 'Dritter Platz', cost: gold(1400), recipes: [R_MILK], slots: 3 },
+          { label: 'Vierter Platz', cost: gold(2200), recipes: [R_MILK], slots: 4 },
+        ],
+      };
+    }
+    return p;
+  }),
+};
+
+const DEV: Ruleset = {
+  ...V16,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V15.recipes.map((r) => {
+  recipes: V16.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
+  }),
+  plots: V16.plots.map((p) => {
+    if (!p.animal) return p;
+    const tenth = Math.floor(p.animal.growTicks / 10);
+    return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
   }),
 };
 
@@ -953,16 +1005,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [13, V13],
   [14, V14],
   [15, V15],
+  [16, V16],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 15;
+export const LATEST_RULESET_VERSION = 16;
 
 export const DEV_RULESET_VERSION = 1001;
 

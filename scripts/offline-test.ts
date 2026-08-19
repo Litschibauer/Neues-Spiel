@@ -1284,7 +1284,7 @@ try {
   check('Die Live-Leitung kommt von allein zurück', streamsBack >= 1, `${streamsBack} offen`);
 
 
-  console.log('\n9b. Ein Stall mit drei Tieren — jedes einzeln');
+  console.log('\n9b. Ein leerer Stall, Küken einzeln dazu');
 
   const farmTab = `document.getElementById('brett-close') && (document.getElementById('brett-bg').hidden = true, document.getElementById('lager-bg').hidden = true, document.getElementById('stand-bg').hidden = true)`;
   const ordersTab = `document.getElementById('lagerhaus').click()`;
@@ -1326,46 +1326,104 @@ try {
   }
   check('Mit Weizen allein kommt man auf Stufe 3', (await levelNow()) >= 3, `Stufe ${await levelNow()}`);
 
-  const buyUpgrade = (name: string) =>
-    evaluate<boolean>(
-      cdp,
-      `(function () {
-         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-           return t.querySelector('.name').textContent.indexOf(${JSON.stringify(name)}) === 0;
-         });
-         if (!tile) return false;
-         var up = tile.querySelector('.upgrade');
-         if (up && !up.disabled) { up.click(); return true; }
-         if (tile.disabled) return false;
-         tile.click();
-         var sheet = document.getElementById('pick-bg');
-         if (!sheet.hidden) { document.getElementById('pick-close').click(); return false; }
-         return true;
-       })()`,
-    );
-
   await baueUndStelle(cdp, 'Mühle');
   await sleep(300);
-  await baueUndStelle(cdp, 'Gehege 1');
-  await sleep(300);
-  await buyUpgrade('Gehege 1');
+  await baueUndStelle(cdp, 'Hühnerstall');
   await sleep(300);
 
-  const stallStatus = await evaluate<string>(
+  const stallTile = `[...document.querySelectorAll('#plots .plot')].find(function (t) {
+       return t.querySelector('.name').textContent.indexOf('Hühnerstall') === 0;
+     })`;
+
+  const leerStatus = await evaluate<string>(
+    cdp,
+    `(function () { var t = ${stallTile}; return t ? t.querySelector('.status').textContent : 'weg'; })()`,
+  );
+  check(
+    'Ein frisch gebauter Stall steht leer da und sagt, was fehlt',
+    /leer/.test(leerStatus) && /Küken/.test(leerStatus),
+    leerStatus,
+  );
+
+  await evaluate(cdp, `${stallTile}.click()`);
+  await sleep(250);
+
+  const leereRegale = await evaluate<{ titel: string; plaetze: number; leer: number }>(
     cdp,
     `(function () {
-       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-         return t.querySelector('.name').textContent.indexOf('Gehege 1') === 0;
-       });
-       return tile ? tile.querySelector('.status').textContent : '';
+       var zeilen = [...document.querySelectorAll('#pick-list .tierplatz')];
+       return {
+         titel: document.getElementById('pick-title').textContent,
+         plaetze: zeilen.length,
+         leer: zeilen.filter(function (z) { return z.dataset.tier === 'none'; }).length,
+       };
      })()`,
   );
   check(
-    'Ein Tier nach dem anderen: aus einem Stall mit einem Huhn wird einer mit zweien',
-    /2 Hühner/.test(stallStatus),
-    stallStatus,
+    'Das Stall-GUI zeigt jeden Platz einzeln — alle noch leer',
+    leereRegale.plaetze === 3 && leereRegale.leer === 3 && /0 von 3/.test(leereRegale.titel),
+    `${leereRegale.leer}/${leereRegale.plaetze} leer, Titel „${leereRegale.titel}"`,
   );
 
+  const kaufeKueken = `(function () {
+       var frei = [...document.querySelectorAll('#pick-list .tierplatz')]
+         .find(function (z) { return z.dataset.tier === 'none' && !z.disabled; });
+       if (!frei) return 'kein freier Platz';
+       frei.click();
+       return 'gekauft';
+     })()`;
+
+  const goldVorKueken = Number(
+    await evaluate<string>(cdp, `document.getElementById('gold').textContent`),
+  );
+  await evaluate<string>(cdp, kaufeKueken);
+  await sleep(250);
+  await evaluate<string>(cdp, kaufeKueken);
+  await sleep(250);
+
+  const nachKauf = await evaluate<{ jung: number; leer: number; gold: number; titel: string }>(
+    cdp,
+    `(function () {
+       var zeilen = [...document.querySelectorAll('#pick-list .tierplatz')];
+       return {
+         jung: zeilen.filter(function (z) { return z.dataset.tier === 'young'; }).length,
+         leer: zeilen.filter(function (z) { return z.dataset.tier === 'none'; }).length,
+         gold: Number(document.getElementById('gold').textContent),
+         titel: document.getElementById('pick-title').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Küken kauft man einzeln in den Stall — jedes kostet Gold',
+    nachKauf.jung === 2 && nachKauf.leer === 1 && nachKauf.gold === goldVorKueken - 500,
+    `${nachKauf.jung} Küken, ${nachKauf.leer} frei, ${goldVorKueken} → ${nachKauf.gold} Gold`,
+  );
+  check(
+    'Über dem Stall steht, wie voll er ist',
+    /2 von 3/.test(nachKauf.titel),
+    nachKauf.titel,
+  );
+
+  await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
+  await sleep(600);
+  const erwachsen = await evaluate<{ gross: number; namen: string }>(
+    cdp,
+    `(function () {
+       var zeilen = [...document.querySelectorAll('#pick-list .tierplatz')];
+       return {
+         gross: zeilen.filter(function (z) { return z.dataset.tier === 'grown'; }).length,
+         namen: zeilen.map(function (z) { return z.querySelector('.top').textContent; }).join(', '),
+       };
+     })()`,
+  );
+  check(
+    'Aus Küken werden Hühner — der leere Platz bleibt leer',
+    erwachsen.gross === 2 && /Huhn 1/.test(erwachsen.namen) && /Leerer Platz/.test(erwachsen.namen),
+    erwachsen.namen,
+  );
+
+  await evaluate(cdp, `document.getElementById('pick-close').click()`);
+  await sleep(200);
   await evaluate(
     cdp,
     `(function () {
@@ -1392,15 +1450,7 @@ try {
   );
   await sleep(300);
 
-  await evaluate(
-    cdp,
-    `(function () {
-       var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-         return t.querySelector('.name').textContent.indexOf('Gehege 1') === 0;
-       });
-       tile.click();
-     })()`,
-  );
+  await evaluate(cdp, `${stallTile}.click()`);
   await sleep(250);
 
   const stallRows = await evaluate<string>(
@@ -2221,7 +2271,7 @@ try {
        .find(function (k) { return !k.disabled && k.dataset.ware === 'wheat'; }).click()`,
   );
   await sleep(1600);
-  const nachKauf = await evaluate<{ weizen: number; kisten: number }>(
+  const nachZeitungsKauf = await evaluate<{ weizen: number; kisten: number }>(
     cdp,
     `(function () {
        var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
@@ -2235,8 +2285,10 @@ try {
   );
   check(
     'Ein Tipp aufs Kästchen kauft — die Ware liegt im Lager, das Kästchen ist weg',
-    nachKauf.weizen > weizenVorKauf && nachKauf.kisten === fremderLaden.kisten - 1,
-    `${weizenVorKauf} → ${nachKauf.weizen} Weizen, ${fremderLaden.kisten} → ${nachKauf.kisten} Kästchen`,
+    nachZeitungsKauf.weizen > weizenVorKauf &&
+      nachZeitungsKauf.kisten === fremderLaden.kisten - 1,
+    `${weizenVorKauf} → ${nachZeitungsKauf.weizen} Weizen, ` +
+      `${fremderLaden.kisten} → ${nachZeitungsKauf.kisten} Kästchen`,
   );
 
   await evaluate(cdp, `document.querySelector('#fremd-stand .zurueck').click()`);

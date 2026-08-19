@@ -29,6 +29,8 @@ export type CancelOrderCommand = CommandBase & { type: 'CANCEL_ORDER'; orderId: 
 
 export type BuyOfferCommand = CommandBase & { type: 'BUY_OFFER'; offerId: number };
 
+export type BuyAnimalCommand = CommandBase & { type: 'BUY_ANIMAL'; plot: number };
+
 export type CollectMailCommand = CommandBase & { type: 'COLLECT_MAIL' };
 
 export type FillRequestCommand = CommandBase & { type: 'FILL_REQUEST'; requestId: number };
@@ -67,6 +69,7 @@ export type Command =
   | ListOrderCommand
   | CancelOrderCommand
   | BuyOfferCommand
+  | BuyAnimalCommand
   | CollectMailCommand
   | FillRequestCommand
   | SkipRequestCommand
@@ -123,6 +126,10 @@ export type SimErrorCode =
   | 'NO_ORDER_SLOTS'
   | 'PRICE_OUT_OF_BAND'
   | 'TOO_MANY_PER_SLOT'
+  | 'NO_ANIMAL'
+  | 'ANIMAL_TOO_YOUNG'
+  | 'NO_ANIMAL_SPACE'
+  | 'NOT_AN_ANIMAL_PLOT'
   | 'NO_SUCH_ORDER'
   | 'NO_SUCH_OFFER'
   | 'OFFER_GONE'

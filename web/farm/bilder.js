@@ -270,8 +270,8 @@ var ART = {
     return artField(p.done ? 3 : p.progress < .4 ? 1 : 2, p.producing);
   },
   'mill': function (p) { return artMill(p.busy); },
-  'coop-': function (p) { return artCoop(p.capacity, p.done); },
-  'pasture-': function (p) { return artPasture(p.capacity, p.done); },
+  'coop-': function (p) { return artCoop(p.stall ? p.stall.animals : p.capacity, p.done); },
+  'pasture-': function (p) { return artPasture(p.stall ? p.stall.animals : p.capacity, p.done); },
   'dairy': function (p) { return artDairy(p.busy); },
   fallback: function () { return artField(0, null); },
 };

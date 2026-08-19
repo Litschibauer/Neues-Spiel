@@ -70,7 +70,11 @@ function show(next) {
 });
 $('brett').addEventListener('click', function () { show('brett'); });
 $('lagerhaus').addEventListener('click', function () { show('lager'); });
-$('stand').addEventListener('click', function () { show('stand'); });
+$('stand').addEventListener('click', function () {
+  client.neueZeitung = true;
+  show('stand');
+  attempt(true);
+});
 $('zahnrad').addEventListener('click', function () { show('rest'); });
 
 function begin(restored) {
