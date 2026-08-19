@@ -55,7 +55,7 @@ function attempt(force) {
 
 function show(next) {
   view = next;
-  if (next !== 'stand') standZu();
+  if (next !== 'stand') { standZu(); zeitungZu(); }
   ['brett', 'lager', 'stand', 'rest', 'bau'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });

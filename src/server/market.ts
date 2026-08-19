@@ -4,6 +4,21 @@ export type { BookEntry, Settlement } from './storage.ts';
 import type { Offer, Order } from '../sim/state.ts';
 import type { Server } from './server.ts';
 
+export const ZEITUNG_MS = 10 * 60 * 1000;
+
+function mische(text: string, salz: number): number {
+  let h = 2166136261 ^ salz;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 1_000_003;
+}
+
+export function hofNummer(sellerId: string): number {
+  return mische(sellerId, 0) % 4096;
+}
+
 export class Market {
   private readonly store: Storage | null;
   private nextOfferId = 1;
@@ -93,12 +108,48 @@ export class Market {
     return changed;
   }
 
-  browse(viewerId: string, limit: number): Offer[] {
-    const visible = [...this.book.values()].filter((e) => e.sellerId !== viewerId);
-    visible.sort((a, b) => a.price - b.price || a.listedMs - b.listedMs || a.id - b.id);
-    return visible
-      .slice(0, limit)
-      .map((e) => ({ id: e.id, item: e.item, amount: e.amount, price: e.price }));
+  browse(viewerId: string, limit: number, nowMs: number = Date.now()): Offer[] {
+    const hoefe = new Map<string, BookEntry[]>();
+    for (const e of this.book.values()) {
+      if (e.sellerId === viewerId) continue;
+      const list = hoefe.get(e.sellerId) ?? [];
+      list.push(e);
+      hoefe.set(e.sellerId, list);
+    }
+
+    const ausgabe = Math.floor(nowMs / ZEITUNG_MS);
+    const sortiert = [...hoefe.entries()].sort((a, b) => {
+      const aeltestA = Math.min(...a[1].map((e) => e.listedMs));
+      const aeltestB = Math.min(...b[1].map((e) => e.listedMs));
+      return aeltestA - aeltestB || (a[0] < b[0] ? -1 : 1);
+    });
+
+    const shelf: Offer[] = [];
+    const vergeben = new Set<number>();
+    for (const [sellerId, eintraege] of sortiert) {
+      if (shelf.length >= limit) break;
+      eintraege.sort((a, b) => a.listedMs - b.listedMs || a.id - b.id);
+      const platz = limit - shelf.length;
+      let seller = hofNummer(sellerId);
+      while (vergeben.has(seller)) seller = (seller + 1) % 4096;
+      vergeben.add(seller);
+      const aushang = eintraege[mische(sellerId, ausgabe) % eintraege.length]!;
+      for (const e of eintraege.slice(0, platz)) {
+        shelf.push({
+          id: e.id,
+          item: e.item,
+          amount: e.amount,
+          price: e.price,
+          seller,
+          headline: e.id === aushang.id,
+        });
+      }
+      if (!shelf.some((o) => o.seller === seller && o.headline)) {
+        const ersatz = shelf.findIndex((o) => o.seller === seller);
+        if (ersatz >= 0) shelf[ersatz] = { ...shelf[ersatz]!, headline: true };
+      }
+    }
+    return shelf;
   }
 
   claim(offerId: number, buyerId: string, nowMs: number): BookEntry | null {

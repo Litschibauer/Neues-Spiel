@@ -36,6 +36,8 @@ export type Offer = {
   item: number;
   amount: number;
   price: number;
+  seller: number;
+  headline: boolean;
 };
 
 export type MailItem = {
@@ -199,7 +201,11 @@ export function normalizeState(s: State): State {
     ...s,
     plots,
     xp: s.xp ?? 0,
-    offers: s.offers ?? [],
+    offers: (s.offers ?? []).map((o) => ({
+      ...o,
+      seller: o.seller ?? 0,
+      headline: o.headline ?? false,
+    })),
     mail: s.mail ?? [],
     requests: (s.requests ?? []).map((r) => (r.dest === undefined ? { ...r, dest: 0 } : r)),
     skipReadyAt: s.skipReadyAt ?? 0,

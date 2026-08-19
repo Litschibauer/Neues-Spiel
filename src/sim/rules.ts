@@ -918,13 +918,20 @@ const V14: Ruleset = {
   maxOfferPrice: 500,
 };
 
-const DEV: Ruleset = {
+const V15: Ruleset = {
   ...V14,
+  version: 15,
+
+  offerSlots: 60,
+};
+
+const DEV: Ruleset = {
+  ...V15,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V14.recipes.map((r) => {
+  recipes: V15.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -945,16 +952,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [12, V12],
   [13, V13],
   [14, V14],
+  [15, V15],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 14;
+export const LATEST_RULESET_VERSION = 15;
 
 export const DEV_RULESET_VERSION = 1001;
 

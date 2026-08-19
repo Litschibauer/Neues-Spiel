@@ -380,51 +380,116 @@ function renderMail(v) {
   box.appendChild(card);
 }
 
+var fremderHof = null;
+
+function zeitungZu() { fremderHof = null; }
+
 function renderMarket(v) {
-  var box = $('market-list');
   var online = navigator.onLine;
-  box.textContent = '';
-  box.className = online ? '' : 'no-net';
+  var blatt = $('zeitung');
+  var laden = $('fremd-stand');
   $('market-note').hidden = online;
 
-  if (v.offers.length === 0) {
-    box.innerHTML = '<p class="empty">' + (online
-      ? 'Gerade bietet niemand etwas an. Stell selbst etwas ein — unter Lager.'
-      : 'Keine Angebote auf dem Gerät. Der Markt kommt mit dem nächsten Sync.') + '</p>';
+  if (fremderHof !== null && !v.zeitung.some(function (z) { return z.seller === fremderHof; })) {
+    fremderHof = null;
+  }
+
+  if (fremderHof === null) {
+    laden.hidden = true;
+    laden.textContent = '';
+    blatt.hidden = false;
+    $('zeitung-titel').textContent = 'Die Zeitung';
+    zeichneZeitung(v, blatt, online);
     return;
   }
 
-  v.offers.forEach(function (o) {
-    var card = document.createElement('button');
-    card.className = 'card';
-    card.disabled = !online || !o.affordable || !o.fits;
+  blatt.hidden = true;
+  blatt.textContent = '';
+  laden.hidden = false;
+  $('zeitung-titel').textContent = hofName(fremderHof);
+  zeichneFremdenStand(v, laden, online);
+}
 
-    var body = document.createElement('div');
-    body.className = 'body';
-    var top = document.createElement('div');
-    top.className = 'top';
-    top.textContent = o.amount + ' ' + itemName(o.item);
-    var sub = document.createElement('div');
-    sub.className = 'sub';
-    sub.textContent = !o.fits ? 'kein Platz im Lager'
-      : !o.affordable ? 'zu teuer für dich'
-      : o.price + ' pro Stück';
-    body.appendChild(top); body.appendChild(sub);
+function zeichneZeitung(v, box, online) {
+  box.textContent = '';
+  box.className = online ? '' : 'no-net';
 
-    var go = document.createElement('span');
-    go.className = 'go';
-    go.textContent = o.total + ' ' + itemName(rules.currency);
+  if (v.zeitung.length === 0) {
+    box.innerHTML = '<p class="empty">' + (online
+      ? 'Diese Woche inseriert kein Hof. Stell selbst etwas in deinen Stand.'
+      : 'Die Zeitung liegt nicht auf dem Gerät. Sie kommt mit dem nächsten Sync.') + '</p>';
+    return;
+  }
 
-    card.appendChild(body); card.appendChild(go);
-    card.addEventListener('click', function () {
+  var raster = document.createElement('div');
+  raster.className = 'stand-raster';
+
+  v.zeitung.forEach(function (hof) {
+    var a = hof.aushang;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kaestchen anzeige';
+    b.disabled = !online;
+    b.innerHTML = itemIcon(a.item, 'gross') +
+      '<span class="n">' + a.amount + '×</span>' +
+      '<span class="p">' + a.price + itemIcon(v.currency.item) + '</span>' +
+      '<span class="rest">' + hofName(hof.seller) + '</span>';
+    b.addEventListener('click', function () {
+      if (!navigator.onLine) return;
+      fremderHof = hof.seller;
+      render();
+    });
+    raster.appendChild(b);
+  });
+
+  box.appendChild(raster);
+}
+
+function zeichneFremdenStand(v, box, online) {
+  box.textContent = '';
+  box.className = online ? '' : 'no-net';
+
+  var hof = v.zeitung.find(function (z) { return z.seller === fremderHof; });
+
+  var kopf = document.createElement('div');
+  kopf.className = 'stand-kopf';
+  var zurueck = document.createElement('button');
+  zurueck.type = 'button';
+  zurueck.className = 'zurueck';
+  zurueck.textContent = '‹ Zeitung';
+  zurueck.addEventListener('click', function () { zeitungZu(); render(); });
+  kopf.appendChild(zurueck);
+  var frei = document.createElement('span');
+  frei.className = 'frei';
+  frei.textContent = hof.offers.length + (hof.offers.length === 1 ? ' Kästchen' : ' Kästchen');
+  kopf.appendChild(frei);
+  box.appendChild(kopf);
+
+  var raster = document.createElement('div');
+  raster.className = 'stand-raster';
+
+  hof.offers.forEach(function (o) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'kaestchen voll fremd';
+    b.dataset.ware = rules.items[o.item].id;
+    b.disabled = !online || !o.affordable || !o.fits;
+    b.innerHTML = itemIcon(o.item, 'gross') +
+      '<span class="n">' + o.amount + '×</span>' +
+      '<span class="p">' + o.total + itemIcon(v.currency.item) + '</span>' +
+      '<span class="rest">' + (!o.fits ? 'kein Platz'
+        : !o.affordable ? 'zu teuer'
+        : o.price + ' je Stück') + '</span>';
+    b.addEventListener('click', function () {
       if (!navigator.onLine) return;
       var res = client.buyOffer(o.id);
       act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res);
-
       if (res.ok) attempt(true);
     });
-    box.appendChild(card);
+    raster.appendChild(b);
   });
+
+  box.appendChild(raster);
 }
 
 function clamp(n, lo, hi) {
@@ -574,7 +639,7 @@ function vollesKaestchen(o) {
   b.className = 'kaestchen voll';
   b.innerHTML = itemIcon(o.item, 'gross') +
     '<span class="n">' + o.amount + '×</span>' +
-    '<span class="p">' + o.price + ' je Stück</span>' +
+    '<span class="p">' + o.price + iconTag(rules.items[rules.currency].id) + '</span>' +
     '<span class="rest">' + (o.expiresIn === null
       ? 'steht seit ' + timeText(o.listedFor)
       : 'noch ' + timeText(o.expiresIn)) + '</span>';

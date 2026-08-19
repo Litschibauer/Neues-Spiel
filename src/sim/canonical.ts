@@ -13,7 +13,9 @@ export function canonicalize(state: State): string {
   const orders = state.orders
     .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}:${o.listedAt}`)
     .join(',');
-  const offers = state.offers.map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}`).join(',');
+  const offers = state.offers
+    .map((o) => `${o.id}:${o.item}:${o.amount}:${o.price}@${o.seller}${o.headline ? '!' : ''}`)
+    .join(',');
   const mail = state.mail.map((m) => `${m.item}:${m.amount}:${m.arrivedAt}`).join(',');
   const stacks = (list: readonly { item: number; amount: number }[]) =>
     list.map((x) => `${x.item}x${x.amount}`).join('+');

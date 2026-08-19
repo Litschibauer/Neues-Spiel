@@ -580,6 +580,41 @@ entstanden. Die Grenze gilt beim Hinstellen, nicht als Zustandsbedingung.
 > Änderung. Der Test verkauft den Hof seitdem in Zehnerschritten an den
 > zweiten Hof, also über den Markt, den es dafür gibt.
 
+#### v15: die Zeitung
+
+Der Markt war bis v15 ein Regal: die zwölf billigsten Angebote aller Höfe,
+durcheinandergewürfelt, ohne Absender. Wer etwas kaufte, kaufte von niemandem.
+
+v15 macht daraus eine **Zeitung**. Jeder Hof, der etwas in seinem Stand
+stehen hat, bekommt darin **eine Anzeige** — ein Stück aus seinem Stand, vom
+System ausgewürfelt, ohne dass der Besitzer etwas tun muss. Ein Tipp auf die
+Anzeige führt in seinen Laden, wo alles steht, was er anbietet.
+
+Damit das geht, tragen Angebote jetzt einen Absender:
+
+```
+Offer { id, item, amount, price, seller, headline }
+```
+
+`seller` ist **keine Kontonummer**, sondern eine Zahl aus einem Hash der
+Konto-ID, 0…4095, im selben Blatt garantiert eindeutig. Die Oberfläche macht
+daraus einen Namen — Sonnenhof, Bachgarten, Steinwiese. Wer in der Zeitung
+blättert, erfährt damit nichts über das Konto dahinter, kann den Hof aber
+wiedererkennen.
+
+**Die Ausgabe wechselt alle zehn Minuten.** `browse()` würfelt den Aushang
+aus `hash(kontoId, ausgabe)`, wobei `ausgabe = floor(jetzt / 10 min)`. Das
+ist kein `Math.random()`: Innerhalb einer Ausgabe steht derselbe Aushang, egal
+wie oft synchronisiert wird — sonst würde die Zeitung unter dem Finger
+flackern. Und weil das Ganze auf dem Server passiert, bleibt die Sim rein.
+
+Das Regal fasst dafür `offerSlots: 60` statt 12 — nicht damit mehr Ware da
+ist, sondern damit hinter jeder Anzeige auch wirklich der ganze Laden steht.
+
+**Offline bleibt die Zeitung liegen**, wie jedes soziale Feature: ausgegraut,
+nicht verschwunden. Das letzte Blatt ist noch lesbar, kaufen geht erst wieder
+mit Verbindung.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

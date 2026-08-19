@@ -932,7 +932,7 @@ try {
     'Ohne Netz ist der Markt ausgegraut und der Hinweis sichtbar',
     await evaluate<boolean>(
       cdp,
-      `document.getElementById('market-list').className === 'no-net'
+      `document.getElementById('zeitung').className === 'no-net'
          && !document.getElementById('market-note').hidden`,
     ),
   );
@@ -973,9 +973,10 @@ try {
   }
   check('Der Browser hält eine Live-Leitung offen', streams >= 1, `${streams} offen`);
 
+  await evaluate(cdp, `document.getElementById('stand').click()`);
   const offersBefore = await evaluate<number>(
     cdp,
-    `document.querySelectorAll('#market-list .card').length`,
+    `document.querySelectorAll('#zeitung .kaestchen.anzeige').length`,
   );
 
   await api(`/api/admin/grant?account=${second.accountId}&item=eggs&amount=6`, 'POST');
@@ -990,13 +991,13 @@ try {
     await sleep(250);
     offersAfter = await evaluate<number>(
       cdp,
-      `document.querySelectorAll('#market-list .card').length`,
+      `document.querySelectorAll('#zeitung .kaestchen.anzeige').length`,
     );
   }
   check(
-    'Ein neues Angebot erscheint von selbst — ohne Neuladen',
+    'Ein fremder Hof erscheint von selbst in der Zeitung — ohne Neuladen',
     offersAfter > offersBefore,
-    `${offersBefore} → ${offersAfter} Angebote`,
+    `${offersBefore} → ${offersAfter} Höfe im Blatt`,
   );
 
   console.log('\n8b. Kästchen füllen: Ware, Menge, Preis');
@@ -2125,6 +2126,131 @@ try {
     platzFrei.state.clearedObstacles.length === 1,
     `geräumt: ${JSON.stringify(platzFrei.state.clearedObstacles)}`,
   );
+
+  console.log('\n9h. Die Zeitung — ein Aushang je Hof, dahinter der ganze Laden');
+
+  const schonImBlatt = await evaluate<number>(
+    cdp,
+    `(function () {
+       document.getElementById('stand').click();
+       var karte = document.querySelector('#zeitung .kaestchen.anzeige');
+       if (!karte) return 0;
+       karte.click();
+       var n = document.querySelectorAll('#fremd-stand .kaestchen.fremd').length;
+       document.querySelector('#fremd-stand .zurueck').click();
+       document.getElementById('stand-close').click();
+       return n;
+     })()`,
+  );
+
+  const zweiterStand = await stateAs(second.key);
+  await syncAs(second.key, zweiterStand.snapshot.seq, [
+    { seq: zweiterStand.snapshot.seq + 1, tick: 0, type: 'LIST_ORDER', item: 1, amount: 6, price: 4 },
+    { seq: zweiterStand.snapshot.seq + 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 3, price: 5 },
+    { seq: zweiterStand.snapshot.seq + 3, tick: 0, type: 'LIST_ORDER', item: 1, amount: 10, price: 6 },
+  ]);
+  await sleep(500);
+
+  await evaluate(cdp, farmTab);
+  await sleep(1600);
+  await evaluate(cdp, `document.getElementById('stand').click()`);
+  await sleep(400);
+
+  const blatt = await evaluate<{ hoefe: number; bilder: number; name: string; titel: string }>(
+    cdp,
+    `(function () {
+       var karten = [...document.querySelectorAll('#zeitung .kaestchen.anzeige')];
+       return {
+         hoefe: karten.length,
+         bilder: karten.filter(function (k) { return !!k.querySelector('img.ic'); }).length,
+         name: karten[0] ? karten[0].querySelector('.rest').textContent : '',
+         titel: document.getElementById('zeitung-titel').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Drei Angebote, aber nur ein Aushang — die Zeitung zeigt Höfe, nicht Kisten',
+    blatt.hoefe === 1 && blatt.bilder === 1 && blatt.titel === 'Die Zeitung',
+    `${blatt.hoefe} Aushang(e), Hof „${blatt.name}"`,
+  );
+  check(
+    'Der fremde Hof hat einen Namen statt einer Kontonummer',
+    /^[A-ZÄÖÜ][a-zäöüß]+$/.test(blatt.name),
+    blatt.name,
+  );
+
+  await evaluate(cdp, `document.querySelector('#zeitung .kaestchen.anzeige').click()`);
+  await sleep(300);
+  const fremderLaden = await evaluate<{ kisten: number; bilder: number; titel: string; zurueck: boolean }>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#fremd-stand .kaestchen.fremd')];
+       return {
+         kisten: k.length,
+         bilder: k.filter(function (x) { return !!x.querySelector('img.ic'); }).length,
+         titel: document.getElementById('zeitung-titel').textContent,
+         zurueck: !!document.querySelector('#fremd-stand .zurueck'),
+       };
+     })()`,
+  );
+  check(
+    'Hinter dem Aushang steht der ganze Stand — mit Bild an jedem Kästchen',
+    fremderLaden.kisten === schonImBlatt + 3 &&
+      fremderLaden.bilder === fremderLaden.kisten &&
+      fremderLaden.zurueck,
+    `${fremderLaden.kisten} Kästchen, ${fremderLaden.bilder} mit Bild, Titel „${fremderLaden.titel}"`,
+  );
+  check(
+    'Über dem Laden steht, bei wem man gerade ist',
+    fremderLaden.titel === blatt.name,
+    `${fremderLaden.titel} statt ${blatt.name}`,
+  );
+
+  const weizenVorKauf = await evaluate<number>(
+    cdp,
+    `(function () {
+       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+         return x.textContent.indexOf('Weizen') === 0;
+       });
+       return c ? Number(c.querySelector('.n').textContent) : -1;
+     })()`,
+  );
+  await evaluate(
+    cdp,
+    `[...document.querySelectorAll('#fremd-stand .kaestchen.fremd')]
+       .find(function (k) { return !k.disabled && k.dataset.ware === 'wheat'; }).click()`,
+  );
+  await sleep(1600);
+  const nachKauf = await evaluate<{ weizen: number; kisten: number }>(
+    cdp,
+    `(function () {
+       var c = [...document.querySelectorAll('#stock .chip')].find(function (x) {
+         return x.textContent.indexOf('Weizen') === 0;
+       });
+       return {
+         weizen: c ? Number(c.querySelector('.n').textContent) : -1,
+         kisten: document.querySelectorAll('#fremd-stand .kaestchen.fremd').length,
+       };
+     })()`,
+  );
+  check(
+    'Ein Tipp aufs Kästchen kauft — die Ware liegt im Lager, das Kästchen ist weg',
+    nachKauf.weizen > weizenVorKauf && nachKauf.kisten === fremderLaden.kisten - 1,
+    `${weizenVorKauf} → ${nachKauf.weizen} Weizen, ${fremderLaden.kisten} → ${nachKauf.kisten} Kästchen`,
+  );
+
+  await evaluate(cdp, `document.querySelector('#fremd-stand .zurueck').click()`);
+  await sleep(300);
+  const zurueckImBlatt = await evaluate<boolean>(
+    cdp,
+    `document.getElementById('fremd-stand').hidden
+       && !document.getElementById('zeitung').hidden
+       && document.getElementById('zeitung-titel').textContent === 'Die Zeitung'`,
+  );
+  check('Zurück führt zurück in die Zeitung', zurueckImBlatt);
+
+  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  await sleep(200);
 
   console.log('\n10. Eine neue Version erreicht den Browser');
 

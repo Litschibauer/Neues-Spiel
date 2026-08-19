@@ -27,6 +27,17 @@ function itemIcon(item, klasse) { return iconTag(rules.items[item].id, klasse); 
 function mengeMitBild(item, menge) {
   return itemIcon(item) + '<span>' + menge + ' ' + itemName(item) + '</span>';
 }
+var HOF_ERST = [
+  'Sonnen', 'Linden', 'Birken', 'Eichen', 'Rosen', 'Auen', 'Berg', 'Tal',
+  'Wiesen', 'Bach', 'Stein', 'Hasel', 'Kirsch', 'Ahorn', 'Weiden', 'Erlen',
+];
+var HOF_ZWEIT = ['hof', 'gut', 'feld', 'garten', 'wiese', 'kamp', 'acker', 'weide'];
+
+function hofName(nummer) {
+  var n = Math.abs(nummer | 0);
+  return HOF_ERST[n % HOF_ERST.length] + HOF_ZWEIT[Math.floor(n / HOF_ERST.length) % HOF_ZWEIT.length];
+}
+
 function hindernisName(art) {
   return art === 'tree' ? 'Baum' : art === 'rock' ? 'Stein' : 'Tümpel';
 }

@@ -430,6 +430,9 @@
   .kaestchen .n { font-size: .8rem; font-weight: 700; }
   .kaestchen .p { font-size: .66rem; color: var(--gold); font-weight: 700; }
   .kaestchen .rest { font-size: .62rem; color: var(--muted); }
+  .kaestchen .p .ic { width: 1em; height: 1em; vertical-align: -.16em; margin: 0 0 0 .12em; }
+  .kaestchen.anzeige { background: var(--gold-soft); border-color: var(--gold); }
+  .kaestchen.fremd .p { color: var(--accent); }
   .kaestchen.leer {
     background: var(--sunk); border-style: dashed; box-shadow: none;
   }
@@ -452,7 +455,7 @@
   .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
   .chip[disabled] { opacity: .45; }
 
-  #market-list.no-net { opacity: .45; pointer-events: none; }
+  #zeitung.no-net, #fremd-stand.no-net { opacity: .45; pointer-events: none; }
   .note {
     margin: 0; font-size: .75rem; color: var(--warn);
     background: var(--warn-soft); border-radius: 10px; padding: .55rem .7rem;

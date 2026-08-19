@@ -87,6 +87,14 @@ export type OfferView = {
   total: number;
   affordable: boolean;
   fits: boolean;
+  seller: number;
+  headline: boolean;
+};
+
+export type ZeitungView = {
+  seller: number;
+  aushang: OfferView;
+  offers: readonly OfferView[];
 };
 
 export type OrderView = {
@@ -194,6 +202,7 @@ export type FarmView = {
   plots: readonly PlotView[];
   requests: readonly RequestView[];
   offers: readonly OfferView[];
+  zeitung: readonly ZeitungView[];
   orders: readonly OrderView[];
   orderSlots: number;
   orderSlotsFree: number;
@@ -377,8 +386,21 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       total,
       affordable: count(state, rules.currency) >= total,
       fits: !rules.items[o.item]?.storable || free >= o.amount,
+      seller: o.seller,
+      headline: o.headline,
     };
   });
+
+  const zeitung: ZeitungView[] = [];
+  for (const o of offers) {
+    let hof = zeitung.find((z) => z.seller === o.seller);
+    if (!hof) {
+      hof = { seller: o.seller, aushang: o, offers: [] };
+      zeitung.push(hof);
+    }
+    (hof.offers as OfferView[]).push(o);
+    if (o.headline) hof.aushang = o;
+  }
 
   const stock: StockView[] = rules.items.map((item, i) => {
     const limits = offerLimits(rules, i);
@@ -425,6 +447,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       skippable: skipEnabled && skipReady && i < rules.requestSlots,
     })),
     offers,
+    zeitung,
     orders: state.orders.map((o) => ({
       id: o.id,
       item: o.item,
