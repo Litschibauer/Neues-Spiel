@@ -191,6 +191,16 @@ $('keydone').addEventListener('click', function () {
   start(pendingStart.snapshot, pendingStart.serverTime, pendingStart.accountId);
   setLease(true, null);
 });
+function tonAnzeigen() {
+  $('tonstand').textContent = tonAn ? 'an' : 'aus';
+  $('tonschalter').textContent = tonAn ? 'aus' : 'an';
+}
+$('tonknopf').addEventListener('click', function () {
+  tonSchalten(!tonAn);
+  tonAnzeigen();
+});
+tonAnzeigen();
+
 $('connect').addEventListener('click', connect);
 $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
 $('takeover').addEventListener('click', function () {

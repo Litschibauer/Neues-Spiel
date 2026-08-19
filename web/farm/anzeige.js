@@ -131,6 +131,7 @@ function renderPlots(v) {
     tile.style.width = ort.width + '%';
     tile.style.height = ort.height + '%';
     tile.style.zIndex = String(1 + Math.round(ort.tiefe * 2));
+    tile.dataset.platz = String(p.index);
     tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 
     var art = document.createElement('div');
@@ -297,7 +298,7 @@ function renderAusbau(v) {
     '<div class="sub">' + stacksMitBild(v.silo.upgrade.cost) + '</div></div>' +
     '<span class="go">Bauen</span>';
   karte.addEventListener('click', function () {
-    act('Lager ausgebaut · ' + v.silo.upgrade.capacity + ' Platz', client.upgradeSilo());
+    act('Lager ausgebaut · ' + v.silo.upgrade.capacity + ' Platz', client.upgradeSilo(), 'stufe');
   });
   box.appendChild(karte);
 }
@@ -355,7 +356,7 @@ function renderRequests(v) {
       ? 'Wagen unterwegs'
       : z.deliverable ? 'Abschicken' : 'Ware fehlt';
     los.addEventListener('click', function () {
-      act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), client.sendSlip(z.slot));
+      act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), client.sendSlip(z.slot), 'wagen');
     });
     reihe.appendChild(los);
 
@@ -397,7 +398,9 @@ function renderMail(v) {
   go.className = 'go';
   go.textContent = 'Abholen';
   card.appendChild(body); card.appendChild(go);
-  card.addEventListener('click', function () { act('Postfach geleert', client.collectMail()); });
+  card.addEventListener('click', function () {
+    act('Postfach geleert', client.collectMail(), 'muenzen');
+  });
   box.appendChild(card);
 }
 
@@ -516,7 +519,7 @@ function zeichneFremdenStand(v, box, online) {
     b.addEventListener('click', function () {
       if (!marktLive()) return;
       var res = client.buyOffer(o.id);
-      act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res);
+      act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res, 'kauf');
       if (res.ok) attempt(true);
     });
     raster.appendChild(b);
@@ -680,7 +683,11 @@ function vollesKaestchen(o) {
       '<span class="p">verkauft</span>' +
       '<span class="rest">abholen</span>';
     b.addEventListener('click', function () {
-      act('Kasse · +' + o.sold + ' ' + itemName(rules.currency), client.collectSale(o.id));
+      var geld = o.sold;
+      var wo = b.getBoundingClientRect();
+      var erg = client.collectSale(o.id);
+      act('Kasse · +' + geld + ' ' + itemName(rules.currency), erg, 'muenzen');
+      if (erg.ok) zahlAuf(wo, '+' + geld, 'gold');
     });
     return b;
   }

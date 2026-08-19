@@ -501,6 +501,24 @@
     align-self: flex-start; border: 1px solid currentColor; background: none;
     border-radius: 999px; padding: .3rem .8rem; font-size: .74rem; font-weight: 650;
   }
+  .flug {
+    position: fixed; z-index: 60; pointer-events: none;
+    transform: translate(-50%, 0);
+    font-size: .82rem; font-weight: 750; letter-spacing: -.01em;
+    color: var(--leaf-dark); text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    animation: steigt .9s ease-out forwards;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .flug.gold { color: var(--gold); }
+  .flug.xp { color: var(--accent); font-size: .72rem; }
+  .flug.ware { color: var(--surface); }
+  @keyframes steigt {
+    0% { opacity: 0; transform: translate(-50%, .3rem) scale(.9); }
+    18% { opacity: 1; transform: translate(-50%, -.2rem) scale(1.06); }
+    100% { opacity: 0; transform: translate(-50%, -2.6rem) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { .flug { display: none; } }
+
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 40;

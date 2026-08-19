@@ -8,10 +8,27 @@ function scheduleSync() {
   }, 250);
 }
 
-function act(name, result) {
+function platzKasten(i) {
+  var el = document.querySelector('#plots .plot[data-platz="' + i + '"]');
+  return el ? el.getBoundingClientRect() : null;
+}
+
+function hoch(kasten) {
+  if (!kasten) return null;
+  return { left: kasten.left, top: kasten.top - 22, width: kasten.width, height: kasten.height };
+}
+
+function act(name, result, ton) {
   if (!isActive) return;
-  if (result.ok) { toast(name); save(); scheduleSync(); }
-  else toast(CODES[result.code] || result.code, true);
+  if (result.ok) {
+    toast(name);
+    klang(ton || 'tipp');
+    save();
+    scheduleSync();
+  } else {
+    toast(CODES[result.code] || result.code, true);
+    klang('fehler');
+  }
   render();
 }
 
@@ -23,7 +40,15 @@ function tapPlot(i) {
   if (p.stall || p.capacity > 1) { openStall(p); return; }
 
   if (p.tap === 'collect') {
-    act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item), client.collect(i));
+    var wo = platzKasten(i);
+    var vorher = client.preview().xp;
+    var res = client.collect(i);
+    act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item), res, 'ernte');
+    if (res.ok) {
+      zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
+      var dazu = client.preview().xp - vorher;
+      if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+    }
     return;
   }
   if (p.tap === 'buy') { tapBuy(i); return; }
@@ -35,7 +60,7 @@ function tapPlot(i) {
   if (p.tap === 'start') {
     act('Gestartet · ' + nameOf(p.next.id) +
           (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
-        client.start(i, p.next.recipe));
+        client.start(i, p.next.recipe), 'saat');
     return;
   }
   if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
@@ -48,7 +73,10 @@ var pickerPlot = null;
 
 function collectSlot(p, j) {
   var out = p.slots[j].output;
-  act('Geerntet · ' + out.amount + ' ' + itemName(out.item), client.collect(p.index, j));
+  var woTier = platzKasten(p.index);
+  var erg = client.collect(p.index, j);
+  act('Geerntet · ' + out.amount + ' ' + itemName(out.item), erg, 'ernte');
+  if (erg.ok) zahlAuf(woTier, '+' + out.amount + ' ' + itemName(out.item), 'ware');
 }
 
 function feedSlot(p, j) {
@@ -89,7 +117,7 @@ function stallRow(p, s) {
       '</div>' +
       '<span class="yield">' + kosten + ' ' + itemName(rules.currency) + '</span>';
     card.addEventListener('click', function () {
-      act(tier.jung + ' gekauft', client.buyAnimal(p.index));
+      act(tier.jung + ' gekauft', client.buyAnimal(p.index), 'tier');
     });
     return card;
   }
@@ -398,7 +426,7 @@ function zeichneHindernis(h) {
 function oeffneKiste(id) {
   if (!isActive) return;
   client.localTick = tickNow();
-  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(id));
+  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(id), 'kiste');
 }
 
 $('kiste').addEventListener('click', function () {
@@ -483,7 +511,7 @@ function nachkaufZeile(v, o, box) {
       : '1 ' + itemName(zutat.item) + ' kaufen · ' + lager.npcBuyPrice + ' ' +
         itemName(v.currency.item);
     knopf.addEventListener('click', function () {
-      act('Nachgekauft · 1 ' + itemName(zutat.item), client.buyNpc(zutat.item, 1));
+      act('Nachgekauft · 1 ' + itemName(zutat.item), client.buyNpc(zutat.item, 1), 'kauf');
     });
     kasten.appendChild(knopf);
 

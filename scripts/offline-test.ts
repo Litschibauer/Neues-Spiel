@@ -709,6 +709,9 @@ try {
     deviceScaleFactor: 2,
     mobile: true,
   });
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+  });
 
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 
@@ -859,6 +862,19 @@ try {
       }),
     );
   }
+  const flugzahl = await evaluate<string>(
+    cdp,
+    `(function () {
+       var el = document.querySelector('.flug');
+       return el ? el.className + ':' + el.textContent : 'keine';
+     })()`,
+  );
+  check(
+    'Beim Ernten steigt die Ausbeute über dem Feld auf',
+    /flug/.test(flugzahl) && /\+/.test(flugzahl),
+    flugzahl,
+  );
+
   check(
     'Ernten geht mit einem Tipp auf den Platz',
     afterHarvest > beforeHarvest,
@@ -1875,6 +1891,26 @@ try {
      })()`,
   );
   check('Der Rest sitzt hinterm Zahnrad', hinterZahnrad === 'true/true', hinterZahnrad);
+
+  const tonSchalter = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('zahnrad').click();
+       var stand = function () { return document.getElementById('tonstand').textContent; };
+       var vorher = stand();
+       document.getElementById('tonknopf').click();
+       var danach = stand();
+       var gemerkt = localStorage.getItem('ns-ton');
+       document.getElementById('tonknopf').click();
+       document.getElementById('rest-close').click();
+       return vorher + '/' + danach + '/' + gemerkt + '/' + stand();
+     })()`,
+  );
+  check(
+    'Töne lassen sich abschalten, und das Gerät merkt es sich',
+    tonSchalter === 'an/aus/aus/an',
+    tonSchalter,
+  );
 
   const leeresFeld = await evaluate<string>(
     cdp,

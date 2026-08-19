@@ -764,6 +764,42 @@ einfach verstummt.
 > Frequenz, sondern die Antwort auf „woran merke ich, dass es wieder geht?" —
 > und die kommt von Ereignissen, nicht vom Takt.
 
+#### Töne und Zahlen, die aufsteigen
+
+Ein Hof ohne Ton ist eine Tabelle mit Bildern. Die naheliegende Lösung —
+ein Ordner mit `.mp3`-Dateien — hätte hier gleich drei Zusagen gebrochen: die
+Seite ist **eine** Datei mit allem darin, es gibt **keine Abhängigkeiten**, und
+offline darf nichts nachgeladen werden. Zehn Klänge als Audiodateien wären
+schnell ein halbes Megabyte gewesen, das bei jedem Laden mitreist.
+
+Also werden sie **gerechnet, nicht abgespielt**: `web/farm/klang.js` baut jeden
+Ton zur Laufzeit aus Oszillatoren und einem Rauschgenerator. Das Ernten sind
+zwei aufsteigende Dreiecke, die Münzen drei kurze Rechtecke, der Wagen ein
+absteigender Sägezahn mit Rauschen darunter. Kosten: **null Bytes Material**,
+etwa 150 Zeilen, und es funktioniert im Funkloch wie überall.
+
+Drei Dinge, die dabei zählen:
+
+- **Der erste Tipp weckt die Tonausgabe.** Mobile Browser lassen Audio erst
+  nach einer Geste zu; ein `pointerdown`-Horcher erledigt das einmalig und
+  hängt sich danach wieder aus.
+- **Im Hintergrund bleibt es still.** `document.hidden` schneidet jeden Ton ab.
+- **Abschaltbar und gemerkt.** Ein Schalter hinterm Zahnrad, gespeichert in
+  `localStorage`. Aus heißt aus, auch nach dem Neuladen.
+
+Dazu steigen **Zahlen über der Stelle auf, an der etwas passiert** — was
+geerntet wurde, wie viel XP das gab, wie viel Gold aus dem Kästchen kam. Zwei
+Fallen steckten darin, und beide hat erst der Browsertest gezeigt:
+
+1. Die Kacheln liegen **nach Tiefe sortiert** im DOM, nicht nach Platznummer.
+   `children[i]` traf die falsche. Jetzt trägt jede Kachel `data-platz`.
+2. `act()` zeichnet neu, bevor die Zahl fliegt — das gemessene Rechteck gehörte
+   dann zu einem Element, das es nicht mehr gibt, und war überall null. Jetzt
+   wird die Stelle **vor** der Handlung gemessen und als Rechteck weitergereicht.
+
+Wer `prefers-reduced-motion` gesetzt hat, bekommt keine fliegenden Zahlen —
+doppelt abgesichert, im CSS und in der Funktion selbst.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 
