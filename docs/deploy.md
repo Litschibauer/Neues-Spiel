@@ -277,6 +277,26 @@ ersten Ei dauert damit ein paar Minuten statt einen Nachmittag.
 Es steht **außerhalb der Produktionsreihe** und ist bewusst kein Migrationsziel
 — es gäbe keinen Weg zurück. Ein Dev-Spielstand ist Wegwerfware: `rm -rf data/dev`.
 
+### Läuft mein Hof schon auf der neuen Version?
+
+`/health` sagt es ohne Werkbank:
+
+```bash
+curl -s http://127.0.0.1:8787/health
+```
+
+| Feld | Bedeutung |
+| --- | --- |
+| `rulesetVersion` | worauf der **Server** zielt — das ist die neue Version |
+| `rulesets` | worauf die **geladenen Höfe** gerade stehen, gezählt je Version |
+| `migrationFailures` | wie oft eine Migration abgebrochen ist |
+
+Steht bei `rulesets` noch eine alte Nummer, hat der Hof seit dem Neustart nicht
+gesynct — er wandert beim nächsten Sync. Steht dort eine alte Nummer **und**
+`migrationFailures` ist größer als 0, ist die Migration gescheitert; der Grund
+steht im Serverprotokoll, und der Hof spielt sicherheitshalber auf der alten
+Version weiter, statt kaputtzugehen.
+
 ### Balance-Patch live beobachten
 
 In Produktion migriert der Server einen Spielstand beim nächsten Sync auf die

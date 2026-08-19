@@ -79,6 +79,8 @@ function plotStatus(p) {
 }
 
 function renderPlots(v) {
+  $('hof').classList.toggle('kein-raster', !hatRaster());
+
   var scene = $('scene');
   var wunsch = 'boden' + (bauModus ? '-bau' : '');
   if (scene.dataset.stand !== wunsch) {
@@ -89,7 +91,7 @@ function renderPlots(v) {
   var box = $('plots');
   box.textContent = '';
 
-  var sichtbar = v.plots.filter(function (p) { return p.gx >= 0; });
+  var sichtbar = v.plots.filter(function (p) { return !hatRaster() || p.gx >= 0; });
   var reihenfolge = sichtbar.slice().sort(function (a, b) {
     return plotKasten(a.index, a).tiefe - plotKasten(b.index, b).tiefe;
   });
@@ -558,7 +560,8 @@ function renderBauliste(v) {
   box.textContent = '';
 
   if (!v.grid) {
-    box.innerHTML = '<p class="empty">In diesem Regelwerk steht alles schon.</p>';
+    box.innerHTML = '<p class="empty">Dieser Hof läuft noch auf einem Regelwerk ohne Raster. ' +
+      'Beim nächsten Sync nach einem Server-Update wandert er darauf.</p>';
     return;
   }
   if (v.buildable.length === 0) {

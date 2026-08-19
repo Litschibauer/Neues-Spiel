@@ -407,6 +407,14 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       live: live.size,
       streams: events.size,
       rejections: Object.fromEntries(rejections),
+      rulesets: Object.fromEntries(
+        [...live.values()].reduce((zaehler, game) => {
+          const v = String(game.snapshot.rulesetVersion);
+          zaehler.set(v, (zaehler.get(v) ?? 0) + 1);
+          return zaehler;
+        }, new Map<string, number>()),
+      ),
+      migrationFailures: [...live.values()].reduce((n, game) => n + game.migrationFailures.length, 0),
       secure: isSecureTransport(CONFIG),
     });
   }

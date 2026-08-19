@@ -217,6 +217,11 @@
   .hof.setzt .moebel, .hof.setzt .zahnrad { opacity: .35; pointer-events: none; }
 
   #wagen { left: 3%; top: 15%; width: 26%; height: 8%; z-index: 60; }
+  .kein-raster #wagen { top: 48%; }
+  .kein-raster #brett { top: 46%; }
+  .kein-raster #kiste { top: 50%; }
+  .kein-raster #lagerhaus { top: 46%; }
+  .kein-raster #stand { top: 47%; }
   #wagen.unterwegs { transform: translateX(-190%); transition: transform 2.2s ease-in; }
   #wagen:not(.unterwegs) { transition: transform 2.2s ease-out; }
   #brett { left: 33%; top: 11%; width: 15%; height: 11%; z-index: 61; }

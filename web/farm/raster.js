@@ -3,8 +3,19 @@ var BODEN = 127;
 var TIEFE_HINTEN = 0.66;
 var HOCH = 1.55;
 
+function hatRaster() {
+  return !!rules.grid;
+}
+
 function raster() {
   return rules.grid || { w: 1, h: 1 };
+}
+
+function altePlatzierung(i) {
+  var ort = rules.plots[i] && rules.plots[i].place;
+  if (!ort) return { left: 2 + ((i % 3) * 32), width: 30, top: 4 + Math.floor(i / 3) * 24,
+    height: 20, tiefe: i };
+  return { left: ort.x, width: ort.w, top: ort.y, height: ort.h, tiefe: ort.y };
 }
 
 function reiheBreite(t) {
@@ -45,6 +56,7 @@ function prozent(wert, gesamt) {
 }
 
 function plotKasten(i, plot) {
+  if (!hatRaster()) return altePlatzierung(i);
   var g = raster();
   var def = rules.plots[i];
   var groesse = (def && def.size) || { w: 1, h: 1 };
@@ -64,6 +76,7 @@ function plotKasten(i, plot) {
 }
 
 function artBoden(zeigeRaster) {
+  if (!hatRaster()) return '';
   var g = raster();
   var out = '';
 

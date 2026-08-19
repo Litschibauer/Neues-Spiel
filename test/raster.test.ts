@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
-import { getRuleset, sizeOf, validateRuleset } from '../src/sim/rules.ts';
+import { RULESETS, getRuleset, sizeOf, validateRuleset } from '../src/sim/rules.ts';
 import { initialState } from '../src/sim/state.ts';
 import { farmView } from '../src/client/view.ts';
 import { assertInvariants, migrateState } from '../src/sim/migrate.ts';
@@ -155,5 +155,33 @@ test('das Regelwerk v10 ist in sich stimmig', () => {
   assert.ok(
     flaeche * 1.5 <= rules.grid!.w * rules.grid!.h,
     'das Raster ist zu eng, um frei zu stellen',
+  );
+});
+
+test('ein Regelwerk ohne Raster bleibt zeichenbar — jeder Platz hat einen Ort', () => {
+  for (const version of [...RULESETS.keys()]) {
+    const r = getRuleset(version);
+    if (r.grid) continue;
+
+    const v = farmView(initialState(r), r);
+    assert.equal(v.grid, null, `v${version}: Raster gemeldet, wo keins ist`);
+    assert.ok(
+      v.plots.every((p) => p.gx < 0),
+      `v${version}: Stellen ohne Raster`,
+    );
+    assert.ok(
+      r.plots.every((p) => p.place),
+      `v${version}: ohne Raster und ohne place wäre der Hof unsichtbar`,
+    );
+  }
+});
+
+test('ein Hof auf einem alten Regelwerk verliert seine Gebäude nicht', () => {
+  const v9 = farmView(initialState(V9), V9);
+  const gebaut = v9.plots.filter((p) => p.level > 0);
+  assert.equal(gebaut.length, 3, 'v9 startet nicht mit drei Feldern');
+  assert.ok(
+    gebaut.every((p) => V9.plots[p.index]!.place),
+    'ein gebauter Platz ohne Ort ist auf dem Hof unsichtbar',
   );
 });

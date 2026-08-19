@@ -4,7 +4,7 @@ function artScene() {
     '<path d="M0 13V9c8-5 16-5 24 0 7-4 14-4 21 1 9-6 18-6 27 0 9-5 19-5 28 1v2z"' +
     ' fill="var(--hill)"/>' +
 
-    '<path d="M0 22h100v6H0z" fill="var(--path)"/>' +
+    (hatRaster() ? '<path d="M0 22h100v6H0z" fill="var(--path)"/>' : '') +
 
     '<g opacity=".92">' +
     '<path d="M6 22V11h18v11z" fill="var(--surface)"/>' +
