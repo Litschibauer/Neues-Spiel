@@ -292,8 +292,15 @@ test('wiederholtes Scheitern verlängert den Abstand, statt zu hämmern', async 
     clock.now += res.retryInMs;
   }
 
-  assert.ok(delays[5]! > delays[0]! * 4, `kein spürbares Backoff: ${delays.join(', ')}`);
-  assert.ok(Math.max(...delays) <= 60_000, 'Backoff übersteigt das Maximum');
+  assert.ok(
+    Math.max(...delays.slice(3)) > delays[0]!,
+    `kein spürbares Backoff: ${delays.join(', ')}`,
+  );
+
+  assert.ok(
+    Math.max(...delays) <= 5_000,
+    `offene Arbeit wartet zu lange: ${delays.join(', ')}`,
+  );
 
   assert.equal(client.queue.length, 1);
 });

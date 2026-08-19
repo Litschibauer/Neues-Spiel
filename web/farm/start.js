@@ -80,7 +80,11 @@ $('zahnrad').addEventListener('click', function () { show('rest'); });
 function begin(restored) {
   client = restored;
   rules = NS.getRuleset(client.rulesetVersion);
-  engine = new NS.SyncEngine(client, transport, { baseDelayMs: 2000, maxDelayMs: 30000 });
+  engine = new NS.SyncEngine(client, transport, {
+    baseDelayMs: 2000,
+    maxDelayMs: 30000,
+    pendingMaxDelayMs: 5000,
+  });
 
   client.snapshotMeta = {
     tick: client.baseSnapshot.state.tick,
@@ -94,17 +98,28 @@ function begin(restored) {
   render();
   setInterval(render, 1000);
   setInterval(function () { attempt(false); }, 4000);
+  setInterval(function () {
+    if (document.hidden || !navigator.onLine) return;
+    if (!liveAbort) startLive();
+    attempt(true);
+  }, 20000 + Math.floor(Math.random() * 10000));
   setInterval(refreshLease, 15000);
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       stopLive();
     } else {
+      if (engine) engine.revive();
       attempt(true);
       refreshLease();
       startLive();
     }
   });
-  window.addEventListener('online', function () { render(); attempt(true); startLive(); });
+  window.addEventListener('online', function () {
+    if (engine) engine.revive();
+    render();
+    attempt(true);
+    startLive();
+  });
   window.addEventListener('offline', function () { setConn('offline'); stopLive(); render(); });
   window.addEventListener('pagehide', function () { save(); stopLive(); });
   startLive();

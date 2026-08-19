@@ -322,3 +322,103 @@ test('vom Server abgelehnte Commands wandern nicht zurück in die Warteschlange'
   assert.equal(client.baseSeq, 1);
   assert.equal(client.queue.length, 0, 'der abgelehnte Zug steht wieder in der Schlange');
 });
+
+test('mit Arbeit in der Warteschlange wartet die Maschine nie eine halbe Minute', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+  client.start(0, R_WHEAT);
+
+  const engine = new SyncEngine(
+    client,
+    async () => {
+      throw new Error('Server ist weg');
+    },
+    { baseDelayMs: 2_000, maxDelayMs: 30_000, pendingMaxDelayMs: 5_000, rnd: () => 1 },
+  );
+
+  let jetzt = T0;
+  let laengste = 0;
+  for (let i = 0; i < 12; i++) {
+    const outcome = await engine.attempt(jetzt, true);
+    assert.equal(outcome.kind, 'failed');
+    if (outcome.kind === 'failed') laengste = Math.max(laengste, outcome.retryInMs);
+    jetzt += outcome.kind === 'failed' ? outcome.retryInMs : 0;
+  }
+
+  assert.ok(laengste <= 5_000, `Wartezeit bei offener Arbeit: ${laengste} ms`);
+  assert.ok(engine.consecutiveFailures >= 12);
+});
+
+test('ohne Arbeit darf sie sich Zeit lassen — sonst hämmert jeder Hof den Server', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+
+  const engine = new SyncEngine(
+    client,
+    async () => {
+      throw new Error('Server ist weg');
+    },
+    { baseDelayMs: 2_000, maxDelayMs: 30_000, pendingMaxDelayMs: 5_000, rnd: () => 1 },
+  );
+
+  let jetzt = T0;
+  let letzte = 0;
+  for (let i = 0; i < 12; i++) {
+    const outcome = await engine.attempt(jetzt, true);
+    if (outcome.kind === 'failed') {
+      letzte = outcome.retryInMs;
+      jetzt += outcome.retryInMs;
+    }
+  }
+  assert.ok(letzte > 5_000, `leere Schlange bremst nicht aus: ${letzte} ms`);
+});
+
+test('meldet sich der Server zurück, wird nicht erst die Strafzeit abgesessen', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+  client.start(0, R_WHEAT);
+
+  let erreichbar = false;
+  const engine = new SyncEngine(
+    client,
+    async (req) => {
+      if (!erreichbar) throw new Error('Server ist weg');
+      return server.sync(req, T0 + 30_000);
+    },
+    { baseDelayMs: 2_000, maxDelayMs: 30_000, pendingMaxDelayMs: 5_000, rnd: () => 1 },
+  );
+
+  let jetzt = T0;
+  for (let i = 0; i < 5; i++) {
+    await engine.attempt(jetzt, true);
+  }
+  assert.equal((await engine.attempt(jetzt)).kind, 'backing-off', 'die Maschine wartet gar nicht');
+
+  erreichbar = true;
+  engine.revive();
+
+  const sofort = await engine.attempt(jetzt);
+  assert.equal(sofort.kind, 'synced', 'nach dem Lebenszeichen wird weiter gewartet');
+  assert.equal(client.queue.length, 0);
+});
+
+test('eine neue Aktion kürzt die Wartezeit, verlängert sie aber nie', async () => {
+  const server = new Server(initialState(rules), T0, CURRENT_RULESET_VERSION);
+  const client = new Client(server.snapshot, 'handy');
+
+  const engine = new SyncEngine(
+    client,
+    async () => {
+      throw new Error('Server ist weg');
+    },
+    { baseDelayMs: 2_000, maxDelayMs: 30_000, pendingMaxDelayMs: 5_000, rnd: () => 1 },
+  );
+
+  engine.nextAttemptAt = T0 + 30_000;
+  engine.hurry(T0);
+  assert.equal(engine.nextAttemptAt, T0 + 2_000);
+
+  engine.nextAttemptAt = T0 + 500;
+  engine.hurry(T0);
+  assert.equal(engine.nextAttemptAt, T0 + 500, 'die Wartezeit wurde verlängert');
+});

@@ -84,6 +84,7 @@ function startLive() {
   }).then(function (res) {
     if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
     liveRetryMs = 1000;
+    if (engine) { engine.revive(); attempt(true); }
 
     var reader = res.body.getReader();
     var decoder = new TextDecoder();
@@ -109,7 +110,7 @@ function startLive() {
 
     var wait = liveRetryMs * (0.5 + Math.random());
     setTimeout(startLive, wait);
-    liveRetryMs = Math.min(liveRetryMs * 2, 60000);
+    liveRetryMs = Math.min(liveRetryMs * 2, 8000);
   });
 }
 

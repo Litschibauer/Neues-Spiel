@@ -727,6 +727,43 @@ Server antwortet. Jetzt fragt er die Sync-Maschine: Sobald ein Sync
 fehlschlägt, ist die Zeitung ausgegraut und der Hinweis sagt, warum. Der Fall
 oben wird damit selten; wenn er doch eintritt, kostet er nur noch den Kauf.
 
+#### Nachlaufen, ohne dass jemand nachladen muss
+
+Ein Bericht aus dem Betrieb: „Ich muss oft selbst neu laden, damit der Server
+überhaupt anfängt zu prüfen." Drei Ursachen, alle drei behoben — und keine
+davon hieß „schneller pollen".
+
+**1. Die Warteschlange wartete bis zu einer halben Minute.** Nach einem
+Fehlschlag wächst der Abstand exponentiell, bis 30 s. Das ist richtig, wenn
+nichts ansteht — aber falsch, wenn ungesendete Aktionen liegen. Jetzt gilt ein
+zweiter Deckel: **`pendingMaxDelayMs` = 5 s, solange etwas in der Schlange
+liegt.** Leer bleibt es beim langen Abstand, damit tausend Höfe einen
+schlafenden Server nicht gemeinsam wachklopfen.
+
+**2. Jede Aktion rief `attempt(false)`** — also „versuch's, wenn du darfst".
+Nach einem Fehlschlag durfte sie nicht, und der Tipp verpuffte. Jetzt kürzt
+eine neue Aktion die Strafzeit auf `baseDelayMs` (`hurry`) — sie *verlängert*
+sie nie, und zehn Tipps hintereinander lösen trotzdem nur einen Versuch aus.
+
+**3. Nach einem Serverneustart merkte es niemand.** Die Nudge-Leitung
+verbindet sich zwar neu, aber ihr eigener Abstand war auf 60 s gewachsen, und
+eine erfolgreiche Verbindung setzte nur *ihren* Zähler zurück, nicht den der
+Sync-Maschine. Jetzt gilt: **eine stehende Leitung ist ein Lebenszeichen.**
+`revive()` löscht die Strafzeit und stößt sofort einen Sync an — dasselbe beim
+`online`-Ereignis und beim Zurückholen der Seite aus dem Hintergrund. Der
+Abstand der Leitung selbst ist auf 8 s gedeckelt.
+
+Dazu ein **langsamer Herzschlag alle 20–30 s** (mit Streuung, damit nicht alle
+gleichzeitig anklopfen), der auch bei leerer Schlange einen Sync erzwingt und
+eine abgerissene Leitung neu aufbaut. Das ist der Rettungsanker für den Fall,
+den keins der Ereignisse erwischt: eine Leitung, die nicht abbricht, sondern
+einfach verstummt.
+
+> Alle 1 ms zu fragen wäre der naheliegende Weg gewesen und der falsche: Der
+> Server ist ein Prozess auf einem Gigabyte. Was gefehlt hat, war nicht mehr
+> Frequenz, sondern die Antwort auf „woran merke ich, dass es wieder geht?" —
+> und die kommt von Ereignissen, nicht vom Takt.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

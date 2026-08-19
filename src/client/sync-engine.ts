@@ -16,6 +16,7 @@ export type SyncOutcome =
 export type SyncEngineOptions = {
   baseDelayMs: number;
   maxDelayMs: number;
+  pendingMaxDelayMs: number;
   timeoutMs: number;
   rnd: () => number;
 };
@@ -23,6 +24,7 @@ export type SyncEngineOptions = {
 const DEFAULTS: SyncEngineOptions = {
   baseDelayMs: 2_000,
   maxDelayMs: 60_000,
+  pendingMaxDelayMs: 5_000,
   timeoutMs: 15_000,
   rnd: Math.random,
 };
@@ -47,11 +49,25 @@ export class SyncEngine {
   }
 
   private backoffMs(): number {
+    const deckel =
+      this.client.queue.length > 0
+        ? Math.min(this.opts.maxDelayMs, this.opts.pendingMaxDelayMs)
+        : this.opts.maxDelayMs;
     const exp = Math.min(
       this.opts.baseDelayMs * 2 ** Math.max(0, this.consecutiveFailures - 1),
-      this.opts.maxDelayMs,
+      deckel,
     );
     return Math.round(exp / 2 + this.opts.rnd() * (exp / 2));
+  }
+
+  revive(): void {
+    this.consecutiveFailures = 0;
+    this.nextAttemptAt = 0;
+  }
+
+  hurry(nowMs: number): void {
+    const frueh = nowMs + this.opts.baseDelayMs;
+    if (this.nextAttemptAt > frueh) this.nextAttemptAt = frueh;
   }
 
   async attempt(nowMs: number, force = false): Promise<SyncOutcome> {

@@ -1,5 +1,6 @@
 var syncSoon = null;
 function scheduleSync() {
+  if (engine) engine.hurry(Date.now());
   if (syncSoon) return;
   syncSoon = setTimeout(function () {
     syncSoon = null;
