@@ -97,7 +97,7 @@ export class Sozial {
 
   freunde(wer: string): HofKarte[] {
     const rows = this.db
-      .prepare('select freund from freunde where wer = ? order by seit_ms')
+      .prepare("select freund from freunde where wer = ? and stand = 'ok' order by seit_ms")
       .all(wer) as Array<{ freund: string }>;
     return rows.flatMap((r) => {
       const karte = this.karte(r.freund);
@@ -105,22 +105,74 @@ export class Sozial {
     });
   }
 
+  anfragenAn(wer: string): HofKarte[] {
+    const rows = this.db
+      .prepare("select wer from freunde where freund = ? and stand = 'offen' order by seit_ms")
+      .all(wer) as Array<{ wer: string }>;
+    return rows.flatMap((r) => {
+      const karte = this.karte(r.wer);
+      return karte ? [karte] : [];
+    });
+  }
+
+  anfragenVon(wer: string): HofKarte[] {
+    const rows = this.db
+      .prepare("select freund from freunde where wer = ? and stand = 'offen' order by seit_ms")
+      .all(wer) as Array<{ freund: string }>;
+    return rows.flatMap((r) => {
+      const karte = this.karte(r.freund);
+      return karte ? [karte] : [];
+    });
+  }
+
+  beziehung(wer: string, andere: string): 'keine' | 'gefragt' | 'wartet' | 'freund' {
+    const hin = this.db
+      .prepare('select stand from freunde where wer = ? and freund = ?')
+      .get(wer, andere) as { stand: string } | undefined;
+    if (hin?.stand === 'ok') return 'freund';
+    if (hin?.stand === 'offen') return 'gefragt';
+
+    const her = this.db
+      .prepare('select stand from freunde where wer = ? and freund = ?')
+      .get(andere, wer) as { stand: string } | undefined;
+    if (her?.stand === 'offen') return 'wartet';
+    return 'keine';
+  }
+
   istFreund(wer: string, freund: string): boolean {
-    return (
-      this.db.prepare('select 1 from freunde where wer = ? and freund = ?').get(wer, freund) !==
-      undefined
-    );
+    return this.beziehung(wer, freund) === 'freund';
   }
 
-  merke(wer: string, freund: string, nowMs: number): void {
-    if (wer === freund) return;
+  frage(wer: string, andere: string, nowMs: number): 'gefragt' | 'freund' | 'nein' {
+    if (wer === andere) return 'nein';
+    const stand = this.beziehung(wer, andere);
+    if (stand === 'freund') return 'freund';
+
+    if (stand === 'wartet') {
+      this.db
+        .prepare("update freunde set stand = 'ok' where wer = ? and freund = ?")
+        .run(andere, wer);
+      this.db
+        .prepare(
+          "insert into freunde (wer, freund, seit_ms, stand) values (?, ?, ?, 'ok') " +
+            "on conflict (wer, freund) do update set stand = 'ok'",
+        )
+        .run(wer, andere, nowMs);
+      return 'freund';
+    }
+
     this.db
-      .prepare('insert or ignore into freunde (wer, freund, seit_ms) values (?, ?, ?)')
-      .run(wer, freund, nowMs);
+      .prepare(
+        "insert into freunde (wer, freund, seit_ms, stand) values (?, ?, ?, 'offen') " +
+          'on conflict (wer, freund) do nothing',
+      )
+      .run(wer, andere, nowMs);
+    return 'gefragt';
   }
 
-  vergiss(wer: string, freund: string): void {
-    this.db.prepare('delete from freunde where wer = ? and freund = ?').run(wer, freund);
+  vergiss(wer: string, andere: string): void {
+    this.db.prepare('delete from freunde where wer = ? and freund = ?').run(wer, andere);
+    this.db.prepare('delete from freunde where wer = ? and freund = ?').run(andere, wer);
   }
 
   hilfenHeute(helfer: string, hof: string, nowMs: number): number {

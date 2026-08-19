@@ -56,34 +56,71 @@ function zeichneEigenenHof() {
 
 function freundeLaden() {
   return api('/api/freunde').then(function (d) {
-    zeichneFreunde(d.freunde);
-    return d.freunde;
+    zeichneFreunde(d);
+    return d;
   }).catch(function () {
     $('freundeliste').innerHTML = '<p class="empty">Nachbarn brauchen Verbindung.</p>';
   });
 }
 
-function zeichneFreunde(liste) {
-  var box = $('freundeliste');
-  box.textContent = '';
-  if (!liste || liste.length === 0) {
-    box.innerHTML = '<p class="empty">Noch keine Nachbarn. Frag jemanden nach seinem Code.</p>';
-    return;
+function hofZeile(h, art) {
+  var karte = document.createElement('div');
+  karte.className = 'card';
+  karte.dataset.hof = h.code;
+
+  var offen = Math.max(0, h.proTag - h.heute);
+  var body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML =
+    '<div class="top">' + h.name + '</div><div class="sub">' + h.code + ' · ' +
+    (art === 'anfrage' ? 'möchte dein Nachbar sein'
+      : art === 'gefragt' ? 'wartet auf Antwort'
+      : offen > 0 ? offen + '× helfen möglich'
+      : 'heute schon geholfen') + '</div>';
+  karte.appendChild(body);
+
+  var knopf = document.createElement('button');
+  knopf.type = 'button';
+  knopf.className = 'go';
+  knopf.textContent = art === 'anfrage' ? 'Annehmen' : 'Besuchen';
+  knopf.addEventListener('click', function () {
+    if (art === 'anfrage') {
+      api('/api/freunde?code=' + encodeURIComponent(h.code), { method: 'POST' })
+        .then(function () { toast(h.name + ' ist jetzt Nachbar'); klang('stufe'); freundeLaden(); })
+        .catch(function () { toast('Ging nicht', true); });
+      return;
+    }
+    besuche(h.code);
+  });
+  karte.appendChild(knopf);
+
+  if (art !== 'freund') {
+    var weg = document.createElement('button');
+    weg.type = 'button';
+    weg.className = 'go weg';
+    weg.textContent = art === 'anfrage' ? 'Nein' : 'Zurückziehen';
+    weg.addEventListener('click', function () {
+      api('/api/freunde?code=' + encodeURIComponent(h.code), { method: 'DELETE' })
+        .then(function () { freundeLaden(); })
+        .catch(function () { toast('Ging nicht', true); });
+    });
+    karte.appendChild(weg);
   }
 
-  liste.forEach(function (h) {
-    var karte = document.createElement('button');
-    karte.className = 'card';
-    karte.dataset.hof = h.code;
-    var offen = Math.max(0, h.proTag - h.heute);
-    karte.innerHTML =
-      '<div class="body"><div class="top">' + h.name + '</div>' +
-      '<div class="sub">' + h.code + ' · ' +
-      (offen > 0 ? offen + '× helfen möglich' : 'heute schon geholfen') + '</div></div>' +
-      '<span class="go">Besuchen</span>';
-    karte.addEventListener('click', function () { besuche(h.code); });
-    box.appendChild(karte);
-  });
+  return karte;
+}
+
+function zeichneFreunde(d) {
+  var box = $('freundeliste');
+  box.textContent = '';
+
+  (d.anfragen || []).forEach(function (h) { box.appendChild(hofZeile(h, 'anfrage')); });
+  (d.freunde || []).forEach(function (h) { box.appendChild(hofZeile(h, 'freund')); });
+  (d.gefragt || []).forEach(function (h) { box.appendChild(hofZeile(h, 'gefragt')); });
+
+  if (box.children.length === 0) {
+    box.innerHTML = '<p class="empty">Noch keine Nachbarn. Frag jemanden nach seinem Code.</p>';
+  }
 }
 
 function freundHinzu() {
@@ -92,8 +129,10 @@ function freundHinzu() {
   api('/api/freunde?code=' + encodeURIComponent(code), { method: 'POST' })
     .then(function (d) {
       $('freundcode').value = '';
-      toast(d.hof.name + ' ist jetzt Nachbar');
-      klang('stufe');
+      toast(d.stand === 'freund'
+        ? d.hof.name + ' ist jetzt Nachbar'
+        : 'Anfrage an ' + d.hof.name + ' — er muss zustimmen');
+      klang(d.stand === 'freund' ? 'stufe' : 'tipp');
       freundeLaden();
     })
     .catch(function () { toast('Diesen Code kennt niemand', true); });
@@ -121,7 +160,11 @@ function besuchHolen() {
   api('/api/besuch?code=' + encodeURIComponent(besuchCode))
     .then(function (d) {
       besuchDaten = d;
-      zeichneBesuch();
+      try {
+        zeichneBesuch();
+      } catch (e) {
+        $('besuch-kopf').innerHTML = '<p class="empty">Fehler beim Zeichnen: ' + e.message + '</p>';
+      }
     })
     .catch(function () {
       $('besuch-kopf').innerHTML = '<p class="empty">Der Hof ist gerade nicht erreichbar.</p>';
@@ -145,32 +188,35 @@ function zeichneBesuch() {
 
   zeichneFremdeFarm(d);
   zeichneBesuchKopf(d);
-  zeichneFremdenStand(d);
+  if (view === 'fremdstand') zeichneFremdenStand(d);
 }
 
 function zeichneFremdeFarm(d) {
-  var box = $('besuch-plots');
-  box.textContent = '';
+  var regeln = fremdeRegeln();
+  var jetzt = fremdeUhr();
+
   var szene = $('besuch-scene');
   if (szene.dataset.stand !== 'gemalt') {
     szene.innerHTML = artBoden(false);
     szene.dataset.stand = 'gemalt';
   }
 
-  var regeln = fremdeRegeln();
-  var jetzt = fremdeUhr();
+  zeichneFremdeHindernisse(d, regeln);
+
+  var box = $('besuch-plots');
+  box.textContent = '';
 
   var sichtbar = [];
   d.plots.forEach(function (p, i) {
     if (p.level <= 0 || p.gx < 0) return;
-    sichtbar.push({ index: i, p: p });
+    sichtbar.push({ index: i, p: p, ort: plotKasten(i, { gx: p.gx, gy: p.gy }) });
   });
+  sichtbar.sort(function (a, b) { return a.ort.tiefe - b.ort.tiefe; });
 
   sichtbar.forEach(function (eintrag) {
     var i = eintrag.index;
     var p = eintrag.p;
-    var groesse = NS.sizeOf(regeln, i);
-    var ort = fremdKasten(regeln, p, groesse);
+    var ort = eintrag.ort;
 
     var laeuft = null;
     var fertig = 0;
@@ -182,19 +228,23 @@ function zeichneFremdeFarm(d) {
       if (!laeuft || rest < laeuft.rest) laeuft = { slot: j, rest: rest, dauer: dauer };
     });
 
+    var helfbar = !!laeuft && d.heute < d.proTag;
+
     var kachel = document.createElement('button');
-    kachel.className = 'plot' + (fertig > 0 ? ' ripe' : '');
+    kachel.className = 'plot' + (fertig > 0 ? ' ripe' : '') + (helfbar ? ' hilfe' : '');
     kachel.dataset.platz = String(i);
     kachel.style.left = ort.left + '%';
     kachel.style.top = ort.top + '%';
     kachel.style.width = ort.width + '%';
     kachel.style.height = ort.height + '%';
     kachel.style.zIndex = String(1 + Math.round(ort.tiefe * 2));
-    kachel.disabled = !laeuft || d.heute >= d.proTag;
+    kachel.disabled = !helfbar;
 
-    kachel.innerHTML =
+    var art = document.createElement('div');
+    art.innerHTML =
       '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
       fremdeKunst(regeln, i, p, laeuft, fertig) + '</svg>';
+    kachel.appendChild(art.firstChild);
 
     if (laeuft) {
       var bar = document.createElement('div');
@@ -205,26 +255,27 @@ function zeichneFremdeFarm(d) {
       kachel.appendChild(bar);
     }
 
-    var name = regeln.plots[i].id;
-    kachel.setAttribute(
-      'aria-label',
-      name + (laeuft ? ' — noch ' + timeText(laeuft.rest) : ' — nichts zu tun'),
-    );
-    if (laeuft) {
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    var name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = fremdName(regeln, i);
+    var status = document.createElement('div');
+    status.className = 'status';
+    status.textContent = laeuft
+      ? (helfbar ? 'noch ' + timeText(laeuft.rest) + ' · helfen' : 'noch ' + timeText(laeuft.rest))
+      : fertig > 0 ? 'fertig' : 'nichts zu tun';
+    meta.appendChild(name);
+    meta.appendChild(status);
+    kachel.appendChild(meta);
+
+    if (helfbar) {
       kachel.addEventListener('click', function () { hilf(i, laeuft.slot); });
     }
     box.appendChild(kachel);
   });
 
-  if (sichtbar.length === 0) {
-    box.innerHTML = '<p class="empty">Auf diesem Hof steht noch nichts.</p>';
-  }
-}
-
-function fremdKasten(regeln, p, groesse) {
-  var raster = regeln.grid;
-  if (!raster) return { left: 40, top: 40, width: 18, height: 16, tiefe: 0.5 };
-  return feldKasten(p.gx, p.gy, groesse.w, groesse.h);
+  zeichneFremdenStandKnopf(d);
 }
 
 function fremdeKunst(regeln, i, p, laeuft, fertig) {
@@ -237,6 +288,50 @@ function fremdeKunst(regeln, i, p, laeuft, fertig) {
     capacity: p.slots.length,
     stall: regeln.plots[i].animal ? { animals: p.tiere } : null,
   });
+}
+
+function fremdName(regeln, i) {
+  var id = regeln.plots[i].id;
+  if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
+  if (id.indexOf('coop-') === 0) return 'Hühnerstall';
+  if (id.indexOf('pasture-') === 0) return 'Kuhweide';
+  if (id === 'mill') return 'Mühle';
+  if (id === 'dairy') return 'Molkerei';
+  return id;
+}
+
+function zeichneFremdeHindernisse(d, regeln) {
+  var box = $('besuch-hindernisse');
+  box.textContent = '';
+  if (!regeln.grid || !regeln.obstacles) return;
+
+  var geraeumt = d.clearedObstacles || [];
+  regeln.obstacles.forEach(function (h, index) {
+    if (geraeumt.indexOf(index) >= 0) return;
+    var kasten = hindernisKasten({ gx: h.gx, gy: h.gy, w: h.w, h: h.h, kind: h.kind });
+    var ding = document.createElement('div');
+    ding.className = 'moebel hindernis';
+    ding.style.left = kasten.left + '%';
+    ding.style.top = kasten.top + '%';
+    ding.style.width = kasten.width + '%';
+    ding.style.height = kasten.height + '%';
+    ding.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
+    ding.innerHTML =
+      '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
+    box.appendChild(ding);
+  });
+}
+
+function zeichneFremdenStandKnopf(d) {
+  var knopf = $('besuch-stand-knopf');
+  var offen = d.stand.filter(function (o) { return o.verkauft <= 0; });
+  moebel(knopf, artStand(), 'Sein Stand', offen.length);
+  knopf.disabled = offen.length === 0;
+  knopf.onclick = function () {
+    zeichneFremdenStand(besuchDaten);
+    show('fremdstand');
+  };
 }
 
 function zeichneBesuchKopf(d) {
@@ -257,12 +352,17 @@ function zeichneBesuchKopf(d) {
   reihe.className = 'preisknoepfe';
   var merken = document.createElement('button');
   merken.type = 'button';
-  merken.textContent = d.freund ? 'Nachbar entfernen' : 'Als Nachbar merken';
+  merken.textContent = d.stand === 'freund' ? 'Nachbarschaft beenden'
+    : d.stand === 'gefragt' ? 'Anfrage zurückziehen'
+    : d.stand === 'wartet' ? 'Nachbarschaft annehmen'
+    : 'Als Nachbar anfragen';
   merken.addEventListener('click', function () {
-    var weg = d.freund;
+    var weg = d.stand === 'freund' || d.stand === 'gefragt';
     api('/api/freunde?code=' + encodeURIComponent(d.code), { method: weg ? 'DELETE' : 'POST' })
-      .then(function () {
-        toast(weg ? 'Nachbar entfernt' : 'Nachbar gemerkt');
+      .then(function (a) {
+        toast(weg ? 'Erledigt'
+          : a && a.stand === 'freund' ? 'Ihr seid jetzt Nachbarn'
+          : 'Anfrage geschickt — er muss zustimmen');
         besuchHolen();
         freundeLaden();
       })
@@ -294,10 +394,7 @@ function hilf(plot, slot) {
 function zeichneFremdenStand(d) {
   var box = $('besuch-stand');
   box.textContent = '';
-
-  var titel = document.createElement('h2');
-  titel.textContent = 'Sein Verkaufsstand';
-  box.appendChild(titel);
+  $('fremdstand-titel').textContent = d.name + ' — Verkaufsstand';
 
   var meine = NS.farmView(client.preview(), rules, marktLive());
   var kaufbar = {};
@@ -305,7 +402,7 @@ function zeichneFremdenStand(d) {
 
   var frei = d.stand.filter(function (o) { return o.verkauft <= 0; });
   if (frei.length === 0) {
-    box.innerHTML += '<p class="empty">Der Stand ist leer.</p>';
+    box.innerHTML = '<p class="empty">Der Stand ist leer.</p>';
     return;
   }
 

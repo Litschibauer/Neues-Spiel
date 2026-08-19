@@ -83,6 +83,12 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       );
     `);
   },
+
+  (db) => {
+    db.exec(`
+      alter table freunde add column stand text not null default 'ok';
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

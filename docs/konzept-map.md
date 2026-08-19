@@ -850,6 +850,41 @@ und wenn niemand zu Besuch ist, kostet es nichts.
 > weil die Uhr falsch rechnet, sondern weil ein Testklient sich verhielt, wie
 > kein echter es tut.
 
+#### Nachbarschaft auf Gegenseitigkeit, und ein Hof ist ein Hof
+
+Zwei Nachbesserungen an v18, beide aus einem Blick auf den echten Bildschirm.
+
+**Nachbar wird man zu zweit.** Erst war es ein Lesezeichen: Code eintippen,
+fertig. Das ist keine Nachbarschaft, das ist eine Liste. Jetzt trägt jede
+Zeile in `freunde` einen Stand — `offen` oder `ok`. Eine Anfrage legt
+`(A→B, offen)` an; sagt B ja, wird daraus `(A→B, ok)` **und** `(B→A, ok)`. Wer
+fragt, während die Gegenanfrage schon offen liegt, macht damit den Handschlag
+komplett. Entfernen löst beide Richtungen — sonst bliebe einer mit einem Geist
+befreundet.
+
+Besuchen bleibt für alle offen. Die Zeitung nennt Höfe öffentlich, und wer
+einen Code hat, darf klingeln. Die Nachbarschaft ist die Merkliste, nicht der
+Türsteher.
+
+**Der Besuch zeigt jetzt den ganzen Hof.** Vorher stand da eine grüne Fläche
+mit ein paar schwebenden Feldern — weil ich den Boden in ein `<div>` gemalt
+hatte statt in ein `<svg>`, und weil `feldKasten()` gar keine CSS-Box
+zurückgibt, sondern die Rohwerte der Projektion. Jetzt läuft der Besuch durch
+**dieselben Funktionen wie der eigene Hof**: `artBoden` in dasselbe `<svg
+viewBox="0 0 100 130">`, `plotKasten()` für jede Kachel, `hindernisKasten()`
+für Bäume, Steine und Tümpel.
+
+**Und sein Stand steht auf seinem Hof.** Vorher hing unter dem Bild eine
+Einkaufsliste. Jetzt ist der Stand ein Gebäude wie jedes andere: Man sieht ihn
+stehen, mit einem Zähler, wie viel drinliegt, und tippt ihn an — dann erst
+gehen seine Kästchen auf.
+
+> Zwei Fehler in Folge blieben still, weil sie in einer `.then()`-Kette
+> passierten: Ein `TypeError` dort wird zur unbehandelten Rejection und taucht
+> nirgends auf. Seitdem fängt das Zeichnen des Besuchs seine eigenen Fehler ab
+> und schreibt sie in die Karte — der zweite war damit in einem Lauf gefunden
+> statt in dreien.
+
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).
 

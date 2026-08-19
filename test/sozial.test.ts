@@ -58,23 +58,49 @@ test('Namen werden aufgeräumt, nicht abgelehnt', () => {
   assert.equal(saubererName('a'.repeat(40)), null);
 });
 
-test('Freunde sind eine Liste, kein Zufall', () => {
+test('Freundschaft braucht zwei — eine Anfrage reicht nicht', () => {
   const sozial = new Sozial(db(), mulberry32(11));
   sozial.karte('anna');
   sozial.karte('ben');
 
   assert.deepEqual(sozial.freunde('anna'), []);
-  sozial.merke('anna', 'ben', T0);
-  sozial.merke('anna', 'ben', T0 + 1);
-  assert.equal(sozial.freunde('anna').length, 1, 'doppelt hinzugefügt');
-  assert.equal(sozial.istFreund('anna', 'ben'), true);
-  assert.equal(sozial.istFreund('ben', 'anna'), false, 'Freundschaft ist keine Einbahnstraße mehr');
+  assert.equal(sozial.beziehung('anna', 'ben'), 'keine');
 
-  sozial.merke('anna', 'anna', T0);
-  assert.equal(sozial.freunde('anna').length, 1, 'man hat sich selbst hinzugefügt');
+  assert.equal(sozial.frage('anna', 'ben', T0), 'gefragt');
+  assert.equal(sozial.beziehung('anna', 'ben'), 'gefragt');
+  assert.equal(sozial.beziehung('ben', 'anna'), 'wartet');
+  assert.deepEqual(sozial.freunde('anna'), [], 'einseitig reicht schon als Freundschaft');
+  assert.deepEqual(sozial.freunde('ben'), []);
+  assert.equal(sozial.anfragenAn('ben').length, 1, 'Ben sieht die Anfrage nicht');
+  assert.equal(sozial.anfragenVon('anna').length, 1);
+
+  assert.equal(sozial.frage('anna', 'ben', T0 + 5), 'gefragt', 'nochmal fragen macht Freunde');
+  assert.deepEqual(sozial.freunde('ben'), []);
+
+  assert.equal(sozial.frage('ben', 'anna', T0 + 10), 'freund');
+  assert.equal(sozial.istFreund('anna', 'ben'), true);
+  assert.equal(sozial.istFreund('ben', 'anna'), true, 'Freundschaft gilt nur in eine Richtung');
+  assert.equal(sozial.freunde('anna').length, 1);
+  assert.equal(sozial.freunde('ben').length, 1);
+  assert.equal(sozial.anfragenAn('ben').length, 0, 'die Anfrage steht noch offen');
+});
+
+test('wer sich selbst hinzufügt, bekommt nichts', () => {
+  const sozial = new Sozial(db(), mulberry32(11));
+  assert.equal(sozial.frage('anna', 'anna', T0), 'nein');
+  assert.deepEqual(sozial.freunde('anna'), []);
+});
+
+test('entfernen löst die Freundschaft auf beiden Seiten', () => {
+  const sozial = new Sozial(db(), mulberry32(11));
+  sozial.frage('anna', 'ben', T0);
+  sozial.frage('ben', 'anna', T0 + 1);
+  assert.equal(sozial.istFreund('anna', 'ben'), true);
 
   sozial.vergiss('anna', 'ben');
-  assert.deepEqual(sozial.freunde('anna'), []);
+  assert.equal(sozial.istFreund('anna', 'ben'), false);
+  assert.equal(sozial.istFreund('ben', 'anna'), false, 'einer bleibt mit einem Geist befreundet');
+  assert.equal(sozial.beziehung('ben', 'anna'), 'keine');
 });
 
 test('dreimal am Tag je Hof — und morgen wieder', () => {

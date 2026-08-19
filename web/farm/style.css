@@ -403,6 +403,7 @@
     background: var(--accent); color: var(--on-accent); font-size: .74rem; font-weight: 700;
   }
   .go[disabled] { background: var(--sunk); color: var(--muted); }
+  .go.weg { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
   .ic {
     width: 1.25em; height: 1.25em; vertical-align: -.28em;
@@ -435,12 +436,10 @@
   .kaestchen .p .ic { width: 1em; height: 1em; vertical-align: -.16em; margin: 0 0 0 .12em; }
   .card.anzeige .ic.gross { width: 2.2em; height: 2.2em; flex: none; }
   .sheet.gross { max-width: 34rem; }
-  .hof.fremd {
-    position: relative; width: 100%; aspect-ratio: 5 / 4; border-radius: 14px;
-    overflow: hidden; margin-bottom: .6rem; isolation: isolate;
-  }
-  .hof.fremd .plot { cursor: pointer; }
-  .hof.fremd .plot:disabled { opacity: .75; }
+  #besuch-hof { margin-bottom: .7rem; max-width: calc((100dvh - 22rem) * 100 / 130); }
+  #besuch-hof .plot:disabled { opacity: .8; }
+  #besuch-hof .plot.hilfe .art { filter: drop-shadow(0 0 6px var(--accent)); }
+  #besuch-stand-knopf { left: 74%; top: 10%; width: 18%; height: 12%; z-index: 63; }
   .kaestchen.anzeige { background: var(--gold-soft); border-color: var(--gold); }
   .kaestchen.verkauft { background: var(--gold-soft); border-color: var(--gold); }
   .kaestchen.verkauft .n { color: var(--gold); font-size: 1rem; }

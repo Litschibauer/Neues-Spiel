@@ -2296,7 +2296,7 @@ try {
     blatt.name,
   );
 
-  const zurBesuch = await evaluate<string>(
+  const zurBesuch0 = await evaluate<string>(
     cdp,
     `(function () {
        var karte = document.querySelector('#zeitung .card.anzeige');
@@ -2308,15 +2308,20 @@ try {
   await sleep(1200);
   const beimNachbarn = await evaluate<string>(
     cdp,
-    `document.getElementById('besuch-titel').textContent + '|' +
-     document.querySelectorAll('#besuch-stand .kaestchen').length`,
+    `(function () {
+       document.getElementById('besuch-stand-knopf').click();
+       return document.getElementById('besuch-titel').textContent + '|' +
+         document.querySelectorAll('#besuch-stand .kaestchen').length;
+     })()`,
   );
   check(
     'Aus der Zeitung geht es auf den Hof, nicht in eine Einkaufsliste',
-    zurBesuch === 'unterwegs' && Number(beimNachbarn.split('|')[1]) >= 2,
-    `${zurBesuch}, dort: ${beimNachbarn}`,
+    zurBesuch0 === 'unterwegs' && Number(beimNachbarn.split('|')[1]) >= 2,
+    `${zurBesuch0}, dort: ${beimNachbarn}`,
   );
 
+  await evaluate(cdp, `document.getElementById('fremdstand-close').click()`);
+  await sleep(200);
   await evaluate(cdp, `document.getElementById('besuch-close').click()`);
   await sleep(200);
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
@@ -2393,15 +2398,39 @@ try {
      })()`,
   );
   await sleep(900);
-  const nachbarliste = await evaluate<string>(
+  const nachAnfrage = await evaluate<string>(
     cdp,
     `[...document.querySelectorAll('#freundeliste .card')]
-       .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.top').textContent; })
+       .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
        .join(', ')`,
   );
   check(
-    'Ein Hof lässt sich über seinen Code als Nachbar merken',
-    nachbarliste.indexOf(zweiterCode.code) >= 0 && /Bens Bauernhof/.test(nachbarliste),
+    'Eine Anfrage macht noch keine Nachbarschaft — sie wartet auf Antwort',
+    nachAnfrage.indexOf(zweiterCode.code) >= 0 && /wartet auf Antwort/.test(nachAnfrage),
+    nachAnfrage,
+  );
+
+  const meinCode = await evaluate<string>(
+    cdp,
+    `document.querySelector('#eigenerhof .have').textContent.replace('Code ', '')`,
+  );
+  await fetch(`http://127.0.0.1:${PORT}/api/freunde?code=${meinCode}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${second.key}` },
+  });
+  await sleep(400);
+  await evaluate(cdp, `document.getElementById('nachbarn').click()`);
+  await sleep(900);
+
+  const nachbarliste = await evaluate<string>(
+    cdp,
+    `[...document.querySelectorAll('#freundeliste .card')]
+       .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
+       .join(', ')`,
+  );
+  check(
+    'Sagt der andere ja, stehen beide in der Nachbarschaft',
+    nachbarliste.indexOf(zweiterCode.code) >= 0 && /helfen möglich/.test(nachbarliste),
     nachbarliste,
   );
 
@@ -2415,24 +2444,38 @@ try {
   ]);
   check('Der Nachbar pflanzt kurz vor dem Besuch etwas Langsames', gesaet.ok, gesaet.reason ?? gesaet.kind);
 
-  await evaluate(cdp, `document.querySelector('#freundeliste .card').click()`);
+  await evaluate(cdp, `document.querySelector('#freundeliste .card .go').click()`);
   await sleep(1200);
-  const besuchBild = await evaluate<{ titel: string; plots: number; stand: number; offen: boolean }>(
+  const besuchBild = await evaluate<{
+    titel: string;
+    plots: number;
+    boden: boolean;
+    hindernisse: number;
+    standKnopf: boolean;
+    offen: boolean;
+  }>(
     cdp,
     `(function () {
        return {
          titel: document.getElementById('besuch-titel').textContent,
          plots: document.querySelectorAll('#besuch-plots .plot').length,
-         stand: document.querySelectorAll('#besuch-stand .kaestchen').length,
+         boden: document.getElementById('besuch-scene').childElementCount > 0,
+         hindernisse: document.querySelectorAll('#besuch-hindernisse .hindernis').length,
+         standKnopf: !document.getElementById('besuch-stand-knopf').disabled,
          offen: !document.getElementById('besuch-bg').hidden,
        };
      })()`,
   );
   check(
-    'Ein Tipp führt auf seinen Hof — mit seinem Stand daneben',
-    besuchBild.offen && besuchBild.titel === 'Bens Bauernhof' && besuchBild.stand >= 1 &&
-      besuchBild.plots > 0,
+    'Man steht auf seinem ganzen Hof — Landschaft, Hindernisse, Gebäude',
+    besuchBild.offen && besuchBild.titel === 'Bens Bauernhof' && besuchBild.plots > 0 &&
+      besuchBild.boden && besuchBild.hindernisse > 0,
     JSON.stringify(besuchBild),
+  );
+  check(
+    'Sein Stand steht auf dem Hof und will angetippt werden',
+    besuchBild.standKnopf,
+    `Stand tippbar: ${besuchBild.standKnopf}`,
   );
 
   const helferVorher = Number(await evaluate<string>(cdp, `document.getElementById('xp').textContent`)
@@ -2481,6 +2524,8 @@ try {
     `${helferVorher} → ${heuteDrin.state.xp} XP`,
   );
 
+  await evaluate(cdp, `document.getElementById('besuch-stand-knopf').click()`);
+  await sleep(400);
   const standVorKauf = await evaluate<number>(
     cdp,
     `document.querySelectorAll('#besuch-stand .kaestchen').length`,
@@ -2505,6 +2550,15 @@ try {
     gekauftBeimNachbarn === 'gekauft' && standDanach2 === standVorKauf - 1,
     `${gekauftBeimNachbarn}, ${standVorKauf} → ${standDanach2} Kästchen`,
   );
+
+  await evaluate(cdp, `document.getElementById('fremdstand-close').click()`);
+  await sleep(300);
+  const zurueckAufHof = await evaluate<boolean>(
+    cdp,
+    `!document.getElementById('besuch-bg').hidden
+       && document.getElementById('fremdstand-bg').hidden`,
+  );
+  check('Nach dem Kauf steht man wieder auf seinem Hof', zurueckAufHof);
 
   await evaluate(cdp, `document.getElementById('besuch-close').click()`);
   await sleep(200);

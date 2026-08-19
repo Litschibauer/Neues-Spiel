@@ -56,17 +56,18 @@ function attempt(force) {
 function show(next) {
   view = next;
   if (next !== 'stand') standZu();
-  if (next !== 'besuch') besuchEnde();
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch'].forEach(function (name) {
+  if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch'].forEach(function (name) {
-  $(name + '-close').addEventListener('click', function () { show('farm'); });
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand'].forEach(function (name) {
+  var zurueck = name === 'fremdstand' ? 'besuch' : 'farm';
+  $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
-    if (e.target === $(name + '-bg')) show('farm');
+    if (e.target === $(name + '-bg')) show(zurueck);
   });
 });
 $('brett').addEventListener('click', function () { show('brett'); });

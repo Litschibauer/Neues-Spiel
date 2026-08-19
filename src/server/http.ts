@@ -106,10 +106,12 @@ function zielKonto(id: string): AccountRecord {
 function hofZeile(karte: HofKarte, wer: string) {
   const rules = getRuleset(LATEST_RULESET_VERSION);
   const proTag = rules.helpPerFarmPerDay ?? 0;
+  const stand = sozial.beziehung(wer, karte.id);
   return {
     code: karte.code,
     name: karte.name,
-    freund: sozial.istFreund(wer, karte.id),
+    stand,
+    freund: stand === 'freund',
     heute: sozial.hilfenHeute(wer, karte.id, Date.now()),
     proTag,
   };
@@ -568,7 +570,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (url.pathname === '/api/freunde' && req.method === 'GET') {
-      return json(res, 200, { freunde: sozial.freunde(account.id).map((f) => hofZeile(f, account.id)) });
+      return json(res, 200, {
+        freunde: sozial.freunde(account.id).map((f) => hofZeile(f, account.id)),
+        anfragen: sozial.anfragenAn(account.id).map((f) => hofZeile(f, account.id)),
+        gefragt: sozial.anfragenVon(account.id).map((f) => hofZeile(f, account.id)),
+      });
     }
 
     if (url.pathname === '/api/freunde' && req.method === 'POST') {
@@ -576,8 +582,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const ziel = sozial.perCode(code);
       if (!ziel) return json(res, 404, { error: 'NO_SUCH_FARM' });
       if (ziel.id === account.id) return json(res, 400, { error: 'THATS_YOU' });
-      sozial.merke(account.id, ziel.id, Date.now());
-      return json(res, 200, { hof: hofZeile(ziel, account.id) });
+
+      const stand = sozial.frage(account.id, ziel.id, Date.now());
+      if (stand === 'nein') return json(res, 400, { error: 'THATS_YOU' });
+      events.nudge(ziel.id, 'farm');
+      return json(res, 200, { stand, hof: hofZeile(ziel, account.id) });
     }
 
     if (url.pathname === '/api/freunde' && req.method === 'DELETE') {

@@ -162,13 +162,23 @@
   <div class="sheet-bg" id="besuch-bg" hidden>
     <div class="sheet gross" role="dialog" aria-modal="true" aria-labelledby="besuch-titel">
       <h3 id="besuch-titel">Zu Besuch</h3>
-      <div class="hof fremd" id="besuch-hof">
-        <div class="scene" id="besuch-scene"></div>
+      <div class="hof" id="besuch-hof">
+        <svg class="scene" id="besuch-scene" viewBox="0 0 100 130" preserveAspectRatio="none"
+             aria-hidden="true"></svg>
+        <div id="besuch-hindernisse"></div>
         <div id="besuch-plots"></div>
+        <button class="moebel" id="besuch-stand-knopf"></button>
       </div>
       <div id="besuch-kopf"></div>
-      <div id="besuch-stand"></div>
       <button class="sheet-close" id="besuch-close">Zurück</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="fremdstand-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="fremdstand-titel">
+      <h3 id="fremdstand-titel">Sein Verkaufsstand</h3>
+      <div id="besuch-stand"></div>
+      <button class="sheet-close" id="fremdstand-close">Schließen</button>
     </div>
   </div>
 
