@@ -612,6 +612,91 @@ sudo chown -R spiel:spiel /opt/neues-spiel
 
 ---
 
+## Öffentlich stellen — ohne Tailscale
+
+Tailscale ist ein privates Netz: Nur wer eingeladen ist, kommt hin. Für
+richtige Spieler muss der Server ins offene Internet. Zwei Wege, beide mit
+TLS — ohne TLS startet Produktion gar nicht erst (Riegel 4).
+
+### a) Cloudflare Tunnel — heute, ohne Domain, ohne offenen Port
+
+Der schnellste Weg zu einer öffentlichen `https://`-Adresse. Der Tunnel baut
+die Verbindung von innen nach außen auf; am Router bleibt alles zu.
+
+```bash
+sudo apt install cloudflared          # oder das .deb von Cloudflare
+cloudflared tunnel --url http://127.0.0.1:8787
+```
+
+Die Ausgabe nennt eine Adresse der Form `https://xyz.trycloudflare.com` — die
+gibst du weiter. Der Spielserver bleibt auf `127.0.0.1`, also unverändert.
+
+Was du dabei wissen musst:
+
+- **Die Adresse ist flüchtig.** Jeder Neustart des Tunnels gibt eine neue.
+  Spieler, die einen Hof angelegt haben, finden ihn danach nicht mehr wieder —
+  ihr Schlüssel liegt im Browser der alten Adresse. Für einen Nachmittag mit
+  Freunden gut, für echte Spieler nicht.
+- **Für eine feste Adresse** braucht es einen benannten Tunnel und eine Domain
+  bei Cloudflare (`cloudflared tunnel create`, dann `route dns`).
+
+### b) Eigene Domain — der Weg, der bleibt
+
+Was du brauchst: eine Domain, einen A-Eintrag auf die IP des Servers, und
+Port 443 offen. Als TLS-Endpunkt ist **Caddy** auf einem 1-GB-Server die
+geringste Mühe — es holt und erneuert das Zertifikat allein.
+
+```bash
+sudo apt install caddy
+```
+
+`/etc/caddy/Caddyfile`:
+
+```
+hof.example.de {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+```bash
+sudo systemctl reload caddy
+curl -s https://hof.example.de/health     # "secure":true
+```
+
+Der Spielserver bleibt auf `127.0.0.1` — er soll nur über Caddy erreichbar
+sein. **Eine Variable brauchst du trotzdem:**
+
+```
+NEUES_SPIEL_BEHIND_PROXY=1
+```
+
+Ohne sie sieht der Server als Absender jedes Aufrufs `127.0.0.1`, weil alles
+durch Caddy kommt. Die Bremse gegen Massen-Anlegen (`NEUES_SPIEL_NEW_PER_HOUR`)
+zählt dann alle Spieler zusammen und sperrt nach zwanzig Höfen jeden aus. Mit
+der Variable glaubt der Server `x-forwarded-for` und zählt pro echter Adresse.
+Setz sie **nur**, wenn wirklich ein Proxy davorsteht — sonst hängt jeder seine
+Wunsch-Adresse selbst in den Kopf.
+
+In der systemd-Unit gehört sie zu den anderen:
+
+```ini
+Environment=NEUES_SPIEL_BEHIND_PROXY=1
+```
+
+### Drei Lücken, die erst öffentlich wehtun
+
+Ehrlich vorweg, damit es nicht im Betrieb auffällt:
+
+1. **Kein Weg zurück zu einem verlorenen Hof.** Der Schlüssel im Browser *ist*
+   das Konto. Wer den Browserspeicher löscht oder das Gerät wechselt, ohne den
+   Schlüssel notiert zu haben, hat den Hof verloren — und du kannst ihm nicht
+   helfen. Im privaten Test verschmerzbar, öffentlich der erste Support-Fall.
+2. **Kein Rate-Limit auf `/api/sync`.** Wer den Endpunkt flutet, bringt den
+   einen Prozess ins Schwitzen. Cloudflare davor federt das ab, ein offener
+   Port mit Caddy nicht.
+3. **Backups macht niemand automatisch.** Vor dem ersten öffentlichen Tag ein
+   `cron` mit `npm run backup` einrichten — sonst hängt alles an einer Datei.
+
 ## Von unterwegs erreichbar machen
 
 Für den Tunnel-Test brauchst du das Handy **im Mobilfunknetz**, nicht im WLAN —
