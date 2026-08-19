@@ -12,8 +12,8 @@ import { canonicalize } from '../src/sim/canonical.ts';
 import type { State } from '../src/sim/state.ts';
 
 const T0 = 1_700_000_000_000;
-const rules = getRuleset(9);
-const V8 = getRuleset(8);
+const rules = getRuleset(13);
+const V12 = getRuleset(12);
 
 const GOLD = 0;
 const PLANK = 10;
@@ -24,8 +24,8 @@ function hof(patch: Partial<State> = {}): State {
   return {
     ...base,
     chests: [
-      { id: 1, kind: 0, readyAt: 0 },
-      { id: 2, kind: 1, readyAt: 500 },
+      { id: 1, kind: 0, readyAt: 0, gx: 4, gy: 4 },
+      { id: 2, kind: 1, readyAt: 0, gx: 2, gy: 2 },
     ],
     nextChestId: 3,
     ...patch,
@@ -33,21 +33,31 @@ function hof(patch: Partial<State> = {}): State {
 }
 
 function client(state = hof()): Client {
-  return new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 9 });
+  return new Client({ state, seq: 0, serverTs: T0, rulesetVersion: 13 });
 }
 
-test('eine Kiste öffnet sich erst, wenn ihre Zeit da ist', () => {
+test('es liegt immer nur eine Kiste da — die nächste kommt erst danach', () => {
   const c = client();
 
-  const zuFrueh = c.openChest(2);
-  assert.equal(zuFrueh.ok, false);
-  if (!zuFrueh.ok) assert.equal(zuFrueh.code, 'CHEST_NOT_READY');
+  const hintere = c.openChest(2);
+  assert.equal(hintere.ok, false, 'die zweite Kiste ist noch gar nicht da');
+  if (!hintere.ok) assert.equal(hintere.code, 'NO_SUCH_CHEST');
+
+  assert.equal(farmView(c.preview(), rules).chests.length, 1, 'mehr als eine Kiste sichtbar');
 
   assert.equal(c.openChest(1).ok, true);
-  assert.equal(c.state.chests.length, 1);
   assert.deepEqual(c.state.pendingBoxes, [0]);
+  assert.equal(c.state.chestReadyAt, rules.chestEveryTicks, 'keine Wartezeit gesetzt');
 
-  c.advanceClock(500);
+  const sofort = c.openChest(2);
+  assert.equal(sofort.ok, false, 'die nächste liegt sofort bereit');
+  if (!sofort.ok) assert.equal(sofort.code, 'CHEST_NOT_READY');
+
+  const v = farmView(c.preview(), rules);
+  assert.equal(v.chests[0]!.ready, false);
+  assert.equal(v.chests[0]!.readyIn, rules.chestEveryTicks);
+
+  c.advanceClock(rules.chestEveryTicks!);
   assert.equal(c.openChest(2).ok, true);
   assert.deepEqual(c.state.pendingBoxes, [0, 1]);
 });
@@ -69,7 +79,7 @@ test('der Inhalt steht NICHT im Zustand — der Client kann ihn nicht vorher seh
 });
 
 test('der Server würfelt beim Sync und legt die Beute ins Postfach', () => {
-  const server = new Server(hof(), T0, 9);
+  const server = new Server(hof(), T0, 13);
   server.rollChest = mulberry32(4);
 
   const c = new Client(server.snapshot);
@@ -120,19 +130,21 @@ test('jede Ziehung bleibt in ihrer Tabelle und doppelt keinen Posten', () => {
   }
 });
 
-test('der Kistenvorrat wird aufgefüllt und liegt immer in der Zukunft', () => {
+test('der Vorrat hält genau eine Kiste in Reserve', () => {
   const leer = initialState(rules);
   const { chests, nextChestId } = topUpChests(leer, rules, mulberry32(3));
 
   assert.equal(chests.length, rules.chestQueueMax);
+  assert.equal(rules.chestQueueMax, 2, 'eine liegt da, eine wartet');
   assert.equal(nextChestId, rules.chestQueueMax! + 1);
 
-  let vorher = leer.tick;
+  const stellen = new Set<string>();
   for (const kiste of chests) {
-    assert.ok(kiste.readyAt > vorher, 'zwei Kisten zur selben Zeit');
-    vorher = kiste.readyAt;
     assert.ok(kiste.kind >= 0 && kiste.kind < rules.chestKinds!.length);
+    assert.ok(kiste.gx >= 0, 'Kiste ohne Stelle');
+    stellen.add(`${kiste.gx},${kiste.gy}`);
   }
+  assert.equal(stellen.size, chests.length, 'zwei Kisten auf demselben Feld');
 });
 
 test('das Lager wächst nur gegen Material', () => {
@@ -179,29 +191,31 @@ test('mehr Platz heißt auch: mehr passt hinein', () => {
 
 test('das Anzeigemodell zeigt nur fertige Kisten als antippbar', () => {
   const v = farmView(hof(), rules);
-  assert.equal(v.chests.length, 2);
+  assert.equal(v.chests.length, 1, 'es soll immer nur eine zu sehen sein');
   assert.equal(v.chests[0]!.ready, true);
   assert.equal(v.chests[0]!.kind, 'Holzkiste');
-  assert.equal(v.chests[1]!.ready, false);
-  assert.equal(v.chests[1]!.readyIn, 500);
+
+  const wartend = farmView({ ...hof(), chestReadyAt: 300 }, rules);
+  assert.equal(wartend.chests[0]!.ready, false);
+  assert.equal(wartend.chests[0]!.readyIn, 300);
 });
 
-test('ein Hof aus v8 bekommt Kisten und ein ausbaubares Lager', () => {
-  const alt = initialState(V8);
+test('ein Hof aus v12 bekommt Kisten und ein ausbaubares Lager', () => {
+  const alt = initialState(V12);
   const items = alt.items.slice();
   items[1] = 40;
 
-  const neu = migrateState({ ...alt, items, tick: 300 }, 8, 9);
+  const neu = migrateState({ ...alt, items, tick: 300 }, 12, 13);
   assertInvariants(neu, rules);
 
   assert.equal(count(neu, 1), 40);
   assert.equal(neu.siloLevel, 0);
   assert.deepEqual(neu.chests, []);
   assert.equal(count(neu, PLANK), 0, 'Material beginnt bei null');
-  assert.equal(capacityOf(neu, rules), V8.siloCapacity, 'Grundstufe ist das alte Lager');
+  assert.equal(capacityOf(neu, rules), V12.siloCapacity, 'Grundstufe ist das alte Lager');
 });
 
-test('das Regelwerk v9 ist in sich stimmig', () => {
+test('das Regelwerk v13 ist in sich stimmig', () => {
   assert.deepEqual(validateRuleset(rules), []);
 
   const stufen = rules.siloLevels!;
@@ -227,7 +241,7 @@ test('Kisten landen auf freien Rasterfeldern, nicht in Gebäuden oder im Teich',
   const start = initialState(v11);
   const { chests } = topUpChests(start, v11, mulberry32(11));
 
-  assert.ok(chests.length >= 6, `nur ${chests.length} Kisten geplant`);
+  assert.ok(chests.length >= 2, `nur ${chests.length} Kisten geplant`);
 
   const stellen = new Set<string>();
   for (const kiste of chests) {
@@ -253,17 +267,15 @@ test('Kisten landen auf freien Rasterfeldern, nicht in Gebäuden oder im Teich',
     stellen.add(stelle);
   }
 
-  assert.ok(stellen.size > 3, 'die Kisten liegen alle am selben Fleck');
+  assert.equal(stellen.size, chests.length, 'zwei Kisten auf demselben Feld');
 });
 
 test('Kisten kommen öfter als früher', () => {
   const v9 = getRuleset(9);
-  const v11 = getRuleset(11);
   assert.ok(
-    v11.chestEveryTicks! < v9.chestEveryTicks!,
-    `v11 wartet ${v11.chestEveryTicks}s, v9 wartete ${v9.chestEveryTicks}s`,
+    rules.chestEveryTicks! < v9.chestEveryTicks!,
+    `v13 wartet ${rules.chestEveryTicks}s, v9 wartete ${v9.chestEveryTicks}s`,
   );
-  assert.ok(v11.chestQueueMax! >= v9.chestQueueMax!);
 });
 
 test('eine Kiste gibt genau ein Stück — Material oder Werkzeug', () => {

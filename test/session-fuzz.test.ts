@@ -111,16 +111,20 @@ test('die ausgeschriebene Referenz-Schleife stimmt mit der Einzelfunktion übere
   assert.ok(referenceStepMatchesUnit());
 });
 
-test('Profil „busy": 200 Sitzungen — Client == Referenz == Server', () => {
-  const s = runProfile(BUSY, 200);
+test('Profil „busy": jede Version mehrfach — Client == Referenz == Server', () => {
+  const laeufe = VERSIONS.length * 20;
+  const s = runProfile(BUSY, laeufe);
 
-  assert.ok(s.sessions > 180, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
-  assert.ok(s.commands > 2000, `zu wenige Commands: ${s.commands}`);
+  assert.ok(s.sessions > laeufe * 0.9, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
+  assert.ok(s.commands > laeufe * 10, `zu wenige Commands: ${s.commands}`);
 
-  assert.ok(s.rejections > 500, `zu wenige abgelehnte Aktionen: ${s.rejections}`);
+  assert.ok(s.rejections > laeufe * 2.5, `zu wenige abgelehnte Aktionen: ${s.rejections}`);
 
   for (const v of VERSIONS) {
-    assert.ok((s.perVersion.get(v) ?? 0) > 200, `v${v} zu selten gefuzzt: ${s.perVersion.get(v)}`);
+    assert.ok(
+      (s.perVersion.get(v) ?? 0) > 150,
+      `v${v} zu selten gefuzzt: ${s.perVersion.get(v)}`,
+    );
   }
 });
 

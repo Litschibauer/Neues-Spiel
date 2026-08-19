@@ -38,6 +38,7 @@ export function canonicalize(state: State): string {
       .map((c) => `${c.id}:${c.kind}@${c.readyAt}/${c.gx},${c.gy}`)
       .join(',')}]`,
     `nextChestId=${state.nextChestId}`,
+    `chestReadyAt=${state.chestReadyAt}`,
     `boxes=[${state.pendingBoxes.join(',')}]`,
     `geraeumt=[${state.clearedObstacles.join(',')}]`,
   ].join('|');

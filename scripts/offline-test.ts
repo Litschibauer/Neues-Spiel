@@ -1491,18 +1491,13 @@ try {
   console.log('\n9d. Schatzkisten und der Lagerausbau');
 
   const kistenStand = (await api(`/api/admin/status?account=${status.accountId}`)) as {
-    state: { chests: Array<{ id: number; readyAt: number }>; tick: number };
+    state: { chests: Array<{ id: number; gx: number }>; tick: number; chestReadyAt: number };
   };
   check(
-    'Der Server plant Kisten voraus, ohne den Inhalt zu verraten',
-    kistenStand.state.chests.length >= 3 &&
-      kistenStand.state.chests.every((k) => typeof k.readyAt === 'number'),
-    `${kistenStand.state.chests.length} Kisten in der Warteschlange`,
+    'Es liegt genau eine Kiste da, die nächste wartet unsichtbar',
+    kistenStand.state.chests.length === 2,
+    `${kistenStand.state.chests.length} Kisten im Vorrat`,
   );
-
-  const naechste = kistenStand.state.chests[0]!;
-  const wartezeit = Math.max(60, naechste.readyAt - kistenStand.state.tick + 30);
-  await api(`/api/admin/time?account=${status.accountId}&seconds=${wartezeit}`, 'POST');
 
   try {
     await waitFor(
@@ -1542,6 +1537,28 @@ try {
     nachKiste.state.mail.length > vorKiste.state.mail.length &&
       nachKiste.state.pendingBoxes.length === 0,
     `Postfach ${vorKiste.state.mail.length} → ${nachKiste.state.mail.length}`,
+  );
+
+  const nachDemOeffnen = await evaluate<number>(
+    cdp,
+    `document.querySelectorAll('#kisten .schatz').length`,
+  );
+  check(
+    'Danach ist keine Kiste mehr da — die nächste braucht ihre Zeit',
+    nachDemOeffnen === 0,
+    `${nachDemOeffnen} sichtbar`,
+  );
+
+  await api(`/api/admin/time?account=${status.accountId}&seconds=90`, 'POST');
+  let wiederDa = 0;
+  for (let i = 0; i < 40 && wiederDa === 0; i++) {
+    await sleep(250);
+    wiederDa = await evaluate<number>(cdp, `document.querySelectorAll('#kisten .schatz').length`);
+  }
+  check(
+    'Nach der Wartezeit liegt genau eine neue da',
+    wiederDa === 1,
+    `${wiederDa} Kisten`,
   );
 
   await evaluate(cdp, `document.getElementById('lagerhaus').click()`);

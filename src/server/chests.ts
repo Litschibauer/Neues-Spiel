@@ -39,18 +39,31 @@ export function topUpChests(
     return { chests, nextChestId: state.nextChestId };
   }
 
-  const streuung = rules.chestSpreadTicks ?? 0;
   let id = state.nextChestId;
-  let letzte = chests.reduce((max2, c) => Math.max(max2, c.readyAt), state.tick);
+
+  if (chests.length > 0) {
+    const erste = chests[0]!;
+    const belegt =
+      erste.gx < 0 ||
+      freieFelder(state, rules, chests.slice(1)).every(
+        ([gx, gy]) => gx !== erste.gx || gy !== erste.gy,
+      );
+    if (belegt) {
+      const frei = freieFelder(state, rules, chests.slice(1));
+      if (frei.length > 0) {
+        const stelle = frei[Math.floor(rnd() * frei.length)]!;
+        chests[0] = { ...erste, gx: stelle[0]!, gy: stelle[1]! };
+      }
+    }
+  }
 
   while (chests.length < max) {
-    letzte += takt + Math.floor(rnd() * (streuung + 1));
     const frei = freieFelder(state, rules, chests);
     const stelle = frei.length > 0 ? frei[Math.floor(rnd() * frei.length)]! : [-1, -1];
     chests.push({
       id,
       kind: Math.floor(rnd() * arten.length),
-      readyAt: letzte,
+      readyAt: 0,
       gx: stelle[0]!,
       gy: stelle[1]!,
     });

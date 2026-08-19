@@ -519,8 +519,28 @@ Erfahrung zu bekommen, ohne etwas zu produzieren — und damit ein Grund, sich u
 den Hof selbst zu kümmern statt nur um die Produktionskette. Ein Tümpel bringt
 so viel wie eine ganze Stufe am Anfang.
 
-Kisten kommen dafür deutlich öfter: alle **7 Minuten** statt 15, zwölf statt
-acht im Vorrat, verteilt über das ganze Raster.
+#### v13: eine Kiste, nicht zwölf
+
+Zwölf Kisten gleichzeitig auf dem Hof waren eine Sammelaufgabe, kein Fund. Ab
+v13 liegt **immer genau eine** da, und die nächste kommt erst, wenn diese
+abgeholt ist — plus sieben Minuten.
+
+Das Schöne daran: Die Wartezeit hängt jetzt an einer *eigenen Handlung* statt
+an einem Fahrplan, und genau deshalb bleibt sie offline berechenbar.
+`OPEN_CHEST` setzt `chestReadyAt = tick + chestEveryTicks`; sichtbar ist
+`chests[0]`, sobald der Tick da ist. Der Vorrat im Zustand schrumpft auf zwei
+Einträge: die liegende Kiste und die nächste, deren Art und Stelle der Server
+schon gewürfelt hat.
+
+Weil zwischen Auswürfeln und Erscheinen jetzt nur noch eine Kiste liegt, kann
+der Server die Stelle der vordersten beim Sync **nachbessern**, falls dort
+inzwischen etwas gebaut wurde. Das Problem aus v11 — Kiste unter dem Stall —
+löst sich damit von selbst.
+
+> Der Testlauf hat mich hier ausgelacht: Die Prüfung „nach dem Öffnen ist keine
+> Kiste da" schlug fehl, weil ich dem Server vorher 120 Sekunden geschenkt
+> hatte — mehr als die 60 Sekunden Wartezeit im Dev-Regelwerk. Das Spiel hatte
+> recht, der Test hatte unrecht.
 
 ### M2 · Lagerlimit über alle Waren 🟢 ✅ gebaut
 Scheune, Silo, Stapel, Engpässe zwischen Rohstoff und Produkt — alles dieselbe Grenze (§7).

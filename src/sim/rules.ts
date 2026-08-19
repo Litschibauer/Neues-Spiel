@@ -899,14 +899,22 @@ const V12: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const V13: Ruleset = {
   ...V12,
+  version: 13,
+
+  chestQueueMax: 2,
+  chestEveryTicks: 420,
+  chestSpreadTicks: 0,
+};
+
+const DEV: Ruleset = {
+  ...V13,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
-  chestEveryTicks: 180,
-  chestSpreadTicks: 120,
-  recipes: V12.recipes.map((r) => {
+  chestEveryTicks: 60,
+  recipes: V13.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
@@ -925,16 +933,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [10, V10],
   [11, V11],
   [12, V12],
+  [13, V13],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 12;
+export const LATEST_RULESET_VERSION = 13;
 
 export const DEV_RULESET_VERSION = 1001;
 

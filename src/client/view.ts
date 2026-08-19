@@ -482,11 +482,11 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
         },
       ];
     }),
-    chests: state.chests.map((c) => ({
+    chests: state.chests.slice(0, 1).map((c) => ({
       id: c.id,
       kind: rules.chestKinds?.[c.kind]?.label ?? '',
-      ready: state.tick >= c.readyAt,
-      readyIn: Math.max(0, c.readyAt - state.tick),
+      ready: state.tick >= state.chestReadyAt,
+      readyIn: Math.max(0, state.chestReadyAt - state.tick),
       gx: c.gx,
       gy: c.gy,
     })),

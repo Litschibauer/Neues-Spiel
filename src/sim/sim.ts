@@ -533,14 +533,15 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const kisten = rules.chestKinds;
       if (!kisten || kisten.length === 0) throw new SimError('NO_SUCH_CHEST');
 
-      const kiste = s.chests.find((c) => c.id === cmd.chestId);
-      if (!kiste) throw new SimError('NO_SUCH_CHEST');
-      if (s.tick < kiste.readyAt) throw new SimError('CHEST_NOT_READY');
+      const kiste = s.chests[0];
+      if (!kiste || kiste.id !== cmd.chestId) throw new SimError('NO_SUCH_CHEST');
+      if (s.tick < s.chestReadyAt) throw new SimError('CHEST_NOT_READY');
       if (s.pendingBoxes.length >= MAX_PENDING_BOXES) throw new SimError('TOO_MANY_BOXES');
 
       const next = cloneState(s);
-      next.chests = s.chests.filter((c) => c.id !== cmd.chestId);
+      next.chests = s.chests.slice(1);
       next.pendingBoxes = s.pendingBoxes.concat(kiste.kind);
+      next.chestReadyAt = s.tick + (rules.chestEveryTicks ?? 0);
       return next;
     }
 
