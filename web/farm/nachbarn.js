@@ -21,13 +21,22 @@ function zeichneEigenenHof() {
   }
 
   var karte = document.createElement('div');
-  karte.className = 'card trade';
-  karte.innerHTML =
-    '<div class="head"><span class="name">Dein Hof</span>' +
-    '<span class="have">Code ' + eigenerHof.code + '</span></div>';
+  karte.className = 'hofkarte';
+
+  var zeile = document.createElement('div');
+  zeile.className = 'zeile';
+  var wer = document.createElement('span');
+  wer.className = 'wer';
+  wer.textContent = 'Dein Hof';
+  var code = document.createElement('span');
+  code.className = 'code';
+  code.textContent = eigenerHof.code;
+  zeile.appendChild(wer);
+  zeile.appendChild(code);
+  karte.appendChild(zeile);
 
   var reihe = document.createElement('div');
-  reihe.className = 'pick';
+  reihe.className = 'eingabe';
   var feld = document.createElement('input');
   feld.type = 'text';
   feld.id = 'hofnamefeld';
@@ -46,10 +55,10 @@ function zeichneEigenenHof() {
   reihe.appendChild(knopf);
   karte.appendChild(reihe);
 
-  var hinweis = document.createElement('div');
-  hinweis.className = 'note';
-  hinweis.textContent = 'Gib den Code weiter, dann kann dich jemand besuchen.';
-  karte.appendChild(hinweis);
+  var fuss = document.createElement('p');
+  fuss.className = 'fuss';
+  fuss.textContent = 'Gib den Code weiter — damit kann dich jemand besuchen.';
+  karte.appendChild(fuss);
 
   box.appendChild(karte);
 }
@@ -63,10 +72,19 @@ function freundeLaden() {
   });
 }
 
+function wappenFuer(name) {
+  return (name || '?').trim().charAt(0).toUpperCase();
+}
+
 function hofZeile(h, art) {
   var karte = document.createElement('div');
-  karte.className = 'card';
+  karte.className = 'nachbar';
   karte.dataset.hof = h.code;
+
+  var wappen = document.createElement('div');
+  wappen.className = 'wappen';
+  wappen.textContent = wappenFuer(h.name);
+  karte.appendChild(wappen);
 
   var offen = Math.max(0, h.proTag - h.heute);
   var body = document.createElement('div');
@@ -78,6 +96,9 @@ function hofZeile(h, art) {
       : offen > 0 ? offen + '× helfen möglich'
       : 'heute schon geholfen') + '</div>';
   karte.appendChild(body);
+
+  var tun = document.createElement('div');
+  tun.className = 'tun';
 
   var knopf = document.createElement('button');
   knopf.type = 'button';
@@ -92,21 +113,22 @@ function hofZeile(h, art) {
     }
     besuche(h.code);
   });
-  karte.appendChild(knopf);
+  tun.appendChild(knopf);
 
   if (art !== 'freund') {
     var weg = document.createElement('button');
     weg.type = 'button';
-    weg.className = 'go weg';
-    weg.textContent = art === 'anfrage' ? 'Nein' : 'Zurückziehen';
+    weg.className = 'leise';
+    weg.textContent = art === 'anfrage' ? 'Nein' : 'Zurück';
     weg.addEventListener('click', function () {
       api('/api/freunde?code=' + encodeURIComponent(h.code), { method: 'DELETE' })
         .then(function () { freundeLaden(); })
         .catch(function () { toast('Ging nicht', true); });
     });
-    karte.appendChild(weg);
+    tun.appendChild(weg);
   }
 
+  karte.appendChild(tun);
   return karte;
 }
 
@@ -114,12 +136,21 @@ function zeichneFreunde(d) {
   var box = $('freundeliste');
   box.textContent = '';
 
-  (d.anfragen || []).forEach(function (h) { box.appendChild(hofZeile(h, 'anfrage')); });
-  (d.freunde || []).forEach(function (h) { box.appendChild(hofZeile(h, 'freund')); });
-  (d.gefragt || []).forEach(function (h) { box.appendChild(hofZeile(h, 'gefragt')); });
+  var abschnitt = function (titel, liste, art) {
+    if (!liste || liste.length === 0) return;
+    var kopf = document.createElement('h2');
+    kopf.textContent = titel;
+    box.appendChild(kopf);
+    liste.forEach(function (h) { box.appendChild(hofZeile(h, art)); });
+  };
+
+  abschnitt('Möchten dein Nachbar sein', d.anfragen, 'anfrage');
+  abschnitt('Deine Nachbarn', d.freunde, 'freund');
+  abschnitt('Angefragt', d.gefragt, 'gefragt');
 
   if (box.children.length === 0) {
-    box.innerHTML = '<p class="empty">Noch keine Nachbarn. Frag jemanden nach seinem Code.</p>';
+    box.innerHTML = '<h2>Deine Nachbarn</h2>' +
+      '<p class="empty">Noch keine Nachbarn. Frag jemanden nach seinem Code.</p>';
   }
 }
 
@@ -339,28 +370,40 @@ function zeichneBesuchKopf(d) {
   box.textContent = '';
 
   var offen = Math.max(0, d.proTag - d.heute);
-  var karte = document.createElement('div');
-  karte.className = 'card trade';
-  karte.innerHTML =
-    '<div class="head"><span class="name">' + d.name + '</span>' +
-    '<span class="have">' + d.code + '</span></div>' +
-    '<div class="note">' + (offen > 0
-      ? 'Tippe auf etwas, das gerade läuft — ' + offen + '× heute möglich.'
-      : 'Heute hast du hier schon dreimal geholfen. Morgen wieder.') + '</div>';
+  var leiste = document.createElement('div');
+  leiste.className = 'besuch-leiste';
 
-  var reihe = document.createElement('div');
-  reihe.className = 'preisknoepfe';
+  var body = document.createElement('div');
+  body.className = 'body';
+  body.innerHTML =
+    '<div class="top">' + d.name + '</div>' +
+    '<div class="sub">' + d.code + ' · ' + (offen > 0
+      ? 'tippe auf etwas, das gerade läuft'
+      : 'heute schon dreimal geholfen') + '</div>';
+  leiste.appendChild(body);
+
+  var punkte = document.createElement('div');
+  punkte.className = 'hilfen';
+  punkte.setAttribute('aria-label', offen + ' von ' + d.proTag + ' Hilfen offen');
+  for (var i = 0; i < d.proTag; i++) {
+    var p = document.createElement('i');
+    if (i >= offen) p.className = 'weg';
+    punkte.appendChild(p);
+  }
+  leiste.appendChild(punkte);
+
   var merken = document.createElement('button');
   merken.type = 'button';
-  merken.textContent = d.stand === 'freund' ? 'Nachbarschaft beenden'
-    : d.stand === 'gefragt' ? 'Anfrage zurückziehen'
-    : d.stand === 'wartet' ? 'Nachbarschaft annehmen'
-    : 'Als Nachbar anfragen';
+  if (d.stand === 'freund') merken.className = 'an';
+  merken.textContent = d.stand === 'freund' ? 'Nachbar'
+    : d.stand === 'gefragt' ? 'gefragt'
+    : d.stand === 'wartet' ? 'Annehmen'
+    : 'Anfragen';
   merken.addEventListener('click', function () {
     var weg = d.stand === 'freund' || d.stand === 'gefragt';
     api('/api/freunde?code=' + encodeURIComponent(d.code), { method: weg ? 'DELETE' : 'POST' })
       .then(function (a) {
-        toast(weg ? 'Erledigt'
+        toast(weg ? 'Nachbarschaft beendet'
           : a && a.stand === 'freund' ? 'Ihr seid jetzt Nachbarn'
           : 'Anfrage geschickt — er muss zustimmen');
         besuchHolen();
@@ -368,9 +411,9 @@ function zeichneBesuchKopf(d) {
       })
       .catch(function () { toast('Ging nicht', true); });
   });
-  reihe.appendChild(merken);
-  karte.appendChild(reihe);
-  box.appendChild(karte);
+  leiste.appendChild(merken);
+
+  box.appendChild(leiste);
 }
 
 function hilf(plot, slot) {

@@ -2380,13 +2380,13 @@ try {
     cdp,
     `(function () {
        var feld = document.getElementById('hofnamefeld');
-       var code = document.querySelector('#eigenerhof .have');
+       var code = document.querySelector('#eigenerhof .code');
        return (feld ? feld.value : 'kein Feld') + '|' + (code ? code.textContent : 'kein Code');
      })()`,
   );
   check(
     'Der eigene Hof zeigt Name und Code zum Weitergeben',
-    eigener === 'auf' && /Code [A-Z0-9]{6}/.test(hofkarte) && hofkarte.split('|')[0]!.length > 3,
+    eigener === 'auf' && /\|[A-Z0-9]{6}$/.test(hofkarte) && hofkarte.split('|')[0]!.length > 3,
     hofkarte,
   );
 
@@ -2400,7 +2400,7 @@ try {
   await sleep(900);
   const nachAnfrage = await evaluate<string>(
     cdp,
-    `[...document.querySelectorAll('#freundeliste .card')]
+    `[...document.querySelectorAll('#freundeliste .nachbar')]
        .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
        .join(', ')`,
   );
@@ -2412,7 +2412,7 @@ try {
 
   const meinCode = await evaluate<string>(
     cdp,
-    `document.querySelector('#eigenerhof .have').textContent.replace('Code ', '')`,
+    `document.querySelector('#eigenerhof .code').textContent`,
   );
   await fetch(`http://127.0.0.1:${PORT}/api/freunde?code=${meinCode}`, {
     method: 'POST',
@@ -2424,7 +2424,7 @@ try {
 
   const nachbarliste = await evaluate<string>(
     cdp,
-    `[...document.querySelectorAll('#freundeliste .card')]
+    `[...document.querySelectorAll('#freundeliste .nachbar')]
        .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
        .join(', ')`,
   );
@@ -2444,7 +2444,7 @@ try {
   ]);
   check('Der Nachbar pflanzt kurz vor dem Besuch etwas Langsames', gesaet.ok, gesaet.reason ?? gesaet.kind);
 
-  await evaluate(cdp, `document.querySelector('#freundeliste .card .go').click()`);
+  await evaluate(cdp, `document.querySelector('#freundeliste .nachbar .go').click()`);
   await sleep(1200);
   const besuchBild = await evaluate<{
     titel: string;
@@ -2509,11 +2509,12 @@ try {
   const nachHilfe = await evaluate<string>(
     cdp,
     `document.getElementById('toast').textContent + '|' +
-     document.getElementById('besuch-kopf').textContent`,
+     (document.querySelector('#besuch-kopf .hilfen') || { ariaLabel: 'keine' }).ariaLabel`,
   );
   check(
     'Helfen gibt XP und zählt herunter, wie oft es heute noch geht',
-    geholfen === 'getippt' && /\+\d+ XP/.test(nachHilfe) && /2× heute möglich/.test(nachHilfe),
+    geholfen === 'getippt' && /\+\d+ XP/.test(nachHilfe) &&
+      /2 von 3 Hilfen offen/.test(nachHilfe),
     (geholfen === 'getippt' ? nachHilfe : geholfen).slice(0, 160),
   );
 

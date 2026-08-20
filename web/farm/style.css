@@ -411,6 +411,84 @@
   }
   .ic.gross { width: 1.7em; height: 1.7em; vertical-align: -.4em; }
 
+  .hofkarte {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); padding: .8rem; margin-bottom: .9rem;
+  }
+  .hofkarte .zeile {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: .5rem; margin-bottom: .55rem;
+  }
+  .hofkarte .wer { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; }
+  .hofkarte .code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .92rem; font-weight: 700; letter-spacing: .12em; color: var(--accent);
+  }
+  .hofkarte .fuss { font-size: .68rem; color: var(--muted); margin: .5rem 0 0; }
+
+  .eingabe { display: flex; gap: .4rem; align-items: stretch; }
+  .eingabe input {
+    flex: 1; min-width: 0; height: 2.4rem; padding: 0 .7rem;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+    color: var(--ink); font-size: .85rem; font-weight: 600; font-family: inherit;
+  }
+  .eingabe input#freundcode {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em;
+  }
+  .eingabe button {
+    flex: none; height: 2.4rem; padding: 0 .9rem; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent); font-size: .8rem; font-weight: 700;
+  }
+  .eingabe button:disabled { background: var(--sunk); color: var(--muted); }
+
+  .nachbar {
+    display: flex; align-items: center; gap: .6rem; width: 100%;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); padding: .65rem .7rem;
+  }
+  .nachbar + .nachbar { margin-top: .5rem; }
+  .nachbar .wappen {
+    flex: none; width: 2.2rem; height: 2.2rem; border-radius: 11px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: .8rem;
+  }
+  .nachbar .body { flex: 1; min-width: 0; }
+  .nachbar .top { font-size: .85rem; font-weight: 650; }
+  .nachbar .sub { font-size: .68rem; color: var(--muted); }
+  .nachbar .tun { display: flex; gap: .35rem; flex: none; }
+  .nachbar .tun button {
+    border: 0; border-radius: 999px; padding: .4rem .75rem;
+    background: var(--accent); color: var(--on-accent); font-size: .72rem; font-weight: 700;
+  }
+  .nachbar .tun button.leise {
+    background: transparent; color: var(--muted); border: 1px solid var(--line);
+  }
+  .nachbar .tun button:disabled { background: var(--sunk); color: var(--muted); }
+
+  .besuch-leiste {
+    display: flex; align-items: center; gap: .6rem;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: .6rem .7rem; margin-bottom: .5rem;
+  }
+  .besuch-leiste .body { flex: 1; min-width: 0; }
+  .besuch-leiste .top { font-size: .88rem; font-weight: 700; }
+  .besuch-leiste .sub { font-size: .68rem; color: var(--muted); }
+  .besuch-leiste .hilfen {
+    flex: none; display: flex; gap: .2rem; align-items: center;
+  }
+  .besuch-leiste .hilfen i {
+    width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); display: block;
+  }
+  .besuch-leiste .hilfen i.weg { background: var(--sunk); }
+  .besuch-leiste button {
+    flex: none; border: 1px solid var(--line); border-radius: 999px;
+    padding: .4rem .75rem; background: transparent; color: var(--muted);
+    font-size: .72rem; font-weight: 650;
+  }
+  .besuch-leiste button.an { border-color: var(--accent); color: var(--accent); }
+
   .stand-kopf {
     display: flex; align-items: baseline; gap: .5rem;
     font-size: .78rem; font-weight: 650; margin: .2rem 0 .5rem;
