@@ -657,9 +657,32 @@ kaufen: `sslip.io` löst jeden Namen der Form `85-1-2-3.sslip.io` auf genau
 diese IP auf. Damit hat die Maschine einen Namen, den Let's Encrypt
 zertifizieren kann, und die Adresse ist praktisch die IP.
 
+#### Caddy installieren (Debian/Ubuntu)
+
+`caddy` steckt nicht in den normalen Paketquellen — `apt install caddy` findet
+entweder nichts oder eine alte Version. Der Weg über die Paketquelle des
+Projekts, vier Zeilen:
+
 ```bash
-sudo apt install caddy
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
 ```
+
+Danach läuft Caddy schon als Dienst:
+
+```bash
+systemctl status caddy        # sollte „active (running)" sagen
+```
+
+Auf einer anderen Distribution: die einzelne Binärdatei von
+`caddyserver.com/download` holen, nach `/usr/local/bin/caddy` legen und eine
+eigene systemd-Unit schreiben — dieselbe Konfigurationsdatei, mehr Handarbeit.
+
+#### Konfigurieren
 
 `/etc/caddy/Caddyfile` — die eigene IP mit Bindestrichen einsetzen:
 
@@ -671,10 +694,21 @@ sudo apt install caddy
 
 ```bash
 sudo systemctl reload caddy
+sudo journalctl -u caddy -f                   # beim ersten Mal zuschauen
 curl -s https://85-1-2-3.sslip.io/health      # "secure":true
 ```
 
-Am Router muss **443** offen sein (und 80 für die Zertifikatsprüfung). Der
+Beim ersten Start holt Caddy das Zertifikat — das dauert ein paar Sekunden und
+steht im Protokoll. Kommt dort ein Fehler, liegt es fast immer daran, dass
+Port 80 oder 443 nicht durchkommt:
+
+```bash
+sudo ufw allow 80,443/tcp     # falls ufw läuft
+sudo ss -tlnp | grep -E ':80|:443'
+```
+
+Am Router und in der Firewall des Anbieters muss **443** offen sein (und 80 für
+die Zertifikatsprüfung). Der
 Spielserver bleibt auf `127.0.0.1`, und in der Unit gehört wie oben
 `NEUES_SPIEL_BEHIND_PROXY=1` dazu, damit die Anlege-Bremse echte Adressen
 sieht statt lauter `127.0.0.1`.
@@ -690,11 +724,8 @@ Konto, kein Tailscale, keine gekaufte Domain.
 
 Was du brauchst: eine Domain, einen A-Eintrag auf die IP des Servers, und
 Port 443 offen. Als TLS-Endpunkt ist **Caddy** auf einem 1-GB-Server die
-geringste Mühe — es holt und erneuert das Zertifikat allein.
-
-```bash
-sudo apt install caddy
-```
+geringste Mühe — es holt und erneuert das Zertifikat allein. Installiert wird
+es wie oben beschrieben.
 
 `/etc/caddy/Caddyfile`:
 
