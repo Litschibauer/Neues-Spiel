@@ -74,13 +74,13 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -95,6 +95,7 @@ $('stand').addEventListener('click', function () {
   attempt(true);
 });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
+$('pfad-auf').addEventListener('click', function () { show('pfad'); });
 $('stufe-weiter').addEventListener('click', feierZu);
 $('stufe-feier').addEventListener('click', function (e) {
   if (e.target === $('stufe-feier')) feierZu();

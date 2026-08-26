@@ -487,3 +487,91 @@ function zeichneFremdenStand(d) {
 
   box.appendChild(raster);
 }
+
+function pfadStufen() {
+  var t = rules.levelThresholds || [];
+  var max = t.length + 1;
+  var stufen = [];
+  for (var l = 1; l <= max; l++) {
+    var von = l === 1 ? 0 : t[l - 2];
+    var bis = l <= t.length ? t[l - 1] : null;
+    stufen.push({ level: l, von: von, bis: bis, frei: NS.freischaltungenAb(rules, l) });
+  }
+  return stufen;
+}
+
+function gabeZeile(pn, art, bild) {
+  return '<span class="gabe">' + (bild || '') + '<span>' + pn + '</span></span>';
+}
+
+function renderPfad(v) {
+  var kopf = $('pfad-kopf');
+  var stufen = pfadStufen();
+  var jetzt = v.level;
+  var xp = v.xp.total;
+
+  var akt = stufen[jetzt - 1];
+  if (v.xp.atMax || !akt || akt.bis === null) {
+    kopf.innerHTML = '<div class="gross"><span class="stufe">Stufe ' + jetzt +
+      '</span><span class="rest">Höchststufe</span></div>' +
+      '<div class="zahlen"><span class="hast">' + xp + ' XP</span></div>';
+  } else {
+    var into = xp - akt.von;
+    var span = akt.bis - akt.von;
+    var fehlt = akt.bis - xp;
+    var pct = Math.max(0, Math.min(100, Math.round((into * 100) / span)));
+    kopf.innerHTML =
+      '<div class="gross"><span class="stufe">Stufe ' + jetzt + '</span>' +
+      '<span class="rest">' + pct + ' % bis Stufe ' + (jetzt + 1) + '</span></div>' +
+      '<div class="balken"><i style="width:' + pct + '%"></i><span class="mitte"></span></div>' +
+      '<div class="zahlen"><span class="hast">' + into + ' / ' + span + ' XP</span>' +
+      '<span class="fehlt">noch ' + fehlt + ' XP</span></div>';
+  }
+
+  var box = $('pfad-liste');
+  box.textContent = '';
+  var pfad = document.createElement('div');
+  pfad.className = 'pfad';
+
+  stufen.forEach(function (s) {
+    var gaben = [];
+    (s.frei.plots || []).forEach(function (id) {
+      var pn = plotIdName(id);
+      gaben.push(gabeZeile(pn.name, pn.art, '<span class="ic">🔨</span>'));
+    });
+    (s.frei.recipes || []).forEach(function (i) {
+      var item = rules.recipes[i].output.item;
+      gaben.push(gabeZeile(itemName(item), '', itemIcon(item)));
+    });
+
+    var zustand = s.level < jetzt ? 'fertig' : s.level === jetzt ? 'jetzt' : '';
+    var leer = gaben.length === 0;
+
+    var stein = document.createElement('div');
+    stein.className = 'stein ' + zustand + (leer ? ' leer' : '');
+
+    var knoten = document.createElement('div');
+    knoten.className = 'knoten';
+    knoten.textContent = s.level;
+    stein.appendChild(knoten);
+
+    var karte = document.createElement('div');
+    karte.className = 'karte';
+    var titel = s.level === jetzt ? 'Du bist hier'
+      : leer ? 'Stufe ' + s.level
+      : 'Schaltet frei';
+    karte.innerHTML = '<div class="titel">' + titel +
+      (leer ? '' : ' <span class="lvl">· Stufe ' + s.level + '</span>') + '</div>' +
+      (leer ? '' : '<div class="gaben">' + gaben.join('') + '</div>');
+    stein.appendChild(karte);
+
+    pfad.appendChild(stein);
+  });
+
+  box.appendChild(pfad);
+
+  var hier = pfad.querySelector('.stein.jetzt');
+  if (hier) setTimeout(function () {
+    hier.scrollIntoView({ block: 'center', behavior: 'auto' });
+  }, 30);
+}

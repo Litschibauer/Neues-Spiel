@@ -39,18 +39,20 @@
 <div id="shell" hidden>
   <header class="topbar">
     <div class="purse">
-      <div class="ring">
+      <button class="pfad-auf" id="pfad-auf" aria-label="Fortschritt und was jede Stufe bringt">
+        <div class="ring">
         <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
           <circle cx="20" cy="20" r="17" fill="none" stroke="var(--sunk)" stroke-width="4"></circle>
           <circle id="ring-fill" cx="20" cy="20" r="17" fill="none" stroke="var(--accent)"
                   stroke-width="4" stroke-linecap="round" stroke-dasharray="107" stroke-dashoffset="107"></circle>
         </svg>
-        <b id="lvl">1</b>
-      </div>
-      <div class="purse-main">
-        <div class="who">Dein Hof</div>
-        <div class="xp" id="xp">0 / 0 XP</div>
-      </div>
+          <b id="lvl">1</b>
+        </div>
+        <div class="purse-main">
+          <div class="who">Dein Hof</div>
+          <div class="xp" id="xp">0 / 0 XP</div>
+        </div>
+      </button>
       <span class="coins">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="8" cy="8" r="6.5" fill="currentColor" opacity=".25"></circle>
@@ -58,7 +60,6 @@
         </svg>
         <span id="gold">0</span>
       </span>
-    </div>
     <div class="silo" id="silo">
       <span>Lager</span>
       <span class="silo-track"><i class="silo-fill" id="silo-fill"></i></span>
@@ -178,6 +179,15 @@
       <h3 id="fremdstand-titel">Sein Verkaufsstand</h3>
       <div id="besuch-stand"></div>
       <button class="sheet-close" id="fremdstand-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="pfad-bg" hidden>
+    <div class="sheet gross" role="dialog" aria-modal="true" aria-labelledby="pfad-titel">
+      <h3 id="pfad-titel">Dein Weg</h3>
+      <div id="pfad-kopf"></div>
+      <div id="pfad-liste"></div>
+      <button class="sheet-close" id="pfad-close">Schließen</button>
     </div>
   </div>
 

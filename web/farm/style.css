@@ -90,6 +90,12 @@
     display: flex; flex-direction: column; gap: .5rem;
   }
   .purse { display: flex; align-items: center; gap: .5rem; }
+  .pfad-auf {
+    display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 0;
+    background: none; border: 0; padding: .1rem; margin: -.1rem; border-radius: 12px;
+    text-align: left; color: inherit; cursor: pointer;
+  }
+  .pfad-auf:active { background: var(--sunk); }
 
   .ring { position: relative; width: 2.5rem; height: 2.5rem; flex: none; }
   .ring svg { transform: rotate(-90deg); display: block; }
@@ -605,6 +611,76 @@
     100% { opacity: 0; transform: translate(-50%, -2.6rem) scale(1); }
   }
   @media (prefers-reduced-motion: reduce) { .flug { display: none; } }
+
+  #pfad-kopf {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 1rem; margin-bottom: 1rem;
+  }
+  #pfad-kopf .gross {
+    display: flex; align-items: baseline; gap: .5rem; margin-bottom: .7rem;
+  }
+  #pfad-kopf .stufe { font-size: 1.4rem; font-weight: 800; }
+  #pfad-kopf .rest { margin-left: auto; font-size: .72rem; color: var(--muted); font-weight: 650; }
+  #pfad-kopf .balken {
+    height: .8rem; border-radius: 999px; background: var(--sunk); overflow: hidden;
+    position: relative;
+  }
+  #pfad-kopf .balken i {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--leaf, var(--accent)));
+    transition: width .4s ease;
+  }
+  #pfad-kopf .balken .mitte {
+    position: absolute; top: -2px; bottom: -2px; left: 50%; width: 2px;
+    background: var(--line);
+  }
+  #pfad-kopf .zahlen {
+    display: flex; justify-content: space-between; margin-top: .45rem;
+    font-size: .72rem; font-variant-numeric: tabular-nums;
+  }
+  #pfad-kopf .zahlen .hast { color: var(--accent); font-weight: 700; }
+  #pfad-kopf .zahlen .fehlt { color: var(--muted); font-weight: 650; }
+
+  .pfad {
+    position: relative; padding-left: 2.6rem;
+  }
+  .pfad::before {
+    content: ''; position: absolute; left: 1.15rem; top: .8rem; bottom: .8rem;
+    width: 3px; background: var(--line); border-radius: 2px;
+  }
+  .pfad .stein { position: relative; padding: .1rem 0 .9rem; }
+  .pfad .stein .knoten {
+    position: absolute; left: -2.6rem; top: .05rem;
+    width: 2.3rem; height: 2.3rem; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: .85rem; z-index: 1;
+    background: var(--surface); border: 3px solid var(--line); color: var(--muted);
+  }
+  .pfad .stein.fertig .knoten { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .pfad .stein.jetzt .knoten {
+    background: var(--gold); border-color: var(--gold); color: #fff;
+    box-shadow: 0 0 0 4px var(--gold-soft);
+  }
+  .pfad .stein .karte {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+    padding: .55rem .7rem; min-height: 2.3rem; display: flex; flex-direction: column;
+    justify-content: center; gap: .35rem;
+  }
+  .pfad .stein.jetzt .karte { border-color: var(--gold); }
+  .pfad .stein.leer .karte {
+    background: transparent; border-style: dashed; color: var(--muted);
+    min-height: 0; padding: .35rem .7rem;
+  }
+  .pfad .stein .titel { font-size: .72rem; font-weight: 700; }
+  .pfad .stein .titel .lvl { color: var(--muted); font-weight: 650; }
+  .pfad .stein .gaben { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .pfad .stein .gabe {
+    display: inline-flex; align-items: center; gap: .3rem;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: .25rem .55rem; font-size: .72rem; font-weight: 600;
+  }
+  .pfad .stein.jetzt .gabe { background: var(--gold-soft); border-color: var(--gold); }
+  .pfad .stein .gabe .ic { width: 1.15em; height: 1.15em; }
 
   .stufe-feier {
     position: fixed; inset: 0; z-index: 80; display: flex;

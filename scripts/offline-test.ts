@@ -1402,6 +1402,51 @@ try {
     await evaluate<boolean>(cdp, `document.getElementById('stufe-feier').hidden`),
   );
 
+  const pfad = await evaluate<{
+    offen: boolean;
+    steine: number;
+    jetzt: string;
+    hatBalken: boolean;
+    fehlt: boolean;
+    freischalt: string;
+  }>(
+    cdp,
+    `(function () {
+       document.getElementById('pfad-auf').click();
+       var steine = [...document.querySelectorAll('#pfad-liste .stein')];
+       var jetzt = document.querySelector('#pfad-liste .stein.jetzt');
+       var mitGabe = steine.filter(function (s) { return s.querySelector('.gabe'); });
+       return {
+         offen: !document.getElementById('pfad-bg').hidden,
+         steine: steine.length,
+         jetzt: jetzt ? jetzt.querySelector('.knoten').textContent : 'keiner',
+         hatBalken: !!document.querySelector('#pfad-kopf .balken i'),
+         fehlt: /noch [0-9]+ XP/.test(document.getElementById('pfad-kopf').textContent),
+         freischalt: mitGabe.map(function (s) {
+           return s.querySelector('.knoten').textContent + ':' +
+             [...s.querySelectorAll('.gabe span:last-child')].map(function (g) { return g.textContent; }).join('+');
+         }).slice(0, 6).join(' | '),
+       };
+     })()`,
+  );
+  check(
+    'Ein Tipp auf die Stufenleiste öffnet den Pfad mit einem Stein je Stufe',
+    pfad.offen && pfad.steine >= 8 && pfad.jetzt === '3',
+    `${pfad.steine} Steine, hier bei ${pfad.jetzt}`,
+  );
+  check(
+    'Der Pfad zeigt, was jede Stufe freischaltet',
+    /Feld|Hühnerstall|Kuhweide|Molkerei|Butter|Käse/.test(pfad.freischalt),
+    pfad.freischalt,
+  );
+  check(
+    'Der Kopf zeigt den Fortschritt: Balken und wie viel XP noch fehlt',
+    pfad.hatBalken && pfad.fehlt,
+    `Balken ${pfad.hatBalken}, Rest-XP ${pfad.fehlt}`,
+  );
+  await evaluate(cdp, `document.getElementById('pfad-close').click()`);
+  await sleep(150);
+
   await baueUndStelle(cdp, 'Mühle');
   await sleep(300);
   await baueUndStelle(cdp, 'Hühnerstall');

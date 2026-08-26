@@ -15,6 +15,7 @@ function render() {
   renderMail(v);
   renderMarket(v);
   renderVorrat(v);
+  if (view === 'pfad') renderPfad(v);
 
   var typing = document.activeElement
     && document.activeElement.tagName === 'INPUT'
