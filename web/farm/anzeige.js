@@ -1,5 +1,6 @@
 function render() {
   if (!client) return;
+  if (netzWache()) return;
   client.localTick = tickNow();
   var s = client.preview();
   var v = NS.farmView(s, rules, marktLive());
@@ -406,8 +407,7 @@ function renderMail(v) {
 }
 
 function marktLive() {
-  if (!navigator.onLine) return false;
-  return !engine || engine.view !== 'offline';
+  return netzOk();
 }
 
 function renderMarket(v) {

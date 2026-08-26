@@ -2563,6 +2563,72 @@ try {
 
   await evaluate(cdp, `document.getElementById('besuch-close').click()`);
   await sleep(200);
+
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: true,
+    latency: 0,
+    downloadThroughput: 0,
+    uploadThroughput: 0,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
+  await sleep(600);
+  const lagerBleibt = await evaluate<boolean>(
+    cdp,
+    `!document.getElementById('lager-bg').hidden`,
+  );
+  check(
+    'Ohne Netz bleibt das Lager offen — es braucht keine Verbindung',
+    lagerBleibt,
+  );
+
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+  const rausgeworfen = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('nachbarn').click();
+       var offen = !document.getElementById('freunde-bg').hidden;
+       return offen ? 'trotzdem offen' : 'gar nicht erst auf';
+     })()`,
+  );
+  await sleep(400);
+  const nachWurf = await evaluate<string>(
+    cdp,
+    `JSON.stringify({
+       freunde: !document.getElementById('freunde-bg').hidden,
+       besuch: !document.getElementById('besuch-bg').hidden,
+       meldung: document.getElementById('toast').textContent,
+     })`,
+  );
+  check(
+    'Ohne Netz landet man aus den Nachbarn sofort wieder auf dem Hof',
+    /"freunde":false/.test(nachWurf) && /"besuch":false/.test(nachWurf),
+    `${rausgeworfen} · ${nachWurf}`,
+  );
+
+  await cdp.send('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await waitFor(
+    cdp,
+    `document.getElementById('conn').className.indexOf('live') >= 0`,
+    'wieder verbunden',
+    20_000,
+  );
+  const wiederDrin = await evaluate<boolean>(
+    cdp,
+    `(function () {
+       document.getElementById('nachbarn').click();
+       return !document.getElementById('freunde-bg').hidden;
+     })()`,
+  );
+  check('Mit Netz gehen die Nachbarn wieder auf', wiederDrin);
+
   await evaluate(cdp, `document.getElementById('freunde-close').click()`);
   await sleep(200);
 

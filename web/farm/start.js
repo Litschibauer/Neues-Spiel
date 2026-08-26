@@ -28,6 +28,21 @@ function refreshLease() {
     .catch(function () {  });
 }
 
+var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1 };
+
+function netzOk() {
+  if (!navigator.onLine) return false;
+  return !engine || engine.view !== 'offline';
+}
+
+function netzWache() {
+  if (!ONLINE_NUR[view] || netzOk()) return false;
+  toast('Ohne Verbindung geht das nicht — zurück auf deinen Hof', true);
+  klang('fehler');
+  show('farm');
+  return true;
+}
+
 function attempt(force) {
   if (!engine) return;
   client.localTick = tickNow();
@@ -44,13 +59,14 @@ function attempt(force) {
       if (r.ok) { setLease(true, null); client.takeover = false; }
     } else if (outcome.kind === 'failed') {
       setConn('offline', outcome.timedOut);
+      netzWache();
       return;
     } else if (outcome.kind === 'dropped') {
       toast(/OFFER_GONE/.test(outcome.reason || '') ? 'Jemand war schneller' : 'Teil verworfen', true);
       afterSync(outcome.snapshot, outcome.serverTime);
     }
     render();
-  }).catch(function () { setConn('offline'); });
+  }).catch(function () { setConn('offline'); netzWache(); });
 }
 
 function show(next) {
@@ -131,7 +147,12 @@ function begin(restored) {
     attempt(true);
     startLive();
   });
-  window.addEventListener('offline', function () { setConn('offline'); stopLive(); render(); });
+  window.addEventListener('offline', function () {
+    setConn('offline');
+    stopLive();
+    netzWache();
+    render();
+  });
   window.addEventListener('pagehide', function () { save(); stopLive(); });
   startLive();
 }

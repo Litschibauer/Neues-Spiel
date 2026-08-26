@@ -198,6 +198,7 @@ function besuchHolen() {
       }
     })
     .catch(function () {
+      if (netzWache()) return;
       $('besuch-kopf').innerHTML = '<p class="empty">Der Hof ist gerade nicht erreichbar.</p>';
     });
 }
