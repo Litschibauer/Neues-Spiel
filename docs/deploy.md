@@ -640,6 +640,25 @@ Was du dabei wissen musst:
 - **Für eine feste Adresse** braucht es einen benannten Tunnel und eine Domain
   bei Cloudflare (`cloudflared tunnel create`, dann `route dns`).
 
+### Der kurze Weg: ein Befehl auf dem Server
+
+Alles unten steht auch in einem Skript. Auf dem Server, im Repo-Ordner:
+
+```bash
+sudo bash scripts/oeffentlich.sh
+```
+
+Es sucht die öffentliche IP, macht daraus eine Adresse mit Zertifikat,
+installiert Caddy, trägt `NEUES_SPIEL_BEHIND_PROXY=1` in die Unit ein, öffnet
+80 und 443 in `ufw` und sagt am Ende, unter welcher Adresse gespielt wird.
+Mit eigener Domain: `sudo bash scripts/oeffentlich.sh hof.example.de`.
+
+Was es **nicht** kann: die Firewall deines Anbieters öffnen. Das ist eine
+eigene Ebene im Kundenmenü, und ohne offene 80 und 443 kommt kein Zertifikat.
+
+Wer wissen will, was da passiert — die nächsten Abschnitte erklären jeden
+Schritt einzeln.
+
 ### b) Nur die IP, ohne Domain und ohne Tailscale
 
 Der Wunsch ist verständlich: `http://85.x.x.x:8787` eintippen, fertig. Zwei

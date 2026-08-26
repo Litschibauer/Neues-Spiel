@@ -1,0 +1,22 @@
+# Kopieren nach /etc/caddy/Caddyfile — oder von scripts/oeffentlich.sh
+# schreiben lassen, das setzt die Adresse selbst ein.
+#
+# HOFADRESSE ersetzen durch den Namen, unter dem gespielt wird:
+#   85-1-2-3.sslip.io      die eigene IP, Punkte zu Bindestrichen
+#   hof.example.de         eine gekaufte Domain
+#
+# Caddy holt und erneuert das Zertifikat allein. Dafür muss Port 80 (Prüfung)
+# und 443 (Spiel) von außen durchkommen — auch in der Firewall des Anbieters.
+
+HOFADRESSE {
+	reverse_proxy 127.0.0.1:8787
+
+	encode gzip
+
+	# Der Spielserver liest x-forwarded-for nur mit
+	# NEUES_SPIEL_BEHIND_PROXY=1. Ohne das zählt die Anlege-Bremse alle
+	# Spieler als eine Adresse und sperrt nach zwanzig Höfen jeden aus.
+	header {
+		-Server
+	}
+}
