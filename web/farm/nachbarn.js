@@ -63,6 +63,15 @@ function zeichneEigenenHof() {
   box.appendChild(karte);
 }
 
+var freundeTimer = null;
+
+function freundeWachen(an) {
+  if (freundeTimer) { clearInterval(freundeTimer); freundeTimer = null; }
+  if (an) freundeTimer = setInterval(function () {
+    if (!document.hidden && netzOk()) freundeLaden();
+  }, 5000);
+}
+
 function freundeLaden() {
   return api('/api/freunde').then(function (d) {
     zeichneFreunde(d);

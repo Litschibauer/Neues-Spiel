@@ -2414,24 +2414,30 @@ try {
     cdp,
     `document.querySelector('#eigenerhof .code').textContent`,
   );
+  // Das Blatt bleibt offen. Der andere sagt zu — es muss von selbst umspringen,
+  // ohne dass jemand das Blatt neu öffnet.
   await fetch(`http://127.0.0.1:${PORT}/api/freunde?code=${meinCode}`, {
     method: 'POST',
     headers: { authorization: `Bearer ${second.key}` },
   });
-  await sleep(400);
-  await evaluate(cdp, `document.getElementById('nachbarn').click()`);
-  await sleep(900);
 
-  const nachbarliste = await evaluate<string>(
-    cdp,
-    `[...document.querySelectorAll('#freundeliste .nachbar')]
-       .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
-       .join(', ')`,
-  );
+  let nachbarliste = '';
+  const seitZusage = Date.now();
+  let umgesprungen = -1;
+  for (let i = 0; i < 40; i++) {
+    nachbarliste = await evaluate<string>(
+      cdp,
+      `[...document.querySelectorAll('#freundeliste .nachbar')]
+         .map(function (c) { return c.dataset.hof + ':' + c.querySelector('.sub').textContent; })
+         .join(', ')`,
+    );
+    if (/helfen möglich/.test(nachbarliste)) { umgesprungen = Date.now() - seitZusage; break; }
+    await sleep(200);
+  }
   check(
-    'Sagt der andere ja, stehen beide in der Nachbarschaft',
-    nachbarliste.indexOf(zweiterCode.code) >= 0 && /helfen möglich/.test(nachbarliste),
-    nachbarliste,
+    'Sagt der andere ja, springt das offene Blatt von selbst auf Nachbarschaft um',
+    umgesprungen >= 0 && umgesprungen < 4000,
+    umgesprungen < 0 ? nachbarliste : `nach ${umgesprungen} ms live umgesprungen`,
   );
 
   await api(`/api/admin/grant?account=${second.accountId}&item=corn&amount=10`, 'POST');

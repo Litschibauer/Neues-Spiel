@@ -1,6 +1,7 @@
 export type NudgeKind =
   | 'market'
-  | 'farm';
+  | 'farm'
+  | 'sozial';
 
 export type Sink = {
   write: (chunk: string) => boolean;

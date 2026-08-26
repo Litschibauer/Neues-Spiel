@@ -585,14 +585,17 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
       const stand = sozial.frage(account.id, ziel.id, Date.now());
       if (stand === 'nein') return json(res, 400, { error: 'THATS_YOU' });
-      events.nudge(ziel.id, 'farm');
+      events.nudge(ziel.id, 'sozial');
       return json(res, 200, { stand, hof: hofZeile(ziel, account.id) });
     }
 
     if (url.pathname === '/api/freunde' && req.method === 'DELETE') {
       const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
       const ziel = sozial.perCode(code);
-      if (ziel) sozial.vergiss(account.id, ziel.id);
+      if (ziel) {
+        sozial.vergiss(account.id, ziel.id);
+        events.nudge(ziel.id, 'sozial');
+      }
       return json(res, 200, { ok: true });
     }
 

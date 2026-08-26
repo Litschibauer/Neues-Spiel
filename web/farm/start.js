@@ -73,6 +73,7 @@ function show(next) {
   view = next;
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
+  if (next !== 'freunde') freundeWachen(false);
   ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
@@ -98,6 +99,7 @@ $('nachbarn').addEventListener('click', function () {
   show('freunde');
   hofLaden();
   freundeLaden();
+  freundeWachen(true);
 });
 $('freundadd').addEventListener('click', freundHinzu);
 $('freundcode').addEventListener('keydown', function (e) {

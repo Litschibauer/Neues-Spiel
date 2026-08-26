@@ -98,7 +98,12 @@ function startLive() {
         var parts = buffer.split('\n\n');
         buffer = parts.pop();
         parts.forEach(function (block) {
-          if (block.indexOf('event: nudge') === 0) onNudge();
+          if (block.indexOf('event: nudge') !== 0) return;
+          var arten = '';
+          block.split('\n').forEach(function (zeile) {
+            if (zeile.indexOf('data:') === 0) arten = zeile.slice(5).trim();
+          });
+          onNudge(arten);
         });
         return pump();
       });
@@ -115,12 +120,21 @@ function startLive() {
 }
 
 var nudgeTimer = null;
-function onNudge() {
+function onNudge(arten) {
+  if ((arten || '').indexOf('sozial') >= 0) sozialFrisch();
+
   if (nudgeTimer) return;
   nudgeTimer = setTimeout(function () {
     nudgeTimer = null;
     attempt(true);
-  }, Math.floor(Math.random() * 500));
+    sozialFrisch();
+  }, 40);
+}
+
+function sozialFrisch() {
+  if (typeof view === 'undefined') return;
+  if (view === 'freunde') freundeLaden();
+  else if (view === 'besuch' || view === 'fremdstand') besuchHolen();
 }
 
 function tickNow() {
