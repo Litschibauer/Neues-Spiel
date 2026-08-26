@@ -618,7 +618,7 @@ Tailscale ist ein privates Netz: Nur wer eingeladen ist, kommt hin. Für
 richtige Spieler muss der Server ins offene Internet. Zwei Wege, beide mit
 TLS — ohne TLS startet Produktion gar nicht erst (Riegel 4).
 
-### a) Cloudflare Tunnel — heute, ohne Domain, ohne offenen Port
+### a) Cloudflare Tunnel — ohne offenen Port, ohne Domain
 
 Der schnellste Weg zu einer öffentlichen `https://`-Adresse. Der Tunnel baut
 die Verbindung von innen nach außen auf; am Router bleibt alles zu.
@@ -640,7 +640,53 @@ Was du dabei wissen musst:
 - **Für eine feste Adresse** braucht es einen benannten Tunnel und eine Domain
   bei Cloudflare (`cloudflared tunnel create`, dann `route dns`).
 
-### b) Eigene Domain — der Weg, der bleibt
+### b) Nur die IP, ohne Domain und ohne Tailscale
+
+Der Wunsch ist verständlich: `http://85.x.x.x:8787` eintippen, fertig. Zwei
+Dinge stehen dem im Weg, und beide sind keine Geschmacksfrage:
+
+1. **Der Hof-Schlüssel reist in jedem Aufruf mit.** Über einfaches HTTP liest
+   ihn jedes Netz zwischen Handy und Server mit — und wer ihn hat, hat den Hof.
+2. **Ohne sicheren Kontext kein Service Worker.** Über `http://` registriert
+   ihn kein Browser. Das Spiel startet dann **nicht** mehr im Funkloch — genau
+   das, wofür alles hier gebaut ist, wäre weg. Das entscheidet der Browser,
+   nicht diese Anwendung.
+
+Es geht trotzdem fast so bequem, **mit** Zertifikat und ohne eine Domain zu
+kaufen: `sslip.io` löst jeden Namen der Form `85-1-2-3.sslip.io` auf genau
+diese IP auf. Damit hat die Maschine einen Namen, den Let's Encrypt
+zertifizieren kann, und die Adresse ist praktisch die IP.
+
+```bash
+sudo apt install caddy
+```
+
+`/etc/caddy/Caddyfile` — die eigene IP mit Bindestrichen einsetzen:
+
+```
+85-1-2-3.sslip.io {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+```bash
+sudo systemctl reload caddy
+curl -s https://85-1-2-3.sslip.io/health      # "secure":true
+```
+
+Am Router muss **443** offen sein (und 80 für die Zertifikatsprüfung). Der
+Spielserver bleibt auf `127.0.0.1`, und in der Unit gehört wie oben
+`NEUES_SPIEL_BEHIND_PROXY=1` dazu, damit die Anlege-Bremse echte Adressen
+sieht statt lauter `127.0.0.1`.
+
+Gespielt wird dann über `https://85-1-2-3.sslip.io` — eine Adresse, kein
+Konto, kein Tailscale, keine gekaufte Domain.
+
+> Wer die IP **wirklich nackt** will, braucht ein Zertifikat auf die IP selbst.
+> Das gibt es inzwischen, aber nur kurzlebig und nur mit passendem ACME-Client
+> — mehr Bastelei als der Umweg über `sslip.io`, für dasselbe Ergebnis.
+
+### c) Eigene Domain — der Weg, der bleibt
 
 Was du brauchst: eine Domain, einen A-Eintrag auf die IP des Servers, und
 Port 443 offen. Als TLS-Endpunkt ist **Caddy** auf einem 1-GB-Server die
