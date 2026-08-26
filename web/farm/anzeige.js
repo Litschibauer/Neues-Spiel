@@ -28,6 +28,7 @@ function render() {
 }
 
 function renderPurse(v) {
+  stufePruefen(v);
   $('lvl').textContent = v.level;
   $('gold').textContent = v.currency.amount;
 

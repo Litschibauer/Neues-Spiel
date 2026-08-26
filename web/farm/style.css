@@ -606,6 +606,69 @@
   }
   @media (prefers-reduced-motion: reduce) { .flug { display: none; } }
 
+  .stufe-feier {
+    position: fixed; inset: 0; z-index: 80; display: flex;
+    align-items: center; justify-content: center; padding: 1.5rem;
+    background: radial-gradient(circle at 50% 42%, rgba(47,125,93,.28), rgba(0,0,0,.62));
+    animation: feierAuf .25s ease-out;
+  }
+  @keyframes feierAuf { from { opacity: 0; } }
+  .stufe-karte {
+    position: relative; width: 100%; max-width: 20rem; text-align: center;
+    background: var(--surface); border-radius: 22px; padding: 2.2rem 1.4rem 1.4rem;
+    box-shadow: 0 24px 60px rgba(0,0,0,.4); overflow: hidden;
+    animation: feierPop .45s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes feierPop {
+    from { transform: scale(.7) translateY(1rem); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stufe-feier, .stufe-karte, .stufe-strahlen, .stufe-zahl { animation: none; }
+  }
+  .stufe-strahlen {
+    position: absolute; top: -30%; left: 50%; width: 200%; aspect-ratio: 1;
+    transform: translateX(-50%); z-index: 0; opacity: .5;
+    background: repeating-conic-gradient(from 0deg,
+      var(--accent-soft) 0deg 12deg, transparent 12deg 24deg);
+    animation: strahlDreh 14s linear infinite;
+  }
+  @keyframes strahlDreh { to { transform: translateX(-50%) rotate(360deg); } }
+  .stufe-karte > *:not(.stufe-strahlen) { position: relative; z-index: 1; }
+  .stufe-zahl {
+    width: 4.4rem; height: 4.4rem; margin: 0 auto .5rem; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; font-weight: 800; box-shadow: 0 6px 18px rgba(47,125,93,.5);
+    animation: zahlPuls .5s ease-out .15s both;
+  }
+  @keyframes zahlPuls { 0% { transform: scale(.4); } 60% { transform: scale(1.15); } }
+  .stufe-titel { font-size: 1.05rem; font-weight: 750; letter-spacing: -.01em; }
+  .stufe-neu {
+    margin: .9rem 0 .2rem; display: flex; flex-direction: column; gap: .4rem;
+  }
+  .stufe-neu:empty { display: none; }
+  .stufe-neu .zeile {
+    display: flex; align-items: center; gap: .55rem; text-align: left;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+    padding: .5rem .65rem; font-size: .8rem; font-weight: 600;
+    animation: neuRein .4s ease-out both;
+  }
+  .stufe-neu .zeile:nth-child(2) { animation-delay: .08s; }
+  .stufe-neu .zeile:nth-child(3) { animation-delay: .16s; }
+  .stufe-neu .zeile:nth-child(4) { animation-delay: .24s; }
+  @keyframes neuRein { from { opacity: 0; transform: translateY(.5rem); } }
+  .stufe-neu .zeile .ic { width: 1.4em; height: 1.4em; flex: none; }
+  .stufe-neu .zeile .mark {
+    flex: none; width: 1.4rem; height: 1.4rem; border-radius: 7px;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-size: .8rem;
+  }
+  .stufe-neu .zeile .was { color: var(--muted); font-weight: 650; font-size: .68rem; }
+  #stufe-weiter {
+    width: 100%; height: 2.6rem; margin-top: 1rem; border: 0; border-radius: 13px;
+    background: var(--accent); color: var(--on-accent); font-size: .9rem; font-weight: 700;
+  }
+
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 40;

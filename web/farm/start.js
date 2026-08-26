@@ -95,6 +95,10 @@ $('stand').addEventListener('click', function () {
   attempt(true);
 });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
+$('stufe-weiter').addEventListener('click', feierZu);
+$('stufe-feier').addEventListener('click', function (e) {
+  if (e.target === $('stufe-feier')) feierZu();
+});
 $('nachbarn').addEventListener('click', function () {
   show('freunde');
   hofLaden();

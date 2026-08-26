@@ -1374,6 +1374,34 @@ try {
   }
   check('Mit Weizen allein kommt man auf Stufe 3', (await levelNow()) >= 3, `Stufe ${await levelNow()}`);
 
+  const feier = await evaluate<{ da: boolean; zahl: string; neu: string }>(
+    cdp,
+    `(function () {
+       var f = document.getElementById('stufe-feier');
+       return {
+         da: !f.hidden,
+         zahl: document.getElementById('stufe-zahl').textContent,
+         neu: document.getElementById('stufe-neu').textContent.slice(0, 80),
+       };
+     })()`,
+  );
+  check(
+    'Ein Stufenaufstieg feiert sich — mit der neuen Stufe und was sie bringt',
+    feier.da && Number(feier.zahl) >= 2 && feier.neu.length > 0,
+    JSON.stringify(feier),
+  );
+  check(
+    'Die Feier nennt, was neu freigeschaltet ist',
+    /Feld|Mühle|Hühnerstall|Kuhweide|Molkerei/.test(feier.neu),
+    feier.neu,
+  );
+  await evaluate(cdp, `document.getElementById('stufe-weiter').click()`);
+  await sleep(200);
+  check(
+    'Weiter schließt die Feier',
+    await evaluate<boolean>(cdp, `document.getElementById('stufe-feier').hidden`),
+  );
+
   await baueUndStelle(cdp, 'Mühle');
   await sleep(300);
   await baueUndStelle(cdp, 'Hühnerstall');
@@ -2186,25 +2214,42 @@ try {
      }).length`,
   );
 
+  // Welches Werkzeug fehlt sicher? Kisten würfeln random, also erst nachsehen,
+  // statt blind auf die Säge zu setzen.
+  const inv = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    itemIds: string[];
+    state: { items: number[] };
+  };
+  const hat = (id: string) => {
+    const i = inv.itemIds.indexOf(id);
+    return i >= 0 ? inv.state.items[i]! : 0;
+  };
+  const werkzeuge: Array<{ art: string; werkzeug: string }> = [
+    { art: 'Baum', werkzeug: 'saw' },
+    { art: 'Stein', werkzeug: 'pickaxe' },
+    { art: 'Tümpel', werkzeug: 'shovel' },
+  ];
+  const fehlt = werkzeuge.find((w) => hat(w.werkzeug) === 0) ?? werkzeuge[0]!;
+
   const ohneWerkzeug = await evaluate<string>(
     cdp,
-    `(function () {
-       var baum = [...document.querySelectorAll('#hindernisse .hindernis')].find(function (h) {
-         return h.getAttribute('aria-label') === 'Baum';
+    `(function (art) {
+       var h = [...document.querySelectorAll('#hindernisse .hindernis')].find(function (x) {
+         return x.getAttribute('aria-label') === art;
        });
-       if (!baum) return 'kein Baum';
-       baum.click();
+       if (!h) return 'kein Hindernis: ' + art;
+       h.click();
        var knopf = document.querySelector('#pick-list .abfahrt');
        var text = knopf ? knopf.textContent : '';
        var gesperrt = knopf ? knopf.disabled : false;
        document.getElementById('pick-close').click();
        return (gesperrt ? 'gesperrt' : 'offen') + ': ' + text;
-     })()`,
+     })(${JSON.stringify(fehlt.art)})`,
   );
   check(
-    'Ohne Säge geht der Baum nicht weg — und die Seite sagt warum',
-    /^gesperrt/.test(ohneWerkzeug) && /Säge/.test(ohneWerkzeug),
-    ohneWerkzeug,
+    'Ohne das passende Werkzeug geht das Hindernis nicht weg — und die Seite sagt warum',
+    /^gesperrt/.test(ohneWerkzeug),
+    `${fehlt.art} ohne ${fehlt.werkzeug}: ${ohneWerkzeug}`,
   );
 
   await api(`/api/admin/grant?account=${status.accountId}&item=saw&amount=1`, 'POST');

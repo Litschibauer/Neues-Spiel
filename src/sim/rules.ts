@@ -1171,6 +1171,32 @@ export function priceBand(rules: Ruleset, item: number): { min: number; max: num
   return { min, max };
 }
 
+export type Freischaltung = { plots: readonly string[]; recipes: readonly number[] };
+
+export function freischaltungenAb(rules: Ruleset, level: number): Freischaltung {
+  if (level <= 1) return { plots: [], recipes: [] };
+
+  const plots: string[] = [];
+  for (const def of rules.plots) {
+    if (def.startLevel > 0) continue;
+    const erste = def.levels[0];
+    if (erste && (erste.minPlayerLevel ?? 1) === level) plots.push(def.id);
+  }
+
+  const erreichbar = new Set<number>();
+  for (const def of rules.plots) {
+    for (const stufe of def.levels) for (const r of stufe.recipes) erreichbar.add(r);
+  }
+
+  const recipes: number[] = [];
+  for (let i = 0; i < rules.recipes.length; i++) {
+    if (!erreichbar.has(i)) continue;
+    if (recipeMinLevel(rules, i) === level) recipes.push(i);
+  }
+
+  return { plots, recipes };
+}
+
 export function helpSpeedup(rules: Ruleset, recipe: number): number {
   const pct = rules.helpSpeedupPct ?? 0;
   const def = rules.recipes[recipe];

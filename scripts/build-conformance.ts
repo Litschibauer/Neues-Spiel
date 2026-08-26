@@ -142,6 +142,7 @@ ${modules}
     storageKeyFor: storageKeyFor,
     farmView: farmView,
     sizeOf: sizeOf,
+    freischaltungenAb: freischaltungenAb,
   };
 })();
 `;

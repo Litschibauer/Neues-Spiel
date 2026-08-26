@@ -152,3 +152,55 @@ function zahlAuf(kasten, text, art) {
     flieger--;
   }, 900);
 }
+
+var stufeGesehen = -1;
+
+function stufePruefen(v) {
+  var jetzt = v.level;
+  if (stufeGesehen < 0) { stufeGesehen = jetzt; return; }
+  if (jetzt <= stufeGesehen) { stufeGesehen = jetzt; return; }
+  var von = stufeGesehen;
+  stufeGesehen = jetzt;
+  for (var l = von + 1; l <= jetzt; l++) feiereStufe(l);
+}
+
+function plotIdName(id) {
+  if (id.indexOf('field-') === 0) return { name: 'Feld ' + id.slice(6), art: 'Neues Feld' };
+  if (id.indexOf('coop-') === 0) return { name: 'Hühnerstall', art: 'Neuer Stall' };
+  if (id.indexOf('pasture-') === 0) return { name: 'Kuhweide', art: 'Neue Weide' };
+  if (id === 'mill') return { name: 'Mühle', art: 'Neues Gebäude' };
+  if (id === 'dairy') return { name: 'Molkerei', art: 'Neues Gebäude' };
+  return { name: nameOf(id), art: 'Neu' };
+}
+
+function feiereStufe(level) {
+  var karte = NS.freischaltungenAb(rules, level);
+  var zeilen = [];
+
+  (karte.plots || []).forEach(function (id) {
+    var pn = plotIdName(id);
+    zeilen.push('<div class="zeile"><span class="mark">🔨</span><span>' + pn.name +
+      '</span><span class="was">' + pn.art + '</span></div>');
+  });
+  (karte.recipes || []).forEach(function (i) {
+    var id = rules.recipes[i].output.item;
+    zeilen.push('<div class="zeile">' + itemIcon(id) + '<span>' + itemName(id) +
+      '</span><span class="was">jetzt herstellbar</span></div>');
+  });
+
+  $('stufe-zahl').textContent = level;
+  $('stufe-neu').innerHTML = zeilen.slice(0, 4).join('');
+  $('stufe-feier').hidden = false;
+
+  klang('stufe');
+  if (navigator.vibrate) { try { navigator.vibrate([0, 40, 40, 60]); } catch (e) {} }
+
+  if (feierTimer) clearTimeout(feierTimer);
+  feierTimer = setTimeout(feierZu, 6000);
+}
+
+var feierTimer = null;
+function feierZu() {
+  if (feierTimer) { clearTimeout(feierTimer); feierTimer = null; }
+  $('stufe-feier').hidden = true;
+}
