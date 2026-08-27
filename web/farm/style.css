@@ -540,15 +540,11 @@
   }
   .kaestchen.leer .plus { font-size: 1.6rem; font-weight: 300; color: var(--muted); line-height: 1; }
   .kaestchen[disabled] { opacity: .45; }
-  .kaestchen.wahl.gesperrt { opacity: 1; }
-  .kaestchen.wahl.gesperrt .ic { opacity: .4; filter: grayscale(1); }
-  .kaestchen.wahl.gesperrt .n { color: var(--muted); }
-  .kaestchen.wahl.gesperrt .rest { color: var(--gold); font-weight: 700; }
-  .kaestchen.wahl.gesperrt::after {
-    content: ''; position: absolute; left: 12%; right: 12%; top: 50%; height: 2px;
-    background: var(--bad); transform: rotate(-18deg); transform-origin: center;
-    box-shadow: 0 0 0 1px var(--surface);
-  }
+  .kaestchen.gesperrt[disabled] { opacity: 1; }
+  .kaestchen.gesperrt .ic { opacity: .4; filter: grayscale(1); }
+  .kaestchen.gesperrt .n { color: var(--muted); }
+  .kaestchen.gesperrt .p { color: var(--muted); }
+  .kaestchen.gesperrt .rest { color: var(--gold); font-weight: 700; }
   .kaestchen.wahl { position: relative; }
   .preisknoepfe { display: flex; gap: .35rem; margin: .1rem 0 .5rem; }
   .preisknoepfe button {

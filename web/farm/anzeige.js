@@ -569,7 +569,7 @@ function standWaren(v) {
 }
 
 function standKaufbar(v) {
-  return v.stock.filter(function (e) { return e.sellable && (e.amount > 0 || e.locked); });
+  return v.stock.filter(function (e) { return e.sellable && e.amount > 0; });
 }
 
 function standGrenzen(entry) {

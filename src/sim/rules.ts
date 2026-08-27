@@ -137,6 +137,7 @@ export type Ruleset = {
   maxOfferAmount?: number;
   maxOfferPrice?: number;
   offerNeedsLevel?: boolean;
+  buyNeedsLevel?: boolean;
   animalsMustBeBought?: boolean;
   saleGoldInSlot?: boolean;
   helpPerFarmPerDay?: number;
@@ -1037,8 +1038,15 @@ const V20: Ruleset = {
   }),
 };
 
-const DEV: Ruleset = {
+const V21: Ruleset = {
   ...V20,
+  version: 21,
+
+  buyNeedsLevel: true,
+};
+
+const DEV: Ruleset = {
+  ...V21,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
@@ -1075,16 +1083,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [18, V18],
   [19, V19],
   [20, V20],
+  [21, V21],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 20;
+export const LATEST_RULESET_VERSION = 21;
 
 export const DEV_RULESET_VERSION = 1001;
 

@@ -450,6 +450,7 @@ function zeichneFremdenStand(d) {
   $('fremdstand-titel').textContent = d.name + ' — Verkaufsstand';
 
   var meine = NS.farmView(client.preview(), rules, marktLive());
+  var meineStufe = meine.level;
   var kaufbar = {};
   meine.offers.forEach(function (o) { kaufbar[o.item + ':' + o.amount + ':' + o.price] = o; });
 
@@ -464,20 +465,23 @@ function zeichneFremdenStand(d) {
 
   frei.forEach(function (o) {
     var angebot = kaufbar[o.item + ':' + o.amount + ':' + o.price];
+    var stufe = rules.buyNeedsLevel ? NS.itemUnlockLevel(rules, o.item) : 0;
+    var gesperrt = meineStufe < stufe;
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'kaestchen voll fremd';
+    b.className = 'kaestchen voll fremd' + (gesperrt ? ' gesperrt' : '');
     b.dataset.ware = rules.items[o.item] ? rules.items[o.item].id : String(o.item);
-    b.disabled = !angebot || !marktLive() || !angebot.affordable || !angebot.fits;
+    b.disabled = gesperrt || !angebot || !marktLive() || !angebot.affordable || !angebot.fits;
     b.innerHTML = itemIcon(o.item, 'gross') +
       '<span class="n">' + o.amount + '×</span>' +
       '<span class="p">' + o.amount * o.price + itemIcon(rules.currency) + '</span>' +
-      '<span class="rest">' + (!angebot ? 'gleich verfügbar'
+      '<span class="rest">' + (gesperrt ? 'ab Stufe ' + stufe
+        : !angebot ? 'gleich verfügbar'
         : !angebot.fits ? 'kein Platz'
         : !angebot.affordable ? 'zu teuer'
         : o.price + ' je Stück') + '</span>';
     b.addEventListener('click', function () {
-      if (!angebot || !marktLive()) return;
+      if (gesperrt || !angebot || !marktLive()) return;
       var res = client.buyOffer(angebot.id);
       act('Gekauft · ' + o.amount + ' ' + itemName(o.item), res, 'kauf');
       if (res.ok) { attempt(true); besuchHolen(); }

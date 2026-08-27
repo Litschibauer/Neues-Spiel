@@ -352,6 +352,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const offer = s.offers.find((o) => o.id === cmd.offerId);
       if (!offer) throw new SimError('NO_SUCH_OFFER');
 
+      if (rules.buyNeedsLevel && levelOf(rules, s.xp) < itemUnlockLevel(rules, offer.item)) {
+        throw new SimError('ITEM_LOCKED');
+      }
+
       const total = offer.amount * offer.price;
       if (count(s, rules.currency) < total) throw new SimError('CANT_AFFORD');
 

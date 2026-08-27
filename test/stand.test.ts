@@ -189,6 +189,52 @@ test('die Oberfläche kreuzt gesperrte Waren an, statt sie zu verstecken', () =>
   assert.equal(saege.locked, false);
 });
 
+test('wer die Stufe nicht hat, kann eine gesperrte Ware auch nicht kaufen', () => {
+  const rules = getRuleset(21);
+  const cheese = idOf(rules, 'cheese');
+  const stufe = itemUnlockLevel(rules, cheese);
+  assert.ok(stufe > 1, 'Käse sollte eine Stufe brauchen');
+
+  const angebot = {
+    id: 1,
+    item: cheese,
+    amount: 2,
+    price: 10,
+    seller: 'FREMD1',
+    hof: 'Nachbarhof',
+    headline: false,
+  };
+
+  const arm = { ...mit(rules, 0, 100_000), xp: 0, offers: [angebot] };
+  assert.throws(
+    () => simulate(arm, { seq: 1, tick: 0, type: 'BUY_OFFER', offerId: 1 }, rules),
+    { code: 'ITEM_LOCKED' },
+  );
+
+  const reif = { ...mit(rules, 0, 100_000), offers: [angebot] };
+  const nach = simulate(reif, { seq: 1, tick: 0, type: 'BUY_OFFER', offerId: 1 }, rules);
+  assert.equal(nach.offers.length, 0, 'mit genug Stufe muss der Kauf durchgehen');
+  assert.equal(nach.items[cheese], 2);
+});
+
+test('die Kaufsperre gilt erst ab dem Regelwerk, das sie kennt', () => {
+  const v20 = getRuleset(20);
+  assert.equal(v20.buyNeedsLevel, undefined);
+  const cheese = idOf(v20, 'cheese');
+  const angebot = {
+    id: 1,
+    item: cheese,
+    amount: 1,
+    price: 5,
+    seller: 'FREMD1',
+    hof: 'Nachbarhof',
+    headline: false,
+  };
+  const arm = { ...mit(v20, 0, 100_000), xp: 0, offers: [angebot] };
+  const nach = simulate(arm, { seq: 1, tick: 0, type: 'BUY_OFFER', offerId: 1 }, v20);
+  assert.equal(nach.offers.length, 0, 'v20 kennt keine Kaufsperre — alter Log bleibt gleich');
+});
+
 test('jede handelbare Ware im neuesten Regelwerk lässt sich auch wirklich hinstellen', () => {
   const rules = getRuleset(LATEST_RULESET_VERSION);
   for (let i = 0; i < rules.items.length; i++) {

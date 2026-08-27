@@ -1216,7 +1216,7 @@ try {
     `${standDanach.voll} → ${zurueckgeholt} belegt`,
   );
 
-  // Werkzeug verkaufen, gesperrte Ware durchgestrichen
+  // Werkzeug verkaufen, gesperrte Ware nur ausgegraut
   await api(`/api/admin/grant?account=${status.accountId}&item=saw&amount=2`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=cheese&amount=3`, 'POST');
   await sleep(500);
@@ -1253,7 +1253,7 @@ try {
     `Säge wählbar: ${werkzeugStand.saege}`,
   );
   check(
-    'Was die Stufe noch nicht hergibt, steht durchgestrichen und gesperrt da',
+    'Was die Stufe noch nicht hergibt, steht nur ausgegraut und gesperrt da',
     werkzeugStand.kaeseGesperrt && /ab Stufe/.test(werkzeugStand.kaeseText),
     werkzeugStand.kaeseText,
   );

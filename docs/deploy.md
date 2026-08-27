@@ -12,7 +12,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 | Lauscht auf | `0.0.0.0` — im LAN erreichbar | `127.0.0.1` — **nur lokal** |
 | Spielstand | `data/dev/save.json` | `data/prod/save.json` |
 | Token | `data/dev/token` | `data/prod/token` |
-| Regelwerk | v1001 — Sekundenuhren | v20 — echte Zeiten |
+| Regelwerk | v1001 — Sekundenuhren | v21 — echte Zeiten |
 | Werkbank `/admin` | an | **aus** |
 
 Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version

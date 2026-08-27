@@ -143,6 +143,7 @@ ${modules}
     farmView: farmView,
     sizeOf: sizeOf,
     freischaltungenAb: freischaltungenAb,
+    itemUnlockLevel: itemUnlockLevel,
   };
 })();
 `;
