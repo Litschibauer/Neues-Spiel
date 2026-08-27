@@ -354,6 +354,30 @@ $('hof').addEventListener('pointerdown', function (e) {
   schwenkStart(e);
 });
 
+$('hof').addEventListener('wheel', function (e) {
+  if (!isActive || !hatRaster() || bauModus) return;
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    kameraZoomen(e.deltaY < 0 ? 1.12 : 0.89, e.clientX, e.clientY);
+  } else {
+    kamera.x -= e.deltaX;
+    kamera.y -= e.deltaY;
+    kameraAnwenden();
+  }
+}, { passive: false });
+
+var kneifDist = 0;
+$('hof').addEventListener('touchmove', function (e) {
+  if (e.touches.length !== 2) return;
+  e.preventDefault();
+  var a = e.touches[0], b = e.touches[1];
+  var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  var mx = (a.clientX + b.clientX) / 2, my = (a.clientY + b.clientY) / 2;
+  if (kneifDist > 0) kameraZoomen(d / kneifDist, mx, my);
+  kneifDist = d;
+}, { passive: false });
+$('hof').addEventListener('touchend', function () { kneifDist = 0; });
+
 function starteSetzen(plot, text) {
   setzePlot = plot;
   bauModus = true;

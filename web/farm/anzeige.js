@@ -210,10 +210,36 @@ function renderTruck(v) {
 
   knopf.hidden = false;
   knopf.className = 'moebel wagen' + (t.here ? '' : ' unterwegs');
+  setzeMoebel('wagen');
   knopf.innerHTML =
     '<svg class="art" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">' +
     artTruck(!t.here, false) + '</svg>';
   knopf.setAttribute('aria-label', t.here ? 'Lieferwagen wartet' : 'Lieferwagen unterwegs');
+}
+
+var MOEBEL_ORTE = {
+  nachbarn: [0.2, 0.5, 2, 2],
+  brett: [2.6, 0.2, 2.2, 2],
+  lagerhaus: [4.9, 0.2, 2.2, 2],
+  stand: [7, 0.7, 2, 2],
+  wagen: [-0.3, 8.7, 3, 1.7],
+  kiste: [7.2, 3.4, 1.6, 1.6],
+};
+
+function setzeMoebel(id) {
+  var el = $(id);
+  var o = MOEBEL_ORTE[id];
+  if (!hatRaster() || !o) {
+    el.style.left = el.style.top = el.style.width = el.style.height = '';
+    el.style.zIndex = '';
+    return;
+  }
+  var k = moebelKasten(o[0], o[1], o[2], o[3], id === 'brett' || id === 'stand');
+  el.style.left = k.left + '%';
+  el.style.top = k.top + '%';
+  el.style.width = k.width + '%';
+  el.style.height = k.height + '%';
+  el.style.zIndex = String(1 + Math.round(k.tiefe * 2));
 }
 
 function renderMoebel(v) {
@@ -223,12 +249,13 @@ function renderMoebel(v) {
     v.mail.entries.length + (v.silo.upgrade && v.silo.upgrade.affordable ? 1 : 0));
   moebel($('stand'), artStand(), 'Stand', v.orders.filter(function (o) { return o.sold > 0; }).length);
   moebel($('nachbarn'), artNachbarn(), 'Nachbarn', 0);
+  ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(setzeMoebel);
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');
   var ohneOrt = offen.filter(function (k) { return k.gx < 0 || !hatRaster(); });
   kiste.hidden = ohneOrt.length === 0;
-  if (ohneOrt.length > 0) moebel(kiste, artKiste(), 'Kiste', ohneOrt.length);
+  if (ohneOrt.length > 0) { moebel(kiste, artKiste(), 'Kiste', ohneOrt.length); setzeMoebel('kiste'); }
 }
 
 function renderHindernisse(v) {

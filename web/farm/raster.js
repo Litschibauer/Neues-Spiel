@@ -89,6 +89,13 @@ function artBoden(zeigeRaster) {
   var g = raster();
   var out = '';
 
+  var w1 = projiziere(-RAND, -RAND);
+  var w2 = projiziere(g.w + RAND, -RAND);
+  var w3 = projiziere(g.w + RAND, g.h + RAND);
+  var w4 = projiziere(-RAND, g.h + RAND);
+  out += '<path d="M' + w1.x + ' ' + w1.y + 'L' + w2.x + ' ' + w2.y +
+    'L' + w3.x + ' ' + w3.y + 'L' + w4.x + ' ' + w4.y + 'z" fill="var(--wiese, var(--meadow))"/>';
+
   var e1 = projiziere(0, 0);
   var e2 = projiziere(g.w, 0);
   var e3 = projiziere(g.w, g.h);
@@ -157,6 +164,20 @@ function passtHin(plot, gx, gy) {
   return true;
 }
 
+function moebelKasten(gx, gy, w, h, flach) {
+  var k = feldKasten(gx, gy, w, h);
+  var hoch = flach ? 1 : HOCH;
+  var hoehe = (k.unten - k.oben) * hoch;
+  var top = k.unten - hoehe;
+  return {
+    left: k.left,
+    width: k.breite,
+    top: prozent(top, BODEN + 3),
+    height: prozent(hoehe, BODEN + 3),
+    tiefe: gy + h,
+  };
+}
+
 function hindernisKasten(h) {
   var kasten = feldKasten(h.gx, h.gy, h.w, h.h);
   var hoehe = (kasten.unten - kasten.oben) * (h.kind === 'pond' ? 1 : 1.7);
@@ -178,11 +199,15 @@ function feldFuer(plot, feld) {
   };
 }
 
-var kamera = { x: 0, y: 0, gesetzt: false };
+var kamera = { x: 0, y: 0, z: 1, gesetzt: false };
+
+function effZoom() {
+  return zoomFaktor() * kamera.z;
+}
 
 function kameraGrenzen() {
   var k = $('hof').getBoundingClientRect();
-  var z = zoomFaktor();
+  var z = effZoom();
   return { minX: k.width * (1 - z), minY: k.height * (1 - z), w: k.width, h: k.height };
 }
 
@@ -194,22 +219,13 @@ function kameraKlemmen() {
 
 function kameraMitte() {
   var g = kameraGrenzen();
-  var tiles = document.querySelectorAll('#plots .plot');
-  if (tiles.length > 0) {
-    var sx = 0, sy = 0;
-    tiles.forEach(function (t) {
-      sx += (parseFloat(t.style.left) || 0) + (parseFloat(t.style.width) || 0) / 2;
-      sy += (parseFloat(t.style.top) || 0) + (parseFloat(t.style.height) || 0) / 2;
-    });
-    var mx = (sx / tiles.length) / 100 * g.w;
-    var my = (sy / tiles.length) / 100 * g.h;
-    var z = zoomFaktor();
-    kamera.x = g.w / 2 - z * mx;
-    kamera.y = g.h / 2 - z * my;
-  } else {
-    kamera.x = g.minX / 2;
-    kamera.y = g.minY * 0.62;
-  }
+  var raster0 = raster();
+  var mitte = projiziere(raster0.w / 2, raster0.h / 2);
+  var mx = (mitte.x / 100) * g.w;
+  var my = (mitte.y / (BODEN + 3)) * g.h;
+  var z = effZoom();
+  kamera.x = g.w / 2 - z * mx;
+  kamera.y = g.h / 2 - z * my;
   kamera.gesetzt = true;
   kameraAnwenden();
 }
@@ -219,12 +235,23 @@ function kameraAnwenden() {
   if (!w) return;
   if (!kamera.gesetzt) return;
   kameraKlemmen();
-  w.style.transform = 'translate(' + kamera.x + 'px,' + kamera.y + 'px) scale(' + zoomFaktor() + ')';
+  w.style.transform = 'translate(' + kamera.x + 'px,' + kamera.y + 'px) scale(' + effZoom() + ')';
+}
+
+function kameraZoomen(faktor, mx, my) {
+  var alt = effZoom();
+  kamera.z = Math.max(0.75, Math.min(1.8, kamera.z * faktor));
+  var neu = effZoom();
+  var k = $('hof').getBoundingClientRect();
+  var px = mx - k.left, py = my - k.top;
+  kamera.x = px - (px - kamera.x) * (neu / alt);
+  kamera.y = py - (py - kamera.y) * (neu / alt);
+  kameraAnwenden();
 }
 
 function zeigerAufFeld(e) {
   var kasten = $('hof').getBoundingClientRect();
-  var z = zoomFaktor();
+  var z = effZoom();
   var lx = (e.clientX - kasten.left - kamera.x) / z;
   var ly = (e.clientY - kasten.top - kamera.y) / z;
   var px = (lx / kasten.width) * 100;

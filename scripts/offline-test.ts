@@ -2190,7 +2190,10 @@ try {
          clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, button: 0,
        }));
 
-       var stellen = [[.75, .45], [.25, .4], [.5, .35], [.8, .6], [.15, .55], [.6, .85]];
+       var stellen = [];
+       for (var sy = 0.28; sy <= 0.74; sy += 0.06) {
+         for (var sx = 0.25; sx <= 0.78; sx += 0.13) stellen.push([sx, sy]);
+       }
        return new Promise(function (fertig) {
          setTimeout(function () {
            var lang = document.getElementById('setzen').hidden === false
