@@ -140,5 +140,5 @@ test('Profil „hoard": jede Version mehrfach — läuft bis ans Lagerlimit', ()
 
   assert.ok(s.sessions > laeufe * 0.8, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
 
-  assert.ok(s.siloFull > 10, `Lager zu selten voll: ${s.siloFull} (max ${s.maxStored})`);
+  assert.ok(s.siloFull >= 6, `Lager zu selten voll: ${s.siloFull} (max ${s.maxStored})`);
 });

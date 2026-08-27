@@ -4,6 +4,8 @@ import {
   levelStartedAt,
   listingFee,
   nextLevelAt,
+  isTradable,
+  itemUnlockLevel,
   offerLimits,
   recipeMinLevel,
   recipeUnlocked,
@@ -140,6 +142,8 @@ export type StockView = {
   bandMin: number;
   maxAmount: number;
   feePerUnit: number;
+  unlockLevel: number;
+  locked: boolean;
 };
 
 export type ObstacleView = {
@@ -466,19 +470,24 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     if (o.headline) hof.aushang = o;
   }
 
+  const spielerStufe = levelOf(rules, state.xp);
   const stock: StockView[] = rules.items.map((item, i) => {
     const limits = offerLimits(rules, i);
+    const stufe = itemUnlockLevel(rules, i);
+    const gesperrt = rules.offerNeedsLevel === true && spielerStufe < stufe;
     return {
       item: i,
       id: item.id,
       amount: count(state, i),
-      sellable: item.storable && item.npcPrice > 0,
+      sellable: isTradable(rules, i),
       npcPrice: item.npcPrice,
       npcBuyPrice: item.npcBuyPrice,
       bandMax: limits.maxPrice,
       bandMin: limits.minPrice,
       maxAmount: limits.maxAmount,
       feePerUnit: listingFee(rules, i, 1),
+      unlockLevel: stufe,
+      locked: gesperrt,
     };
   });
 

@@ -7,6 +7,7 @@ import {
   listingFee,
   blockiert,
   nextLevel,
+  itemUnlockLevel,
   offerLimits,
   sizeOf,
   recipeUnlocked,
@@ -284,6 +285,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!Number.isInteger(cmd.price) || cmd.price <= 0) throw new SimError('BAD_AMOUNT');
       if (!rules.items[cmd.item]) throw new SimError('NO_SUCH_ITEM');
       if (!isTradable(rules, cmd.item)) throw new SimError('NOT_TRADABLE');
+
+      if (rules.offerNeedsLevel && levelOf(rules, s.xp) < itemUnlockLevel(rules, cmd.item)) {
+        throw new SimError('ITEM_LOCKED');
+      }
 
       if (s.orders.length >= rules.orderSlots) throw new SimError('NO_ORDER_SLOTS');
 

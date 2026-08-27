@@ -1216,6 +1216,51 @@ try {
     `${standDanach.voll} → ${zurueckgeholt} belegt`,
   );
 
+  // Werkzeug verkaufen, gesperrte Ware durchgestrichen
+  await api(`/api/admin/grant?account=${status.accountId}&item=saw&amount=2`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=cheese&amount=3`, 'POST');
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Werkzeug im Postfach');
+  for (let i = 0; i < 4; i++) {
+    const c = await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`);
+    if (!c) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(300);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+
+  const werkzeugStand = await evaluate<{ saege: boolean; kaeseGesperrt: boolean; kaeseText: string }>(
+    cdp,
+    `(function () {
+       document.getElementById('stand').click();
+       var frei = document.querySelector('#stand-kaesten .kaestchen.leer');
+       frei.click();
+       var wahl = [...document.querySelectorAll('#stand-fuellen .kaestchen.wahl')];
+       var saege = wahl.find(function (b) { return b.textContent.indexOf('Säge') >= 0; });
+       var kaese = wahl.find(function (b) { return b.textContent.indexOf('Käse') >= 0; });
+       return {
+         saege: !!saege && !saege.disabled,
+         kaeseGesperrt: !!kaese && kaese.classList.contains('gesperrt') && kaese.disabled,
+         kaeseText: kaese ? kaese.textContent : 'kein Käse',
+       };
+     })()`,
+  );
+  check(
+    'Werkzeug wie die Säge lässt sich anbieten',
+    werkzeugStand.saege,
+    `Säge wählbar: ${werkzeugStand.saege}`,
+  );
+  check(
+    'Was die Stufe noch nicht hergibt, steht durchgestrichen und gesperrt da',
+    werkzeugStand.kaeseGesperrt && /ab Stufe/.test(werkzeugStand.kaeseText),
+    werkzeugStand.kaeseText,
+  );
+  await evaluate(cdp, `document.querySelector('#stand-fuellen .zurueck').click()`);
+  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  await sleep(200);
+
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
     .seq;
   const tapped = Date.now();

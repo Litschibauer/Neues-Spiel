@@ -129,6 +129,7 @@ export type SimErrorCode =
   | 'NO_ORDER_SLOTS'
   | 'PRICE_OUT_OF_BAND'
   | 'TOO_MANY_PER_SLOT'
+  | 'ITEM_LOCKED'
   | 'NO_ANIMAL'
   | 'ANIMAL_TOO_YOUNG'
   | 'NO_ANIMAL_SPACE'

@@ -5,6 +5,7 @@ import {
   PRODUCTION_VERSIONS,
   getRuleset,
   isTradable,
+  itemUnlockLevel,
   offerLimits,
   priceBand,
   validateRuleset,
@@ -22,7 +23,7 @@ function mit(rules: Ruleset, item: number, amount: number, gold = 100_000) {
   const items = base.items.map(() => 0);
   items[item] = amount;
   items[0] = gold;
-  return { ...base, items };
+  return { ...base, items, xp: 10_000_000 };
 }
 
 function idOf(rules: Ruleset, id: string): number {
@@ -117,6 +118,75 @@ test('die Oberfläche bekommt dieselben Grenzen wie die Sim', () => {
   assert.equal(kaese.bandMin, priceBand(V14, CHEESE14).min);
   assert.equal(v.orderSlots, V14.orderSlots);
   assert.equal(v.orderSlotsFree, V14.orderSlots);
+});
+
+test('Werkzeug lässt sich verkaufen — Sägen, Nägel, Bretter', () => {
+  const SAW14 = idOf(V14, 'saw');
+  assert.equal(isTradable(V14, SAW14), false, 'in v14 war Werkzeug noch nicht handelbar');
+
+  const rules = getRuleset(20);
+  const saw = idOf(rules, 'saw');
+  assert.equal(isTradable(rules, saw), true);
+  assert.equal(itemUnlockLevel(rules, saw), 0, 'Werkzeug hat keine Stufensperre');
+
+  const s = mit(rules, saw, 3);
+  const preis = offerLimits(rules, saw).maxPrice;
+  const next = simulate(
+    s,
+    { seq: 1, tick: 0, type: 'LIST_ORDER', item: saw, amount: 2, price: preis },
+    rules,
+  );
+  assert.equal(next.orders.length, 1);
+  assert.equal(next.orders[0]!.item, saw);
+});
+
+test('was die Stufe noch nicht hergibt, lässt sich nicht anbieten', () => {
+  const rules = getRuleset(20);
+  const cheese = idOf(rules, 'cheese');
+  assert.ok(itemUnlockLevel(rules, cheese) > 1, 'Käse sollte eine Stufe brauchen');
+
+  const jung = mit(rules, cheese, 5);
+  jung.xp = 0;
+  const band = offerLimits(rules, cheese);
+  assert.throws(
+    () =>
+      simulate(jung, { seq: 1, tick: 0, type: 'LIST_ORDER', item: cheese, amount: 1, price: band.minPrice }, rules),
+    { code: 'ITEM_LOCKED' },
+  );
+
+  const reif = mit(rules, cheese, 5);
+  assert.equal(
+    simulate(reif, { seq: 1, tick: 0, type: 'LIST_ORDER', item: cheese, amount: 1, price: band.minPrice }, rules).orders.length,
+    1,
+    'mit genug XP muss es gehen',
+  );
+});
+
+test('die Stufensperre gilt nur ab dem Regelwerk, das sie kennt', () => {
+  const v19 = getRuleset(19);
+  assert.equal(v19.offerNeedsLevel, undefined);
+  const wheat19 = idOf(v19, 'wheat');
+  const s = { ...mit(v19, wheat19, 10), xp: 0 };
+  assert.equal(
+    simulate(s, { seq: 1, tick: 0, type: 'LIST_ORDER', item: wheat19, amount: 5, price: 3 }, v19).orders.length,
+    1,
+    'v19 kennt keine Stufensperre — alter Log muss gleich bleiben',
+  );
+});
+
+test('die Oberfläche kreuzt gesperrte Waren an, statt sie zu verstecken', () => {
+  const rules = getRuleset(20);
+  const cheese = idOf(rules, 'cheese');
+  const s = mit(rules, cheese, 5);
+  s.xp = 0;
+  const kaese = farmView(s, rules).stock[cheese]!;
+  assert.equal(kaese.locked, true);
+  assert.ok(kaese.unlockLevel > 1);
+
+  const saw = idOf(rules, 'saw');
+  const saege = farmView(mit(rules, saw, 2), rules).stock[saw]!;
+  assert.equal(saege.sellable, true);
+  assert.equal(saege.locked, false);
 });
 
 test('jede handelbare Ware im neuesten Regelwerk lässt sich auch wirklich hinstellen', () => {

@@ -568,6 +568,10 @@ function standWaren(v) {
   return v.stock.filter(function (e) { return e.sellable && e.amount > 0; });
 }
 
+function standKaufbar(v) {
+  return v.stock.filter(function (e) { return e.sellable && (e.amount > 0 || e.locked); });
+}
+
 function standGrenzen(entry) {
   var deckel = entry.maxAmount > 0 ? entry.maxAmount : entry.amount;
   return {
@@ -703,22 +707,27 @@ function zeichneFuellen(v, box) {
 }
 
 function zeichneWarenwahl(v, box) {
-  var waren = standWaren(v);
+  var waren = standKaufbar(v);
   var raster = document.createElement('div');
   raster.className = 'stand-raster';
 
   waren.forEach(function (entry) {
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'kaestchen wahl';
+    b.className = 'kaestchen wahl' + (entry.locked ? ' gesperrt' : '');
+    b.disabled = entry.locked || entry.amount <= 0;
     b.innerHTML = iconTag(entry.id, 'gross') +
       '<span class="n">' + nameOf(entry.id) + '</span>' +
-      '<span class="rest">du hast ' + entry.amount + '</span>';
-    b.addEventListener('click', function () {
-      var g = standGrenzen(entry);
-      stand = { item: entry.item, amount: g.menge, price: g.max };
-      render();
-    });
+      '<span class="rest">' + (entry.locked
+        ? 'ab Stufe ' + entry.unlockLevel
+        : 'du hast ' + entry.amount) + '</span>';
+    if (!entry.locked && entry.amount > 0) {
+      b.addEventListener('click', function () {
+        var g = standGrenzen(entry);
+        stand = { item: entry.item, amount: g.menge, price: g.max };
+        render();
+      });
+    }
     raster.appendChild(b);
   });
 
@@ -867,6 +876,7 @@ var CODES = {
   REQUEST_NOT_ACTIVE: 'Der wartet noch hinten',
   PRICE_OUT_OF_BAND: 'Preis außerhalb des Bandes',
   TOO_MANY_PER_SLOT: 'Zu viel für ein Kästchen',
+  ITEM_LOCKED: 'Dafür fehlt dir die Stufe',
   NO_ANIMAL: 'Auf dem Platz steht kein Tier',
   ANIMAL_TOO_YOUNG: 'Das Junge ist noch zu klein',
   NO_ANIMAL_SPACE: 'Der Stall ist voll',

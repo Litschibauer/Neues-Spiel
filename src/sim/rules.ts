@@ -136,6 +136,7 @@ export type Ruleset = {
   obstacleKinds?: Record<string, { tool: number; xp: number }>;
   maxOfferAmount?: number;
   maxOfferPrice?: number;
+  offerNeedsLevel?: boolean;
   animalsMustBeBought?: boolean;
   saleGoldInSlot?: boolean;
   helpPerFarmPerDay?: number;
@@ -1020,17 +1021,33 @@ const V19: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const V20: Ruleset = {
   ...V19,
+  version: 20,
+
+  offerNeedsLevel: true,
+
+  items: V19.items.map((it) => {
+    if (it.id === 'plank') return { ...it, npcPrice: 14 };
+    if (it.id === 'nail') return { ...it, npcPrice: 10 };
+    if (it.id === 'saw') return { ...it, npcPrice: 45 };
+    if (it.id === 'shovel') return { ...it, npcPrice: 55 };
+    if (it.id === 'pickaxe') return { ...it, npcPrice: 65 };
+    return it;
+  }),
+};
+
+const DEV: Ruleset = {
+  ...V20,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V19.recipes.map((r) => {
+  recipes: V20.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V19.plots.map((p) => {
+  plots: V20.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1057,16 +1074,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [17, V17],
   [18, V18],
   [19, V19],
+  [20, V20],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 19;
+export const LATEST_RULESET_VERSION = 20;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1189,7 +1207,17 @@ export function passiveInterval(rules: Ruleset, passive: number): number {
 
 export function isTradable(rules: Ruleset, item: number): boolean {
   const def = rules.items[item];
-  return def !== undefined && def.storable && def.npcPrice > 0;
+  return def !== undefined && item !== rules.currency && def.npcPrice > 0;
+}
+
+export function itemUnlockLevel(rules: Ruleset, item: number): number {
+  let lvl: number | null = null;
+  for (let i = 0; i < rules.recipes.length; i++) {
+    if (rules.recipes[i]!.output.item !== item) continue;
+    const m = recipeMinLevel(rules, i);
+    lvl = lvl === null ? m : Math.min(lvl, m);
+  }
+  return lvl ?? 0;
 }
 
 export function priceBand(rules: Ruleset, item: number): { min: number; max: number } {
