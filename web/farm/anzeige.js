@@ -218,12 +218,12 @@ function renderTruck(v) {
 }
 
 var MOEBEL_ORTE = {
-  nachbarn: [0.2, 0.5, 2, 2],
-  brett: [2.6, 0.2, 2.2, 2],
-  lagerhaus: [4.9, 0.2, 2.2, 2],
-  stand: [7, 0.7, 2, 2],
-  wagen: [-0.3, 8.7, 3, 1.7],
-  kiste: [7.2, 3.4, 1.6, 1.6],
+  nachbarn: [0.4, -1.7, 2, 2],
+  brett: [3.6, -1.9, 2.4, 2],
+  lagerhaus: [6.6, -1.9, 2.4, 2],
+  stand: [9.8, -1.7, 2, 2],
+  wagen: [-1.9, 10, 3, 1.7],
+  kiste: [-1.8, 5, 1.6, 1.6],
 };
 
 function setzeMoebel(id) {

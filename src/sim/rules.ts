@@ -992,17 +992,45 @@ const V18: Ruleset = {
   helpXp: 12,
 };
 
-const DEV: Ruleset = {
+const V19: Ruleset = {
   ...V18,
+  version: 19,
+
+  grid: { w: 13, h: 13 },
+
+  plots: V18.plots.map((p) => {
+    if (p.id === 'field-1') return { ...p, place: at(10, 64, 30, 15) };
+    if (p.id === 'field-2') return { ...p, place: at(40, 64, 30, 15) };
+    if (p.id === 'field-3') return { ...p, place: at(70, 64, 28, 15) };
+    return p;
+  }),
+
+  obstacles: [
+    ...(V18.obstacles ?? []),
+    { kind: 'tree', gx: 11, gy: 0, w: 1, h: 1 },
+    { kind: 'tree', gx: 12, gy: 4, w: 1, h: 1 },
+    { kind: 'rock', gx: 10, gy: 6, w: 1, h: 1 },
+    { kind: 'pond', gx: 2, gy: 10, w: 2, h: 2 },
+    { kind: 'tree', gx: 5, gy: 11, w: 1, h: 1 },
+    { kind: 'tree', gx: 9, gy: 11, w: 1, h: 1 },
+    { kind: 'rock', gx: 12, gy: 9, w: 1, h: 1 },
+    { kind: 'tree', gx: 11, gy: 10, w: 1, h: 1 },
+    { kind: 'rock', gx: 4, gy: 4, w: 1, h: 1 },
+    { kind: 'pond', gx: 10, gy: 11, w: 2, h: 2 },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V19,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V18.recipes.map((r) => {
+  recipes: V19.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V18.plots.map((p) => {
+  plots: V19.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1028,16 +1056,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [16, V16],
   [17, V17],
   [18, V18],
+  [19, V19],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 18;
+export const LATEST_RULESET_VERSION = 19;
 
 export const DEV_RULESET_VERSION = 1001;
 

@@ -2735,6 +2735,11 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
        var welt = document.getElementById('welt');
        var hof = document.getElementById('hof');
        var r = hof.getBoundingClientRect();
+       var mid = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+       // Erst reinzoomen (Strg+Rad), sonst gibt es bei Vollsicht nichts zu schwenken.
+       for (var z = 0; z < 5; z++) {
+         hof.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true, bubbles: true, cancelable: true, clientX: mid.clientX, clientY: mid.clientY }));
+       }
        var vorher = welt.style.transform;
        // Auf leerem Boden (obere Ecke) aufsetzen und ziehen — nicht auf einem Feld.
        var x = r.left + r.width * 0.5, y = r.top + r.height * 0.2;

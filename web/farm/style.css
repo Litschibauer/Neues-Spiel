@@ -138,7 +138,7 @@
 
   .hof {
     position: relative; isolation: isolate; aspect-ratio: 100 / 130;
-    width: 100%; max-width: calc((100dvh - 14rem) * 100 / 130); margin-inline: auto;
+    width: 100%; max-width: calc((100dvh - 10rem) * 100 / 130); margin-inline: auto;
     border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
     background: var(--meadow); touch-action: none; cursor: grab;
   }

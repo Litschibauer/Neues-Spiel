@@ -202,7 +202,7 @@ function feldFuer(plot, feld) {
 var kamera = { x: 0, y: 0, z: 1, gesetzt: false };
 
 function effZoom() {
-  return zoomFaktor() * kamera.z;
+  return kamera.z;
 }
 
 function kameraGrenzen() {
@@ -218,14 +218,10 @@ function kameraKlemmen() {
 }
 
 function kameraMitte() {
+  kamera.z = 1;
   var g = kameraGrenzen();
-  var raster0 = raster();
-  var mitte = projiziere(raster0.w / 2, raster0.h / 2);
-  var mx = (mitte.x / 100) * g.w;
-  var my = (mitte.y / (BODEN + 3)) * g.h;
-  var z = effZoom();
-  kamera.x = g.w / 2 - z * mx;
-  kamera.y = g.h / 2 - z * my;
+  kamera.x = g.minX / 2;
+  kamera.y = g.minY / 2;
   kamera.gesetzt = true;
   kameraAnwenden();
 }
@@ -240,7 +236,7 @@ function kameraAnwenden() {
 
 function kameraZoomen(faktor, mx, my) {
   var alt = effZoom();
-  kamera.z = Math.max(0.75, Math.min(1.8, kamera.z * faktor));
+  kamera.z = Math.max(1, Math.min(2.6, kamera.z * faktor));
   var neu = effZoom();
   var k = $('hof').getBoundingClientRect();
   var px = mx - k.left, py = my - k.top;
