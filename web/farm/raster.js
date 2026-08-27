@@ -22,12 +22,21 @@ function reiheBreite(t) {
   return TIEFE_HINTEN + (1 - TIEFE_HINTEN) * t;
 }
 
+var RAND = 2;
+
+function zoomFaktor() {
+  var g = raster();
+  return (g.w + 2 * RAND) / g.w;
+}
+
 function projiziere(gx, gy) {
   var g = raster();
-  var t = gy / g.h;
+  var W = g.w + 2 * RAND;
+  var H = g.h + 2 * RAND;
+  var t = (gy + RAND) / H;
   var breite = reiheBreite(t);
   return {
-    x: 50 + (gx / g.w - 0.5) * 100 * breite,
+    x: 50 + ((gx + RAND) / W - 0.5) * 100 * breite,
     y: HORIZONT + t * (BODEN - HORIZONT),
     breite: breite,
   };
@@ -169,10 +178,57 @@ function feldFuer(plot, feld) {
   };
 }
 
+var kamera = { x: 0, y: 0, gesetzt: false };
+
+function kameraGrenzen() {
+  var k = $('hof').getBoundingClientRect();
+  var z = zoomFaktor();
+  return { minX: k.width * (1 - z), minY: k.height * (1 - z), w: k.width, h: k.height };
+}
+
+function kameraKlemmen() {
+  var g = kameraGrenzen();
+  kamera.x = Math.max(g.minX, Math.min(0, kamera.x));
+  kamera.y = Math.max(g.minY, Math.min(0, kamera.y));
+}
+
+function kameraMitte() {
+  var g = kameraGrenzen();
+  var tiles = document.querySelectorAll('#plots .plot');
+  if (tiles.length > 0) {
+    var sx = 0, sy = 0;
+    tiles.forEach(function (t) {
+      sx += (parseFloat(t.style.left) || 0) + (parseFloat(t.style.width) || 0) / 2;
+      sy += (parseFloat(t.style.top) || 0) + (parseFloat(t.style.height) || 0) / 2;
+    });
+    var mx = (sx / tiles.length) / 100 * g.w;
+    var my = (sy / tiles.length) / 100 * g.h;
+    var z = zoomFaktor();
+    kamera.x = g.w / 2 - z * mx;
+    kamera.y = g.h / 2 - z * my;
+  } else {
+    kamera.x = g.minX / 2;
+    kamera.y = g.minY * 0.62;
+  }
+  kamera.gesetzt = true;
+  kameraAnwenden();
+}
+
+function kameraAnwenden() {
+  var w = $('welt');
+  if (!w) return;
+  if (!kamera.gesetzt) return;
+  kameraKlemmen();
+  w.style.transform = 'translate(' + kamera.x + 'px,' + kamera.y + 'px) scale(' + zoomFaktor() + ')';
+}
+
 function zeigerAufFeld(e) {
   var kasten = $('hof').getBoundingClientRect();
-  var px = ((e.clientX - kasten.left) / kasten.width) * 100;
-  var py = ((e.clientY - kasten.top) / kasten.height) * (BODEN + 3);
+  var z = zoomFaktor();
+  var lx = (e.clientX - kasten.left - kamera.x) / z;
+  var ly = (e.clientY - kasten.top - kamera.y) / z;
+  var px = (lx / kasten.width) * 100;
+  var py = (ly / kasten.height) * (BODEN + 3);
   return feldUnterMaus(px, py);
 }
 

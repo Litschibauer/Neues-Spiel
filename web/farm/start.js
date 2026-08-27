@@ -28,7 +28,7 @@ function refreshLease() {
     .catch(function () {  });
 }
 
-var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1 };
+var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1, stand: 1 };
 
 function netzOk() {
   if (!navigator.onLine) return false;
@@ -161,6 +161,7 @@ function begin(restored) {
     render();
   });
   window.addEventListener('pagehide', function () { save(); stopLive(); });
+  window.addEventListener('resize', function () { if (kamera.gesetzt) kameraAnwenden(); });
   startLive();
 }
 

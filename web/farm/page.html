@@ -83,13 +83,19 @@
 
     <section class="view" id="view-farm">
       <div class="hof" id="hof">
-        <svg class="scene" id="scene" viewBox="0 0 100 130" preserveAspectRatio="none"
-             aria-hidden="true"></svg>
-        <div id="plots"></div>
-        <div id="hindernisse"></div>
-        <div id="kisten"></div>
+        <div class="welt" id="welt">
+          <svg class="scene" id="scene" viewBox="0 0 100 130" preserveAspectRatio="none"
+               aria-hidden="true"></svg>
+          <div id="plots"></div>
+          <div id="hindernisse"></div>
+          <div id="kisten"></div>
+        </div>
         <button class="moebel" id="wagen" hidden></button>
         <button class="moebel" id="brett"></button>
+        <button class="moebel" id="kiste" hidden></button>
+        <button class="moebel" id="lagerhaus"></button>
+        <button class="moebel" id="stand"></button>
+        <button class="moebel" id="nachbarn"></button>
         <button class="zahnrad hammer" id="bauen" aria-label="Bauen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -107,10 +113,6 @@
             <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7 5.4 5.4"/>
           </svg>
         </button>
-        <button class="moebel" id="kiste" hidden></button>
-        <button class="moebel" id="lagerhaus"></button>
-        <button class="moebel" id="stand"></button>
-        <button class="moebel" id="nachbarn"></button>
       </div>
       <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
     </section>

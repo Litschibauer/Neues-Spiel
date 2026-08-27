@@ -236,6 +236,37 @@ $('bauen').addEventListener('click', function () { show('bau'); });
 var setzePlot = -1;
 var ziehen = null;
 var klickSchlucken = 0;
+var schwenk = null;
+
+function schwenkStart(e) {
+  if (!isActive || setzePlot >= 0 || bauModus) return;
+  if (e.button !== undefined && e.button !== 0) return;
+  schwenk = { x: e.clientX, y: e.clientY, kx: kamera.x, ky: kamera.y, aktiv: false };
+}
+
+function schwenkZu(e) {
+  if (!schwenk) return false;
+  var dx = e.clientX - schwenk.x;
+  var dy = e.clientY - schwenk.y;
+  if (!schwenk.aktiv) {
+    if (Math.abs(dx) + Math.abs(dy) < 10) return false;
+    schwenk.aktiv = true;
+    $('hof').classList.add('schwenkt');
+    if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
+  }
+  kamera.x = schwenk.kx + dx;
+  kamera.y = schwenk.ky + dy;
+  kameraAnwenden();
+  return true;
+}
+
+function schwenkEnde() {
+  if (!schwenk) return;
+  var war = schwenk;
+  schwenk = null;
+  $('hof').classList.remove('schwenkt');
+  if (war.aktiv) klickSchlucken = Date.now();
+}
 
 function ziehStart(e, plot, tile) {
   if (!isActive || !hatRaster() || setzePlot >= 0) return;
@@ -307,18 +338,21 @@ function ziehEnde() {
 }
 
 document.addEventListener('pointermove', function (e) {
-  if (!ziehen) return;
-  if (!ziehen.aktiv) {
+  if (ziehen && ziehen.aktiv) { e.preventDefault(); ziehZu(e); return; }
+  if (schwenk) { if (schwenkZu(e)) e.preventDefault(); return; }
+  if (ziehen && !ziehen.aktiv) {
     var weit = Math.abs(e.clientX - ziehen.x) + Math.abs(e.clientY - ziehen.y);
     if (weit > 12) { clearTimeout(ziehen.timer); ziehen = null; }
-    return;
   }
-  e.preventDefault();
-  ziehZu(e);
 }, { passive: false });
 
-document.addEventListener('pointerup', ziehEnde);
-document.addEventListener('pointercancel', ziehEnde);
+document.addEventListener('pointerup', function (e) { ziehEnde(); schwenkEnde(); });
+document.addEventListener('pointercancel', function (e) { ziehEnde(); schwenkEnde(); });
+
+$('hof').addEventListener('pointerdown', function (e) {
+  if (e.target.closest('.zahnrad, .setzen, .moebel')) return;
+  schwenkStart(e);
+});
 
 function starteSetzen(plot, text) {
   setzePlot = plot;

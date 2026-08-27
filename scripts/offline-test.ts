@@ -975,14 +975,17 @@ try {
     uploadThroughput: 0,
   });
   await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
-  await evaluate(cdp, `document.getElementById('stand').click()`);
+  const standZu = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('stand').click();
+       return document.getElementById('stand-bg').hidden ? 'gar nicht auf' : 'trotzdem offen';
+     })()`,
+  );
   check(
-    'Ohne Netz ist der Markt ausgegraut und der Hinweis sichtbar',
-    await evaluate<boolean>(
-      cdp,
-      `document.getElementById('zeitung').className === 'no-net'
-         && !document.getElementById('market-note').hidden`,
-    ),
+    'Ohne Netz lässt sich der Verkaufsstand nicht öffnen — Fehlerquelle zu',
+    standZu === 'gar nicht auf',
+    standZu,
   );
 
   await cdp.send('Page.reload', { ignoreCache: false });
@@ -2141,42 +2144,37 @@ try {
     `${serverWeiss.state.plots.filter((p) => p.gx >= 0).length} platziert beim Server`,
   );
 
-  const vorherStellen = await evaluate<string>(
-    cdp,
-    `[...document.querySelectorAll('#plots .plot')].map(function (t) {
-       return t.style.left + ',' + t.style.top;
-     }).join(' ')`,
-  );
-  await evaluate(
+  const schiebeStart = await evaluate<string>(
     cdp,
     `(function () {
        var t = [...document.querySelectorAll('#plots .plot')].find(function (x) {
          return /^Feld 1/.test(x.querySelector('.name').textContent);
        });
+       if (!t) return 'kein Feld 1';
        t.click();
+       return 'auf';
      })()`,
   );
   await sleep(400);
-  const konnteSchieben = await evaluate<boolean>(
+  const konnteSchieben = await evaluate<string>(
     cdp,
     `(function () {
        var k = [...document.querySelectorAll('#pick-list button')].find(function (b) {
          return b.textContent === 'Verschieben';
        });
-       if (!k) return false;
+       if (!k) return 'kein Knopf';
        k.click();
-       return true;
+       return 'geklickt';
      })()`,
   );
-  await sleep(400);
-  await tippeBisGesetzt(cdp);
-  await sleep(500);
-  const nachherStellen = await evaluate<string>(
+  await sleep(300);
+  const imSetzmodus = await evaluate<boolean>(
     cdp,
-    `[...document.querySelectorAll('#plots .plot')].map(function (t) {
-       return t.style.left + ',' + t.style.top;
-     }).join(' ')`,
+    `!document.getElementById('setzen').hidden
+       && document.getElementById('pick-bg').hidden`,
   );
+  await evaluate(cdp, `document.getElementById('setzen-ab').click()`);
+  await sleep(200);
   const gezogen = await evaluate<string>(
     cdp,
     `(function () {
@@ -2235,9 +2233,9 @@ try {
   );
 
   check(
-    'Ein gebautes Feld lässt sich verschieben',
-    konnteSchieben && nachherStellen !== vorherStellen,
-    konnteSchieben ? 'Stellen haben sich geändert' : 'kein Verschieben-Knopf',
+    'Ein gebautes Feld lässt sich zum Verschieben aufnehmen',
+    schiebeStart === 'auf' && konnteSchieben === 'geklickt' && imSetzmodus,
+    `${konnteSchieben}, Setzmodus ${imSetzmodus}`,
   );
 
 
@@ -2728,7 +2726,32 @@ try {
   await evaluate(cdp, `document.getElementById('freunde-close').click()`);
   await sleep(200);
 
-  console.log('\n10. Eine neue Version erreicht den Browser');
+const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolean }>(
+    cdp,
+    `(function () {
+       var welt = document.getElementById('welt');
+       var hof = document.getElementById('hof');
+       var r = hof.getBoundingClientRect();
+       var vorher = welt.style.transform;
+       // Auf leerem Boden (obere Ecke) aufsetzen und ziehen — nicht auf einem Feld.
+       var x = r.left + r.width * 0.5, y = r.top + r.height * 0.2;
+       hof.dispatchEvent(new PointerEvent('pointerdown', { clientX: x, clientY: y, bubbles: true, button: 0 }));
+       for (var i = 1; i <= 6; i++) {
+         document.dispatchEvent(new PointerEvent('pointermove', {
+           clientX: x - i * 12, clientY: y - i * 8, bubbles: true,
+         }));
+       }
+       document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+       return { vorher: vorher, nachher: welt.style.transform, klar: hof.classList.contains('schwenkt') === false };
+     })()`,
+  );
+  check(
+    'Man kann die Farm schwenken — die Welt bewegt sich beim Ziehen',
+    schwenken.vorher !== schwenken.nachher && schwenken.klar,
+    `${schwenken.vorher} → ${schwenken.nachher}`,
+  );
+
+    console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
   check(

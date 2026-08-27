@@ -140,9 +140,15 @@
     position: relative; isolation: isolate; aspect-ratio: 100 / 130;
     width: 100%; max-width: calc((100dvh - 14rem) * 100 / 130); margin-inline: auto;
     border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
-    background: var(--meadow);
+    background: var(--meadow); touch-action: none; cursor: grab;
   }
-  .hof > .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hof.schwenkt { cursor: grabbing; }
+  .hof.schwenkt .plot, .hof.schwenkt .moebel { pointer-events: none; }
+  .welt {
+    position: absolute; inset: 0; transform-origin: 0 0; will-change: transform;
+    touch-action: none;
+  }
+  .welt > .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
   .plot {
     position: absolute; padding: 0; margin: 0; border: 0; background: none;

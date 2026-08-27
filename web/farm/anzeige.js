@@ -197,7 +197,11 @@ function renderPlots(v) {
       tile.appendChild(up);
     }
   });
+
+  if (hatRaster() && !kamera.gesetzt && $('hof').getBoundingClientRect().width > 0) kameraMitte();
 }
+
+var tileFuerKamera = false;
 
 function renderTruck(v) {
   var knopf = $('wagen');
