@@ -44,6 +44,7 @@ export function canonicalize(state: State): string {
     `chestReadyAt=${state.chestReadyAt}`,
     `boxes=[${state.pendingBoxes.join(',')}]`,
     `geraeumt=[${state.clearedObstacles.join(',')}]`,
+    `expandiert=[${(state.expandiert ?? []).join(',')}]`,
   ].join('|');
 }
 
@@ -75,6 +76,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|PLACE|${c.plot}|${c.gx}|${c.gy}`;
     case 'CLEAR_OBSTACLE':
       return `${c.seq}|${c.tick}|CLEAR_OBSTACLE|${c.index}`;
+    case 'EXPAND':
+      return `${c.seq}|${c.tick}|EXPAND|${c.id}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

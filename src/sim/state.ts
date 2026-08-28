@@ -88,6 +88,7 @@ export type State = {
   nextChestId: number;
   pendingBoxes: readonly number[];
   clearedObstacles: readonly number[];
+  expandiert: readonly string[];
   chestReadyAt: number;
 };
 
@@ -167,6 +168,7 @@ export function initialState(rules: Ruleset): State {
     nextChestId: 1,
     pendingBoxes: [],
     clearedObstacles: [],
+    expandiert: [],
     chestReadyAt: 0,
     skipReadyAt: 0,
   };
@@ -223,6 +225,7 @@ export function normalizeState(s: State): State {
     nextChestId: s.nextChestId ?? 1,
     pendingBoxes: s.pendingBoxes ?? [],
     clearedObstacles: s.clearedObstacles ?? [],
+    expandiert: s.expandiert ?? [],
     chestReadyAt: s.chestReadyAt ?? 0,
   };
 }
@@ -245,6 +248,7 @@ export function cloneState(s: State): State {
     nextChestId: s.nextChestId,
     pendingBoxes: s.pendingBoxes,
     clearedObstacles: s.clearedObstacles,
+    expandiert: s.expandiert ?? [],
     chestReadyAt: s.chestReadyAt,
     skipReadyAt: s.skipReadyAt,
   };

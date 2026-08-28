@@ -167,6 +167,20 @@ export type ChestView = {
   gy: number;
 };
 
+export type ExpansionView = {
+  id: string;
+  gx: number;
+  gy: number;
+  w: number;
+  h: number;
+  minLevel: number;
+  cost: readonly Stack[];
+  unlocked: boolean;
+  reachedLevel: boolean;
+  affordable: boolean;
+  fehlt: readonly Stack[];
+};
+
 export type SiloUpgradeView = {
   label: string;
   cost: readonly Stack[];
@@ -249,6 +263,7 @@ export type FarmView = {
   grid: { w: number; h: number } | null;
   buildable: readonly BuildView[];
   obstacles: readonly ObstacleView[];
+  expansions: readonly ExpansionView[];
 };
 
 export type BuildView = {
@@ -587,6 +602,27 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
           removable: art !== undefined && count(state, art.tool) >= 1,
         },
       ];
+    }),
+    expansions: (rules.expansions ?? []).map((e): ExpansionView => {
+      const level = levelOf(rules, state.xp);
+      const unlocked = state.expandiert.includes(e.id);
+      const reachedLevel = level >= e.minLevel;
+      const fehlt = e.cost
+        .map((c) => ({ item: c.item, amount: c.amount - count(state, c.item) }))
+        .filter((s) => s.amount > 0);
+      return {
+        id: e.id,
+        gx: e.gx,
+        gy: e.gy,
+        w: e.w,
+        h: e.h,
+        minLevel: e.minLevel,
+        cost: e.cost.map((c) => ({ item: c.item, amount: c.amount })),
+        unlocked,
+        reachedLevel,
+        affordable: reachedLevel && fehlt.length === 0,
+        fehlt,
+      };
     }),
     chests: state.chests.slice(0, 1).map((c) => ({
       id: c.id,

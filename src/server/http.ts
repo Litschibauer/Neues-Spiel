@@ -414,6 +414,16 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
   }
 
+  if (url.pathname === '/api/admin/xp') {
+    const amount = Number(url.searchParams.get('amount') ?? '0');
+    if (!Number.isInteger(amount) || amount <= 0) return json(res, 400, { error: 'BAD_XP' });
+    game.grantXp(amount);
+    persist(target, game);
+    events.nudge(target.id, 'farm');
+    console.log(`[admin] ${target.id}: +${amount} XP`);
+    return json(res, 200, { ok: true });
+  }
+
   if (url.pathname === '/api/admin/ruleset') {
     const version = Number(url.searchParams.get('version') ?? '0');
     if (!RULESETS.has(version)) return json(res, 400, { error: 'UNKNOWN_RULESET' });

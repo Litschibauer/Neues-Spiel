@@ -88,6 +88,16 @@ export type Obstacle = {
   h: number;
 };
 
+export type Expansion = {
+  id: string;
+  gx: number;
+  gy: number;
+  w: number;
+  h: number;
+  minLevel: number;
+  cost: readonly ItemStack[];
+};
+
 export type RequestTemplate = {
   id: string;
   wants: readonly ItemStack[];
@@ -134,6 +144,7 @@ export type Ruleset = {
   grid?: GridDef;
   obstacles?: readonly Obstacle[];
   obstacleKinds?: Record<string, { tool: number; xp: number }>;
+  expansions?: readonly Expansion[];
   maxOfferAmount?: number;
   maxOfferPrice?: number;
   offerNeedsLevel?: boolean;
@@ -864,6 +875,9 @@ const V11: Ruleset = {
 const SAW = 12;
 const SHOVEL = 13;
 const PICKAXE = 14;
+const MAP = 15;
+const MALLET = 16;
+const STAKE = 17;
 
 const V12: Ruleset = {
   ...V11,
@@ -1045,17 +1059,80 @@ const V21: Ruleset = {
   buyNeedsLevel: true,
 };
 
-const DEV: Ruleset = {
+const V22: Ruleset = {
   ...V21,
+  version: 22,
+
+  items: [
+    ...V21.items,
+    { id: 'map', storable: false, npcPrice: 40, npcBuyPrice: 0 },
+    { id: 'mallet', storable: false, npcPrice: 30, npcBuyPrice: 0 },
+    { id: 'stake', storable: false, npcPrice: 20, npcBuyPrice: 0 },
+  ],
+
+  grid: { w: 39, h: 13 },
+
+  plots: V21.plots.map((p) => {
+    if (p.id === 'field-1') return { ...p, place: at(3, 64, 7, 15) };
+    if (p.id === 'field-2') return { ...p, place: at(11, 64, 7, 15) };
+    if (p.id === 'field-3') return { ...p, place: at(26, 64, 7, 15) };
+    return p;
+  }),
+
+  chestKinds: [
+    {
+      id: 'holzkiste',
+      label: 'Holzkiste',
+      picks: 1,
+      drops: [
+        { item: PLANK, min: 1, max: 1, weight: 24 },
+        { item: NAIL, min: 1, max: 1, weight: 24 },
+        { item: SAW, min: 1, max: 1, weight: 16 },
+        { item: SHOVEL, min: 1, max: 1, weight: 13 },
+        { item: PICKAXE, min: 1, max: 1, weight: 13 },
+        { item: STAKE, min: 1, max: 2, weight: 12 },
+        { item: MALLET, min: 1, max: 1, weight: 8 },
+        { item: MAP, min: 1, max: 1, weight: 5 },
+      ],
+    },
+    {
+      id: 'eisenkiste',
+      label: 'Eisenkiste',
+      picks: 1,
+      drops: [
+        { item: PLANK, min: 1, max: 1, weight: 16 },
+        { item: NAIL, min: 1, max: 1, weight: 16 },
+        { item: SAW, min: 1, max: 1, weight: 16 },
+        { item: SHOVEL, min: 1, max: 1, weight: 16 },
+        { item: PICKAXE, min: 1, max: 1, weight: 16 },
+        { item: STAKE, min: 1, max: 2, weight: 14 },
+        { item: MALLET, min: 1, max: 2, weight: 12 },
+        { item: MAP, min: 1, max: 1, weight: 8 },
+      ],
+    },
+  ],
+
+  expansions: [
+    { id: 'w1', gx: 13, gy: 0, w: 9, h: 7, minLevel: 5, cost: [want(MAP, 1), want(MALLET, 1), want(STAKE, 2)] },
+    { id: 'w2', gx: 22, gy: 0, w: 9, h: 7, minLevel: 6, cost: [want(MAP, 1), want(MALLET, 2), want(STAKE, 3)] },
+    { id: 'w3', gx: 31, gy: 0, w: 8, h: 7, minLevel: 8, cost: [want(MAP, 2), want(MALLET, 2), want(STAKE, 4)] },
+    { id: 'w4', gx: 13, gy: 7, w: 9, h: 6, minLevel: 9, cost: [want(MAP, 2), want(MALLET, 3), want(STAKE, 5)] },
+    { id: 'w5', gx: 22, gy: 7, w: 9, h: 6, minLevel: 11, cost: [want(MAP, 3), want(MALLET, 4), want(STAKE, 6)] },
+    { id: 'w6', gx: 31, gy: 7, w: 8, h: 6, minLevel: 12, cost: [want(MAP, 4), want(MALLET, 5), want(STAKE, 8)] },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V22,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V20.recipes.map((r) => {
+  recipes: V22.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V20.plots.map((p) => {
+  plots: V22.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1084,16 +1161,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [19, V19],
   [20, V20],
   [21, V21],
+  [22, V22],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 21;
+export const LATEST_RULESET_VERSION = 22;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1116,6 +1194,20 @@ export function gridOf(rules: Ruleset): GridDef | null {
   return rules.grid ?? null;
 }
 
+function ueberlappt(
+  gx: number,
+  gy: number,
+  w: number,
+  h: number,
+  ox: number,
+  oy: number,
+  ow: number,
+  oh: number,
+): boolean {
+  const frei = gx + w <= ox || ox + ow <= gx || gy + h <= oy || oy + oh <= gy;
+  return !frei;
+}
+
 export function blockiert(
   rules: Ruleset,
   gx: number,
@@ -1123,17 +1215,26 @@ export function blockiert(
   w: number,
   h: number,
   geraeumt: readonly number[] = [],
+  expandiert: readonly string[] = [],
 ): boolean {
   for (const [i, hindernis] of (rules.obstacles ?? []).entries()) {
     if (geraeumt.includes(i)) continue;
-    const frei =
-      gx + w <= hindernis.gx ||
-      hindernis.gx + hindernis.w <= gx ||
-      gy + h <= hindernis.gy ||
-      hindernis.gy + hindernis.h <= gy;
-    if (!frei) return true;
+    if (ueberlappt(gx, gy, w, h, hindernis.gx, hindernis.gy, hindernis.w, hindernis.h)) return true;
+  }
+  for (const feld of rules.expansions ?? []) {
+    if (expandiert.includes(feld.id)) continue;
+    if (ueberlappt(gx, gy, w, h, feld.gx, feld.gy, feld.w, feld.h)) return true;
   }
   return false;
+}
+
+export function expansionAffordable(
+  rules: Ruleset,
+  feld: Expansion,
+  level: number,
+  hat: (item: number) => number,
+): boolean {
+  return level >= feld.minLevel && feld.cost.every((c) => hat(c.item) >= c.amount);
 }
 
 export function slotsAt(rules: Ruleset, plot: number, level: number): number {

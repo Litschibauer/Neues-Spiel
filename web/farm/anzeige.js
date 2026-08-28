@@ -10,6 +10,7 @@ function render() {
   renderTruck(v);
   renderMoebel(v);
   renderHindernisse(v);
+  renderErweiterungen(v);
   renderKisten(v);
   renderRequests(v);
   renderMail(v);
@@ -22,6 +23,7 @@ function render() {
     && $('stand-bg').contains(document.activeElement);
   if (!typing) renderStand(v);
   renderAusbau(v);
+  if (view === 'erweiterung') renderErweiterungSheet(v);
   renderHofinfo(v);
   renderBadges(v);
   renderBauliste(v);
@@ -280,6 +282,94 @@ function renderHindernisse(v) {
     knopf.addEventListener('click', function () { tippeHindernis(h); });
     box.appendChild(knopf);
   });
+}
+
+function sperrGebuesch(e) {
+  var out = '';
+  var n = Math.max(3, Math.round(e.w * e.h / 10));
+  var seed = (e.gx * 31 + e.gy * 17) % 97;
+  for (var i = 0; i < n; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var cx = 8 + (seed % 84);
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var cy = 20 + (seed % 70);
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var r = 7 + (seed % 6);
+    out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#3f6b3a"/>' +
+      '<circle cx="' + cx + '" cy="' + (cy - r * 0.5) + '" r="' + (r * 0.7) + '" fill="#4f7f45"/>';
+  }
+  return out;
+}
+
+function renderErweiterungen(v) {
+  var box = $('erweiterungen');
+  if (!box) return;
+  box.textContent = '';
+  if (!hatRaster()) return;
+
+  (v.expansions || []).forEach(function (e) {
+    if (e.unlocked) return;
+    var kasten = moebelKasten(e.gx, e.gy, e.w, e.h, true);
+    var knopf = document.createElement('button');
+    knopf.className = 'feld-sperre' + (e.reachedLevel ? ' bereit' : ' fern');
+    knopf.style.left = kasten.left + '%';
+    knopf.style.top = kasten.top + '%';
+    knopf.style.width = kasten.width + '%';
+    knopf.style.height = kasten.height + '%';
+    knopf.style.zIndex = String(2 + Math.round(kasten.tiefe * 2));
+    knopf.innerHTML =
+      '<svg class="wuchs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+      sperrGebuesch(e) + '</svg>' +
+      '<span class="plakette">' + (e.reachedLevel
+        ? '<b>Neues Land</b>' + (e.affordable ? '<em>frei machen</em>' : '<em>Werkzeug fehlt</em>')
+        : '<b>ab Stufe ' + e.minLevel + '</b>') + '</span>';
+    knopf.setAttribute('aria-label', 'Neues Land, ab Stufe ' + e.minLevel);
+    knopf.addEventListener('click', function () { oeffneErweiterung(e.id); });
+    box.appendChild(knopf);
+  });
+}
+
+var offenesFeld = null;
+
+function oeffneErweiterung(id) {
+  offenesFeld = id;
+  show('erweiterung');
+}
+
+function renderErweiterungSheet(v) {
+  var box = $('erweiterung-inhalt');
+  if (!box) return;
+  var e = null;
+  (v.expansions || []).forEach(function (x) { if (x.id === offenesFeld) e = x; });
+  if (!e || e.unlocked) { show('farm'); return; }
+
+  var kostenHtml = e.cost.map(function (c) {
+    var hat = v.stock[c.item] ? v.stock[c.item].amount : 0;
+    var ok = hat >= c.amount;
+    return '<div class="zeile' + (ok ? ' ok' : ' fehlt') + '">' +
+      itemIcon(c.item, 'gross') +
+      '<span class="n">' + itemName(c.item) + '</span>' +
+      '<span class="m">' + hat + ' / ' + c.amount + '</span></div>';
+  }).join('');
+
+  box.innerHTML =
+    '<p class="lead">Dieses Stück Land ist überwuchert. Vermiss es mit Landkarte, ' +
+    'Bauhammer und Steckpfahl, dann gehört es zu deinem Hof.</p>' +
+    (e.reachedLevel ? '' : '<p class="warn">Erst ab Stufe ' + e.minLevel + '.</p>') +
+    '<div class="kosten">' + kostenHtml + '</div>';
+
+  var knopf = document.createElement('button');
+  knopf.className = 'primär';
+  knopf.disabled = !e.affordable;
+  knopf.textContent = e.affordable ? 'Land freischalten'
+    : !e.reachedLevel ? 'ab Stufe ' + e.minLevel
+    : 'Werkzeug fehlt';
+  knopf.addEventListener('click', function () {
+    var res = client.expand(e.id);
+    act('Neues Land freigeschaltet', res, 'stufe');
+    if (res.ok) { offenesFeld = null; show('farm'); attempt(true); }
+  });
+  box.appendChild(knopf);
 }
 
 function renderKisten(v) {
@@ -887,4 +977,6 @@ var CODES = {
   OFFER_GONE: 'Jemand war schneller',
   PLOT_BUSY: 'Läuft noch',
   MAX_LEVEL: 'Voll ausgebaut',
+  ALREADY_EXPANDED: 'Schon freigeschaltet',
+  NO_SUCH_EXPANSION: 'Kein Land zum Freischalten',
 };

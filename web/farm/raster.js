@@ -150,6 +150,19 @@ function passtHin(plot, gx, gy) {
     if (!offen) return false;
   }
 
+  var felder = rules.expansions || [];
+  var frei2 = (client.preview().expandiert) || [];
+  for (var e = 0; e < felder.length; e++) {
+    var ex = felder[e];
+    if (frei2.indexOf(ex.id) >= 0) continue;
+    var raus =
+      gx + groesse.w <= ex.gx ||
+      ex.gx + ex.w <= gx ||
+      gy + groesse.h <= ex.gy ||
+      ex.gy + ex.h <= gy;
+    if (!raus) return false;
+  }
+
   var andere = client.preview().plots;
   for (var i = 0; i < andere.length; i++) {
     if (i === plot || andere[i].gx < 0) continue;

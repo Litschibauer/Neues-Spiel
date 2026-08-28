@@ -1261,6 +1261,47 @@ try {
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
   await sleep(200);
 
+  // Das rechte Zweidrittel: überwuchert, gesperrt, in sechs Feldern
+  const sperren = await evaluate<{ anzahl: number; text: string }>(
+    cdp,
+    `(function () {
+       var s = [...document.querySelectorAll('#erweiterungen .feld-sperre')];
+       return { anzahl: s.length, text: s.map(function (x) { return x.textContent; }).join(' | ') };
+     })()`,
+  );
+  check(
+    'Das rechte Zweidrittel liegt in sechs gesperrten Feldern',
+    sperren.anzahl === 6,
+    `${sperren.anzahl} Felder`,
+  );
+  check(
+    'Ein gesperrtes Feld zeigt seine Stufe',
+    /ab Stufe/.test(sperren.text),
+    sperren.text.slice(0, 60),
+  );
+
+  const sperrSheet = await evaluate<{ auf: boolean; text: string; gesperrt: boolean }>(
+    cdp,
+    `(function () {
+       document.querySelector('#erweiterungen .feld-sperre').click();
+       var auf = !document.getElementById('erweiterung-bg').hidden;
+       var box = document.getElementById('erweiterung-inhalt');
+       var knopf = box.querySelector('.primär');
+       return { auf: auf, text: box.textContent, gesperrt: !!knopf && knopf.disabled };
+     })()`,
+  );
+  check(
+    'Antippen öffnet das Freischalt-Fenster mit Landkarte, Bauhammer und Steckpfahl',
+    sperrSheet.auf &&
+      /Landkarte/.test(sperrSheet.text) &&
+      /Bauhammer/.test(sperrSheet.text) &&
+      /Steckpfahl/.test(sperrSheet.text),
+    sperrSheet.text.slice(0, 80),
+  );
+  check('Solange die Stufe fehlt, ist der Freischalt-Knopf gesperrt', sperrSheet.gesperrt);
+  await evaluate(cdp, `document.getElementById('erweiterung-close').click()`);
+  await sleep(150);
+
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
     .seq;
   const tapped = Date.now();
@@ -2804,7 +2845,51 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `${schwenken.vorher} → ${schwenken.nachher}`,
   );
 
-    console.log('\n10. Eine neue Version erreicht den Browser');
+  console.log('\n9z. Neues Land vermessen und freischalten');
+  await api(`/api/admin/grant?account=${status.accountId}&item=map&amount=2`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=mallet&amount=2`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=stake&amount=3`, 'POST');
+  await api(`/api/admin/xp?account=${status.accountId}&amount=1200`, 'POST');
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Vermessungszeug im Postfach');
+  for (let i = 0; i < 6; i++) {
+    const c = await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`);
+    if (!c) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(250);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+  await evaluate(cdp, `(function () {
+    var f = document.getElementById('stufe-feier');
+    if (f && !f.hidden) { var w = document.getElementById('stufe-weiter'); if (w) w.click(); }
+  })()`);
+  await sleep(200);
+
+  await waitFor(
+    cdp,
+    `document.querySelector('#erweiterungen .feld-sperre.bereit') !== null`,
+    'ein Feld ist bereit zum Freischalten',
+  );
+  const freigeschaltet = await evaluate<{ vorher: number; nachher: number }>(
+    cdp,
+    `(async function () {
+       var vorher = document.querySelectorAll('#erweiterungen .feld-sperre').length;
+       document.querySelector('#erweiterungen .feld-sperre.bereit').click();
+       await new Promise(function (r) { setTimeout(r, 250); });
+       document.querySelector('#erweiterung-inhalt .primär').click();
+       await new Promise(function (r) { setTimeout(r, 700); });
+       return { vorher: vorher, nachher: document.querySelectorAll('#erweiterungen .feld-sperre').length };
+     })()`,
+  );
+  check(
+    'Freischalten macht aus einem gesperrten Feld freies Farmland',
+    freigeschaltet.nachher === freigeschaltet.vorher - 1,
+    `${freigeschaltet.vorher} → ${freigeschaltet.nachher} gesperrte Felder`,
+  );
+
+  console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
   check(

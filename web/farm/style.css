@@ -271,6 +271,48 @@
   #nachbarn { left: 5%; top: 8%; width: 16%; height: 11%; z-index: 60; }
   .kein-raster #nachbarn { top: 30%; }
 
+  .feld-sperre {
+    position: absolute; border: none; padding: 0; cursor: pointer;
+    border-radius: 10px; overflow: hidden;
+    background:
+      repeating-linear-gradient(45deg, rgba(70,54,30,.28) 0 6px, rgba(70,54,30,.12) 6px 12px),
+      #365a30;
+    box-shadow: inset 0 0 0 3px #6b5330, inset 0 0 0 5px rgba(0,0,0,.25),
+      0 2px 6px rgba(0,0,0,.3);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .feld-sperre .wuchs { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .9; }
+  .feld-sperre .plakette {
+    position: relative; z-index: 1; text-align: center; line-height: 1.15;
+    background: rgba(20,16,10,.72); color: #fff; border-radius: 8px;
+    padding: .3rem .55rem; font-size: .66rem; max-width: 86%;
+    box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  }
+  .feld-sperre .plakette b { display: block; font-weight: 800; font-size: .74rem; }
+  .feld-sperre .plakette em { font-style: normal; color: #ffd27a; font-weight: 700; }
+  .feld-sperre.bereit { box-shadow: inset 0 0 0 3px var(--accent), inset 0 0 0 5px rgba(0,0,0,.2),
+      0 0 10px rgba(120,200,120,.45); }
+  .feld-sperre.bereit .plakette em { color: #b6f0a8; }
+  .hof.schwenkt .feld-sperre { pointer-events: none; }
+  .hof.setzt .feld-sperre { opacity: .35; pointer-events: none; }
+
+  #erweiterung-inhalt .lead { font-size: .82rem; color: var(--muted); margin: 0 0 .6rem; }
+  #erweiterung-inhalt .warn { color: var(--gold); font-weight: 700; margin: 0 0 .6rem; }
+  #erweiterung-inhalt .kosten { display: flex; flex-direction: column; gap: .4rem; margin-bottom: .8rem; }
+  #erweiterung-inhalt .kosten .zeile {
+    display: flex; align-items: center; gap: .5rem;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .4rem .6rem;
+  }
+  #erweiterung-inhalt .kosten .zeile .n { flex: 1; font-weight: 650; }
+  #erweiterung-inhalt .kosten .zeile .m { font-variant-numeric: tabular-nums; font-weight: 700; }
+  #erweiterung-inhalt .kosten .zeile.ok .m { color: var(--accent); }
+  #erweiterung-inhalt .kosten .zeile.fehlt .m { color: var(--bad); }
+  #erweiterung-inhalt .primär {
+    width: 100%; height: 2.6rem; border: none; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent); font-weight: 750; font-size: .9rem;
+  }
+  #erweiterung-inhalt .primär[disabled] { opacity: .45; }
+
   .zettel {
     background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
     padding: .55rem .65rem; display: flex; flex-direction: column; gap: .4rem;

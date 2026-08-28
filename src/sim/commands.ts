@@ -62,6 +62,8 @@ export type PlaceCommand = CommandBase & {
   gy: number;
 };
 
+export type ExpandCommand = CommandBase & { type: 'EXPAND'; id: string };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -82,6 +84,7 @@ export type Command =
   | OpenChestCommand
   | UpgradeSiloCommand
   | PlaceCommand
+  | ExpandCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -102,6 +105,8 @@ export type SimErrorCode =
   | 'NOT_PLACED'
   | 'NO_SUCH_OBSTACLE'
   | 'ALREADY_CLEARED'
+  | 'NO_SUCH_EXPANSION'
+  | 'ALREADY_EXPANDED'
   | 'NEEDS_TOOL'
   | 'TRUCK_AWAY'
   | 'NO_WAYBILL'

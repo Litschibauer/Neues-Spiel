@@ -547,7 +547,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         throw new SimError('OFF_GRID');
       }
 
-      if (blockiert(rules, cmd.gx, cmd.gy, groesse.w, groesse.h, s.clearedObstacles)) {
+      if (blockiert(rules, cmd.gx, cmd.gy, groesse.w, groesse.h, s.clearedObstacles, s.expandiert)) {
         throw new SimError('CELL_TAKEN');
       }
 
@@ -564,6 +564,24 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
 
       const next = cloneState(s);
       next.plots = replaceAt(s.plots, cmd.plot, { ...plot, gx: cmd.gx, gy: cmd.gy });
+      return next;
+    }
+
+    case 'EXPAND': {
+      const feld = rules.expansions?.find((e) => e.id === cmd.id);
+      if (!feld) throw new SimError('NO_SUCH_EXPANSION');
+      if (s.expandiert.includes(feld.id)) throw new SimError('ALREADY_EXPANDED');
+      if (levelOf(rules, s.xp) < feld.minLevel) throw new SimError('PLAYER_LEVEL_TOO_LOW');
+      for (const c of feld.cost) {
+        if (count(s, c.item) < c.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+      }
+
+      const next = cloneState(s);
+      next.items = addItems(
+        s.items,
+        feld.cost.map((c) => [c.item, -c.amount] as [number, number]),
+      );
+      next.expandiert = s.expandiert.concat(feld.id);
       return next;
     }
 

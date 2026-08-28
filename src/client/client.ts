@@ -97,6 +97,10 @@ export class Client {
     return this.apply({ type: 'CLEAR_OBSTACLE', index } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  expand(id: string): ActionResult {
+    return this.apply({ type: 'EXPAND', id } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buy(plot: number): ActionResult {
     return this.apply({ type: 'BUY', plot } as Omit<Command, 'seq' | 'tick'>);
   }

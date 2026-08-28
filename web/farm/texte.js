@@ -4,6 +4,7 @@ var NAMES = {
   mill: 'Mühle', dairy: 'Molkerei', 'cow-feed': 'Kuhfutter',
   plank: 'Bretter', nail: 'Nägel',
   saw: 'Säge', shovel: 'Schaufel', pickaxe: 'Spitzhacke',
+  map: 'Landkarte', mallet: 'Bauhammer', stake: 'Steckpfahl',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

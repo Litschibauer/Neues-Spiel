@@ -123,7 +123,7 @@ export const AUFS_RASTER: MigrationStep = (state, from, to) => {
     if (p.level <= 0) return true;
     if (p.gx < 0) return false;
     const g = sizeOf(to, i);
-    return !blockiert(to, p.gx, p.gy, g.w, g.h, gewachsen.clearedObstacles);
+    return !blockiert(to, p.gx, p.gy, g.w, g.h, gewachsen.clearedObstacles, gewachsen.expandiert);
   });
   if (stimmt) return gewachsen;
 
@@ -132,7 +132,7 @@ export const AUFS_RASTER: MigrationStep = (state, from, to) => {
 
   const passt = (gx: number, gy: number, w: number, h: number): boolean => {
     if (gx < 0 || gy < 0 || gx + w > raster.w || gy + h > raster.h) return false;
-    if (blockiert(to, gx, gy, w, h, gewachsen.clearedObstacles)) return false;
+    if (blockiert(to, gx, gy, w, h, gewachsen.clearedObstacles, gewachsen.expandiert)) return false;
     for (let y = gy; y < gy + h; y++) {
       for (let x = gx; x < gx + w; x++) if (belegt[y]![x]) return false;
     }
@@ -214,6 +214,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['18->19', AUFS_RASTER],
   ['19->20', AUFS_RASTER],
   ['20->21', AUFS_RASTER],
+  ['21->22', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -246,6 +247,11 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   }
   for (const i of state.clearedObstacles) {
     if (!rules.obstacles?.[i]) problems.push(`geräumtes Hindernis ${i} gibt es nicht`);
+  }
+  for (const id of state.expandiert ?? []) {
+    if (!rules.expansions?.some((e) => e.id === id)) {
+      problems.push(`freigeschaltetes Feld ${id} gibt es nicht`);
+    }
   }
 
   if (state.orders.length > rules.orderSlots) {
@@ -350,8 +356,8 @@ export function assertInvariants(state: State, rules: Ruleset): void {
       if (p.gx + groesse.w > raster.w || p.gy + groesse.h > raster.h || p.gy < 0) {
         problems.push(`Platz ${i} steht außerhalb des Rasters: ${p.gx},${p.gy}`);
       }
-      if (blockiert(rules, p.gx, p.gy, groesse.w, groesse.h, state.clearedObstacles)) {
-        problems.push(`Platz ${i} steht auf einem Hindernis`);
+      if (blockiert(rules, p.gx, p.gy, groesse.w, groesse.h, state.clearedObstacles, state.expandiert)) {
+        problems.push(`Platz ${i} steht auf einem Hindernis oder gesperrten Feld`);
       }
       for (const [j, other] of state.plots.entries()) {
         if (j <= i || other.gx < 0) continue;
