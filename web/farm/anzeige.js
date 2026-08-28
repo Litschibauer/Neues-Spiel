@@ -130,7 +130,9 @@ function renderPlots(v) {
     var tile = document.createElement('button');
     tile.className = 'plot' + (p.done ? ' ripe' : '') + (p.idle ? ' locked' : '') +
       (p.blocked === 'level' ? ' gated' : '');
-    tile.disabled = p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false;
+    tile.disabled = (p.stall || p.capacity > 1)
+      ? false
+      : (p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false);
     tile.style.left = ort.left + '%';
     tile.style.top = ort.top + '%';
     tile.style.width = ort.width + '%';

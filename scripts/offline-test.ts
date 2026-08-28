@@ -1614,6 +1614,25 @@ try {
     nachKauf.titel,
   );
 
+  // Bug-Schutz: Stall mit lauter Küken bleibt anklickbar
+  await evaluate(cdp, `document.getElementById('pick-close').click()`);
+  await sleep(200);
+  const jungKlick = await evaluate<{ disabled: boolean; guiAuf: boolean }>(
+    cdp,
+    `(function () {
+       var t = ${stallTile};
+       var disabled = !t || t.disabled;
+       if (t && !t.disabled) t.click();
+       return { disabled: !!disabled, guiAuf: !document.getElementById('pick-bg').hidden };
+     })()`,
+  );
+  check(
+    'Der Stall bleibt anklickbar, auch wenn nur Küken drin sind',
+    !jungKlick.disabled && jungKlick.guiAuf,
+    `disabled=${jungKlick.disabled}, GUI offen=${jungKlick.guiAuf}`,
+  );
+  await sleep(150);
+
   await api(`/api/admin/time?account=${status.accountId}&seconds=600`, 'POST');
   try {
     await waitFor(
