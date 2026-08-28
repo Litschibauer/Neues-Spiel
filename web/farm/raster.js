@@ -1,7 +1,4 @@
-var HORIZONT = 30;
-var BODEN = 127;
-var TIEFE_HINTEN = 0.66;
-var HOCH = 1.55;
+var BAND = 3;
 
 function hatRaster() {
   return !!rules.grid;
@@ -11,6 +8,10 @@ function raster() {
   return rules.grid || { w: 1, h: 1 };
 }
 
+function gesamtReihen() {
+  return raster().h + BAND;
+}
+
 function altePlatzierung(i) {
   var ort = rules.plots[i] && rules.plots[i].place;
   if (!ort) return { left: 2 + ((i % 3) * 32), width: 30, top: 4 + Math.floor(i / 3) * 24,
@@ -18,70 +19,49 @@ function altePlatzierung(i) {
   return { left: ort.x, width: ort.w, top: ort.y, height: ort.h, tiefe: ort.y };
 }
 
-function reiheBreite(t) {
-  return TIEFE_HINTEN + (1 - TIEFE_HINTEN) * t;
-}
-
-var RAND = 2;
-
-function zoomFaktor() {
-  var g = raster();
-  return (g.w + 2 * RAND) / g.w;
-}
-
 function projiziere(gx, gy) {
-  var g = raster();
-  var W = g.w + 2 * RAND;
-  var H = g.h + 2 * RAND;
-  var t = (gy + RAND) / H;
-  var breite = reiheBreite(t);
   return {
-    x: 50 + ((gx + RAND) / W - 0.5) * 100 * breite,
-    y: HORIZONT + t * (BODEN - HORIZONT),
-    breite: breite,
+    x: (gx / raster().w) * 100,
+    y: ((gy + BAND) / gesamtReihen()) * 100,
   };
 }
+
+function zellB() { return 100 / raster().w; }
+function zellH() { return 100 / gesamtReihen(); }
 
 function feldKasten(gx, gy, w, h) {
-  var g = raster();
-  var oben = projiziere(gx, gy);
-  var unten = projiziere(gx, gy + h);
-  var links = Math.min(oben.x, unten.x + ((gx / g.w - 0.5) * 0 || 0));
-  var untenLinks = projiziere(gx, gy + h);
-  var untenRechts = projiziere(gx + w, gy + h);
-
+  var p = projiziere(gx, gy);
   return {
-    left: Math.min(oben.x, untenLinks.x),
-    breite: untenRechts.x - untenLinks.x,
-    oben: oben.y,
-    unten: unten.y,
-    skala: unten.breite,
-    linksOben: links,
+    left: p.x,
+    top: p.y,
+    breite: w * zellB(),
+    hoehe: h * zellH(),
+    tiefe: gy + h,
   };
-}
-
-function prozent(wert, gesamt) {
-  return (wert * 100) / gesamt;
 }
 
 function plotKasten(i, plot) {
   if (i >= 0 && !hatRaster()) return altePlatzierung(i);
-  var g = raster();
   var def = i >= 0 ? rules.plots[i] : null;
   var groesse = (def && def.size) || { w: 1, h: 1 };
   var k = feldKasten(plot.gx, plot.gy, groesse.w, groesse.h);
-
-  var hoch = def && def.flat ? 1 : HOCH;
-  var hoehe = (k.unten - k.oben) * hoch;
-  var top = k.unten - hoehe;
-
   return {
     left: k.left,
     width: k.breite,
-    top: prozent(top, BODEN + 3),
-    height: prozent(hoehe, BODEN + 3),
+    top: k.top,
+    height: k.hoehe,
     tiefe: plot.gy + groesse.h,
   };
+}
+
+function moebelKasten(gx, gy, w, h) {
+  var k = feldKasten(gx, gy, w, h);
+  return { left: k.left, width: k.breite, top: k.top, height: k.hoehe, tiefe: gy + h };
+}
+
+function hindernisKasten(h) {
+  var k = feldKasten(h.gx, h.gy, h.w, h.h);
+  return { left: k.left, width: k.breite, top: k.top, height: k.hoehe, tiefe: h.gy + h.h };
 }
 
 function artBoden(zeigeRaster) {
@@ -89,44 +69,31 @@ function artBoden(zeigeRaster) {
   var g = raster();
   var out = '';
 
-  var w1 = projiziere(-RAND, -RAND);
-  var w2 = projiziere(g.w + RAND, -RAND);
-  var w3 = projiziere(g.w + RAND, g.h + RAND);
-  var w4 = projiziere(-RAND, g.h + RAND);
-  out += '<path d="M' + w1.x + ' ' + w1.y + 'L' + w2.x + ' ' + w2.y +
-    'L' + w3.x + ' ' + w3.y + 'L' + w4.x + ' ' + w4.y + 'z" fill="var(--wiese, var(--meadow))"/>';
-
-  var e1 = projiziere(0, 0);
-  var e2 = projiziere(g.w, 0);
-  var e3 = projiziere(g.w, g.h);
-  var e4 = projiziere(0, g.h);
-  out += '<path d="M' + e1.x + ' ' + e1.y + 'L' + e2.x + ' ' + e2.y +
-    'L' + e3.x + ' ' + e3.y + 'L' + e4.x + ' ' + e4.y + 'z" fill="var(--acker)"/>';
+  var bandOben = projiziere(0, -BAND).y;
+  var ackerOben = projiziere(0, 0).y;
+  out += '<rect x="0" y="' + bandOben + '" width="100" height="' + (ackerOben - bandOben) +
+    '" fill="var(--path)"/>';
+  out += '<rect x="0" y="' + ackerOben + '" width="100" height="' + (100 - ackerOben) +
+    '" fill="var(--acker)"/>';
 
   for (var y = 0; y < g.h; y++) {
     for (var x = 0; x < g.w; x++) {
       if ((x + y) % 2 === 1) continue;
       var a = projiziere(x, y);
-      var b = projiziere(x + 1, y);
-      var c = projiziere(x + 1, y + 1);
-      var d = projiziere(x, y + 1);
-      out += '<path d="M' + a.x + ' ' + a.y + 'L' + b.x + ' ' + b.y +
-        'L' + c.x + ' ' + c.y + 'L' + d.x + ' ' + d.y + 'z" fill="var(--acker-hell)"/>';
+      var b = projiziere(x + 1, y + 1);
+      out += '<rect x="' + a.x + '" y="' + a.y + '" width="' + (b.x - a.x) +
+        '" height="' + (b.y - a.y) + '" fill="var(--acker-hell)"/>';
     }
   }
 
   if (zeigeRaster) {
     for (var gy = 0; gy <= g.h; gy++) {
-      var l = projiziere(0, gy);
-      var r = projiziere(g.w, gy);
-      out += '<path d="M' + l.x + ' ' + l.y + 'L' + r.x + ' ' + r.y +
-        '" stroke="var(--raster)" stroke-width=".4"/>';
+      var ly = projiziere(0, gy).y;
+      out += '<path d="M0 ' + ly + 'H100" stroke="var(--raster)" stroke-width=".3"/>';
     }
-    for (var gx2 = 0; gx2 <= g.w; gx2++) {
-      var o = projiziere(gx2, 0);
-      var u = projiziere(gx2, g.h);
-      out += '<path d="M' + o.x + ' ' + o.y + 'L' + u.x + ' ' + u.y +
-        '" stroke="var(--raster)" stroke-width=".4"/>';
+    for (var gx = 0; gx <= g.w; gx++) {
+      var lx = projiziere(gx, 0).x;
+      out += '<path d="M' + lx + ' ' + ackerOben + 'V100" stroke="var(--raster)" stroke-width=".3"/>';
     }
   }
 
@@ -177,32 +144,6 @@ function passtHin(plot, gx, gy) {
   return true;
 }
 
-function moebelKasten(gx, gy, w, h, flach) {
-  var k = feldKasten(gx, gy, w, h);
-  var hoch = flach ? 1 : HOCH;
-  var hoehe = (k.unten - k.oben) * hoch;
-  var top = k.unten - hoehe;
-  return {
-    left: k.left,
-    width: k.breite,
-    top: prozent(top, BODEN + 3),
-    height: prozent(hoehe, BODEN + 3),
-    tiefe: gy + h,
-  };
-}
-
-function hindernisKasten(h) {
-  var kasten = feldKasten(h.gx, h.gy, h.w, h.h);
-  var hoehe = (kasten.unten - kasten.oben) * (h.kind === 'pond' ? 1 : 1.7);
-  return {
-    left: kasten.left,
-    width: kasten.breite,
-    top: prozent(kasten.unten - hoehe, BODEN + 3),
-    height: prozent(hoehe, BODEN + 3),
-    tiefe: h.gy + h.h,
-  };
-}
-
 function feldFuer(plot, feld) {
   var g = rules.grid;
   var groesse = rules.plots[plot].size || { w: 1, h: 1 };
@@ -218,59 +159,71 @@ function effZoom() {
   return kamera.z;
 }
 
-function kameraGrenzen() {
+function weltMasse() {
   var k = $('hof').getBoundingClientRect();
   var z = effZoom();
-  return { minX: k.width * (1 - z), minY: k.height * (1 - z), w: k.width, h: k.height };
+  var hoehe = k.height * z;
+  var breite = k.height * (raster().w / gesamtReihen()) * z;
+  return { hofW: k.width, hofH: k.height, w: breite, h: hoehe };
+}
+
+function weltFormat() {
+  var w = $('welt');
+  if (!w) return;
+  w.style.height = '100%';
+  w.style.width = 'auto';
+  w.style.aspectRatio = raster().w + ' / ' + gesamtReihen();
+}
+
+function zoomMin() {
+  var k = $('hof').getBoundingClientRect();
+  if (k.height <= 0) return 1;
+  var baseW = k.height * (raster().w / gesamtReihen());
+  return Math.min(1, k.width / baseW);
 }
 
 function kameraKlemmen() {
-  var g = kameraGrenzen();
-  kamera.x = Math.max(g.minX, Math.min(0, kamera.x));
-  kamera.y = Math.max(g.minY, Math.min(0, kamera.y));
-}
-
-function kameraMitte() {
-  kamera.z = 1;
-  var g = kameraGrenzen();
-  kamera.x = g.minX / 2;
-  kamera.y = g.minY / 2;
-  kamera.gesetzt = true;
-  kameraAnwenden();
-}
-
-function startZoom() {
-  var g = raster();
-  return Math.max(1, Math.min(3.2, (g.w + 2 * RAND) / 15));
-}
-
-function kameraStart() {
-  var g = raster();
-  var k = $('hof').getBoundingClientRect();
-  if (k.width <= 0) return;
-  kamera.z = startZoom();
-  var fokusX = Math.min(g.w - 1, 6);
-  var fokusY = Math.min(g.h - 1, Math.round(g.h * 0.62));
-  var p = projiziere(fokusX, fokusY);
-  var fx = p.x / 100;
-  var fy = p.y / (BODEN + 3);
-  kamera.x = k.width / 2 - fx * k.width * kamera.z;
-  kamera.y = k.height / 2 - fy * k.height * kamera.z;
-  kamera.gesetzt = true;
-  kameraAnwenden();
+  var m = weltMasse();
+  if (m.w <= m.hofW) kamera.x = (m.hofW - m.w) / 2;
+  else kamera.x = Math.max(m.hofW - m.w, Math.min(0, kamera.x));
+  if (m.h <= m.hofH) kamera.y = (m.hofH - m.h) / 2;
+  else kamera.y = Math.max(m.hofH - m.h, Math.min(0, kamera.y));
 }
 
 function kameraAnwenden() {
   var w = $('welt');
   if (!w) return;
   if (!kamera.gesetzt) return;
+  kamera.z = Math.max(zoomMin(), Math.min(4.5, kamera.z));
   kameraKlemmen();
   w.style.transform = 'translate(' + kamera.x + 'px,' + kamera.y + 'px) scale(' + effZoom() + ')';
 }
 
+function kameraMitte() {
+  weltFormat();
+  kamera.z = zoomMin();
+  kamera.x = 0;
+  kamera.y = 0;
+  kamera.gesetzt = true;
+  kameraAnwenden();
+}
+
+function kameraStart() {
+  weltFormat();
+  var k = $('hof').getBoundingClientRect();
+  if (k.width <= 0) return;
+  var ziel = Math.min(raster().w, 15);
+  var z = (k.width * gesamtReihen()) / (k.height * ziel);
+  kamera.z = Math.max(zoomMin(), Math.min(4.5, z));
+  kamera.x = 0;
+  kamera.y = 0;
+  kamera.gesetzt = true;
+  kameraAnwenden();
+}
+
 function kameraZoomen(faktor, mx, my) {
   var alt = effZoom();
-  kamera.z = Math.max(1, Math.min(4.5, kamera.z * faktor));
+  kamera.z = Math.max(zoomMin(), Math.min(4.5, kamera.z * faktor));
   var neu = effZoom();
   var k = $('hof').getBoundingClientRect();
   var px = mx - k.left, py = my - k.top;
@@ -280,40 +233,12 @@ function kameraZoomen(faktor, mx, my) {
 }
 
 function zeigerAufFeld(e) {
-  var kasten = $('hof').getBoundingClientRect();
-  var z = effZoom();
-  var lx = (e.clientX - kasten.left - kamera.x) / z;
-  var ly = (e.clientY - kasten.top - kamera.y) / z;
-  var px = (lx / kasten.width) * 100;
-  var py = (ly / kasten.height) * (BODEN + 3);
-  return feldUnterMaus(px, py);
-}
-
-function feldUnterMaus(px, py) {
-  var g = raster();
-  for (var gy = g.h - 1; gy >= 0; gy--) {
-    for (var gx = 0; gx < g.w; gx++) {
-      var a = projiziere(gx, gy);
-      var b = projiziere(gx + 1, gy);
-      var c = projiziere(gx + 1, gy + 1);
-      var d = projiziere(gx, gy + 1);
-      if (imViereck(px, py, a, b, c, d)) return { gx: gx, gy: gy };
-    }
-  }
-  return null;
-}
-
-function imViereck(px, py, a, b, c, d) {
-  return dreieck(px, py, a, b, c) || dreieck(px, py, a, c, d);
-}
-
-function dreieck(px, py, a, b, c) {
-  var v0x = c.x - a.x, v0y = c.y - a.y;
-  var v1x = b.x - a.x, v1y = b.y - a.y;
-  var v2x = px - a.x, v2y = py - a.y;
-  var nenner = v0x * v1y - v1x * v0y;
-  if (nenner === 0) return false;
-  var u = (v2x * v1y - v1x * v2y) / nenner;
-  var v = (v0x * v2y - v2x * v0y) / nenner;
-  return u >= 0 && v >= 0 && u + v <= 1;
+  var k = $('hof').getBoundingClientRect();
+  var m = weltMasse();
+  var lx = e.clientX - k.left - kamera.x;
+  var ly = e.clientY - k.top - kamera.y;
+  var gx = Math.floor((lx / m.w) * raster().w);
+  var gy = Math.floor((ly / m.h) * gesamtReihen()) - BAND;
+  if (gx < 0 || gx >= raster().w || gy < 0 || gy >= raster().h) return null;
+  return { gx: gx, gy: gy };
 }

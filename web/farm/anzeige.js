@@ -200,6 +200,7 @@ function renderPlots(v) {
     }
   });
 
+  if (hatRaster()) weltFormat();
   if (hatRaster() && !kamera.gesetzt && $('hof').getBoundingClientRect().width > 0) kameraStart();
 }
 
@@ -220,12 +221,12 @@ function renderTruck(v) {
 }
 
 var MOEBEL_ORTE = {
-  nachbarn: [0.4, -1.7, 2, 2],
-  brett: [3.6, -1.9, 2.4, 2],
-  lagerhaus: [6.6, -1.9, 2.4, 2],
-  stand: [9.8, -1.7, 2, 2],
-  wagen: [-1.9, 10, 3, 1.7],
-  kiste: [-1.8, 5, 1.6, 1.6],
+  nachbarn: [0, -2.5, 3, 2],
+  brett: [4, -2.5, 3, 2],
+  lagerhaus: [8, -2.5, 3, 2],
+  stand: [12, -2.5, 3, 2],
+  wagen: [16, -2.5, 4, 2],
+  kiste: [21, -2.5, 2, 2],
 };
 
 function setzeMoebel(id) {
@@ -236,12 +237,12 @@ function setzeMoebel(id) {
     el.style.zIndex = '';
     return;
   }
-  var k = moebelKasten(o[0], o[1], o[2], o[3], id === 'brett' || id === 'stand');
+  var k = moebelKasten(o[0], o[1], o[2], o[3]);
   el.style.left = k.left + '%';
   el.style.top = k.top + '%';
   el.style.width = k.width + '%';
   el.style.height = k.height + '%';
-  el.style.zIndex = String(1 + Math.round(k.tiefe * 2));
+  el.style.zIndex = String(50 + Math.round(k.tiefe * 2));
 }
 
 function renderMoebel(v) {
@@ -309,7 +310,7 @@ function renderErweiterungen(v) {
 
   (v.expansions || []).forEach(function (e) {
     if (e.unlocked) return;
-    var kasten = moebelKasten(e.gx, e.gy, e.w, e.h, true);
+    var kasten = moebelKasten(e.gx, e.gy, e.w, e.h);
     var knopf = document.createElement('button');
     knopf.className = 'feld-sperre' + (e.reachedLevel ? ' bereit' : ' fern');
     knopf.style.left = kasten.left + '%';
