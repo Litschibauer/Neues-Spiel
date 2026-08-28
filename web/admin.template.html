@@ -1,9 +1,10 @@
-<title>Hof-Werkbank</title>
+<title>Hof-Verwaltung</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
     --ground: #f5f3ee; --surface: #ffffff; --surface-2: #ece8df; --line: #d9d3c6;
     --ink: #1c1813; --muted: #6d6455; --accent: #8a5a12;
-    --ok: #2c6e49; --bad: #a83246;
+    --ok: #2c6e49; --bad: #a83246; --sel: #f2e6cf;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
@@ -11,13 +12,8 @@
     :root:not([data-theme="light"]) {
       --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
       --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
-      --ok: #79cfa2; --bad: #e88a99;
+      --ok: #79cfa2; --bad: #e88a99; --sel: #35301f;
     }
-  }
-  :root[data-theme="dark"] {
-    --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
-    --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
-    --ok: #79cfa2; --bad: #e88a99;
   }
 
   * { box-sizing: border-box; }
@@ -25,7 +21,7 @@
     margin: 0; background: var(--ground); color: var(--ink);
     font-family: var(--sans); line-height: 1.5; -webkit-text-size-adjust: 100%;
   }
-  .wrap { max-width: 40rem; margin: 0 auto; padding: 1.25rem 1rem 3rem;
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 1.25rem 1rem 3rem;
           display: flex; flex-direction: column; gap: 1.1rem; }
   [hidden] { display: none !important; }
 
@@ -37,15 +33,11 @@
     border: 1px dashed var(--accent); border-radius: 4px; padding: .6rem .8rem;
     color: var(--accent); font-size: .82rem; font-family: var(--mono);
   }
-
   .card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: .85rem .9rem; }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .7rem; }
-  .stat dt { font-family: var(--mono); font-size: .6rem; letter-spacing: .1em;
-             text-transform: uppercase; color: var(--muted); }
-  .stat dd { margin: 0; font-family: var(--mono); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+  label { font-family: var(--mono); font-size: .7rem; color: var(--muted); }
 
-  .row { display: flex; flex-wrap: wrap; gap: .4rem; }
   button {
     font-family: var(--mono); font-size: .76rem; padding: .5rem .7rem;
     border: 1px solid var(--accent); border-radius: 3px; background: transparent;
@@ -56,100 +48,106 @@
   button:disabled { opacity: .4; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  input {
-    font-family: var(--mono); font-size: .85rem; padding: .55rem .65rem; width: 100%;
+  input, select {
+    font-family: var(--mono); font-size: .85rem; padding: .5rem .6rem;
     border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); color: var(--ink);
   }
+  input.wide { width: 100%; }
+  input.zahl { width: 7rem; }
+  select { min-width: 9rem; }
+
+  .hofliste { display: flex; flex-direction: column; gap: .3rem; max-height: 17rem; overflow-y: auto; }
+  .hofzeile {
+    text-align: left; width: 100%; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--surface-2); color: var(--ink); padding: .5rem .6rem; cursor: pointer;
+    display: flex; justify-content: space-between; gap: .6rem; align-items: baseline;
+  }
+  .hofzeile.an { border-color: var(--accent); background: var(--sel); }
+  .hofzeile .name { font-weight: 600; }
+  .hofzeile .code { font-family: var(--mono); color: var(--muted); font-size: .72rem; }
+  .hofzeile .meta { font-family: var(--mono); color: var(--muted); font-size: .66rem; flex: none; }
+
+  .zeile { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin-bottom: .55rem; }
+  .zeile > label { min-width: 3.2rem; }
+
+  .kopf { font-family: var(--mono); font-size: .8rem; margin-bottom: .7rem; }
+  .kopf b { color: var(--accent); }
+  .kopf .g { color: var(--muted); }
 
   .log { font-family: var(--mono); font-size: .68rem; display: flex; flex-direction: column;
-         gap: .2rem; max-height: 11rem; overflow-y: auto; }
+         gap: .2rem; max-height: 12rem; overflow-y: auto; }
   .log div { display: flex; gap: .5rem; }
   .log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
   .log .good { color: var(--ok); }
   .log .bad { color: var(--bad); }
 
-  .hint { color: var(--muted); font-size: .8rem; margin: .5rem 0 0; }
+  .hint { color: var(--muted); font-size: .78rem; margin: .5rem 0 0; }
   a { color: var(--accent); }
 </style>
 
 <div class="wrap">
-  <h1>Hof-Werkbank</h1>
+  <h1>Hof-Verwaltung</h1>
   <div class="banner">
-    Testwerkzeug. Greift <strong>serverseitig</strong> ein — der Client kann sich
-    per Konstruktion nichts selbst geben.
+    Nur mit deinem Server-Schlüssel. Alles greift <strong>serverseitig</strong> —
+    Waren und Gold landen im <strong>Postfach</strong> des Hofs, XP wird beim
+    nächsten Sync gutgeschrieben.
   </div>
 
   <div class="card" id="setup">
     <h2>Zugang</h2>
-    <input id="token" type="password" placeholder="Server-Token" autocomplete="off" spellcheck="false">
+    <input id="token" class="wide" type="password" placeholder="Server-Schlüssel"
+           autocomplete="off" spellcheck="false">
     <div class="row" style="margin-top:.6rem"><button class="primary" id="connect">Verbinden</button></div>
   </div>
 
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:1.1rem">
     <div class="card">
-      <h2>Zustand</h2>
-      <dl class="stats">
-        <div class="stat"><dt>seq</dt><dd id="s-seq">—</dd></div>
-        <div class="stat"><dt>Tick</dt><dd id="s-tick">—</dd></div>
-        <div class="stat"><dt>Regelwerk</dt><dd id="s-rules">—</dd></div>
-        <div class="stat"><dt>Bestände</dt><dd id="s-items">—</dd></div>
-        <div class="stat"><dt>Postfach</dt><dd id="s-mail">—</dd></div>
-        <div class="stat"><dt>Wartet</dt><dd id="s-pending">—</dd></div>
-        <div class="stat"><dt>Divergenz</dt><dd id="s-div">—</dd></div>
-      </dl>
+      <h2>Höfe</h2>
+      <div class="row" style="margin-bottom:.55rem">
+        <input id="suche" placeholder="Suche Name / Code / ID" style="flex:1;min-width:10rem">
+        <button id="neuladen">Neu laden</button>
+      </div>
+      <div class="hofliste" id="hofliste"></div>
     </div>
 
-    <div class="card">
-      <h2>Zeit vorspulen</h2>
-      <div class="row">
-        <button data-time="60">+1 min</button>
+    <div class="card" id="aktionen" hidden>
+      <div class="kopf" id="kopf"></div>
+
+      <div class="zeile">
+        <label>Gold</label>
+        <input id="goldbetrag" class="zahl" type="number" min="1" value="1000">
+        <button class="primary" id="goldgeben">Gold geben</button>
+      </div>
+
+      <div class="zeile">
+        <label>XP</label>
+        <input id="xpbetrag" class="zahl" type="number" min="1" value="500">
+        <button class="primary" id="xpgeben">XP geben</button>
+      </div>
+
+      <div class="zeile">
+        <label>Ware</label>
+        <select id="warenwahl"></select>
+        <input id="warenmenge" class="zahl" type="number" min="1" value="10">
+        <button class="primary" id="warengeben">Geben</button>
+      </div>
+
+      <div class="zeile">
+        <label>Zeit</label>
         <button data-time="600">+10 min</button>
         <button data-time="3600">+1 h</button>
         <button data-time="43200">+12 h</button>
       </div>
-      <p class="hint">
-        Verstellt nur die Uhr, gegen die das Zeitbudget gemessen wird (§4) — kein
-        Griff in den Zustand. Plätze werden fertig, der Stall legt nach. Im Spiel danach
-        einmal syncen.
-      </p>
-    </div>
 
-    <div class="card">
-      <h2>Ware schenken</h2>
-      <div class="row">
-        <button data-grant="eggs">10 Eier</button>
-        <button data-grant="wheat">10 Weizen</button>
-        <button data-grant="gold">100 Gold</button>
-        <button data-grant="bread">10 Brot</button>
-      </div>
-      <p class="hint">
-        Landet im <strong>Postfach</strong>, nie direkt im Lager — nichts darf
-        auftauchen, wovon der Spieler nichts wissen konnte (§7). Im Spiel dann
-        „Postfach leeren".
-      </p>
-    </div>
-
-    <div class="card">
-      <h2>Regelwerk umschalten</h2>
-      <div class="row">
-        <button data-rules="1">v1 normal</button>
-        <button data-rules="2">v2 gepatcht</button>
-        <button data-rules="3">v3 Inhalt</button>
-        <button data-rules="4">v4 Feldtest-Tempo</button>
-      </div>
-      <p class="hint">
-        Greift beim nächsten Sync als echter Balance-Patch, inklusive fairer
-        Umrechnung laufender Plätze (R2). Zurück geht es nicht.
-      </p>
-    </div>
-
-    <div class="card">
-      <h2>Zurücksetzen</h2>
-      <div class="row">
+      <div class="zeile" style="margin-bottom:0">
+        <label>Reset</label>
         <button class="danger" id="reset">Spielstand löschen</button>
-        <button id="refresh">Neu laden</button>
       </div>
-      <p class="hint">Danach im Spiel die Seite neu laden.</p>
+
+      <p class="hint">
+        Gold und Waren muss der Spieler danach im Spiel aus dem Postfach abholen.
+        XP wirkt beim nächsten automatischen Sync.
+      </p>
     </div>
 
     <div class="card">
@@ -157,7 +155,7 @@
       <div class="log" id="log"></div>
     </div>
 
-    <p class="hint">Zum Spiel: <a href="/">Feldtest-Hof</a></p>
+    <p class="hint">Zum Spiel: <a href="/">Hof</a></p>
   </div>
 </div>
 
@@ -166,6 +164,17 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var token = localStorage.getItem('ns-token') || '';
+  var hoefe = [];
+  var gewaehlt = null;
+
+  var NAMEN = {
+    gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier', corn: 'Mais',
+    milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
+    'cow-feed': 'Kuhfutter', plank: 'Bretter', nail: 'Nägel', saw: 'Säge',
+    shovel: 'Schaufel', pickaxe: 'Spitzhacke', map: 'Landkarte',
+    mallet: 'Bauhammer', stake: 'Steckpfahl'
+  };
+  function nameVon(id) { return (NAMEN[id] || id) + ' (' + id + ')'; }
 
   function log(msg, kind) {
     var row = document.createElement('div');
@@ -177,42 +186,100 @@
     row.appendChild(t); row.appendChild(s);
     var box = $('log');
     box.insertBefore(row, box.firstChild);
-    while (box.childElementCount > 30) box.removeChild(box.lastChild);
+    while (box.childElementCount > 40) box.removeChild(box.lastChild);
   }
 
   function api(path, method) {
     return fetch(path, {
       method: method || 'GET',
-      headers: { authorization: 'Bearer ' + token },
+      headers: { authorization: 'Bearer ' + token }
     }).then(function (r) {
-      if (r.status === 401) throw new Error('Token stimmt nicht');
-      if (r.status === 403) throw new Error('Admin ist abgeschaltet');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (r.status === 401) throw new Error('Schlüssel stimmt nicht');
+      if (r.status === 403) throw new Error('Verwaltung ist abgeschaltet (NEUES_SPIEL_ADMIN=1)');
+      if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || ('HTTP ' + r.status)); },
+        function () { throw new Error('HTTP ' + r.status); });
       return r.json();
     });
   }
 
-  function refresh() {
-    return api('/api/admin/status').then(function (s) {
-      $('s-seq').textContent = s.seq;
-      $('s-tick').textContent = s.tick;
-      $('s-rules').textContent = 'v' + s.rulesetVersion +
-        (s.targetRulesetVersion !== s.rulesetVersion ? ' → v' + s.targetRulesetVersion : '');
+  function vorZeit(ms) {
+    if (!ms) return 'nie';
+    var s = Math.floor((Date.now() - ms) / 1000);
+    if (s < 60) return 'gerade';
+    if (s < 3600) return Math.floor(s / 60) + ' min';
+    if (s < 86400) return Math.floor(s / 3600) + ' h';
+    return Math.floor(s / 86400) + ' d';
+  }
 
-      var names = { gold: 'Gold', wheat: 'Weizen', eggs: 'Eier', milk: 'Milch', flour: 'Mehl', bread: 'Brot' };
-      $('s-items').textContent = (s.itemIds || [])
-        .map(function (id, i) { return (names[id] || id) + ' ' + ((s.state.items || [])[i] || 0); })
-        .join(' · ');
-      $('s-mail').textContent = s.state.mail.length;
-      $('s-pending').textContent = s.pendingDeliveries;
-      $('s-div').textContent = s.divergenceAlerts;
-      return s;
+  function passt(h, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    return (h.name || '').toLowerCase().indexOf(q) >= 0
+      || (h.code || '').toLowerCase().indexOf(q) >= 0
+      || h.id.toLowerCase().indexOf(q) >= 0;
+  }
+
+  function zeichneListe() {
+    var q = $('suche').value.trim();
+    var box = $('hofliste');
+    box.textContent = '';
+    var sichtbar = hoefe.filter(function (h) { return passt(h, q); });
+    if (sichtbar.length === 0) { box.innerHTML = '<p class="hint">Keine Höfe.</p>'; return; }
+    sichtbar.forEach(function (h) {
+      var b = document.createElement('button');
+      b.className = 'hofzeile' + (gewaehlt && gewaehlt.id === h.id ? ' an' : '');
+      b.innerHTML =
+        '<span><span class="name">' + (h.name || 'Hof') + '</span> ' +
+        '<span class="code">' + (h.code || '—') + '</span></span>' +
+        '<span class="meta">seq ' + (h.seq == null ? '—' : h.seq) +
+        ' · ' + vorZeit(h.lastSeenMs) + '</span>';
+      b.addEventListener('click', function () { waehle(h); });
+      box.appendChild(b);
     });
   }
 
-  function act(path, label) {
-    api(path, 'POST')
-      .then(function () { log(label, 'good'); return refresh(); })
+  function ladeHoefe() {
+    return api('/api/admin/accounts').then(function (d) {
+      hoefe = d.accounts || [];
+      hoefe.sort(function (a, b) { return (b.lastSeenMs || 0) - (a.lastSeenMs || 0); });
+      zeichneListe();
+      log(d.count + ' Höfe geladen', 'good');
+    });
+  }
+
+  function fuelleWaren(itemIds) {
+    var sel = $('warenwahl');
+    var vorher = sel.value;
+    sel.innerHTML = '';
+    (itemIds || []).forEach(function (id) {
+      var o = document.createElement('option');
+      o.value = id;
+      o.textContent = nameVon(id);
+      sel.appendChild(o);
+    });
+    if (vorher) sel.value = vorher;
+  }
+
+  function waehle(h) {
+    gewaehlt = h;
+    zeichneListe();
+    $('aktionen').hidden = false;
+    api('/api/admin/status?account=' + encodeURIComponent(h.id)).then(function (s) {
+      fuelleWaren(s.itemIds);
+      var gold = (s.state.items || [])[0] || 0;
+      $('kopf').innerHTML =
+        '<b>' + (h.name || 'Hof') + '</b> <span class="g">' + (h.code || '') + '</span><br>' +
+        '<span class="g">' + h.id + '</span><br>' +
+        'Gold ' + gold + ' · XP ' + (s.state.xp || 0) + ' · Regelwerk v' + s.rulesetVersion +
+        ' · Postfach ' + s.state.mail.length;
+    }).catch(function (e) { log('Status: ' + e.message, 'bad'); });
+  }
+
+  function tun(pfad, label) {
+    if (!gewaehlt) return;
+    var sep = pfad.indexOf('?') >= 0 ? '&' : '?';
+    api(pfad + sep + 'account=' + encodeURIComponent(gewaehlt.id), 'POST')
+      .then(function () { log(label + ' → ' + (gewaehlt.name || gewaehlt.id), 'good'); waehle(gewaehlt); })
       .catch(function (e) { log(label + ' — ' + e.message, 'bad'); });
   }
 
@@ -220,12 +287,10 @@
     token = $('token').value.trim();
     if (!token) return;
     $('connect').disabled = true;
-    refresh().then(function () {
+    ladeHoefe().then(function () {
       localStorage.setItem('ns-token', token);
       $('setup').hidden = true;
       $('panel').hidden = false;
-      log('Verbunden', 'good');
-      setInterval(function () { refresh().catch(function () {}); }, 5000);
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message);
@@ -234,33 +299,32 @@
 
   $('connect').addEventListener('click', connect);
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
-  $('refresh').addEventListener('click', function () { refresh().catch(function () {}); });
+  $('neuladen').addEventListener('click', function () { ladeHoefe().catch(function (e) { log(e.message, 'bad'); }); });
+  $('suche').addEventListener('input', zeichneListe);
 
+  $('goldgeben').addEventListener('click', function () {
+    var n = Math.max(1, Math.floor(Number($('goldbetrag').value) || 0));
+    tun('/api/admin/grant?item=gold&amount=' + n, n + ' Gold');
+  });
+  $('xpgeben').addEventListener('click', function () {
+    var n = Math.max(1, Math.floor(Number($('xpbetrag').value) || 0));
+    tun('/api/admin/xp?amount=' + n, n + ' XP');
+  });
+  $('warengeben').addEventListener('click', function () {
+    var id = $('warenwahl').value;
+    var n = Math.max(1, Math.floor(Number($('warenmenge').value) || 0));
+    if (!id) return;
+    tun('/api/admin/grant?item=' + encodeURIComponent(id) + '&amount=' + n, n + '× ' + (NAMEN[id] || id));
+  });
   document.querySelectorAll('[data-time]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var s = b.getAttribute('data-time');
-      act('/api/admin/time?seconds=' + s, b.textContent.trim() + ' Zeit gutgeschrieben');
+      tun('/api/admin/time?seconds=' + b.getAttribute('data-time'), b.textContent.trim() + ' Zeit');
     });
   });
-
-  document.querySelectorAll('[data-grant]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var item = b.getAttribute('data-grant');
-      var amount = item === 'gold' ? 100 : 10;
-      act('/api/admin/grant?item=' + item + '&amount=' + amount, amount + ' ' + item + ' ins Postfach');
-    });
-  });
-
-  document.querySelectorAll('[data-rules]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var v = b.getAttribute('data-rules');
-      act('/api/admin/ruleset?version=' + v, 'Zielversion v' + v);
-    });
-  });
-
   $('reset').addEventListener('click', function () {
-    if (!confirm('Spielstand wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
-    act('/api/admin/reset', 'Spielstand zurückgesetzt');
+    if (!gewaehlt) return;
+    if (!confirm('Spielstand von „' + (gewaehlt.name || gewaehlt.id) + '" löschen? Unwiderruflich.')) return;
+    tun('/api/admin/reset', 'Spielstand gelöscht');
   });
 
   if (token) { $('token').value = token; connect(); }

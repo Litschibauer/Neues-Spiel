@@ -351,12 +351,17 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
   if (url.pathname === '/api/admin/accounts') {
     return json(res, 200, {
       count: accounts.count,
-      accounts: accounts.list().map((a) => ({
-        id: a.id,
-        createdAt: a.createdAt,
-        lastSeenMs: a.lastSeenMs,
-        seq: live.get(a.id)?.snapshot.seq ?? null,
-      })),
+      accounts: accounts.list().map((a) => {
+        const karte = sozial.karte(a.id);
+        return {
+          id: a.id,
+          name: karte?.name ?? null,
+          code: karte?.code ?? null,
+          createdAt: a.createdAt,
+          lastSeenMs: a.lastSeenMs,
+          seq: live.get(a.id)?.snapshot.seq ?? null,
+        };
+      }),
     });
   }
 
