@@ -122,7 +122,8 @@ export function resolveConfig(vars: Vars, argv: readonly string[], root: string)
     );
   }
 
-  const dataDir = join(root, 'data', env);
+  const dataBase = vars.NEUES_SPIEL_DATA_DIR?.trim() || join(root, 'data');
+  const dataDir = join(dataBase, env);
   const savePath = vars.NEUES_SPIEL_SAVE ?? join(dataDir, 'save.json');
 
   return {
