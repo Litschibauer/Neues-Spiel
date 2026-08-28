@@ -2864,6 +2864,62 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `${schwenken.vorher} → ${schwenken.nachher}`,
   );
 
+  console.log('\n9y. Tagesbonus');
+  await waitFor(
+    cdp,
+    `!document.getElementById('bonus-auf').hidden`,
+    'Der Geschenk-Knopf taucht auf',
+  );
+  check('Ein verfügbarer Tagesbonus zeigt sich als Geschenk-Knopf', true);
+
+  const bonusAuf = await evaluate<{ tage: number; heute: boolean; knopf: string }>(
+    cdp,
+    `(function () {
+       document.getElementById('bonus-auf').click();
+       var tage = document.querySelectorAll('#bonus-inhalt .bonus-tag');
+       var heute = document.querySelector('#bonus-inhalt .bonus-tag.heute');
+       var knopf = document.querySelector('#bonus-inhalt .primär');
+       return { tage: tage.length, heute: !!heute, knopf: knopf ? knopf.textContent : 'kein Knopf' };
+     })()`,
+  );
+  check(
+    'Das Bonus-Fenster zeigt die Sieben-Tage-Leiter mit dem heutigen Tag markiert',
+    bonusAuf.tage === 7 && bonusAuf.heute && /Abholen/.test(bonusAuf.knopf),
+    `${bonusAuf.tage} Tage, heute markiert ${bonusAuf.heute}, Knopf „${bonusAuf.knopf}"`,
+  );
+
+  await evaluate(cdp, `document.querySelector('#bonus-inhalt .primär').click()`);
+  await sleep(600);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length >= 0`, 'Sync nach Bonus');
+  // Postfach öffnen und den Gold-Eingang bestätigen
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await sleep(400);
+  const bonusMail = await evaluate<boolean>(
+    cdp,
+    `[...document.querySelectorAll('#mail .card')].some(function (c) { return /Gold/.test(c.textContent); })`,
+  );
+  check('Der Bonus landet als Gold im Postfach', bonusMail);
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+
+  const nachBonus = await evaluate<{ knopfWeg: boolean; text: string }>(
+    cdp,
+    `(function () {
+       document.getElementById('bonus-auf').click();
+       return {
+         knopfWeg: document.getElementById('bonus-auf').hidden,
+         text: document.getElementById('bonus-inhalt').textContent,
+       };
+     })()`,
+  );
+  check(
+    'Nach dem Abholen ist der Knopf weg und das Fenster sagt „morgen wieder"',
+    nachBonus.knopfWeg && /morgen/.test(nachBonus.text),
+    `Knopf weg ${nachBonus.knopfWeg}`,
+  );
+  await evaluate(cdp, `document.getElementById('bonus-close').click()`);
+  await sleep(150);
+
   console.log('\n9z. Neues Land vermessen und freischalten');
   await api(`/api/admin/grant?account=${status.accountId}&item=map&amount=2`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=mallet&amount=2`, 'POST');

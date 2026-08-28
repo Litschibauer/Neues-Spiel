@@ -107,6 +107,13 @@
           <span id="setzen-text">Wohin?</span>
           <button id="setzen-ab">Abbrechen</button>
         </div>
+        <button class="zahnrad geschenk" id="bonus-auf" aria-label="Tagesbonus" hidden>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9"/>
+            <path d="M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>
+          </svg>
+        </button>
         <button class="zahnrad" id="zahnrad" aria-label="Einstellungen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -193,6 +200,14 @@
     </div>
   </div>
 
+  <div class="sheet-bg" id="bonus-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bonus-titel">
+      <h3 id="bonus-titel">Tagesbonus</h3>
+      <div id="bonus-inhalt"></div>
+      <button class="sheet-close" id="bonus-close">Schließen</button>
+    </div>
+  </div>
+
   <div class="sheet-bg" id="pfad-bg" hidden>
     <div class="sheet gross" role="dialog" aria-modal="true" aria-labelledby="pfad-titel">
       <h3 id="pfad-titel">Dein Weg</h3>
@@ -276,6 +291,8 @@
   <!--INCLUDE:farm/anzeige.js-->
 
   <!--INCLUDE:farm/nachbarn.js-->
+
+  <!--INCLUDE:farm/bonus.js-->
 
   <!--INCLUDE:farm/tippen.js-->
 

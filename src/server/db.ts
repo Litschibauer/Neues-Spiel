@@ -89,6 +89,13 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       alter table freunde add column stand text not null default 'ok';
     `);
   },
+
+  (db) => {
+    db.exec(`
+      alter table accounts add column bonus_day integer not null default 0;
+      alter table accounts add column bonus_streak integer not null default 0;
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

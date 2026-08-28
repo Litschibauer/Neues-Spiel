@@ -227,6 +227,39 @@
   }
   .zahnrad:active { transform: scale(.94); }
   .hammer { right: 3rem; }
+  .geschenk { right: 5.55rem; color: var(--on-accent); background: var(--accent); }
+  .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
+  @keyframes winken {
+    0%, 70%, 100% { transform: rotate(0); }
+    78% { transform: rotate(-10deg); }
+    86% { transform: rotate(10deg); }
+    94% { transform: rotate(-6deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .geschenk.winkt { animation: none; } }
+
+  #bonus-inhalt .lead { font-size: .86rem; color: var(--muted); margin: 0 0 .7rem; }
+  .bonus-leiter { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; margin-bottom: .9rem; }
+  .bonus-tag {
+    position: relative; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); padding: .5rem .4rem; text-align: center;
+    display: flex; flex-direction: column; gap: .15rem; align-items: center;
+  }
+  .bonus-tag .d { font-size: .62rem; color: var(--muted); font-weight: 700; }
+  .bonus-tag .g { font-weight: 750; font-size: .82rem; }
+  .bonus-tag .g .ic { width: 1em; height: 1em; vertical-align: -.12em; }
+  .bonus-tag .x { font-size: .6rem; color: var(--leaf); font-weight: 700; }
+  .bonus-tag.erreicht { opacity: .55; }
+  .bonus-tag.erreicht .hk {
+    position: absolute; top: -.35rem; right: -.35rem; width: 1.1rem; height: 1.1rem;
+    border-radius: 50%; background: var(--accent); color: var(--on-accent);
+    font-size: .7rem; display: grid; place-items: center;
+  }
+  .bonus-tag.heute { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  #bonus-inhalt .primär {
+    width: 100%; height: 2.6rem; border: none; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent); font-weight: 750; font-size: .9rem;
+  }
+  #bonus-inhalt .primär[disabled] { opacity: .45; }
 
   .setzen {
     position: absolute; left: 50%; top: .5rem; transform: translateX(-50%); z-index: 75;

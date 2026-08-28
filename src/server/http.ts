@@ -15,6 +15,7 @@ import type { AccountRecord } from './accounts.ts';
 import { SqliteStorage } from './storage.ts';
 import { NAME_MAX, Sozial } from './sozial.ts';
 import type { HofKarte } from './sozial.ts';
+import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
 
@@ -73,6 +74,7 @@ const limiter = new CreateLimiter(
 
 const market = new Market(accounts.storage);
 const sozial = new Sozial((accounts.storage as SqliteStorage).database);
+const tagesbonus = new Tagesbonus((accounts.storage as SqliteStorage).database);
 market.hofInfo = (id) => {
   const karte = sozial.karte(id);
   return karte ? { code: karte.code, name: karte.name } : { code: '', name: 'Unbekannt' };
@@ -661,6 +663,32 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         heute: sozial.hilfenHeute(account.id, ziel.id, jetzt),
         proTag,
         besuch: besuchsBild(ziel, account.id),
+      });
+    }
+
+    if (url.pathname === '/api/tagesbonus' && req.method === 'GET') {
+      return json(res, 200, tagesbonus.status(account.id, Date.now()));
+    }
+
+    if (url.pathname === '/api/tagesbonus' && req.method === 'POST') {
+      const geholt = tagesbonus.hole(account.id, Date.now());
+      if (!geholt) return json(res, 409, { error: 'ALREADY_CLAIMED' });
+
+      const currency = getRuleset(game.snapshot.rulesetVersion).currency;
+      if (geholt.lohn.gold > 0) {
+        game.deliver({ item: currency, amount: geholt.lohn.gold, arrivedAt: Date.now() });
+      }
+      if (geholt.lohn.xp > 0) game.grantXp(geholt.lohn.xp);
+      game.receiveExternal();
+      persist(account, game);
+      events.nudge(account.id, 'farm');
+
+      return json(res, 200, {
+        ok: true,
+        streak: geholt.streak,
+        gold: geholt.lohn.gold,
+        xp: geholt.lohn.xp,
+        status: tagesbonus.status(account.id, Date.now()),
       });
     }
 

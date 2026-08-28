@@ -28,7 +28,7 @@ function refreshLease() {
     .catch(function () {  });
 }
 
-var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1, stand: 1 };
+var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1, stand: 1, bonus: 1 };
 
 function netzOk() {
   if (!navigator.onLine) return false;
@@ -74,7 +74,7 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -96,6 +96,7 @@ $('stand').addEventListener('click', function () {
 });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
 $('pfad-auf').addEventListener('click', function () { show('pfad'); });
+$('bonus-auf').addEventListener('click', function () { oeffneBonus(); });
 $('stufe-weiter').addEventListener('click', feierZu);
 $('stufe-feier').addEventListener('click', function (e) {
   if (e.target === $('stufe-feier')) feierZu();
@@ -136,8 +137,10 @@ function begin(restored) {
     if (document.hidden || !navigator.onLine) return;
     if (!liveAbort) startLive();
     attempt(true);
+    bonusHolen();
   }, 20000 + Math.floor(Math.random() * 10000));
   setInterval(refreshLease, 15000);
+  setTimeout(bonusHolen, 1500);
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       stopLive();
@@ -146,6 +149,7 @@ function begin(restored) {
       attempt(true);
       refreshLease();
       startLive();
+      bonusHolen();
     }
   });
   window.addEventListener('online', function () {
@@ -153,6 +157,7 @@ function begin(restored) {
     render();
     attempt(true);
     startLive();
+    bonusHolen();
   });
   window.addEventListener('offline', function () {
     setConn('offline');

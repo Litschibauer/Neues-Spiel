@@ -28,6 +28,7 @@ function render() {
   renderBadges(v);
   renderBauliste(v);
   renderSheet(v);
+  bonusKnopf();
 }
 
 function renderPurse(v) {
