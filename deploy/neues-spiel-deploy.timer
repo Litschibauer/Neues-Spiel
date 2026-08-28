@@ -1,0 +1,15 @@
+# Auto-Deploy-Takt. Kopieren nach /etc/systemd/system/neues-spiel-deploy.timer
+#
+# Fragt kurz nach dem Booten und danach alle 2 Minuten, ob es neue Commits
+# gibt. Ohne neue Commits macht der Lauf nichts (kein Rebuild, kein Neustart).
+
+[Unit]
+Description=Prueft regelmaessig auf neue Commits und deployt sie
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=neues-spiel-deploy.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+# Auto-Deploy. Kopieren nach /etc/systemd/system/neues-spiel-deploy.service
+#
+# Prüft bei jedem Lauf, ob der aktuelle Branch auf origin neuer ist, und
+# fährt dann pull -> build -> restart. Ein oneshot; getaktet vom Timer daneben.
+#
+# __NODEBIN__ muss auf das Verzeichnis von node/npm gesetzt werden — das
+# erledigt die Einrichtungszeile in docs/deploy.md per sed automatisch.
+
+[Unit]
+Description=Neues Spiel — Auto-Deploy (pull, build, restart bei neuem Commit)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/Neues-Spiel
+Environment=PATH=__NODEBIN__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/Neues-Spiel/scripts/auto-deploy.sh

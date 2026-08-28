@@ -438,6 +438,34 @@ systemctl status neues-spiel-prod --no-pager
 journalctl -u neues-spiel-prod -f
 ```
 
+## Auto-Deploy (optional): bei jedem Push von selbst aktualisieren
+
+Ein Timer prüft alle zwei Minuten, ob der aktuelle Branch auf `origin` neuer
+ist, und fährt dann `git reset --hard origin/<branch>` → `npm run build` →
+`systemctl restart neues-spiel-prod`. Ohne neue Commits passiert nichts. `data/`
+ist gitignored, die Spielstände bleiben also unberührt. Schlägt der Build fehl,
+bricht das Skript **vor** dem Neustart ab — der laufende Dienst bleibt stehen.
+
+Einmalig einrichten (Pfade ggf. anpassen, hier `/home/Neues-Spiel`):
+
+```bash
+cd /home/Neues-Spiel
+chmod +x scripts/auto-deploy.sh
+sudo cp deploy/neues-spiel-deploy.{service,timer} /etc/systemd/system/
+# node/npm-Verzeichnis in den PATH des Dienstes einsetzen:
+sudo sed -i "s#__NODEBIN__#$(dirname "$(command -v node)")#" \
+  /etc/systemd/system/neues-spiel-deploy.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now neues-spiel-deploy.timer
+
+# Kontrolle:
+systemctl list-timers neues-spiel-deploy.timer --no-pager
+journalctl -u neues-spiel-deploy.service -n 20 --no-pager
+```
+
+Sofort einmal von Hand auslösen: `sudo systemctl start neues-spiel-deploy.service`.
+Abschalten: `sudo systemctl disable --now neues-spiel-deploy.timer`.
+
 `deploy/neues-spiel-dev.service` daneben, falls die Entwicklungsumgebung
 dauerhaft laufen soll. Beide stören sich nicht: eigener Port, eigene Datenbank,
 eigenes Token, eigenes Regelwerk.
