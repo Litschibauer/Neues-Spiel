@@ -124,8 +124,9 @@
   .silo.full { color: var(--warn); }
   .silo b { font-variant-numeric: tabular-nums; font-weight: 600; }
 
-  main { flex: 1; padding: .85rem .85rem 5.5rem; }
+  main { flex: 1; padding: .85rem; display: flex; flex-direction: column; min-height: 0; }
   .view { display: flex; flex-direction: column; gap: .85rem; }
+  #view-farm { flex: 1; min-height: 0; gap: .5rem; }
   h2 {
     font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
     color: var(--muted); font-weight: 700; margin: .2rem 0 -.3rem .15rem;
@@ -137,11 +138,12 @@
   }
 
   .hof {
-    position: relative; isolation: isolate; aspect-ratio: 100 / 130;
-    width: 100%; max-width: calc((100dvh - 10rem) * 100 / 130); margin-inline: auto;
+    position: relative; isolation: isolate;
+    flex: 1 1 auto; width: 100%; min-height: 60dvh; margin-inline: auto;
     border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
     background: var(--meadow); touch-action: none; cursor: grab;
   }
+  .kein-raster.hof { aspect-ratio: 100 / 130; flex: none; max-width: calc((100dvh - 10rem) * 100 / 130); }
   .hof.schwenkt { cursor: grabbing; }
   .hof.schwenkt .plot, .hof.schwenkt .moebel { pointer-events: none; }
   .welt {

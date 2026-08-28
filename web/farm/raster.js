@@ -239,6 +239,27 @@ function kameraMitte() {
   kameraAnwenden();
 }
 
+function startZoom() {
+  var g = raster();
+  return Math.max(1, Math.min(3.2, (g.w + 2 * RAND) / 15));
+}
+
+function kameraStart() {
+  var g = raster();
+  var k = $('hof').getBoundingClientRect();
+  if (k.width <= 0) return;
+  kamera.z = startZoom();
+  var fokusX = Math.min(g.w - 1, 6);
+  var fokusY = Math.min(g.h - 1, Math.round(g.h * 0.62));
+  var p = projiziere(fokusX, fokusY);
+  var fx = p.x / 100;
+  var fy = p.y / (BODEN + 3);
+  kamera.x = k.width / 2 - fx * k.width * kamera.z;
+  kamera.y = k.height / 2 - fy * k.height * kamera.z;
+  kamera.gesetzt = true;
+  kameraAnwenden();
+}
+
 function kameraAnwenden() {
   var w = $('welt');
   if (!w) return;
@@ -249,7 +270,7 @@ function kameraAnwenden() {
 
 function kameraZoomen(faktor, mx, my) {
   var alt = effZoom();
-  kamera.z = Math.max(1, Math.min(2.6, kamera.z * faktor));
+  kamera.z = Math.max(1, Math.min(4.5, kamera.z * faktor));
   var neu = effZoom();
   var k = $('hof').getBoundingClientRect();
   var px = mx - k.left, py = my - k.top;

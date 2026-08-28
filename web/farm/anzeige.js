@@ -200,7 +200,7 @@ function renderPlots(v) {
     }
   });
 
-  if (hatRaster() && !kamera.gesetzt && $('hof').getBoundingClientRect().width > 0) kameraMitte();
+  if (hatRaster() && !kamera.gesetzt && $('hof').getBoundingClientRect().width > 0) kameraStart();
 }
 
 var tileFuerKamera = false;
