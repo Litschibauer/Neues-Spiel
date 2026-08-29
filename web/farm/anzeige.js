@@ -289,18 +289,29 @@ function renderHindernisse(v) {
 }
 
 function sperrGebuesch(e) {
-  var out = '';
-  var n = Math.max(3, Math.round(e.w * e.h / 10));
+  var out = '<rect x="0" y="0" width="100" height="100" fill="#2f5a2c"/>';
   var seed = (e.gx * 31 + e.gy * 17) % 97;
+  function rnd(m) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % m; }
+  var toene = ['#37632f', '#3f6b3a', '#4f7f45', '#5c8c4d', '#446e39'];
+
+  // dichtes Gebüsch, das die ganze Fläche zuwuchert
+  var n = Math.max(14, Math.round(e.w * e.h / 2.2));
   for (var i = 0; i < n; i++) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var cx = 8 + (seed % 84);
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var cy = 20 + (seed % 70);
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var r = 7 + (seed % 6);
-    out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#3f6b3a"/>' +
-      '<circle cx="' + cx + '" cy="' + (cy - r * 0.5) + '" r="' + (r * 0.7) + '" fill="#4f7f45"/>';
+    var cx = 2 + rnd(96);
+    var cy = 6 + rnd(92);
+    var r = 6 + rnd(9);
+    var t = toene[rnd(toene.length)];
+    out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + t + '"/>' +
+      '<circle cx="' + cx + '" cy="' + (cy - r * 0.5) + '" r="' + (r * 0.62) + '" fill="#5c8c4d"/>';
+  }
+  // Unkraut-Halme
+  var halme = Math.max(10, Math.round(e.w * e.h / 3));
+  for (var j = 0; j < halme; j++) {
+    var hx = 3 + rnd(94);
+    var hy = 14 + rnd(84);
+    var lean = rnd(7) - 3;
+    out += '<path d="M' + hx + ' ' + hy + 'q' + lean + ' -6 ' + (lean * 1.5) + ' -12" ' +
+      'stroke="#6fa04f" stroke-width="1.3" fill="none" stroke-linecap="round"/>';
   }
   return out;
 }

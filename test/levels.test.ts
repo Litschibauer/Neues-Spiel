@@ -31,9 +31,10 @@ test('das Level ergibt sich aus der Erfahrung, nicht aus einem zweiten Feld', ()
   assert.equal(levelOf(rules, rules.levelThresholds[0]!), 2);
   assert.equal(levelOf(rules, rules.levelThresholds[1]!), 3);
 
-  const max = rules.levelThresholds.length + 1;
-  assert.equal(levelOf(rules, 10_000_000), max);
-  assert.equal(nextLevelAt(rules, 10_000_000), null, 'Maximum hat kein Danach');
+  // keine harte Höchststufe mehr — es geht über die Schwellen hinaus weiter
+  const anZahl = rules.levelThresholds.length + 1;
+  assert.ok(levelOf(rules, 10_000_000) > anZahl, 'jenseits der Schwellen steigt die Stufe weiter');
+  assert.notEqual(nextLevelAt(rules, 10_000_000), null, 'es gibt immer ein Danach');
 });
 
 test('der Fortschrittsbalken hat immer einen Anfang und ein Ende', () => {

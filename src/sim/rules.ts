@@ -1407,29 +1407,48 @@ export function recipeUnlocked(rules: Ruleset, recipe: number, playerLevel: numb
   return playerLevel >= recipeMinLevel(rules, recipe);
 }
 
+// Jenseits der letzten Schwelle geht es im Abstand der letzten Lücke weiter,
+// damit es keine harte Höchststufe gibt.
+function levelSchritt(t: readonly number[]): number {
+  if (t.length >= 2) return Math.max(1, t[t.length - 1]! - t[t.length - 2]!);
+  if (t.length === 1) return Math.max(1, t[0]!);
+  return 0;
+}
+
 export function levelOf(rules: Ruleset, xp: number): number {
+  const t = rules.levelThresholds;
   let level = 1;
-  for (const threshold of rules.levelThresholds) {
-    if (xp < threshold) break;
+  for (const threshold of t) {
+    if (xp < threshold) return level;
     level++;
   }
-  return level;
+  const schritt = levelSchritt(t);
+  if (schritt <= 0) return level;
+  return level + Math.floor((xp - t[t.length - 1]!) / schritt);
 }
 
 export function nextLevelAt(rules: Ruleset, xp: number): number | null {
-  for (const threshold of rules.levelThresholds) {
+  const t = rules.levelThresholds;
+  for (const threshold of t) {
     if (xp < threshold) return threshold;
   }
-  return null;
+  const schritt = levelSchritt(t);
+  if (schritt <= 0) return null;
+  const last = t[t.length - 1]!;
+  const drueber = Math.floor((xp - last) / schritt);
+  return last + (drueber + 1) * schritt;
 }
 
 export function levelStartedAt(rules: Ruleset, xp: number): number {
+  const t = rules.levelThresholds;
   let start = 0;
-  for (const threshold of rules.levelThresholds) {
-    if (xp < threshold) break;
+  for (const threshold of t) {
+    if (xp < threshold) return start;
     start = threshold;
   }
-  return start;
+  const schritt = levelSchritt(t);
+  if (schritt <= 0) return start;
+  return start + Math.floor((xp - start) / schritt) * schritt;
 }
 
 export function nextLevel(rules: Ruleset, plot: number, level: number): LevelDef | null {
@@ -1613,7 +1632,7 @@ export function validateRuleset(rules: Ruleset): string[] {
       ) {
         problems.push(`Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre < 1`);
       }
-      if ((level.minPlayerLevel ?? 1) > rules.levelThresholds.length + 1) {
+      if ((level.minPlayerLevel ?? 1) > 100) {
         problems.push(
           `Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre über dem Maximum — nie erreichbar`,
         );
@@ -1710,7 +1729,7 @@ export function validateRuleset(rules: Ruleset): string[] {
     });
   });
   rules.recipes.forEach((r, i) => {
-    const max = rules.levelThresholds.length + 1;
+    const max = 100;
     if ((r.minPlayerLevel ?? 1) > max) {
       problems.push(`Rezept ${r.id} verlangt Stufe ${r.minPlayerLevel}, es gibt nur ${max}`);
     }
