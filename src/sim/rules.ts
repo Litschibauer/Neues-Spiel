@@ -1341,17 +1341,27 @@ const V24: Ruleset = {
   obstacles: V24_HINDERNISSE,
 };
 
-const DEV: Ruleset = {
+// v25: Die Schmiede ist ab jetzt ein normales Bauwerk, das man wie Ställe baut
+// und frei platziert. Nur die Mine bleibt fest am Berg und wird freigeschaltet.
+const V25: Ruleset = {
   ...V24,
+  version: 25,
+  plots: V24.plots.map((p) =>
+    p.id === 'forge' ? { ...p, fixed: false, place: at(16, 47, 12, 15) } : p,
+  ),
+};
+
+const DEV: Ruleset = {
+  ...V25,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V24.recipes.map((r) => {
+  recipes: V25.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V24.plots.map((p) => {
+  plots: V25.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1383,16 +1393,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [22, V22],
   [23, V23],
   [24, V24],
+  [25, V25],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 24;
+export const LATEST_RULESET_VERSION = 25;
 
 export const DEV_RULESET_VERSION = 1001;
 

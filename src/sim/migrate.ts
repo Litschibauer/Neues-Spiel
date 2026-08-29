@@ -187,6 +187,21 @@ export const FESTE_PLAETZE: MigrationStep = (state, from, to) => {
   return next;
 };
 
+// v25: Die Schmiede ist kein festes Bauwerk mehr, sondern wird wie ein Stall
+// gebaut und platziert. Wer sie noch nicht gebaut hat (Stufe 0), verliert den
+// festen Bergplatz — sie wird über das Baumenü frei gesetzt.
+export const BAUBAR: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  const plots = gewachsen.plots.map((p, i) => {
+    const def = to.plots[i];
+    if (!def || def.fixed || p.level > 0 || p.gx < 0) return p;
+    return { ...p, gx: -1, gy: -1 };
+  });
+  const next = cloneState(gewachsen);
+  next.plots = plots;
+  return next;
+};
+
 export const TIERE: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   if (!to.animalsMustBeBought) return gewachsen;
@@ -231,6 +246,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['21->22', AUFS_RASTER],
   ['22->23', AUFS_RASTER],
   ['23->24', FESTE_PLAETZE],
+  ['24->25', BAUBAR],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

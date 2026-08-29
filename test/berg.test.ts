@@ -5,18 +5,18 @@ import { initialState } from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 import { farmView } from '../src/client/view.ts';
 
-const V = getRuleset(24);
+const V = getRuleset(25);
 
-test('Mine und Schmiede sind fest und stehen von Anfang an am Berg', () => {
+test('nur die Mine ist fest; die Schmiede baut man wie einen Stall', () => {
   const mine = V.plots.findIndex((p) => p.id === 'mine');
   const forge = V.plots.findIndex((p) => p.id === 'forge');
   assert.equal(V.plots[mine]!.fixed, true);
-  assert.equal(V.plots[forge]!.fixed, true);
+  assert.notEqual(V.plots[forge]!.fixed, true, 'die Schmiede ist kein festes Bauwerk mehr');
 
   const s = initialState(V);
   assert.ok(s.plots[mine]!.gx >= 0, 'die Mine ist von Anfang an platziert');
-  assert.ok(s.plots[forge]!.gx >= 0, 'die Schmiede ist von Anfang an platziert');
   assert.equal(s.plots[mine]!.level, 0, 'aber noch nicht gebaut');
+  assert.equal(s.plots[forge]!.gx, -1, 'die Schmiede wird erst über das Baumenü gesetzt');
 });
 
 test('freigeschaltetes Land trägt Hindernisse, gesperrtes verbirgt sie', () => {
