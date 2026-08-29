@@ -1270,8 +1270,8 @@ try {
      })()`,
   );
   check(
-    'Das rechte Zweidrittel liegt in sechs gesperrten Feldern',
-    sperren.anzahl === 6,
+    'Das rechte Zweidrittel liegt in gesperrten Feldern, samt Bergen',
+    sperren.anzahl === 8,
     `${sperren.anzahl} Felder`,
   );
   check(
@@ -2862,6 +2862,96 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     'Man kann die Farm schwenken — die Welt bewegt sich beim Ziehen',
     schwenken.vorher !== schwenken.nachher && schwenken.klar,
     `${schwenken.vorher} → ${schwenken.nachher}`,
+  );
+
+  console.log('\n9w. Bergbau: Mine bauen, graben, Erze ernten');
+  await api(`/api/admin/xp?account=${status.accountId}&amount=16000`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=60`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=nail&amount=40`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=20000`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=shovel&amount=3`, 'POST');
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Bau-Material im Postfach');
+  for (let i = 0; i < 8; i++) {
+    const c = await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`);
+    if (!c) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(220);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+  await evaluate(cdp, `(function () {
+    var f = document.getElementById('stufe-feier');
+    if (f && !f.hidden) { var w = document.getElementById('stufe-weiter'); if (w) w.click(); }
+  })()`);
+  await sleep(200);
+
+  const mineGebaut = await baueUndStelle(cdp, 'Mine');
+  check('Die Mine lässt sich ab Stufe 10 bauen und hinstellen', mineGebaut);
+
+  const grabWahl = await evaluate<{ opts: number; bundle: boolean; text: string }>(
+    cdp,
+    `(function () {
+       var t = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+         return x.querySelector('.name') && x.querySelector('.name').textContent.indexOf('Mine') === 0;
+       });
+       if (!t) return { opts: 0, bundle: false, text: 'keine Mine' };
+       t.click();
+       var opts = [...document.querySelectorAll('#pick-list .card.opt')];
+       var mehrfach = opts.some(function (o) {
+         return o.querySelectorAll('.yield img').length >= 2;
+       });
+       return { opts: opts.length, bundle: mehrfach, text: opts.map(function (o) { return o.querySelector('.top').textContent; }).join(' | ') };
+     })()`,
+  );
+  check(
+    'Die Mine bietet drei Grab-Rezepte, und der Ertrag zeigt mehrere Erze auf einmal',
+    grabWahl.opts === 3 && grabWahl.bundle,
+    `${grabWahl.opts} Rezepte (${grabWahl.text}), Bündel ${grabWahl.bundle}`,
+  );
+
+  const kohleVor = await stockOf('Kohle');
+  await evaluate(
+    cdp,
+    `(function () {
+       var o = [...document.querySelectorAll('#pick-list .card.opt')].find(function (c) {
+         return /Schaufel/.test(c.querySelector('.top').textContent) && !c.disabled;
+       });
+       if (o) o.click();
+     })()`,
+  );
+  await sleep(400);
+  await api(`/api/admin/time?account=${status.accountId}&seconds=250`, 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await waitFor(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].some(function (t) {
+       return t.querySelector('.name') && t.querySelector('.name').textContent.indexOf('Mine') === 0 && t.classList.contains('ripe');
+     })`,
+    'Der Stollen ist fertig',
+    20_000,
+  );
+  await evaluate(
+    cdp,
+    `(function () {
+       var t = [...document.querySelectorAll('#plots .plot')].find(function (x) {
+         return x.querySelector('.name') && x.querySelector('.name').textContent.indexOf('Mine') === 0;
+       });
+       if (t) t.click();
+     })()`,
+  );
+  let kohleNach = kohleVor;
+  let eisenNach = -1;
+  for (let i = 0; i < 40 && (kohleNach <= (kohleVor < 0 ? 0 : kohleVor) || eisenNach < 1); i++) {
+    await sleep(250);
+    kohleNach = await stockOf('Kohle');
+    eisenNach = await stockOf('Eisenerz');
+  }
+  check(
+    'Graben mit der Schaufel bringt Kohle und Eisenerz zugleich ins Lager',
+    kohleNach >= 2 && eisenNach >= 1,
+    `Kohle ${kohleNach}, Eisenerz ${eisenNach}`,
   );
 
   console.log('\n9y. Tagesbonus');

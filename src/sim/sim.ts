@@ -9,6 +9,7 @@ import {
   nextLevel,
   itemUnlockLevel,
   offerLimits,
+  recipeOutputs,
   sizeOf,
   recipeUnlocked,
   slotsAt,
@@ -226,8 +227,12 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!recipe) throw new SimError('RECIPE_NOT_ALLOWED');
       if (s.tick - slot.startedAt < recipe.durationTicks) throw new SimError('NOT_DONE');
 
-      const output = rules.items[recipe.output.item];
-      if (output?.storable && spaceLeft(s, rules) < recipe.output.amount) {
+      const alle = recipeOutputs(recipe);
+      let brauchtPlatz = 0;
+      for (const stack of alle) {
+        if (rules.items[stack.item]?.storable) brauchtPlatz += stack.amount;
+      }
+      if (brauchtPlatz > 0 && spaceLeft(s, rules) < brauchtPlatz) {
         throw new SimError('SILO_FULL');
       }
 
@@ -236,7 +241,10 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         ...plot,
         slots: replaceAt(plot.slots, slotIndex, { recipe: EMPTY_PLOT, startedAt: 0 }),
       });
-      next.items = addItem(s.items, recipe.output.item, recipe.output.amount);
+      next.items = addItems(
+        s.items,
+        alle.map((stack) => [stack.item, stack.amount] as [number, number]),
+      );
 
       next.xp = s.xp + recipe.xp;
       return next;

@@ -260,8 +260,35 @@ var ART = {
   'coop-': function (p) { return artCoop(p.stall ? p.stall.animals : p.capacity, p.done); },
   'pasture-': function (p) { return artPasture(p.stall ? p.stall.animals : p.capacity, p.done); },
   'dairy': function (p) { return artDairy(p.busy); },
+  'mine': function (p) { return artMine(p.busy); },
+  'forge': function (p) { return artForge(p.busy); },
   fallback: function () { return artField(0, null); },
 };
+
+function artMine(working) {
+  var loren = working ? '<circle cx="52" cy="60" r="1.4" fill="var(--roof)"><animate attributeName="cy" values="60;54;60" dur="1.6s" repeatCount="indefinite"/></circle>' : '';
+  return '<ellipse cx="50" cy="68" rx="44" ry="8" fill="var(--soil)" opacity=".25"/>' +
+    '<path d="M12 64L34 26l20 12 18-20 20 46z" fill="#7d858b"/>' +
+    '<path d="M34 26l20 12-8 26H24z" fill="#5f676d"/>' +
+    '<path d="M38 64V48a12 12 0 0 1 24 0v16z" fill="#2b2420"/>' +
+    '<path d="M40 64V49a10 10 0 0 1 20 0v15z" fill="#1a1512"/>' +
+    '<rect x="46" y="56" width="8" height="8" fill="var(--wood-dark)"/>' + loren +
+    '<circle cx="78" cy="30" r="4" fill="#c9d0d5"/><circle cx="20" cy="40" r="3" fill="#c9d0d5"/>';
+}
+
+function artForge(working) {
+  var feuer = working
+    ? '<path d="M44 40c0-6 6-6 6-12 4 4 8 6 8 12a7 7 0 0 1-14 0z" fill="var(--ripe)">' +
+      '<animate attributeName="opacity" values="1;.6;1" dur=".7s" repeatCount="indefinite"/></path>'
+    : '';
+  return '<ellipse cx="50" cy="68" rx="44" ry="8" fill="var(--soil)" opacity=".25"/>' +
+    '<path d="M24 64V34h40v30z" fill="#4a4038"/>' +
+    '<path d="M24 34h40l-6-8H30z" fill="#332c26"/>' +
+    '<rect x="40" y="44" width="20" height="14" rx="2" fill="#1a1512"/>' + feuer +
+    '<rect x="66" y="30" width="8" height="34" fill="#3a322c"/>' +
+    '<path d="M14 60h24l-4 6H16z" fill="#6b6a6e"/>' +
+    '<rect x="22" y="52" width="10" height="4" rx="2" fill="#8a8a90"/>';
+}
 
 function artFor(p) {
   if (ART[p.id]) return ART[p.id](p);

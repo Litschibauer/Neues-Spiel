@@ -5,6 +5,10 @@ var NAMES = {
   plank: 'Bretter', nail: 'Nägel',
   saw: 'Säge', shovel: 'Schaufel', pickaxe: 'Spitzhacke',
   map: 'Landkarte', mallet: 'Bauhammer', stake: 'Steckpfahl',
+  explosive: 'Sprengstoff', coal: 'Kohle', 'iron-ore': 'Eisenerz',
+  'gold-ore': 'Golderz', 'iron-bar': 'Eisenbarren', 'gold-bar': 'Goldbarren',
+  mine: 'Mine', forge: 'Schmiede',
+  'dig-shovel': 'Mit Schaufel', 'dig-pickaxe': 'Mit Spitzhacke', 'dig-blast': 'Mit Sprengstoff',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
@@ -69,6 +73,20 @@ function stacksMitBild(list) {
     .join(' + ');
 }
 function costText(cost) { return stacks(cost); }
+
+function ausbeute(recipeIndex) {
+  var r = rules.recipes[recipeIndex];
+  if (!r) return [];
+  return r.extra && r.extra.length ? [r.output].concat(r.extra) : [r.output];
+}
+function ausbeuteHtml(recipeIndex, klasse) {
+  return ausbeute(recipeIndex).map(function (s) {
+    return '+' + s.amount + ' ' + itemIcon(s.item, klasse || 'gross');
+  }).join(' ');
+}
+function ausbeuteText(recipeIndex) {
+  return ausbeute(recipeIndex).map(function (s) { return s.amount + ' ' + itemName(s.item); }).join(' + ');
+}
 
 function timeText(seconds) {
   if (seconds < 60) return seconds + ' s';

@@ -124,5 +124,5 @@ test('ältere Regelwerke kennen keine Erweiterungen', () => {
   const v21 = getRuleset(21);
   assert.equal(v21.expansions, undefined);
   assert.equal(v21.grid?.w, 13);
-  assert.equal(LATEST_RULESET_VERSION, 22);
+  assert.ok(LATEST_RULESET_VERSION >= 22);
 });

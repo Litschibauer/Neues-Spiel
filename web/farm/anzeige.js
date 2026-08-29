@@ -101,8 +101,8 @@ function plotStatus(p) {
   if (p.tap === 'start') {
     var n = p.next;
     if (!n) return 'antippen zum Starten';
-    if (n.inputs.length === 0) return 'antippen · +' + n.output.amount + ' ' + itemName(n.output.item);
-    return costText(n.inputs) + ' → ' + n.output.amount + ' ' + itemName(n.output.item);
+    if (n.inputs.length === 0) return 'antippen · ' + ausbeuteText(n.recipe);
+    return costText(n.inputs) + ' → ' + ausbeuteText(n.recipe);
   }
   return 'nichts zu tun';
 }

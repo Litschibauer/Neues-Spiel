@@ -14,10 +14,15 @@ export type RecipeDef = {
   id: string;
   inputs: readonly ItemStack[];
   output: ItemStack;
+  extra?: readonly ItemStack[];
   durationTicks: number;
   xp: number;
   minPlayerLevel?: number;
 };
+
+export function recipeOutputs(recipe: RecipeDef): readonly ItemStack[] {
+  return recipe.extra && recipe.extra.length > 0 ? [recipe.output, ...recipe.extra] : [recipe.output];
+}
 
 export type LevelDef = {
   label: string;
@@ -1122,17 +1127,166 @@ const V22: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+const EXPLOSIVE = 18;
+const COAL = 19;
+const IRON_ORE = 20;
+const GOLD_ORE = 21;
+const IRON_BAR = 22;
+const GOLD_BAR = 23;
+
+const R_DIG_SHOVEL = 9;
+const R_DIG_PICKAXE = 10;
+const R_DIG_BLAST = 11;
+const R_IRON_BAR = 12;
+const R_GOLD_BAR = 13;
+
+const V23: Ruleset = {
   ...V22,
+  version: 23,
+
+  items: [
+    ...V22.items,
+    { id: 'explosive', storable: false, npcPrice: 60, npcBuyPrice: 0 },
+    { id: 'coal', storable: true, npcPrice: 10, npcBuyPrice: 0 },
+    { id: 'iron-ore', storable: true, npcPrice: 22, npcBuyPrice: 0 },
+    { id: 'gold-ore', storable: true, npcPrice: 45, npcBuyPrice: 0 },
+    { id: 'iron-bar', storable: true, npcPrice: 90, npcBuyPrice: 0 },
+    { id: 'gold-bar', storable: true, npcPrice: 200, npcBuyPrice: 0 },
+  ],
+
+  recipes: [
+    ...V22.recipes,
+    {
+      id: 'dig-shovel',
+      inputs: [want(SHOVEL, 1)],
+      output: want(COAL, 2),
+      extra: [want(IRON_ORE, 1)],
+      durationTicks: 180,
+      xp: 6,
+      minPlayerLevel: 10,
+    },
+    {
+      id: 'dig-pickaxe',
+      inputs: [want(PICKAXE, 1)],
+      output: want(COAL, 3),
+      extra: [want(IRON_ORE, 2), want(GOLD_ORE, 1)],
+      durationTicks: 300,
+      xp: 12,
+      minPlayerLevel: 10,
+    },
+    {
+      id: 'dig-blast',
+      inputs: [want(EXPLOSIVE, 1)],
+      output: want(COAL, 5),
+      extra: [want(IRON_ORE, 3), want(GOLD_ORE, 2)],
+      durationTicks: 420,
+      xp: 22,
+      minPlayerLevel: 10,
+    },
+    {
+      id: 'iron-bar',
+      inputs: [want(IRON_ORE, 2), want(COAL, 1)],
+      output: want(IRON_BAR, 1),
+      durationTicks: 400,
+      xp: 20,
+      minPlayerLevel: 11,
+    },
+    {
+      id: 'gold-bar',
+      inputs: [want(GOLD_ORE, 2), want(COAL, 1)],
+      output: want(GOLD_BAR, 1),
+      durationTicks: 600,
+      xp: 35,
+      minPlayerLevel: 11,
+    },
+  ],
+
+  grid: { w: 52, h: 13 },
+
+  plots: [
+    ...V22.plots.map((p) => {
+      if (p.id === 'field-1') return { ...p, place: at(3, 64, 5, 15) };
+      if (p.id === 'field-2') return { ...p, place: at(8, 64, 5, 15) };
+      if (p.id === 'field-3') return { ...p, place: at(20, 64, 5, 15) };
+      return p;
+    }),
+    {
+      id: 'mine',
+      startLevel: 0,
+      place: at(2, 47, 12, 15),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Mine',
+          cost: [want(PLANK, 20), want(NAIL, 12), want(GOLD, 3000)],
+          recipes: [R_DIG_SHOVEL, R_DIG_PICKAXE, R_DIG_BLAST],
+          minPlayerLevel: 10,
+          slots: 1,
+        },
+        {
+          label: 'Zweiter Stollen',
+          cost: gold(4000),
+          recipes: [R_DIG_SHOVEL, R_DIG_PICKAXE, R_DIG_BLAST],
+          minPlayerLevel: 10,
+          slots: 2,
+        },
+      ],
+    },
+    {
+      id: 'forge',
+      startLevel: 0,
+      place: at(16, 47, 12, 15),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Schmiede',
+          cost: [want(PLANK, 24), want(NAIL, 16), want(GOLD, 5000)],
+          recipes: [R_IRON_BAR, R_GOLD_BAR],
+          minPlayerLevel: 11,
+          slots: 1,
+        },
+        {
+          label: 'Zweiter Ofen',
+          cost: gold(6000),
+          recipes: [R_IRON_BAR, R_GOLD_BAR],
+          minPlayerLevel: 11,
+          slots: 2,
+        },
+      ],
+    },
+  ],
+
+  obstacles: [
+    ...(V22.obstacles ?? []),
+    { kind: 'rock', gx: 42, gy: 3, w: 1, h: 1 },
+    { kind: 'rock', gx: 46, gy: 6, w: 1, h: 1 },
+    { kind: 'rock', gx: 49, gy: 9, w: 1, h: 1 },
+    { kind: 'rock', gx: 44, gy: 10, w: 1, h: 1 },
+  ],
+
+  chestKinds: (V22.chestKinds ?? []).map((k) => ({
+    ...k,
+    drops: [...k.drops, { item: EXPLOSIVE, min: 1, max: 1, weight: 4 }],
+  })),
+
+  expansions: [
+    ...(V22.expansions ?? []),
+    { id: 'm1', gx: 39, gy: 0, w: 13, h: 7, minLevel: 10, cost: [want(MAP, 4), want(MALLET, 5), want(STAKE, 8)] },
+    { id: 'm2', gx: 39, gy: 7, w: 13, h: 6, minLevel: 13, cost: [want(MAP, 6), want(MALLET, 7), want(STAKE, 11)] },
+  ],
+};
+
+const DEV: Ruleset = {
+  ...V23,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V22.recipes.map((r) => {
+  recipes: V23.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V22.plots.map((p) => {
+  plots: V23.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1162,16 +1316,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [20, V20],
   [21, V21],
   [22, V22],
+  [23, V23],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 22;
+export const LATEST_RULESET_VERSION = 23;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1323,7 +1478,7 @@ export function isTradable(rules: Ruleset, item: number): boolean {
 export function itemUnlockLevel(rules: Ruleset, item: number): number {
   let lvl: number | null = null;
   for (let i = 0; i < rules.recipes.length; i++) {
-    if (rules.recipes[i]!.output.item !== item) continue;
+    if (!recipeOutputs(rules.recipes[i]!).some((o) => o.item === item)) continue;
     const m = recipeMinLevel(rules, i);
     lvl = lvl === null ? m : Math.min(lvl, m);
   }
@@ -1410,9 +1565,11 @@ export function validateRuleset(rules: Ruleset): string[] {
       problems.push(`Rezept ${i} (${r.id}): Dauer ${r.durationTicks} < 1`);
     }
     if (!Number.isInteger(r.xp) || r.xp < 0) problems.push(`Rezept ${i} (${r.id}): XP ungültig`);
-    if (!itemOk(r.output.item)) problems.push(`Rezept ${i} (${r.id}): Ausgabe unbekannt`);
-    if (!Number.isInteger(r.output.amount) || r.output.amount < 1) {
-      problems.push(`Rezept ${i} (${r.id}): Ausgabemenge ${r.output.amount} < 1`);
+    for (const stack of recipeOutputs(r)) {
+      if (!itemOk(stack.item)) problems.push(`Rezept ${i} (${r.id}): Ausgabe unbekannt`);
+      if (!Number.isInteger(stack.amount) || stack.amount < 1) {
+        problems.push(`Rezept ${i} (${r.id}): Ausgabemenge ${stack.amount} < 1`);
+      }
     }
     const seen = new Set<number>();
     for (const input of r.inputs) {

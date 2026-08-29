@@ -524,7 +524,7 @@ function zeichnePicker(p) {
           timeText(o.durationTicks) +
           (o.affordable ? '' : ' · Zutaten fehlen')) +
       '</div></div>' +
-      '<span class="yield">+' + o.output.amount + ' ' + itemIcon(o.output.item, 'gross') + '</span>';
+      '<span class="yield">' + ausbeuteHtml(o.recipe) + '</span>';
     card.addEventListener('click', function () {
       var slot = sheet.slot;
       closePicker();
