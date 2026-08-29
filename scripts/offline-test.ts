@@ -783,10 +783,16 @@ try {
        return {
          landschaft: document.getElementById('scene').children.length > 0,
          verteilt: Object.keys(stellen).length,
-         imBild: kacheln.every(function (r) {
-           return r.left >= rahmen.left - 1 && r.right <= rahmen.right + 1
-             && r.top >= rahmen.top - 1 && r.bottom <= rahmen.bottom + 1;
-         }),
+         imBild: (function () {
+           var felder = [...document.querySelectorAll('#plots .plot')].filter(function (t) {
+             var n = t.querySelector('.name');
+             return n && n.textContent.indexOf('Feld') === 0;
+           }).map(function (t) { return t.getBoundingClientRect(); });
+           return felder.length > 0 && felder.every(function (r) {
+             return r.left >= rahmen.left - 1 && r.right <= rahmen.right + 1
+               && r.top >= rahmen.top - 1 && r.bottom <= rahmen.bottom + 1;
+           });
+         })(),
          ueberlappt: ueberlappt,
        };
      })()`,
@@ -2887,8 +2893,31 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   })()`);
   await sleep(200);
 
-  const mineGebaut = await baueUndStelle(cdp, 'Mine');
-  check('Die Mine lässt sich ab Stufe 10 bauen und hinstellen', mineGebaut);
+  // Die Mine ist fest — man baut sie an ihrem Platz am Berg, ohne Hinstellen.
+  const mineGebaut = await evaluate<{ gefunden: boolean; nachStufe: number }>(
+    cdp,
+    `(function () {
+       function tile() {
+         return [...document.querySelectorAll('#plots .plot')].find(function (x) {
+           return x.querySelector('.name') && x.querySelector('.name').textContent.indexOf('Mine') === 0;
+         });
+       }
+       var t = tile();
+       if (!t) return { gefunden: false, nachStufe: 0 };
+       t.click();
+       return { gefunden: true, nachStufe: 0 };
+     })()`,
+  );
+  await sleep(600);
+  const truthMine = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { plots: { level: number }[] };
+  };
+  const mineIdx = truthMine.state.plots.length - 2; // Mine liegt vor der Schmiede am Ende
+  check(
+    'Die feste Mine baut man am Berg auf — ohne Hinstellen',
+    mineGebaut.gefunden && (truthMine.state.plots[mineIdx]?.level ?? 0) >= 1,
+    `Mine-Stufe ${truthMine.state.plots[mineIdx]?.level}`,
+  );
 
   const grabWahl = await evaluate<{ opts: number; bundle: boolean; text: string }>(
     cdp,

@@ -142,8 +142,8 @@ export function initialState(rules: Ruleset): State {
     plots.push({
       level: def.startLevel,
       slots: emptySlots(slotsAt(rules, i, def.startLevel)),
-      gx: def.startLevel > 0 ? start.gx : -1,
-      gy: def.startLevel > 0 ? start.gy : -1,
+      gx: def.startLevel > 0 || def.fixed ? start.gx : -1,
+      gy: def.startLevel > 0 || def.fixed ? start.gy : -1,
       tiere: [],
     });
   }

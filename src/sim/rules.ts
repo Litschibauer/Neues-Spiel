@@ -1276,17 +1276,82 @@ const V23: Ruleset = {
   ],
 };
 
-const DEV: Ruleset = {
+function zelleSchluessel(gx: number, gy: number): number {
+  return gx * 1000 + gy;
+}
+
+function belegteZellen(hindernisse: readonly Obstacle[]): Set<number> {
+  const belegt = new Set<number>();
+  for (const h of hindernisse) {
+    for (let dx = 0; dx < h.w; dx++) {
+      for (let dy = 0; dy < h.h; dy++) belegt.add(zelleSchluessel(h.gx + dx, h.gy + dy));
+    }
+  }
+  return belegt;
+}
+
+// Streut deterministisch Hindernisse in ein Feld — nur ganzzahlige Rechnung,
+// prozent ist ein Ganzzahl-Anteil (30 = 30 %). Belegte Zellen bleiben frei.
+function wuchern(
+  e: Expansion,
+  kind: Obstacle['kind'],
+  prozent: number,
+  belegt: Set<number>,
+): Obstacle[] {
+  const out: Obstacle[] = [];
+  let seed = (e.gx * 73856 + e.gy * 19349 + 1) & 0x7fffffff;
+  const n = Math.floor((e.w * e.h * prozent) / 100);
+  for (let k = 0; k < n * 5 && out.length < n; k++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const gx = e.gx + (seed % e.w);
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const gy = e.gy + (seed % e.h);
+    const key = zelleSchluessel(gx, gy);
+    if (belegt.has(key)) continue;
+    belegt.add(key);
+    out.push({ kind, gx, gy, w: 1, h: 1 });
+  }
+  return out;
+}
+
+const V24_BELEGT = belegteZellen(V23.obstacles ?? []);
+const V24_HINDERNISSE: Obstacle[] = [...(V23.obstacles ?? [])];
+for (const e of V23.expansions ?? []) {
+  if (e.id.startsWith('w')) V24_HINDERNISSE.push(...wuchern(e, 'tree', 22, V24_BELEGT));
+  else if (e.id.startsWith('m')) V24_HINDERNISSE.push(...wuchern({ ...e, w: 11 }, 'rock', 25, V24_BELEGT));
+}
+
+const V24: Ruleset = {
   ...V23,
+  version: 24,
+
+  // Mine und Schmiede sind fest — man baut sie am Berg auf, verschiebt sie nie.
+  plots: V23.plots.map((p) => {
+    if (p.id === 'mine') return { ...p, fixed: true, place: at(97, 14, 3, 14) };
+    if (p.id === 'forge') return { ...p, fixed: true, place: at(97, 60, 3, 14) };
+    return p;
+  }),
+
+  // Berg-Erweiterungen etwas schmaler, damit rechts (Spalte 50/51) Platz für
+  // die festen Gebäude bleibt.
+  expansions: (V23.expansions ?? []).map((e) =>
+    e.id === 'm1' || e.id === 'm2' ? { ...e, w: 11 } : e,
+  ),
+
+  obstacles: V24_HINDERNISSE,
+};
+
+const DEV: Ruleset = {
+  ...V24,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V23.recipes.map((r) => {
+  recipes: V24.recipes.map((r) => {
     const tenth = Math.floor(r.durationTicks / 10);
     return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
   }),
-  plots: V23.plots.map((p) => {
+  plots: V24.plots.map((p) => {
     if (!p.animal) return p;
     const tenth = Math.floor(p.animal.growTicks / 10);
     return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
@@ -1317,16 +1382,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [21, V21],
   [22, V22],
   [23, V23],
+  [24, V24],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 23;
+export const LATEST_RULESET_VERSION = 24;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1390,6 +1456,22 @@ export function expansionAffordable(
   hat: (item: number) => number,
 ): boolean {
   return level >= feld.minLevel && feld.cost.every((c) => hat(c.item) >= c.amount);
+}
+
+// Ein Hindernis in einer noch gesperrten Erweiterung ist verborgen: es zeigt
+// sich (und lässt sich wegräumen) erst, wenn das Land freigeschaltet ist.
+export function obstacleLocked(
+  rules: Ruleset,
+  index: number,
+  expandiert: readonly string[],
+): boolean {
+  const h = rules.obstacles?.[index];
+  if (!h) return false;
+  for (const e of rules.expansions ?? []) {
+    if (expandiert.includes(e.id)) continue;
+    if (ueberlappt(h.gx, h.gy, h.w, h.h, e.gx, e.gy, e.w, e.h)) return true;
+  }
+  return false;
 }
 
 export function slotsAt(rules: Ruleset, plot: number, level: number): number {

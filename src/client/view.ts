@@ -6,6 +6,7 @@ import {
   nextLevelAt,
   isTradable,
   itemUnlockLevel,
+  obstacleLocked,
   offerLimits,
   recipeMinLevel,
   recipeUnlocked,
@@ -588,6 +589,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     }),
     obstacles: (rules.obstacles ?? []).flatMap((h, i): ObstacleView[] => {
       if (state.clearedObstacles.includes(i)) return [];
+      if (obstacleLocked(rules, i, state.expandiert)) return [];
       const art = rules.obstacleKinds?.[h.kind];
       return [
         {

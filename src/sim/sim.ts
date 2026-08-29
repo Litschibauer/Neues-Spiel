@@ -6,6 +6,7 @@ import {
   levelRecipes,
   listingFee,
   blockiert,
+  obstacleLocked,
   nextLevel,
   itemUnlockLevel,
   offerLimits,
@@ -597,6 +598,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const hindernis = rules.obstacles?.[cmd.index];
       if (!hindernis) throw new SimError('NO_SUCH_OBSTACLE');
       if (s.clearedObstacles.includes(cmd.index)) throw new SimError('ALREADY_CLEARED');
+      if (obstacleLocked(rules, cmd.index, s.expandiert)) throw new SimError('CELL_TAKEN');
 
       const art = rules.obstacleKinds?.[hindernis.kind];
       if (!art) throw new SimError('NEEDS_TOOL');

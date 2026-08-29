@@ -100,8 +100,10 @@ export const GROW: MigrationStep = (state, from, to) => {
 
   while (plots.length < to.plots.length) {
     const i = plots.length;
-    const level = to.plots[i]!.startLevel;
-    plots.push({ level, slots: emptySlots(slotsAt(to, i, level)), gx: -1, gy: -1, tiere: [] });
+    const def = to.plots[i]!;
+    const level = def.startLevel;
+    const ort = def.fixed ? startPlatz(to, i) : { gx: -1, gy: -1 };
+    plots.push({ level, slots: emptySlots(slotsAt(to, i, level)), gx: ort.gx, gy: ort.gy, tiere: [] });
   }
   next.plots = plots;
 
@@ -173,6 +175,18 @@ export const AUFS_RASTER: MigrationStep = (state, from, to) => {
   return next;
 };
 
+export const FESTE_PLAETZE: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  const plots = gewachsen.plots.map((p, i) => {
+    if (!to.plots[i]?.fixed || p.gx >= 0) return p;
+    const ort = startPlatz(to, i);
+    return { ...p, gx: ort.gx, gy: ort.gy };
+  });
+  const next = cloneState(gewachsen);
+  next.plots = plots;
+  return next;
+};
+
 export const TIERE: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   if (!to.animalsMustBeBought) return gewachsen;
@@ -216,6 +230,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['20->21', AUFS_RASTER],
   ['21->22', AUFS_RASTER],
   ['22->23', AUFS_RASTER],
+  ['23->24', FESTE_PLAETZE],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

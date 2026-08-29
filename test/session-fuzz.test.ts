@@ -112,7 +112,7 @@ test('die ausgeschriebene Referenz-Schleife stimmt mit der Einzelfunktion übere
 });
 
 test('Profil „busy": jede Version mehrfach — Client == Referenz == Server', () => {
-  const laeufe = VERSIONS.length * 20;
+  const laeufe = VERSIONS.length * 40;
   const s = runProfile(BUSY, laeufe);
 
   assert.ok(s.sessions > laeufe * 0.9, `zu wenige Sitzungen mit Commands: ${s.sessions}`);
