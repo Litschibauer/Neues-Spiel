@@ -303,19 +303,26 @@ for (const version of VERSIONS) {
   vectors.push(rules.boardDeliveryOnly ? coreLoopBrett(version) : coreLoopVector(version));
 }
 
-const doc = {
-  $comment:
-    'Golden Vectors für den Sim-Kern. Jede Plattform (iOS, Android, WASM, Server) muss ' +
-    'diesen Korpus abspielen und exakt dieselben Endzustände liefern. Abweichung = ' +
-    'Determinismus-Bug (R1). Nicht von Hand bearbeiten — siehe scripts/generate-golden.ts.',
-  rulesetVersions: VERSIONS,
-  vectorCount: vectors.length,
-  vectors,
-};
+const comment =
+  'Golden Vectors für den Sim-Kern. Jede Plattform (iOS, Android, WASM, Server) muss ' +
+  'diesen Korpus abspielen und exakt dieselben Endzustände liefern. Abweichung = ' +
+  'Determinismus-Bug (R1). Nicht von Hand bearbeiten — siehe scripts/generate-golden.ts.';
+
+// Kompakt geschrieben (kein Einrücken) — die Datei wird nie von Hand gelesen,
+// sondern maschinell abgespielt. Ein Vektor pro Zeile hält Git-Diffs klein,
+// wenn nur eine neue Regelversion dazukommt.
+const doc =
+  '{\n' +
+  `"$comment": ${JSON.stringify(comment)},\n` +
+  `"rulesetVersions": ${JSON.stringify(VERSIONS)},\n` +
+  `"vectorCount": ${vectors.length},\n` +
+  '"vectors": [\n' +
+  vectors.map((v) => JSON.stringify(v)).join(',\n') +
+  '\n]\n}\n';
 
 const outDir = join(import.meta.dirname, '..', 'test', 'vectors');
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, 'golden.json'), JSON.stringify(doc, null, 2) + '\n');
+writeFileSync(join(outDir, 'golden.json'), doc);
 
 const commandCount = vectors.reduce((n, v) => n + v.commands.length, 0);
 console.log(`${vectors.length} Vektoren, ${commandCount} Commands → test/vectors/golden.json`);
