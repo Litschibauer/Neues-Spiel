@@ -3129,10 +3129,18 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     }
     check('Nach einem Neuladen ist die neue Oberfläche da — ohne Cache-Löschen', sawNew);
 
-    const shellAfter = await evaluate<string>(
-      cdp,
-      `caches.keys().then(function (k) { return k.join(','); })`,
-    );
+    // Die Hülle kommt jetzt online direkt aus dem Netz (network-first), der neue
+    // Service Worker übernimmt und räumt kurz danach den alten Cache weg. Darum
+    // darauf warten, statt sofort zu prüfen.
+    let shellAfter = shellBefore;
+    for (let i = 0; i < 30; i++) {
+      shellAfter = await evaluate<string>(
+        cdp,
+        `caches.keys().then(function (k) { return k.join(','); })`,
+      ).catch(() => shellBefore);
+      if (shellAfter !== shellBefore && !shellAfter.includes(',')) break;
+      await sleep(500);
+    }
     check(
       'Der alte Hüllen-Cache ist weggeräumt, nicht angesammelt',
       shellAfter !== shellBefore && !shellAfter.includes(','),

@@ -53,7 +53,8 @@ function attempt(force) {
       if (!r.ok && r.reason === 'NOT_ACTIVE_DEVICE') {
         setLease(false, null);
       } else if (!r.ok) {
-        toast(r.reason === 'RULESET_MISMATCH' ? 'Bitte neu laden — neue Version' : 'Server hat abgelehnt', true);
+        if (r.reason === 'RULESET_MISMATCH') { neueVersionLaden(); return; }
+        toast('Server hat abgelehnt', true);
       }
       if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') afterSync(r.snapshot, r.serverTime);
       if (r.ok) { setLease(true, null); client.takeover = false; }
@@ -112,9 +113,32 @@ $('freundcode').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') freundHinzu();
 });
 
+// Der Server ist neuer als dieser Client (kennt ein höheres Regelwerk). Statt
+// hart abzustürzen und „offline für immer" zu hängen, den neuesten Client holen.
+var neuladeVersuch = false;
+function neueVersionLaden() {
+  if (neuladeVersuch) return;
+  neuladeVersuch = true;
+  try { $('conn-text').textContent = 'neue Version wird geladen…'; } catch (e) {}
+  var fertig = function () { location.reload(); };
+  if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+    navigator.serviceWorker.getRegistrations()
+      .then(function (rs) { return Promise.all(rs.map(function (r) { return r.update(); })); })
+      .then(fertig, fertig);
+  } else {
+    fertig();
+  }
+}
+
 function begin(restored) {
   client = restored;
-  rules = NS.getRuleset(client.rulesetVersion);
+  try {
+    rules = NS.getRuleset(client.rulesetVersion);
+  } catch (e) {
+    // Unbekanntes (neueres) Regelwerk → frischen Client nachladen statt abstürzen.
+    neueVersionLaden();
+    return false;
+  }
   engine = new NS.SyncEngine(client, transport, {
     baseDelayMs: 2000,
     maxDelayMs: 30000,
@@ -168,11 +192,12 @@ function begin(restored) {
   window.addEventListener('pagehide', function () { save(); stopLive(); });
   window.addEventListener('resize', function () { if (kamera.gesetzt) kameraAnwenden(); });
   startLive();
+  return true;
 }
 
 function start(snapshot, serverTime, id) {
   accountId = id || accountId;
-  begin(new NS.Client(snapshot, deviceId));
+  if (!begin(new NS.Client(snapshot, deviceId))) return;
   adopt(snapshot, serverTime);
   setConn('live');
   render();
@@ -181,7 +206,7 @@ function start(snapshot, serverTime, id) {
 function startOffline(saved) {
   clockOffsetMs = saved.clockOffsetMs;
   accountId = saved.accountId || null;
-  begin(saved.client);
+  if (!begin(saved.client)) return;
   setConn(navigator.onLine ? 'catching-up' : 'offline');
   render();
   attempt(true);
