@@ -7,7 +7,8 @@ export function canonicalize(state: State): string {
     .map(
       (p) =>
         `${p.level}@${p.gx},${p.gy}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}` +
-        `~${p.tiere.join('/')}`,
+        `~${p.tiere.join('/')}` +
+        (p.baum ? `%${p.baum.reifSeit}:${p.baum.geerntet}` : ''),
     )
     .join(',');
   const passives = state.passives.join(',');
@@ -78,6 +79,10 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CLEAR_OBSTACLE|${c.index}`;
     case 'EXPAND':
       return `${c.seq}|${c.tick}|EXPAND|${c.id}`;
+    case 'HARVEST_TREE':
+      return `${c.seq}|${c.tick}|HARVEST_TREE|${c.plot}`;
+    case 'FELL_TREE':
+      return `${c.seq}|${c.tick}|FELL_TREE|${c.plot}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

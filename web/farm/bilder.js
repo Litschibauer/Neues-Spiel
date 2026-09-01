@@ -262,8 +262,43 @@ var ART = {
   'dairy': function (p) { return artDairy(p.busy); },
   'mine': function (p) { return artMine(p.busy); },
   'forge': function (p) { return artForge(p.busy); },
+  'apple-tree': function (p) { return artAppleTree(p.baum ? p.baum.stufe : 'wachsen'); },
   fallback: function () { return artField(0, null); },
 };
+
+function artAppleTree(stufe) {
+  var schatten = '<ellipse cx="50" cy="90" rx="26" ry="6" fill="var(--ink)" opacity=".18"/>';
+
+  if (stufe === 'setzling') {
+    return '<g>' + schatten +
+      '<rect x="47" y="66" width="6" height="22" rx="2" fill="var(--wood-dark)"/>' +
+      '<circle cx="50" cy="58" r="12" fill="var(--leaf)"/>' +
+      '<circle cx="42" cy="62" r="7" fill="var(--leaf-dark)"/>' +
+      '<circle cx="58" cy="62" r="7" fill="var(--leaf-dark)"/></g>';
+  }
+
+  if (stufe === 'verwelkt') {
+    return '<g>' + schatten +
+      '<rect x="44" y="50" width="12" height="38" rx="3" fill="#6b5a45"/>' +
+      '<path d="M50 54L30 36M50 60L70 40M50 50L50 30" stroke="#6b5a45" stroke-width="5" stroke-linecap="round" fill="none"/>' +
+      '<path d="M34 40l-8-6M66 44l8-6" stroke="#6b5a45" stroke-width="4" stroke-linecap="round" fill="none"/></g>';
+  }
+
+  // wachsen und reif: großer Baum, reif zusätzlich mit roten Äpfeln.
+  var aepfel = stufe === 'reif'
+    ? '<circle cx="38" cy="44" r="5" fill="var(--ripe)"/>' +
+      '<circle cx="62" cy="42" r="5" fill="var(--ripe)"/>' +
+      '<circle cx="50" cy="30" r="5" fill="var(--ripe)"/>' +
+      '<circle cx="54" cy="54" r="5" fill="var(--ripe)"/>' +
+      '<circle cx="30" cy="52" r="4.5" fill="var(--ripe)"/>'
+    : '';
+  return '<g>' + schatten +
+    '<rect x="44" y="52" width="12" height="36" rx="3" fill="var(--wood-dark)"/>' +
+    '<circle cx="50" cy="42" r="30" fill="var(--leaf-dark)"/>' +
+    '<circle cx="32" cy="50" r="20" fill="var(--leaf)"/>' +
+    '<circle cx="68" cy="50" r="18" fill="var(--leaf)"/>' +
+    '<circle cx="50" cy="28" r="18" fill="var(--leaf)"/>' + aepfel + '</g>';
+}
 
 function artMine(working) {
   var loren = working ? '<circle cx="52" cy="60" r="1.4" fill="var(--roof)"><animate attributeName="cy" values="60;54;60" dur="1.6s" repeatCount="indefinite"/></circle>' : '';

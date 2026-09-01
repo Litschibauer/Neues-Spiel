@@ -247,6 +247,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['22->23', AUFS_RASTER],
   ['23->24', FESTE_PLAETZE],
   ['24->25', BAUBAR],
+  ['25->26', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -419,6 +420,19 @@ export function assertInvariants(state: State, rules: Ruleset): void {
     const capacity = slotsAt(rules, i, p.level);
     if (p.slots.length !== capacity) {
       problems.push(`Platz ${i}: ${p.slots.length} Plätze, Stufe ${p.level} hat ${capacity}`);
+    }
+
+    const baumDef = rules.plots[i]?.baum;
+    if (p.baum) {
+      if (!baumDef) problems.push(`Platz ${i}: Baum-Zustand auf einem Platz ohne Baum`);
+      if (!Number.isInteger(p.baum.reifSeit) || !Number.isInteger(p.baum.geerntet)) {
+        problems.push(`Platz ${i}: Baum-Zähler sind keine ganzen Zahlen`);
+      }
+      if (baumDef && (p.baum.geerntet < 0 || p.baum.geerntet > baumDef.ernten)) {
+        problems.push(`Platz ${i}: geerntet ${p.baum.geerntet} außerhalb [0, ${baumDef.ernten}]`);
+      }
+    } else if (baumDef && p.level > 0 && p.gx >= 0) {
+      problems.push(`Platz ${i}: gepflanzter Baum ohne Baum-Zustand`);
     }
 
     for (const [j, slot] of p.slots.entries()) {

@@ -69,6 +69,19 @@ export type AnimalDef = {
   growTicks: number;
 };
 
+// Apfelbaum: nach dem Pflanzen wächst der Setzling `setzlingTicks` lang, dann
+// tragen die Äpfel je `reifeTicks` nach. Nach `ernten` Ernten verwelkt der
+// Baum und muss mit dem Werkzeug `faellenWerkzeug` gefällt werden.
+export type BaumDef = {
+  setzlingTicks: number;
+  reifeTicks: number;
+  ernten: number;
+  ertrag: ItemStack;
+  xp: number;
+  faellenWerkzeug: number;
+  faellenXp: number;
+};
+
 export type PlotDef = {
   id: string;
   startLevel: number;
@@ -78,7 +91,20 @@ export type PlotDef = {
   fixed?: boolean;
   flat?: boolean;
   animal?: AnimalDef;
+  baum?: BaumDef;
 };
+
+export type BaumStufe = 'setzling' | 'wachsen' | 'reif' | 'verwelkt';
+
+// Reiner Zustandsübergang eines Apfelbaums — nur ganzzahlige Tick-Arithmetik,
+// damit der Sim-Kern deterministisch bleibt. `reifSeit`/`geerntet` stehen im
+// Platz-Zustand, `def` liefert die Zeiten.
+export function baumStufe(def: BaumDef, reifSeit: number, geerntet: number, tick: number): BaumStufe {
+  if (geerntet >= def.ernten) return 'verwelkt';
+  if (geerntet === 0 && tick < reifSeit) return 'setzling';
+  if (tick - reifSeit >= def.reifeTicks) return 'reif';
+  return 'wachsen';
+}
 
 export type GridDef = {
   w: number;
@@ -1351,20 +1377,71 @@ const V25: Ruleset = {
   ),
 };
 
-const DEV: Ruleset = {
+// v26: Der Apfelbaum. Ab Stufe 8 für Gold kaufbar, frei platzierbar. Er wächst
+// als Setzling heran, trägt dann Äpfel, die man mehrfach erntet — und verwelkt
+// zum Schluss, sodass man ihn mit der Säge fällen muss.
+const APPLE = 24;
+
+const V26: Ruleset = {
   ...V25,
+  version: 26,
+
+  items: [...V25.items, { id: 'apple', storable: true, npcPrice: 16, npcBuyPrice: 0 }],
+
+  plots: [
+    ...V25.plots,
+    {
+      id: 'apple-tree',
+      startLevel: 0,
+      place: at(85, 29, 13, 15),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Apfelbaum',
+          cost: gold(500),
+          recipes: [],
+          minPlayerLevel: 8,
+          slots: 0,
+        },
+      ],
+      baum: {
+        setzlingTicks: 1800,
+        reifeTicks: 900,
+        ernten: 6,
+        ertrag: want(APPLE, 4),
+        xp: 12,
+        faellenWerkzeug: SAW,
+        faellenXp: 20,
+      },
+    },
+  ],
+};
+
+// Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
+// ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
+const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
+
+const DEV: Ruleset = {
+  ...V26,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V25.recipes.map((r) => {
-    const tenth = Math.floor(r.durationTicks / 10);
-    return { ...r, durationTicks: tenth < 1 ? 1 : tenth };
-  }),
-  plots: V25.plots.map((p) => {
-    if (!p.animal) return p;
-    const tenth = Math.floor(p.animal.growTicks / 10);
-    return { ...p, animal: { ...p.animal, growTicks: tenth < 1 ? 1 : tenth } };
+  recipes: V26.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V26.plots.map((p) => {
+    let q = p;
+    if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
+    if (p.baum) {
+      q = {
+        ...q,
+        baum: {
+          ...p.baum,
+          setzlingTicks: zehntel(p.baum.setzlingTicks),
+          reifeTicks: zehntel(p.baum.reifeTicks),
+        },
+      };
+    }
+    return q;
   }),
 };
 
@@ -1394,16 +1471,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [23, V23],
   [24, V24],
   [25, V25],
+  [26, V26],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 25;
+export const LATEST_RULESET_VERSION = 26;
 
 export const DEV_RULESET_VERSION = 1001;
 

@@ -6,6 +6,7 @@ import {
   levelRecipes,
   listingFee,
   blockiert,
+  baumStufe,
   obstacleLocked,
   nextLevel,
   itemUnlockLevel,
@@ -204,14 +205,18 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
           level.cost.map((c): [number, number] => [c.item, -c.amount]),
         );
       }
-      next.plots = replaceAt(s.plots, cmd.plot, {
+      const gebaut = {
         ...plot,
         level: plot.level + 1,
         slots:
           running.length > 0
             ? [...plot.slots, ...emptySlots(capacity - plot.slots.length)]
             : emptySlots(capacity),
-      });
+      };
+      // Einen Apfelbaum kauft man als Setzling. Die Setzlingsuhr startet erst
+      // beim Hinstellen (PLACE), darum reifSeit = 0 als „noch nicht gepflanzt".
+      if (def.baum) gebaut.baum = { reifSeit: 0, geerntet: 0 };
+      next.plots = replaceAt(s.plots, cmd.plot, gebaut);
       return next;
     }
 
@@ -572,7 +577,13 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       }
 
       const next = cloneState(s);
-      next.plots = replaceAt(s.plots, cmd.plot, { ...plot, gx: cmd.gx, gy: cmd.gy });
+      const gesetzt = { ...plot, gx: cmd.gx, gy: cmd.gy };
+      // Beim ersten Hinstellen den Setzling einpflanzen: die Setzlingsuhr läuft
+      // ab jetzt. Späteres Verschieben (reifSeit > 0) setzt sie nicht zurück.
+      if (def.baum && plot.baum && plot.baum.reifSeit === 0) {
+        gesetzt.baum = { reifSeit: s.tick + def.baum.setzlingTicks, geerntet: 0 };
+      }
+      next.plots = replaceAt(s.plots, cmd.plot, gesetzt);
       return next;
     }
 
@@ -591,6 +602,57 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
         feld.cost.map((c) => [c.item, -c.amount] as [number, number]),
       );
       next.expandiert = s.expandiert.concat(feld.id);
+      return next;
+    }
+
+    case 'HARVEST_TREE': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (!def.baum || !plot.baum) throw new SimError('NOT_A_TREE');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
+      if (rules.grid && plot.gx < 0) throw new SimError('NOT_PLACED');
+
+      const stufe = baumStufe(def.baum, plot.baum.reifSeit, plot.baum.geerntet, s.tick);
+      if (stufe !== 'reif') throw new SimError('TREE_NOT_RIPE');
+
+      const ertrag = def.baum.ertrag;
+      if (rules.items[ertrag.item]?.storable && spaceLeft(s, rules) < ertrag.amount) {
+        throw new SimError('SILO_FULL');
+      }
+
+      const next = cloneState(s);
+      next.items = addItem(s.items, ertrag.item, ertrag.amount);
+      next.xp = s.xp + def.baum.xp;
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        ...plot,
+        baum: { reifSeit: s.tick, geerntet: plot.baum.geerntet + 1 },
+      });
+      return next;
+    }
+
+    case 'FELL_TREE': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (!def.baum || !plot.baum) throw new SimError('NOT_A_TREE');
+
+      const stufe = baumStufe(def.baum, plot.baum.reifSeit, plot.baum.geerntet, s.tick);
+      if (stufe !== 'verwelkt') throw new SimError('TREE_NOT_WITHERED');
+      if (count(s, def.baum.faellenWerkzeug) < 1) throw new SimError('NEEDS_TOOL');
+
+      const next = cloneState(s);
+      next.items = addItem(s.items, def.baum.faellenWerkzeug, -1);
+      next.xp = s.xp + def.baum.faellenXp;
+      // Der Baum ist weg: Platz zurück auf Stufe 0 und vom Raster nehmen, damit
+      // man an derselben Stelle einen neuen Baum (oder etwas anderes) setzen kann.
+      next.plots = replaceAt(s.plots, cmd.plot, {
+        level: 0,
+        slots: [],
+        gx: -1,
+        gy: -1,
+        tiere: [],
+      });
       return next;
     }
 

@@ -52,6 +52,13 @@ function renderPurse(v) {
 }
 
 function plotStatus(p) {
+  if (p.baum) {
+    var b = p.baum;
+    if (b.stufe === 'reif') return 'reif · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item) + ' ernten';
+    if (b.stufe === 'verwelkt') return 'verwelkt · mit Säge fällen';
+    if (b.stufe === 'setzling') return 'Setzling · in ' + timeText(b.reifIn);
+    return 'Äpfel reifen · noch ' + timeText(b.reifIn) + ' (' + b.geerntet + '/' + b.ernten + ')';
+  }
   if (p.stall) {
     var art = animalOf(p.index);
     if (p.stall.animals === 0) return 'leer · ' + art.jung + ' kaufen';
@@ -129,9 +136,11 @@ function renderPlots(v) {
   reihenfolge.forEach(function (p) {
     var ort = plotKasten(p.index, p);
     var tile = document.createElement('button');
-    tile.className = 'plot' + (p.done ? ' ripe' : '') + (p.idle ? ' locked' : '') +
-      (p.blocked === 'level' ? ' gated' : '');
-    tile.disabled = (p.stall || p.capacity > 1)
+    var baumReif = p.baum && p.baum.stufe === 'reif';
+    var baumWelk = p.baum && p.baum.stufe === 'verwelkt';
+    tile.className = 'plot' + (p.done || baumReif || baumWelk ? ' ripe' : '') +
+      (p.idle ? ' locked' : '') + (p.blocked === 'level' ? ' gated' : '');
+    tile.disabled = (p.stall || p.capacity > 1 || p.baum)
       ? false
       : (p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false);
     tile.style.left = ort.left + '%';
@@ -148,16 +157,19 @@ function renderPlots(v) {
       artFor(p) + '</svg>';
     tile.appendChild(art.firstChild);
 
-    if (p.done) {
+    if (p.done || baumReif || baumWelk) {
       var badge = document.createElement('span');
       badge.className = 'badge';
-      badge.textContent = p.capacity > 1
-        ? String(p.slots.filter(function (s) { return s.done; }).length)
-        : '!';
+      badge.textContent = baumWelk
+        ? '🪓'
+        : p.capacity > 1
+          ? String(p.slots.filter(function (s) { return s.done; }).length)
+          : '!';
       tile.appendChild(badge);
     }
 
-    if (p.busy) {
+    var baumWaechst = p.baum && (p.baum.stufe === 'setzling' || p.baum.stufe === 'wachsen');
+    if (p.busy || baumWaechst) {
       var bar = document.createElement('div');
       bar.className = 'bar';
       var fill = document.createElement('i');

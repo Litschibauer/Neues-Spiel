@@ -9,6 +9,7 @@ var NAMES = {
   'gold-ore': 'Golderz', 'iron-bar': 'Eisenbarren', 'gold-bar': 'Goldbarren',
   mine: 'Mine', forge: 'Schmiede',
   'dig-shovel': 'Mit Schaufel', 'dig-pickaxe': 'Mit Spitzhacke', 'dig-blast': 'Mit Sprengstoff',
+  apple: 'Äpfel', 'apple-tree': 'Apfelbaum',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

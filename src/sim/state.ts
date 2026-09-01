@@ -6,12 +6,21 @@ export type Slot = {
   startedAt: number;
 };
 
+// Apfelbaum-Zustand: reifSeit = Tick, ab dem die aktuelle Apfelrunde zählt
+// (beim Pflanzen auf Pflanztick + Setzlingszeit gesetzt); geerntet = Anzahl
+// bisheriger Ernten. Nur Baum-Plätze tragen dieses Feld.
+export type Baum = {
+  reifSeit: number;
+  geerntet: number;
+};
+
 export type Plot = {
   level: number;
   slots: readonly Slot[];
   gx: number;
   gy: number;
   tiere: readonly number[];
+  baum?: Baum;
 };
 
 export const EMPTY_SLOT: Slot = { recipe: -1, startedAt: 0 };

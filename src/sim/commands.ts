@@ -64,6 +64,10 @@ export type PlaceCommand = CommandBase & {
 
 export type ExpandCommand = CommandBase & { type: 'EXPAND'; id: string };
 
+// Apfelbaum: ernten, wenn Äpfel reif sind; fällen, wenn der Baum verwelkt ist.
+export type HarvestTreeCommand = CommandBase & { type: 'HARVEST_TREE'; plot: number };
+export type FellTreeCommand = CommandBase & { type: 'FELL_TREE'; plot: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -85,6 +89,8 @@ export type Command =
   | UpgradeSiloCommand
   | PlaceCommand
   | ExpandCommand
+  | HarvestTreeCommand
+  | FellTreeCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -148,7 +154,10 @@ export type SimErrorCode =
   | 'NO_SUCH_REQUEST'
   | 'REQUEST_NOT_ACTIVE'
   | 'SKIP_ON_COOLDOWN'
-  | 'SKIP_DISABLED';
+  | 'SKIP_DISABLED'
+  | 'NOT_A_TREE'
+  | 'TREE_NOT_RIPE'
+  | 'TREE_NOT_WITHERED';
 
 export class SimError extends Error {
   code: SimErrorCode;

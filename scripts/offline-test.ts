@@ -2894,7 +2894,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await sleep(200);
 
   // Die Mine ist fest — man baut sie an ihrem Platz am Berg, ohne Hinstellen.
-  const mineGebaut = await evaluate<{ gefunden: boolean; nachStufe: number }>(
+  const mineGebaut = await evaluate<{ gefunden: boolean; nachStufe: number; idx: number }>(
     cdp,
     `(function () {
        function tile() {
@@ -2903,16 +2903,19 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
          });
        }
        var t = tile();
-       if (!t) return { gefunden: false, nachStufe: 0 };
+       if (!t) return { gefunden: false, nachStufe: 0, idx: -1 };
+       var idx = parseInt(t.dataset.platz, 10);
        t.click();
-       return { gefunden: true, nachStufe: 0 };
+       return { gefunden: true, nachStufe: 0, idx: idx };
      })()`,
   );
   await sleep(600);
   const truthMine = (await api(`/api/admin/status?account=${status.accountId}`)) as {
     state: { plots: { level: number }[] };
   };
-  const mineIdx = truthMine.state.plots.length - 2; // Mine liegt vor der Schmiede am Ende
+  // Den echten Platz-Index aus der Kachel lesen — der Katalog wächst hinten,
+  // darum ist die Mine nicht mehr fest das vorletzte Element.
+  const mineIdx = mineGebaut.idx;
   check(
     'Die feste Mine baut man am Berg auf — ohne Hinstellen',
     mineGebaut.gefunden && (truthMine.state.plots[mineIdx]?.level ?? 0) >= 1,

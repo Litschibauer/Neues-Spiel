@@ -6,6 +6,7 @@ import {
   nextLevelAt,
   isTradable,
   itemUnlockLevel,
+  baumStufe,
   obstacleLocked,
   offerLimits,
   recipeMinLevel,
@@ -63,6 +64,7 @@ export type PlotView = {
   tap: 'collect' | 'start' | 'buy' | 'none';
   blocked: Blocker;
   stall: StallView | null;
+  baum: BaumView | null;
   upgrade: {
     label: string;
     cost: readonly Stack[];
@@ -79,6 +81,17 @@ export type StallView = {
   animals: number;
   free: number;
   affordable: boolean;
+};
+
+export type BaumView = {
+  stufe: 'setzling' | 'wachsen' | 'reif' | 'verwelkt';
+  ertrag: Stack;
+  geerntet: number;
+  ernten: number;
+  reifIn: number;
+  progress: number;
+  faellenWerkzeug: number;
+  kannFaellen: boolean;
 };
 
 export type RecipeOption = {
@@ -423,6 +436,32 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     tap = 'start';
   }
 
+  let baum: BaumView | null = null;
+  if (def.baum && plot.baum && plot.level > 0) {
+    const bd = def.baum;
+    const stufe = baumStufe(bd, plot.baum.reifSeit, plot.baum.geerntet, state.tick);
+    const reifIn =
+      stufe === 'setzling'
+        ? Math.max(0, plot.baum.reifSeit + bd.reifeTicks - state.tick)
+        : stufe === 'wachsen'
+          ? Math.max(0, plot.baum.reifSeit + bd.reifeTicks - state.tick)
+          : 0;
+    const gesamt = stufe === 'setzling' ? bd.setzlingTicks + bd.reifeTicks : bd.reifeTicks;
+    baum = {
+      stufe,
+      ertrag: { item: bd.ertrag.item, amount: bd.ertrag.amount },
+      geerntet: plot.baum.geerntet,
+      ernten: bd.ernten,
+      reifIn,
+      progress: gesamt > 0 ? Math.max(0, Math.min(1, 1 - reifIn / gesamt)) : 1,
+      faellenWerkzeug: bd.faellenWerkzeug,
+      kannFaellen: stufe === 'verwelkt' && count(state, bd.faellenWerkzeug) >= 1,
+    };
+    // Der Baum hat kein Rezept-/Stall-UI — Tippen erntet oder fällt.
+    tap = 'none';
+    blocked = null;
+  }
+
   return {
     index: i,
     id: def.id,
@@ -430,11 +469,11 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     gx: plot.gx,
     gy: plot.gy,
     size: sizeOf(rules, i),
-    idle: !running && !canRun,
+    idle: !running && !canRun && !baum,
     busy: lead !== null && lead.busy,
     done: anyDone,
-    progress: lead?.progress ?? 0,
-    remaining: lead?.remaining ?? 0,
+    progress: baum ? baum.progress : lead?.progress ?? 0,
+    remaining: baum ? baum.reifIn : lead?.remaining ?? 0,
     producing: lead?.producing ?? null,
     output: lead?.output ?? null,
     next: free > 0 ? startOption : null,
@@ -445,6 +484,7 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     tap,
     blocked,
     stall,
+    baum,
     upgrade,
   };
 }

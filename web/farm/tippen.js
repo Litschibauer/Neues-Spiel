@@ -37,6 +37,7 @@ function tapPlot(i) {
   client.localTick = tickNow();
   var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
 
+  if (p.baum) { tapBaum(p); return; }
   if (p.stall || p.capacity > 1) { openStall(p); return; }
 
   if (p.tap === 'collect') {
@@ -66,6 +67,29 @@ function tapPlot(i) {
   if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
   else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
   else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
+}
+
+function tapBaum(p) {
+  var b = p.baum;
+  if (b.stufe === 'reif') {
+    var wo = platzKasten(p.index);
+    var vorher = client.preview().xp;
+    var res = client.harvestTree(p.index);
+    act('Geerntet · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), res, 'ernte');
+    if (res.ok) {
+      zahlAuf(wo, '+' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), 'ware');
+      var dazu = client.preview().xp - vorher;
+      if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+    }
+    return;
+  }
+  if (b.stufe === 'verwelkt') {
+    if (!b.kannFaellen) { toast('Zum Fällen brauchst du eine ' + itemName(b.faellenWerkzeug), true); return; }
+    act('Baum gefällt', client.fellTree(p.index), 'ernte');
+    return;
+  }
+  if (b.stufe === 'setzling') toast('Setzling · in ' + timeText(b.reifIn) + ' trägt er Äpfel');
+  else toast('Äpfel reifen · noch ' + timeText(b.reifIn));
 }
 
 var sheet = { plot: null, mode: null, slot: 0 };
