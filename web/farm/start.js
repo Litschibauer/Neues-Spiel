@@ -18,6 +18,20 @@ function setLease(active, since) {
   }
 }
 
+// Der Server weist den gespeicherten Schlüssel dauerhaft ab (401). Dann taugt
+// der Token nicht (mehr) für diesen Hof — z. B. weil er überschrieben wurde.
+// Statt still offline zu bleiben, das Anmeldefenster zeigen, damit man den
+// richtigen Hof-Schlüssel neu eingeben kann.
+function braucheAnmeldung() {
+  stopLive();
+  $('shell').hidden = true;
+  $('keygate').hidden = true;
+  $('gate').hidden = false;
+  $('connect').disabled = false;
+  $('key').value = '';
+  toast('Bitte deinen Hof-Schlüssel eingeben', true);
+}
+
 function refreshLease() {
   return api('/api/state?deviceId=' + encodeURIComponent(deviceId))
     .then(function (data) {
@@ -25,7 +39,9 @@ function refreshLease() {
       setLease(data.isActiveDevice !== false, data.activeSince);
       if (wasActive && !isActive) toast('Anderes Gerät hat übernommen', true);
     })
-    .catch(function () {  });
+    .catch(function (e) {
+      if (e && e.message === 'UNAUTHORIZED') braucheAnmeldung();
+    });
 }
 
 var ONLINE_NUR = { freunde: 1, besuch: 1, fremdstand: 1, stand: 1, bonus: 1 };

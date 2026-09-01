@@ -163,7 +163,12 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var token = localStorage.getItem('ns-token') || '';
+  // Eigener Schlüssel! NICHT 'ns-token' — den benutzt das Spiel für den
+  // Hof-Token. Würden beide sich denselben Schlüssel teilen, überschreiben
+  // Admin-Schlüssel und Hof-Token einander: das Admin-Panel macht den offenen
+  // Hof offline, und ein neuer Hof macht das Admin-Panel „vergesslich".
+  var ADMIN_KEY = 'ns-admin-token';
+  var token = localStorage.getItem(ADMIN_KEY) || '';
   var hoefe = [];
   var gewaehlt = null;
 
@@ -288,7 +293,7 @@
     if (!token) return;
     $('connect').disabled = true;
     ladeHoefe().then(function () {
-      localStorage.setItem('ns-token', token);
+      localStorage.setItem(ADMIN_KEY, token);
       $('setup').hidden = true;
       $('panel').hidden = false;
     }).catch(function (e) {
