@@ -398,8 +398,12 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       for (const entry of s.mail) {
         const def = rules.items[entry.item];
 
+        // Bei siloUeberlauf darf das Postfach das Lager übervoll machen —
+        // sonst nur so viel abholen, wie hineinpasst.
         const fits =
-          !def?.storable || capacityOf(s, rules) - storedIn(items, rules) >= entry.amount;
+          rules.siloUeberlauf ||
+          !def?.storable ||
+          capacityOf(s, rules) - storedIn(items, rules) >= entry.amount;
         if (fits) {
           items = addItem(items, entry.item, entry.amount);
           collected++;

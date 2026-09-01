@@ -185,6 +185,10 @@ export type Ruleset = {
   helpPerFarmPerDay?: number;
   helpSpeedupPct?: number;
   helpXp?: number;
+  // Erlaubt, dass das Lager über seine Kapazität hinaus gefüllt wird (z. B. per
+  // Admin-Postfach). Ist es voll, produziert nichts mehr von selbst nach — man
+  // muss erst verkaufen/verbrauchen.
+  siloUeberlauf?: boolean;
 };
 
 const GOLD = 0;
@@ -1417,18 +1421,42 @@ const V26: Ruleset = {
   ],
 };
 
+// v27: Freigeschaltetes Land ist gemischt bewachsen — Bäume, Steine UND Teiche
+// statt nur Bäumen, wie beim Startplot. Positionen und Anzahl bleiben exakt wie
+// in v26 (die Kataloge dürfen nur hinten wachsen; clearedObstacles zeigt per
+// Index), nur die ART der erzeugten Baum-Hindernisse wird fair verteilt.
+const V27_BASIS = (V23.obstacles ?? []).length;
+const V27_HINDERNISSE: Obstacle[] = V24_HINDERNISSE.map((h, i) => {
+  if (i < V27_BASIS) return h; // Startplot + Berg-Basis unverändert
+  if (h.kind !== 'tree') return h; // erzeugte Berg-Steine bleiben Steine
+  const r = ((h.gx * 73856 + h.gy * 19349 + 3) & 0x7fffffff) % 10;
+  const kind: Obstacle['kind'] = r < 5 ? 'tree' : r < 8 ? 'rock' : 'pond';
+  return { ...h, kind };
+});
+
+const V27: Ruleset = {
+  ...V26,
+  version: 27,
+  // Das Postfach-Limit von 20 ist weg (praktisch unbegrenzt) …
+  mailCapacity: 9999,
+  // … und das Lager darf übervoll werden (Admin-Postfach). Voll = nichts wächst
+  // mehr von selbst nach, erst leeren.
+  siloUeberlauf: true,
+  obstacles: V27_HINDERNISSE,
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V26,
+  ...V27,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V26.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V26.plots.map((p) => {
+  recipes: V27.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V27.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1472,16 +1500,17 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [24, V24],
   [25, V25],
   [26, V26],
+  [27, V27],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 26;
+export const LATEST_RULESET_VERSION = 27;
 
 export const DEV_RULESET_VERSION = 1001;
 

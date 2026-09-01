@@ -170,6 +170,8 @@ export type ObstacleView = {
   tool: number;
   xp: number;
   removable: boolean;
+  // In noch gesperrtem Land: als graue Vorschau sichtbar, aber nicht räumbar.
+  locked: boolean;
 };
 
 export type ChestView = {
@@ -250,6 +252,7 @@ export type FarmView = {
     used: number;
     capacity: number;
     full: boolean;
+    over: boolean;
     free: number;
     level: number;
     upgrade: SiloUpgradeView;
@@ -560,6 +563,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       used,
       capacity,
       full: free <= 0,
+      over: used > capacity,
       free,
       level: state.siloLevel,
       upgrade: siloUpgrade(state, rules),
@@ -629,7 +633,10 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     }),
     obstacles: (rules.obstacles ?? []).flatMap((h, i): ObstacleView[] => {
       if (state.clearedObstacles.includes(i)) return [];
-      if (obstacleLocked(rules, i, state.expandiert)) return [];
+      // Gesperrtes Land verbirgt die Hindernisse nicht mehr — sie erscheinen als
+      // graue Vorschau, damit man sieht, was einen erwartet. Räumen geht erst
+      // nach dem Freischalten.
+      const locked = obstacleLocked(rules, i, state.expandiert);
       const art = rules.obstacleKinds?.[h.kind];
       return [
         {
@@ -641,7 +648,8 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
           h: h.h,
           tool: art?.tool ?? -1,
           xp: art?.xp ?? 0,
-          removable: art !== undefined && count(state, art.tool) >= 1,
+          removable: !locked && art !== undefined && count(state, art.tool) >= 1,
+          locked,
         },
       ];
     }),

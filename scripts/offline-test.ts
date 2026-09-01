@@ -2235,7 +2235,9 @@ try {
   const hindernisse = await evaluate<string>(
     cdp,
     `(function () {
-       var arten = [...document.querySelectorAll('#hindernisse .hindernis')]
+       // Nur die echten (nicht gesperrten) Hindernisse — die grauen Vorschauen
+       // im gesperrten Land tragen '.verborgen'.
+       var arten = [...document.querySelectorAll('#hindernisse .hindernis:not(.verborgen)')]
          .map(function (h) { return h.getAttribute('aria-label'); });
        return [...new Set(arten)].sort().join('+');
      })()`,

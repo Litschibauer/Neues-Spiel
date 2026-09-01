@@ -5,7 +5,7 @@ import { initialState } from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 import { farmView } from '../src/client/view.ts';
 
-const V = getRuleset(25);
+const V = getRuleset(27);
 
 test('nur die Mine ist fest; die Schmiede baut man wie einen Stall', () => {
   const mine = V.plots.findIndex((p) => p.id === 'mine');
@@ -52,15 +52,30 @@ test('ein Hindernis im gesperrten Land lässt sich nicht wegräumen', () => {
   assert.ok(nach.clearedObstacles.includes(drin), 'freigeschaltet: geht');
 });
 
-test('das Ansichtsmodell blendet Hindernisse in gesperrtem Land aus', () => {
+test('das Ansichtsmodell zeigt gesperrte Hindernisse als graue Vorschau', () => {
   const s = initialState(V);
   const w1 = V.expansions!.find((e) => e.id === 'w1')!;
-  const sichtbarInW1 = (idx: readonly { gx: number; gy: number }[]) =>
-    idx.some((o) => o.gx >= w1.gx && o.gx < w1.gx + w1.w && o.gy >= w1.gy && o.gy < w1.gy + w1.h);
+  const inW1 = (o: { gx: number; gy: number }) =>
+    o.gx >= w1.gx && o.gx < w1.gx + w1.w && o.gy >= w1.gy && o.gy < w1.gy + w1.h;
 
-  const gesperrt = farmView(s, V, false);
-  assert.equal(sichtbarInW1(gesperrt.obstacles), false, 'gesperrt: keine Hindernisse in w1 sichtbar');
+  const gesperrt = farmView(s, V, false).obstacles.filter(inW1);
+  assert.ok(gesperrt.length > 0, 'die Hindernisse in w1 sind als Vorschau sichtbar');
+  assert.ok(gesperrt.every((o) => o.locked), 'gesperrt: als Vorschau markiert');
+  assert.ok(gesperrt.every((o) => !o.removable), 'gesperrt: nicht räumbar');
 
-  const auf = farmView({ ...s, expandiert: ['w1'] }, V, false);
-  assert.equal(sichtbarInW1(auf.obstacles), true, 'freigeschaltet: jetzt sichtbar');
+  const auf = farmView({ ...s, expandiert: ['w1'] }, V, false).obstacles.filter(inW1);
+  assert.ok(auf.length > 0 && auf.every((o) => !o.locked), 'freigeschaltet: nicht mehr gesperrt');
+});
+
+test('freigeschaltetes Land ist gemischt bewachsen — Bäume, Steine und Teiche', () => {
+  const arten = new Set<string>();
+  for (const e of V.expansions ?? []) {
+    if (!e.id.startsWith('w')) continue;
+    for (const h of V.obstacles ?? []) {
+      if (h.gx >= e.gx && h.gx < e.gx + e.w && h.gy >= e.gy && h.gy < e.gy + e.h) arten.add(h.kind);
+    }
+  }
+  assert.ok(arten.has('tree'), 'Bäume');
+  assert.ok(arten.has('rock'), 'Steine');
+  assert.ok(arten.has('pond'), 'Teiche');
 });

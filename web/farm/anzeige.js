@@ -47,8 +47,8 @@ function renderPurse(v) {
     : v.xp.into + ' / ' + v.xp.span + ' XP';
 
   $('silo-num').textContent = v.silo.used + '/' + v.silo.capacity;
-  $('silo-fill').style.width = Math.round((v.silo.used * 100) / v.silo.capacity) + '%';
-  $('silo').className = 'silo' + (v.silo.full ? ' full' : '');
+  $('silo-fill').style.width = Math.min(100, Math.round((v.silo.used * 100) / v.silo.capacity)) + '%';
+  $('silo').className = 'silo' + (v.silo.over ? ' over' : v.silo.full ? ' full' : '');
 }
 
 function plotStatus(p) {
@@ -284,7 +284,8 @@ function renderHindernisse(v) {
   v.obstacles.forEach(function (h) {
     var kasten = hindernisKasten(h);
     var knopf = document.createElement('button');
-    knopf.className = 'moebel hindernis' + (h.removable ? ' raeumbar' : '');
+    knopf.className = 'moebel hindernis' +
+      (h.removable ? ' raeumbar' : '') + (h.locked ? ' verborgen' : '');
     knopf.style.left = kasten.left + '%';
     knopf.style.top = kasten.top + '%';
     knopf.style.width = kasten.width + '%';
@@ -294,36 +295,34 @@ function renderHindernisse(v) {
       '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
       (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>' +
       (h.removable ? '<span class="badge">✓</span>' : '');
-    knopf.setAttribute('aria-label', hindernisName(h.kind));
-    knopf.addEventListener('click', function () { tippeHindernis(h); });
+    knopf.setAttribute('aria-label', hindernisName(h.kind) + (h.locked ? ' (gesperrtes Land)' : ''));
+    // Im gesperrten Land nur Vorschau: nicht anklickbar (Klick geht an die
+    // Land-Sperre darüber), grau über CSS.
+    if (h.locked) {
+      knopf.disabled = true;
+      knopf.style.pointerEvents = 'none';
+    } else {
+      knopf.addEventListener('click', function () { tippeHindernis(h); });
+    }
     box.appendChild(knopf);
   });
 }
 
 function sperrGebuesch(e) {
-  var out = '<rect x="0" y="0" width="100" height="100" fill="#2f5a2c"/>';
+  // Leichter, durchscheinender Schleier statt dichtem Gebüsch: darunter scheinen
+  // die echten (grauen) Hindernisse durch, damit man sieht, was einen erwartet.
+  var out = '<rect x="0" y="0" width="100" height="100" fill="rgba(24,42,20,0.34)"/>';
   var seed = (e.gx * 31 + e.gy * 17) % 97;
   function rnd(m) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % m; }
-  var toene = ['#37632f', '#3f6b3a', '#4f7f45', '#5c8c4d', '#446e39'];
 
-  // dichtes Gebüsch, das die ganze Fläche zuwuchert
-  var n = Math.max(14, Math.round(e.w * e.h / 2.2));
-  for (var i = 0; i < n; i++) {
-    var cx = 2 + rnd(96);
-    var cy = 6 + rnd(92);
-    var r = 6 + rnd(9);
-    var t = toene[rnd(toene.length)];
-    out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + t + '"/>' +
-      '<circle cx="' + cx + '" cy="' + (cy - r * 0.5) + '" r="' + (r * 0.62) + '" fill="#5c8c4d"/>';
-  }
-  // Unkraut-Halme
-  var halme = Math.max(10, Math.round(e.w * e.h / 3));
+  // ein paar zarte Unkraut-Halme, sehr transparent
+  var halme = Math.max(6, Math.round(e.w * e.h / 6));
   for (var j = 0; j < halme; j++) {
     var hx = 3 + rnd(94);
     var hy = 14 + rnd(84);
     var lean = rnd(7) - 3;
     out += '<path d="M' + hx + ' ' + hy + 'q' + lean + ' -6 ' + (lean * 1.5) + ' -12" ' +
-      'stroke="#6fa04f" stroke-width="1.3" fill="none" stroke-linecap="round"/>';
+      'stroke="rgba(150,190,120,0.5)" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
   }
   return out;
 }

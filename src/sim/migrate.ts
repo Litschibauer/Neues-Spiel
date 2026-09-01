@@ -248,6 +248,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['23->24', FESTE_PLAETZE],
   ['24->25', BAUBAR],
   ['25->26', AUFS_RASTER],
+  ['26->27', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -264,7 +265,8 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   }
 
   const platz = capacityOf(state, rules);
-  if (stored(state, rules) > platz) {
+  // Bei siloUeberlauf ist ein übervolles Lager erlaubt (Admin-Postfach).
+  if (!rules.siloUeberlauf && stored(state, rules) > platz) {
     problems.push(`Lager über Limit: ${stored(state, rules)} > ${platz}`);
   }
   const stufen = rules.siloLevels?.length ?? 1;
