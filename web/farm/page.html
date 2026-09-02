@@ -140,6 +140,19 @@
       <div id="ausbau"></div>
       <h2>Vorräte</h2>
       <div class="chips" id="stock"></div>
+      <div class="loesch" id="loesch-panel" hidden>
+        <div class="loesch-kopf"><b id="loesch-name"></b> löschen — kein Gegenwert</div>
+        <div class="loesch-steuer">
+          <button type="button" id="loesch-minus" aria-label="weniger">−</button>
+          <span class="loesch-menge" id="loesch-menge">1</span>
+          <button type="button" id="loesch-plus" aria-label="mehr">+</button>
+          <button type="button" id="loesch-alle">alle</button>
+        </div>
+        <div class="loesch-knoepfe">
+          <button type="button" id="loesch-ab">Abbrechen</button>
+          <button type="button" id="loesch-ok" class="loesch-los">Löschen</button>
+        </div>
+      </div>
       <h2>Postfach</h2>
       <div id="mail"></div>
       <button class="sheet-close" id="lager-close">Schließen</button>

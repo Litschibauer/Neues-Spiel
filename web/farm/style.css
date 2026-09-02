@@ -654,6 +654,32 @@
   }
   .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
   .chip[disabled] { opacity: .45; }
+  .chip:not([disabled]) { cursor: pointer; }
+
+  /* Lösch-Panel direkt im Lager. */
+  .loesch {
+    margin-top: .7rem; border: 1px solid var(--bad); border-radius: 10px;
+    background: var(--surface); padding: .7rem .8rem;
+    display: flex; flex-direction: column; gap: .6rem;
+  }
+  .loesch-kopf { font-size: .82rem; color: var(--ink); }
+  .loesch-steuer { display: flex; align-items: center; gap: .6rem; }
+  .loesch-steuer button {
+    min-width: 2.4rem; padding: .45rem .6rem; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+    font-size: 1rem; font-weight: 700;
+  }
+  .loesch-menge {
+    min-width: 3.5rem; text-align: center; font-variant-numeric: tabular-nums;
+    font-weight: 800; font-size: 1.1rem;
+  }
+  #loesch-alle { margin-left: auto; font-size: .8rem; font-weight: 600; }
+  .loesch-knoepfe { display: flex; gap: .5rem; }
+  .loesch-knoepfe button {
+    flex: 1; padding: .6rem; border-radius: 8px; font-weight: 700; font-size: .9rem;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+  }
+  .loesch-knoepfe .loesch-los { border-color: var(--bad); background: var(--bad); color: #fff; }
 
   #zeitung.no-net, #fremd-stand.no-net { opacity: .45; pointer-events: none; }
   .note {

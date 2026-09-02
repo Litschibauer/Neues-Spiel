@@ -679,19 +679,41 @@ function renderVorrat(v) {
   });
 }
 
-// Ware endgültig aus dem Lager löschen — ohne Gegenwert.
+// Ware endgültig aus dem Lager löschen — ohne Gegenwert. In-App-Panel direkt
+// im Lager, keine hässlichen Browser-Dialoge.
+var loeschState = null;
+
+function loeschMengeAnzeigen() {
+  if (!loeschState) return;
+  $('loesch-menge').textContent = String(loeschState.menge);
+}
+
 function loeschDialog(entry) {
   if (!isActive || entry.amount <= 0) return;
-  var eingabe = window.prompt(
-    'Wie viele ' + nameOf(entry.id) + ' endgültig löschen?\n' +
-    'Kein Gegenwert — die Ware ist weg. (max ' + entry.amount + ')',
-    String(entry.amount),
-  );
-  if (eingabe === null) return;
-  var n = Math.floor(Number(eingabe));
-  if (!n || n <= 0) return;
-  n = Math.min(n, entry.amount);
-  act(n + ' ' + nameOf(entry.id) + ' gelöscht', client.discard(entry.item, n), 'ernte');
+  loeschState = { item: entry.item, id: entry.id, max: entry.amount, menge: entry.amount };
+  $('loesch-name').textContent = nameOf(entry.id);
+  loeschMengeAnzeigen();
+  $('loesch-panel').hidden = false;
+}
+
+function loeschZu() {
+  loeschState = null;
+  $('loesch-panel').hidden = true;
+}
+
+function loeschStellen(delta) {
+  if (!loeschState) return;
+  loeschState.menge = Math.max(1, Math.min(loeschState.max, loeschState.menge + delta));
+  loeschMengeAnzeigen();
+}
+
+function loeschAusfuehren() {
+  if (!loeschState) return;
+  var vorrat = client.preview().items[loeschState.item] || 0;
+  var n = Math.min(loeschState.menge, vorrat);
+  if (n <= 0) { loeschZu(); return; }
+  act(n + ' ' + nameOf(loeschState.id) + ' gelöscht', client.discard(loeschState.item, n), 'ernte');
+  loeschZu();
 }
 
 var stand = null;

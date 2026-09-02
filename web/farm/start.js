@@ -105,7 +105,13 @@ function show(next) {
   });
 });
 $('brett').addEventListener('click', function () { show('brett'); });
-$('lagerhaus').addEventListener('click', function () { show('lager'); });
+$('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });
+
+$('loesch-minus').addEventListener('click', function () { loeschStellen(-1); });
+$('loesch-plus').addEventListener('click', function () { loeschStellen(1); });
+$('loesch-alle').addEventListener('click', function () { if (loeschState) { loeschState.menge = loeschState.max; loeschMengeAnzeigen(); } });
+$('loesch-ab').addEventListener('click', loeschZu);
+$('loesch-ok').addEventListener('click', loeschAusfuehren);
 $('stand').addEventListener('click', function () {
   client.neueZeitung = true;
   show('stand');
