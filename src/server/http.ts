@@ -138,6 +138,7 @@ function besuchsBild(karte: HofKarte, wer: string) {
       slots: p.slots.map((x) => ({ recipe: x.recipe, startedAt: x.startedAt })),
     })),
     clearedObstacles: spiel.snapshot.state.clearedObstacles,
+    expandiert: spiel.snapshot.state.expandiert ?? [],
     stand: spiel.snapshot.state.orders.map((o) => ({
       id: o.id,
       item: o.item,

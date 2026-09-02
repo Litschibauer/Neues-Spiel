@@ -296,19 +296,23 @@ function zeichneFremdeFarm(d) {
       kachel.appendChild(bar);
     }
 
-    var meta = document.createElement('div');
-    meta.className = 'meta';
-    var name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = fremdName(regeln, i);
-    var status = document.createElement('div');
-    status.className = 'status';
-    status.textContent = laeuft
-      ? (helfbar ? 'noch ' + timeText(laeuft.rest) + ' · helfen' : 'noch ' + timeText(laeuft.rest))
-      : fertig > 0 ? 'fertig' : 'nichts zu tun';
-    meta.appendChild(name);
-    meta.appendChild(status);
-    kachel.appendChild(meta);
+    // Nur laufende oder fertige Plätze beschriften — sonst überladen Labels
+    // wie „nichts zu tun" den fremden Hof.
+    if (laeuft || fertig > 0) {
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = fremdName(regeln, i);
+      var status = document.createElement('div');
+      status.className = 'status';
+      status.textContent = laeuft
+        ? (helfbar ? 'noch ' + timeText(laeuft.rest) + ' · helfen' : 'noch ' + timeText(laeuft.rest))
+        : 'fertig';
+      meta.appendChild(name);
+      meta.appendChild(status);
+      kachel.appendChild(meta);
+    }
 
     if (helfbar) {
       kachel.addEventListener('click', function () { hilf(i, laeuft.slot); });
@@ -336,9 +340,20 @@ function fremdName(regeln, i) {
   if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
   if (id.indexOf('coop-') === 0) return 'Hühnerstall';
   if (id.indexOf('pasture-') === 0) return 'Kuhweide';
-  if (id === 'mill') return 'Mühle';
-  if (id === 'dairy') return 'Molkerei';
-  return id;
+  if (id.indexOf('apple-tree') === 0) return 'Apfelbaum';
+  return nameOf(id);
+}
+
+// Liegt ein Hindernis in noch gesperrtem Land des fremden Hofs? Dann nicht
+// zeichnen — sonst wirkt der Besuch mit dem vielen Bewuchs überladen.
+function fremdVerborgen(regeln, h, expandiert) {
+  var exps = regeln.expansions || [];
+  for (var k = 0; k < exps.length; k++) {
+    var e = exps[k];
+    if (expandiert.indexOf(e.id) >= 0) continue;
+    if (h.gx < e.gx + e.w && e.gx < h.gx + h.w && h.gy < e.gy + e.h && e.gy < h.gy + h.h) return true;
+  }
+  return false;
 }
 
 function zeichneFremdeHindernisse(d, regeln) {
@@ -347,8 +362,10 @@ function zeichneFremdeHindernisse(d, regeln) {
   if (!regeln.grid || !regeln.obstacles) return;
 
   var geraeumt = d.clearedObstacles || [];
+  var expandiert = d.expandiert || [];
   regeln.obstacles.forEach(function (h, index) {
     if (geraeumt.indexOf(index) >= 0) return;
+    if (fremdVerborgen(regeln, h, expandiert)) return;
     var kasten = hindernisKasten({ gx: h.gx, gy: h.gy, w: h.w, h: h.h, kind: h.kind });
     var ding = document.createElement('div');
     ding.className = 'moebel hindernis';
