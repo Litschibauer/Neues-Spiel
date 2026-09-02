@@ -54,7 +54,10 @@ function tapPlot(i) {
   }
   if (p.tap === 'buy') { tapBuy(i); return; }
 
-  if (p.options.length > 1 && (p.tap === 'start' || p.blocked === 'inputs')) {
+  // Jedes Werkstatt-Gebäude öffnet sein Menü — auch die mit nur EINEM Rezept
+  // (z. B. der Grill). Sonst reagiert so ein Gebäude beim Tippen scheinbar gar
+  // nicht, während Öfen mit mehreren Rezepten ein Menü zeigen.
+  if (p.options.length >= 1 && (p.tap === 'start' || p.blocked === 'inputs')) {
     openPicker(p);
     return;
   }
