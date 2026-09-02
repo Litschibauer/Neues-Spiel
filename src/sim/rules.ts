@@ -1466,18 +1466,92 @@ const V28: Ruleset = {
   ],
 };
 
+// v29: Mehr Verarbeitung. Die Mühle mahlt jetzt auch Mehl aus Weizen, ein
+// Backofen bäckt Brot (aus Mehl) und Apfelkuchen (Mehl + Milch + Apfel), ein
+// Grill macht Spiegeleier aus Eiern.
+const MEHL = 25;
+const BROT = 26;
+const APFELKUCHEN = 27;
+const SPIEGELEI = 28;
+
+const R_FLOUR = 14;
+const R_BREAD = 15;
+const R_APPLEPIE = 16;
+const R_FRIEDEGG = 17;
+
+const V29: Ruleset = {
+  ...V28,
+  version: 29,
+  items: [
+    ...V28.items,
+    { id: 'flour', storable: true, npcPrice: 14, npcBuyPrice: 0 },
+    { id: 'bread', storable: true, npcPrice: 42, npcBuyPrice: 0 },
+    { id: 'apple-pie', storable: true, npcPrice: 130, npcBuyPrice: 0 },
+    { id: 'fried-egg', storable: true, npcPrice: 72, npcBuyPrice: 0 },
+  ],
+  recipes: [
+    ...V28.recipes,
+    { id: 'flour', inputs: [want(WHEAT, 2)], output: want(MEHL, 1), durationTicks: 150, xp: 8 },
+    { id: 'bread', inputs: [want(MEHL, 2)], output: want(BROT, 1), durationTicks: 300, xp: 20 },
+    {
+      id: 'apple-pie',
+      inputs: [want(MEHL, 2), want(MILK, 1), want(APPLE, 3)],
+      output: want(APFELKUCHEN, 1),
+      durationTicks: 600,
+      xp: 45,
+    },
+    { id: 'fried-egg', inputs: [want(EGGS, 2)], output: want(SPIEGELEI, 2), durationTicks: 120, xp: 12 },
+  ],
+  plots: [
+    // Die Mühle mahlt zusätzlich Mehl.
+    ...V28.plots.map((p) =>
+      p.id === 'mill'
+        ? { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_FLOUR] })) }
+        : p,
+    ),
+    {
+      id: 'oven',
+      startLevel: 0,
+      place: at(38, 47, 10, 13),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Backofen',
+          cost: [want(PLANK, 20), want(NAIL, 14), want(GOLD, 2500)],
+          recipes: [R_BREAD, R_APPLEPIE],
+          minPlayerLevel: 7,
+        },
+      ],
+    },
+    {
+      id: 'grill',
+      startLevel: 0,
+      place: at(74, 44, 10, 13),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Grill',
+          cost: [want(PLANK, 12), want(NAIL, 8), want(GOLD, 1500)],
+          recipes: [R_FRIEDEGG],
+          minPlayerLevel: 5,
+        },
+      ],
+    },
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V28,
+  ...V29,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V28.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V28.plots.map((p) => {
+  recipes: V29.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V29.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1523,17 +1597,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [26, V26],
   [27, V27],
   [28, V28],
+  [29, V29],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28,
+  28, 29,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 28;
+export const LATEST_RULESET_VERSION = 29;
 
 export const DEV_RULESET_VERSION = 1001;
 

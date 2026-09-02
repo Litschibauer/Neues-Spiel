@@ -10,6 +10,8 @@ var NAMES = {
   mine: 'Mine', forge: 'Schmiede',
   'dig-shovel': 'Mit Schaufel', 'dig-pickaxe': 'Mit Spitzhacke', 'dig-blast': 'Mit Sprengstoff',
   apple: 'Äpfel', 'apple-tree': 'Apfelbaum',
+  flour: 'Mehl', bread: 'Brot', 'apple-pie': 'Apfelkuchen', 'fried-egg': 'Spiegeleier',
+  oven: 'Backofen', grill: 'Grill',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

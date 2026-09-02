@@ -263,8 +263,40 @@ var ART = {
   'mine': function (p) { return artMine(p.busy); },
   'forge': function (p) { return artForge(p.busy); },
   'apple-tree': function (p) { return artAppleTree(p.baum ? p.baum.stufe : 'wachsen'); },
+  'oven': function (p) { return artOven(p.busy); },
+  'grill': function (p) { return artGrill(p.busy); },
   fallback: function () { return artField(0, null); },
 };
+
+function artOven(working) {
+  var glut = working
+    ? '<rect x="40" y="46" width="20" height="10" rx="2" fill="var(--ripe)">' +
+      '<animate attributeName="opacity" values="1;.55;1" dur=".8s" repeatCount="indefinite"/></rect>'
+    : '<rect x="40" y="46" width="20" height="10" rx="2" fill="#2a2118"/>';
+  var rauch = working
+    ? '<circle cx="70" cy="24" r="3" fill="#cfd3d6" opacity=".7"><animate attributeName="cy" values="24;16;24" dur="2s" repeatCount="indefinite"/></circle>'
+    : '';
+  return '<ellipse cx="50" cy="70" rx="42" ry="8" fill="var(--soil)" opacity=".25"/>' +
+    '<path d="M22 66V38a28 20 0 0 1 56 0v28z" fill="#8a6a44"/>' +
+    '<path d="M22 40h56v-3a28 20 0 0 0-56 0z" fill="#6f5335"/>' +
+    '<rect x="34" y="42" width="32" height="18" rx="4" fill="#3a2c1d"/>' + glut +
+    '<rect x="66" y="20" width="8" height="20" rx="2" fill="#5b4632"/>' + rauch +
+    '<rect x="26" y="60" width="48" height="6" rx="2" fill="#6f5335"/>';
+}
+
+function artGrill(working) {
+  var flammen = working
+    ? '<path d="M40 42c0-5 5-5 5-10 3 3 7 5 7 10a6 6 0 0 1-12 0z" fill="var(--ripe)">' +
+      '<animate attributeName="opacity" values="1;.5;1" dur=".6s" repeatCount="indefinite"/></path>'
+    : '';
+  return '<ellipse cx="50" cy="72" rx="38" ry="7" fill="var(--soil)" opacity=".25"/>' +
+    '<rect x="30" y="60" width="6" height="12" fill="#3a3a3e"/>' +
+    '<rect x="64" y="60" width="6" height="12" fill="#3a3a3e"/>' +
+    '<path d="M26 46h48l-4 16H30z" fill="#4a4a4f"/>' +
+    '<ellipse cx="50" cy="46" rx="24" ry="6" fill="#2c2c30"/>' + flammen +
+    '<g stroke="#8a8a90" stroke-width="1.6">' +
+    '<line x1="34" y1="44" x2="66" y2="44"/><line x1="36" y1="48" x2="64" y2="48"/></g>';
+}
 
 function artAppleTree(stufe) {
   var schatten = '<ellipse cx="50" cy="90" rx="26" ry="6" fill="var(--ink)" opacity=".18"/>';
