@@ -488,6 +488,9 @@
     font-size: .8rem; font-weight: 600;
   }
   .opt { width: 100%; text-align: left; }
+  /* Laufender Status im Menü: sichtbar, aber nicht anklickbar. */
+  .opt.laufend { cursor: default; border-style: dashed; }
+  .opt.laufend .yield { color: var(--muted); }
   .opt .yield { font-weight: 700; color: var(--leaf-dark); font-variant-numeric: tabular-nums; }
   .opt:disabled { opacity: .5; }
 

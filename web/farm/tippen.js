@@ -54,11 +54,15 @@ function tapPlot(i) {
   }
   if (p.tap === 'buy') { tapBuy(i); return; }
 
+  // Läuft das Gebäude gerade (Slot belegt)? Menü mit Status zeigen, statt beim
+  // Tippen gar nicht zu reagieren.
+  if (p.options.length >= 1 && p.busy) { openPicker(p, 0); return; }
+
   // Jedes Werkstatt-Gebäude öffnet sein Menü — auch die mit nur EINEM Rezept
   // (z. B. der Grill). Sonst reagiert so ein Gebäude beim Tippen scheinbar gar
   // nicht, während Öfen mit mehreren Rezepten ein Menü zeigen.
   if (p.options.length >= 1 && (p.tap === 'start' || p.blocked === 'inputs')) {
-    openPicker(p);
+    openPicker(p, 0);
     return;
   }
   if (p.tap === 'start') {
@@ -536,6 +540,33 @@ function zeichnePicker(p) {
 
   var box = $('pick-list');
   box.textContent = '';
+
+  // Status des angetippten Slots: läuft gerade / ist fertig.
+  var s0 = p.slots[sheet.slot];
+  if (s0 && s0.done) {
+    var fertig = document.createElement('button');
+    fertig.type = 'button';
+    fertig.className = 'card opt';
+    fertig.innerHTML =
+      '<div class="body"><div class="top">Fertig</div><div class="sub">' +
+      (s0.output ? '+' + s0.output.amount + ' ' + itemName(s0.output.item) : 'bereit') +
+      '</div></div><span class="yield">Ernten</span>';
+    fertig.addEventListener('click', function () { closePicker(); collectSlot(p, sheet.slot); });
+    box.appendChild(fertig);
+  } else if (s0 && s0.busy) {
+    var laeuft = document.createElement('div');
+    laeuft.className = 'card opt laufend';
+    laeuft.innerHTML =
+      '<div class="body"><div class="top">Läuft gerade</div><div class="sub">' +
+      nameOf(s0.producing) +
+      (s0.output ? ' → +' + s0.output.amount + ' ' + itemName(s0.output.item) : '') +
+      '</div></div><span class="yield">noch ' + timeText(s0.remaining) + '</span>';
+    box.appendChild(laeuft);
+  }
+
+  // Rezepte nur zum Starten zeigen, wenn der Slot frei ist.
+  if (s0 && (s0.busy || s0.done)) { verschiebeKnopf(p, box); return; }
+
   p.options.forEach(function (o) {
     var card = document.createElement('button');
     card.type = 'button';
