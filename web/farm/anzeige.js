@@ -309,20 +309,20 @@ function renderHindernisse(v) {
 }
 
 function sperrGebuesch(e) {
-  // Leichter, durchscheinender Schleier statt dichtem Gebüsch: darunter scheinen
-  // die echten (grauen) Hindernisse durch, damit man sieht, was einen erwartet.
-  var out = '<rect x="0" y="0" width="100" height="100" fill="rgba(24,42,20,0.34)"/>';
+  // Graue, durchscheinende Halme — der Boden darunter wird per backdrop-filter
+  // entsättigt, hier bleibt alles neutral grau (kein Grün), damit der Bereich
+  // klar als „gesperrt" lesbar ist.
+  var out = '';
   var seed = (e.gx * 31 + e.gy * 17) % 97;
   function rnd(m) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % m; }
 
-  // ein paar zarte Unkraut-Halme, sehr transparent
   var halme = Math.max(6, Math.round(e.w * e.h / 6));
   for (var j = 0; j < halme; j++) {
     var hx = 3 + rnd(94);
     var hy = 14 + rnd(84);
     var lean = rnd(7) - 3;
     out += '<path d="M' + hx + ' ' + hy + 'q' + lean + ' -6 ' + (lean * 1.5) + ' -12" ' +
-      'stroke="rgba(150,190,120,0.5)" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
+      'stroke="rgba(180,182,186,0.45)" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
   }
   return out;
 }

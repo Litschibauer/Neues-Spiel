@@ -294,9 +294,9 @@
   .schatz { position: absolute; }
   .hindernis { position: absolute; }
   .hindernis:not(.raeumbar) { cursor: default; }
-  /* Vorschau im gesperrten Land: grau und blass, nicht anklickbar. */
+  /* Vorschau im gesperrten Land: klar grau, nicht anklickbar. */
   .hindernis.verborgen { pointer-events: none; }
-  .hindernis.verborgen .art { filter: grayscale(0.85) brightness(0.72); opacity: 0.6; }
+  .hindernis.verborgen .art { filter: grayscale(1) brightness(0.78); opacity: 0.85; }
   .hindernis .badge {
     background: var(--accent); color: var(--on-accent);
     animation: hüpf 1.6s ease-in-out infinite;
@@ -317,14 +317,18 @@
   .feld-sperre {
     position: absolute; border: none; padding: 0; cursor: pointer;
     border-radius: 10px; overflow: hidden;
+    /* Durchscheinendes Grau statt Grün: der Bereich wirkt klar „noch gesperrt".
+       backdrop-filter entsättigt Boden + Hindernisse darunter zu Grau. */
     background:
-      repeating-linear-gradient(45deg, rgba(70,54,30,.28) 0 6px, rgba(70,54,30,.12) 6px 12px),
-      #365a30;
-    box-shadow: inset 0 0 0 3px #6b5330, inset 0 0 0 5px rgba(0,0,0,.25),
+      repeating-linear-gradient(45deg, rgba(0,0,0,.28) 0 7px, rgba(0,0,0,.10) 7px 14px),
+      rgba(36,38,40,.5);
+    -webkit-backdrop-filter: grayscale(1) brightness(.72);
+    backdrop-filter: grayscale(1) brightness(.72);
+    box-shadow: inset 0 0 0 3px rgba(150,152,156,.7), inset 0 0 0 5px rgba(0,0,0,.3),
       0 2px 6px rgba(0,0,0,.3);
     display: flex; align-items: center; justify-content: center;
   }
-  .feld-sperre .wuchs { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .9; }
+  .feld-sperre .wuchs { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .7; }
   .feld-sperre .plakette {
     position: relative; z-index: 1; text-align: center; line-height: 1.15;
     background: rgba(20,16,10,.72); color: #fff; border-radius: 8px;
