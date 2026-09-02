@@ -256,6 +256,18 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    case 'DISCARD': {
+      if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
+      const def = rules.items[cmd.item];
+      if (!def) throw new SimError('NO_SUCH_ITEM');
+      if (count(s, cmd.item) < cmd.amount) throw new SimError('NOT_ENOUGH_ITEMS');
+
+      // Ware wird ersatzlos vernichtet — kein Gold, kein Tausch.
+      const next = cloneState(s);
+      next.items = addItem(s.items, cmd.item, -cmd.amount);
+      return next;
+    }
+
     case 'SELL_NPC': {
       if (rules.sellNpcDisabled) throw new SimError('NPC_DISABLED');
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');

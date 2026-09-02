@@ -667,13 +667,31 @@ function renderVorrat(v) {
   chips.textContent = '';
   v.stock.forEach(function (entry) {
     if (entry.item === v.currency.item) return;
-    var chip = document.createElement('span');
+    var chip = document.createElement('button');
+    chip.type = 'button';
     chip.className = 'chip';
-    if (entry.amount === 0) chip.setAttribute('disabled', '');
+    chip.disabled = entry.amount === 0;
+    chip.title = 'Zum endgültigen Löschen tippen';
     chip.innerHTML = iconTag(entry.id) + '<span>' + nameOf(entry.id) +
       '</span><span class="n">' + entry.amount + '</span>';
+    chip.addEventListener('click', function () { loeschDialog(entry); });
     chips.appendChild(chip);
   });
+}
+
+// Ware endgültig aus dem Lager löschen — ohne Gegenwert.
+function loeschDialog(entry) {
+  if (!isActive || entry.amount <= 0) return;
+  var eingabe = window.prompt(
+    'Wie viele ' + nameOf(entry.id) + ' endgültig löschen?\n' +
+    'Kein Gegenwert — die Ware ist weg. (max ' + entry.amount + ')',
+    String(entry.amount),
+  );
+  if (eingabe === null) return;
+  var n = Math.floor(Number(eingabe));
+  if (!n || n <= 0) return;
+  n = Math.min(n, entry.amount);
+  act(n + ' ' + nameOf(entry.id) + ' gelöscht', client.discard(entry.item, n), 'ernte');
 }
 
 var stand = null;

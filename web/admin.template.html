@@ -83,6 +83,14 @@
 
   .hint { color: var(--muted); font-size: .78rem; margin: .5rem 0 0; }
   a { color: var(--accent); }
+
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .5rem; }
+  .stat { border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2);
+          padding: .55rem .6rem; display: flex; flex-direction: column; gap: .15rem; }
+  .statwert { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--ink);
+              font-variant-numeric: tabular-nums; }
+  .statname { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em;
+              text-transform: uppercase; color: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -101,6 +109,18 @@
   </div>
 
   <div id="panel" hidden style="display:flex;flex-direction:column;gap:1.1rem">
+    <div class="card">
+      <h2>Economy — live</h2>
+      <div class="statgrid" id="statgrid">
+        <div class="stat"><span class="statwert" id="s-gold">—</span><span class="statname">Gold im Spiel</span></div>
+        <div class="stat"><span class="statwert" id="s-items">—</span><span class="statname">Waren im Spiel</span></div>
+        <div class="stat"><span class="statwert" id="s-geloescht">—</span><span class="statname">Waren gelöscht (gesamt)</span></div>
+        <div class="stat"><span class="statwert" id="s-goldrate">—</span><span class="statname">Gold / min (netto)</span></div>
+        <div class="stat"><span class="statwert" id="s-itemrate">—</span><span class="statname">Waren / min (netto)</span></div>
+        <div class="stat"><span class="statwert" id="s-hoefe">—</span><span class="statname">Höfe · XP gesamt</span></div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Höfe</h2>
       <div class="row" style="margin-bottom:.55rem">
@@ -288,6 +308,31 @@
       .catch(function (e) { log(label + ' — ' + e.message, 'bad'); });
   }
 
+  function zahl(n) { return (n || 0).toLocaleString('de-DE'); }
+  function rate(r) {
+    var v = Math.round(r * 10) / 10;
+    return (v >= 0 ? '+' : '') + v.toLocaleString('de-DE');
+  }
+  var letzteStats = null;
+  var statTimer = null;
+  function ladeStats() {
+    return api('/api/admin/stats').then(function (s) {
+      $('s-gold').textContent = zahl(s.goldTotal);
+      $('s-items').textContent = zahl(s.itemsTotal);
+      $('s-geloescht').textContent = zahl(s.itemsDiscarded);
+      $('s-hoefe').textContent = s.farms + ' · ' + zahl(s.xpTotal) + ' XP';
+      var jetzt = s.serverTime || Date.now();
+      if (letzteStats) {
+        var dtMin = (jetzt - letzteStats.t) / 60000;
+        if (dtMin > 0.01) {
+          $('s-goldrate').textContent = rate((s.goldTotal - letzteStats.gold) / dtMin);
+          $('s-itemrate').textContent = rate((s.itemsTotal - letzteStats.items) / dtMin);
+        }
+      }
+      letzteStats = { gold: s.goldTotal, items: s.itemsTotal, t: jetzt };
+    }).catch(function () {});
+  }
+
   function connect() {
     token = $('token').value.trim();
     if (!token) return;
@@ -296,6 +341,9 @@
       localStorage.setItem(ADMIN_KEY, token);
       $('setup').hidden = true;
       $('panel').hidden = false;
+      ladeStats();
+      if (statTimer) clearInterval(statTimer);
+      statTimer = setInterval(ladeStats, 3000);
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message);

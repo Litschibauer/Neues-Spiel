@@ -83,6 +83,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|HARVEST_TREE|${c.plot}`;
     case 'FELL_TREE':
       return `${c.seq}|${c.tick}|FELL_TREE|${c.plot}`;
+    case 'DISCARD':
+      return `${c.seq}|${c.tick}|DISCARD|${c.item}|${c.amount}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

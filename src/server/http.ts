@@ -18,6 +18,7 @@ import type { HofKarte } from './sozial.ts';
 import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
+import { EconStats } from './econstats.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
@@ -67,6 +68,7 @@ function resolveToken(): string {
 const TOKEN = resolveToken();
 
 const accounts = new AccountStore(CONFIG.dbPath, join(dirname(SAVE_PATH), 'accounts'));
+const econstats = new EconStats(join(dirname(SAVE_PATH), 'econstats.json'));
 const limiter = new CreateLimiter(
   Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
   Number(process.env.NEUES_SPIEL_MAX_ACCOUNTS ?? 5000),
@@ -365,6 +367,34 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
           seq: live.get(a.id)?.snapshot.seq ?? null,
         };
       }),
+    });
+  }
+
+  if (url.pathname === '/api/admin/stats') {
+    let goldTotal = 0;
+    let itemsTotal = 0;
+    let xpTotal = 0;
+    let farms = 0;
+    for (const a of accounts.list()) {
+      const cached = live.get(a.id);
+      const snap = cached ? cached.snapshot : accounts.load(a.id)?.snapshot;
+      if (!snap) continue;
+      const rules = getRuleset(snap.rulesetVersion);
+      const st = snap.state;
+      goldTotal += st.items[rules.currency] ?? 0;
+      for (let i = 0; i < st.items.length; i++) {
+        if (rules.items[i]?.storable) itemsTotal += st.items[i] ?? 0;
+      }
+      xpTotal += st.xp ?? 0;
+      farms++;
+    }
+    return json(res, 200, {
+      farms,
+      goldTotal,
+      itemsTotal,
+      xpTotal,
+      itemsDiscarded: econstats.itemsDiscarded,
+      serverTime: Date.now(),
     });
   }
 
@@ -750,6 +780,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       game.besuch = gast && gast.id !== account.id ? gast.id : null;
 
       const result = game.sync(parsed, Date.now());
+      if (result.ok) econstats.addDiscarded(game.lastSyncDiscarded);
 
       publish(account.id, game);
       persist(account, game);

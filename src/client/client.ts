@@ -125,6 +125,10 @@ export class Client {
     return this.apply({ type: 'SELL_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  discard(item: number, amount: number): ActionResult {
+    return this.apply({ type: 'DISCARD', item, amount } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

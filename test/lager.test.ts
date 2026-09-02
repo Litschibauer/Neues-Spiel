@@ -67,6 +67,28 @@ test('ein übervolles Lager füllt sich nicht von selbst — Passive und Ernte p
   assert.ok(ok.items[WHEAT]! > 0, 'mit Platz lässt sich wieder ernten');
 });
 
+test('Ware lässt sich endgültig aus dem Lager löschen — ohne Gegenwert', () => {
+  const base = initialState(V);
+  const items = base.items.map(() => 0);
+  items[WHEAT] = 20;
+  items[V.currency] = 500;
+  const s = { ...base, items };
+
+  const nach = simulate(s, { seq: 1, tick: 0, type: 'DISCARD', item: WHEAT, amount: 8 }, V);
+  assert.equal(nach.items[WHEAT], 12, 'acht Weizen weniger');
+  assert.equal(nach.items[V.currency], 500, 'kein Gold als Gegenwert');
+
+  assert.throws(
+    () => simulate(s, { seq: 1, tick: 0, type: 'DISCARD', item: WHEAT, amount: 99 }, V),
+    { code: 'NOT_ENOUGH_ITEMS' },
+    'mehr löschen als da ist geht nicht',
+  );
+  assert.throws(
+    () => simulate(s, { seq: 1, tick: 0, type: 'DISCARD', item: WHEAT, amount: 0 }, V),
+    { code: 'BAD_AMOUNT' },
+  );
+});
+
 test('ältere Regelwerke bleiben streng — kein Überlauf', () => {
   const V26 = getRuleset(26);
   assert.notEqual(V26.siloUeberlauf, true);

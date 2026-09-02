@@ -79,6 +79,10 @@ export class Server {
 
   pendingXp = 0;
 
+  // Menge Ware, die im letzten Sync per DISCARD vernichtet wurde (für die
+  // globale Economy-Statistik). Wird bei jedem Sync neu gesetzt.
+  lastSyncDiscarded = 0;
+
   grantXp(xp: number): void {
     if (!Number.isInteger(xp) || xp <= 0) return;
     this.pendingXp += xp;
@@ -353,6 +357,12 @@ export class Server {
     if (verarbeitet.length === 0) {
       return { ok: false, kind: 'rejected', reason: rejectReason ?? 'SIM_FAILURE', snapshot: snap };
     }
+
+    // Vernichtete Ware dieses Syncs zählen (Economy-Senke).
+    this.lastSyncDiscarded = accepted.reduce(
+      (n, c) => (c.type === 'DISCARD' ? n + c.amount : n),
+      0,
+    );
 
     const fullyApplied = rejectedFrom === undefined;
     let divergence: boolean | null = null;

@@ -68,6 +68,9 @@ export type ExpandCommand = CommandBase & { type: 'EXPAND'; id: string };
 export type HarvestTreeCommand = CommandBase & { type: 'HARVEST_TREE'; plot: number };
 export type FellTreeCommand = CommandBase & { type: 'FELL_TREE'; plot: number };
 
+// Ware endgültig aus dem Lager löschen — ohne Gegenwert. Verlässt die Economy.
+export type DiscardCommand = CommandBase & { type: 'DISCARD'; item: number; amount: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -91,6 +94,7 @@ export type Command =
   | ExpandCommand
   | HarvestTreeCommand
   | FellTreeCommand
+  | DiscardCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
