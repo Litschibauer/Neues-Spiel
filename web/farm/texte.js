@@ -63,6 +63,7 @@ function plotName(i) {
   if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
   if (id.indexOf('coop-') === 0) return 'Hühnerstall';
   if (id.indexOf('pasture-') === 0) return 'Kuhweide';
+  if (id.indexOf('apple-tree') === 0) return 'Apfelbaum';
   return nameOf(id);
 }
 function stacks(list) {

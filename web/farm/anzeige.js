@@ -939,14 +939,26 @@ function renderBauliste(v) {
     return;
   }
 
+  // Gleiche Bauwerke (z. B. mehrere Apfelbäume) zu einer Karte zusammenfassen —
+  // sie zeigt, wie viele noch frei sind, und baut den nächsten davon.
+  var gruppen = [];
+  var index = {};
   v.buildable.forEach(function (b) {
+    var name = plotName(b.plot);
+    if (index[name] === undefined) { index[name] = gruppen.length; gruppen.push({ b: b, name: name, anzahl: 0 }); }
+    gruppen[index[name]].anzahl++;
+  });
+
+  gruppen.forEach(function (g) {
+    var b = g.b;
     var karte = document.createElement('button');
     karte.className = 'card';
     karte.disabled = !b.affordable;
     karte.innerHTML =
       '<div class="body">' +
-      '<div class="top">' + plotName(b.plot) +
-        (b.label && b.label !== plotName(b.plot) && plotName(b.plot).indexOf(b.label) !== 0
+      '<div class="top">' + g.name +
+        (g.anzahl > 1 ? ' · noch ' + g.anzahl + ' frei' : '') +
+        (b.label && b.label !== g.name && g.name.indexOf(b.label) !== 0
           ? ' · ' + b.label
           : '') + '</div>' +
       '<div class="sub">' + (b.unlocked

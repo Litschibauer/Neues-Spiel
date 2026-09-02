@@ -1445,18 +1445,39 @@ const V27: Ruleset = {
   obstacles: V27_HINDERNISSE,
 };
 
+// v28: Bis zu 5 Apfelbäume gleichzeitig. Vier weitere Apfelbaum-Plätze, sonst
+// identisch zum ersten — jeder wird einzeln gebaut, platziert und gefällt.
+const APFEL_VORLAGE = V26.plots.find((p) => p.id === 'apple-tree')!;
+const weitererApfelbaum = (id: string, place: PlotPlace): PlotDef => ({
+  ...APFEL_VORLAGE,
+  id,
+  place,
+});
+
+const V28: Ruleset = {
+  ...V27,
+  version: 28,
+  plots: [
+    ...V27.plots,
+    weitererApfelbaum('apple-tree-2', at(76, 30, 8, 12)),
+    weitererApfelbaum('apple-tree-3', at(30, 50, 8, 12)),
+    weitererApfelbaum('apple-tree-4', at(50, 50, 8, 12)),
+    weitererApfelbaum('apple-tree-5', at(70, 60, 8, 12)),
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V27,
+  ...V28,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V27.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V27.plots.map((p) => {
+  recipes: V28.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V28.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1501,16 +1522,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [25, V25],
   [26, V26],
   [27, V27],
+  [28, V28],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+  28,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 27;
+export const LATEST_RULESET_VERSION = 28;
 
 export const DEV_RULESET_VERSION = 1001;
 

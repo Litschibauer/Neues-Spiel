@@ -118,6 +118,25 @@ test('Setzling → wächst → reif → Ernte × N → verwelkt → gefällt', (
   assert.equal(s.xp, xpVorher + def.faellenXp, 'Fäll-XP gutgeschrieben');
 });
 
+test('ab v28 gibt es fünf Apfelbaum-Plätze — fünf Bäume gleichzeitig', () => {
+  const V28 = getRuleset(28);
+  const baeume = V28.plots.filter((p) => p.id.indexOf('apple-tree') === 0);
+  assert.equal(baeume.length, 5, 'fünf Apfelbaum-Plätze');
+  assert.ok(
+    baeume.every((p) => p.baum && p.baum.ernten === 6 && !p.fixed),
+    'alle gleich konfiguriert und frei platzierbar',
+  );
+  // Frischer Hof: alle fünf ungebaut (gx -1), also im Baumenü verfügbar.
+  const s = initialState(V28);
+  assert.ok(
+    baeume.every((_, k) => {
+      const idx = V28.plots.findIndex((p) => p.id === baeume[k]!.id);
+      return s.plots[idx]!.gx === -1;
+    }),
+    'alle fünf sind zu Beginn ungebaut',
+  );
+});
+
 test('einen Baum, den es nicht gibt, kann man nicht ernten oder fällen', () => {
   const s = startHof();
   assert.throws(
