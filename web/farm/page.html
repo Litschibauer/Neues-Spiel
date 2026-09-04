@@ -36,6 +36,19 @@
   </div>
 </div>
 
+<div class="tut-bg" id="tut-bg" hidden>
+  <div class="tut-card" role="dialog" aria-modal="true">
+    <div class="tut-emoji" id="tut-emoji">🌾</div>
+    <h2 id="tut-titel"></h2>
+    <p id="tut-text"></p>
+    <div class="tut-dots" id="tut-dots"></div>
+    <div class="tut-knoepfe">
+      <button type="button" class="ghost" id="tut-skip">Überspringen</button>
+      <button type="button" class="big" id="tut-next">Weiter</button>
+    </div>
+  </div>
+</div>
+
 <div id="shell" hidden>
   <header class="topbar">
     <div class="purse">
@@ -241,6 +254,13 @@
           <div class="sub" id="tonstand">an</div>
         </div>
         <span class="go" id="tonschalter">aus</span>
+      </button>
+      <button class="card" id="anleitung">
+        <div class="body">
+          <div class="top">Anleitung ansehen</div>
+          <div class="sub">Die kurze Einführung nochmal zeigen</div>
+        </div>
+        <span class="go">▶</span>
       </button>
       <button class="card" id="forget">
         <div class="body">

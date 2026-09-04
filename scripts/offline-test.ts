@@ -364,6 +364,8 @@ try {
 
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/feldtest` });
   await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
+  // Einführungs-Overlay im Test unterdrücken (gleiche Origin → bleibt gesetzt).
+  await evaluate(cdp, `localStorage.setItem('ns-tutorial', 'done')`);
   await evaluate(cdp, `document.getElementById('create').click()`);
   await waitFor(cdp, '!document.getElementById("keybox").hidden', 'Schlüssel gezeigt');
 

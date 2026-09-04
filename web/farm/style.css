@@ -919,5 +919,33 @@
   .gate .row { display: flex; gap: .5rem; }
   .gate .row > * { flex: 1; }
 
+  /* Einführung für neue Höfe. */
+  .tut-bg {
+    position: fixed; inset: 0; z-index: 60; display: flex; align-items: center;
+    justify-content: center; padding: 1.2rem; background: rgba(0,0,0,.55);
+  }
+  .tut-card {
+    background: var(--surface); border-radius: 18px; border: 1px solid var(--line);
+    max-width: 22rem; width: 100%; padding: 1.6rem 1.3rem; text-align: center;
+    display: flex; flex-direction: column; gap: .6rem; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  }
+  .tut-emoji { font-size: 2.6rem; line-height: 1; }
+  .tut-card h2 { margin: 0; font-size: 1.15rem; }
+  .tut-card p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.5; }
+  .tut-dots { display: flex; gap: .35rem; justify-content: center; margin: .3rem 0 .2rem; }
+  .tut-dots span {
+    width: .5rem; height: .5rem; border-radius: 999px; background: var(--line);
+  }
+  .tut-dots span.an { background: var(--accent); }
+  .tut-knoepfe { display: flex; gap: .5rem; margin-top: .3rem; }
+  .tut-knoepfe .ghost {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+    padding: .7rem; font-size: .85rem; font-weight: 600; flex: 1;
+  }
+  .tut-knoepfe .big {
+    border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent);
+    padding: .7rem; font-size: .9rem; font-weight: 700; flex: 1.4;
+  }
+
   .tiny { font-size: .68rem; color: var(--muted); text-align: center; }
   .tiny a { color: inherit; }

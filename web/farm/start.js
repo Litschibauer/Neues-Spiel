@@ -223,6 +223,7 @@ function start(snapshot, serverTime, id) {
   adopt(snapshot, serverTime);
   setConn('live');
   render();
+  tutorialStarten(false);
 }
 
 function startOffline(saved) {
@@ -307,8 +308,57 @@ $('forget').addEventListener('click', function () {
   location.reload();
 });
 
+// — Kurze Einführung für neue Höfe —————————————————————————————————————
+var TUTORIAL = [
+  { emoji: '🌾', titel: 'Willkommen auf deinem Hof!',
+    text: 'Hier säst, erntest und verarbeitest du. Alles läuft weiter — auch ohne Internet.' },
+  { emoji: '🌱', titel: 'Säen',
+    text: 'Tippe auf ein Feld und wähle Weizen oder Mais. Nach kurzer Zeit ist es reif.' },
+  { emoji: '❗', titel: 'Ernten',
+    text: 'Reife Felder tragen ein Ausrufezeichen. Tippe sie an — die Ware wandert ins Lager.' },
+  { emoji: '🚚', titel: 'Aufträge erfüllen',
+    text: 'Am Wagen unten wartet der Frachtbrief. Erfülle Aufträge und bekomme Gold und XP.' },
+  { emoji: '🔨', titel: 'Bauen & aufsteigen',
+    text: 'Mit dem Hammer baust du neue Gebäude: Ställe, Mühle, Backofen, Grill, Mine … Mit jeder Stufe kommt mehr dazu.' },
+  { emoji: '🛒', titel: 'Handeln',
+    text: 'Im Verkaufsstand bietest du Waren anderen Höfen an. Viel Erfolg auf deinem Hof!' },
+];
+var tutStep = 0;
+
+function tutorialFertig() {
+  try { return localStorage.getItem('ns-tutorial') === 'done'; } catch (e) { return false; }
+}
+function tutorialAbschliessen() {
+  try { localStorage.setItem('ns-tutorial', 'done'); } catch (e) {}
+  $('tut-bg').hidden = true;
+}
+function tutorialZeigen() {
+  var s = TUTORIAL[tutStep];
+  if (!s) { tutorialAbschliessen(); return; }
+  $('tut-emoji').textContent = s.emoji;
+  $('tut-titel').textContent = s.titel;
+  $('tut-text').textContent = s.text;
+  var punkte = '';
+  for (var i = 0; i < TUTORIAL.length; i++) punkte += '<span class="' + (i === tutStep ? 'an' : '') + '"></span>';
+  $('tut-dots').innerHTML = punkte;
+  $('tut-next').textContent = tutStep === TUTORIAL.length - 1 ? 'Los geht’s' : 'Weiter';
+  $('tut-bg').hidden = false;
+}
+function tutorialStarten(erzwingen) {
+  if (!erzwingen) {
+    if (tutorialFertig()) return;
+    // Nur für ganz frische Höfe automatisch — Veteranen (mit XP) verschonen.
+    if (client && client.preview && client.preview().xp > 0) return;
+  }
+  tutStep = 0;
+  tutorialZeigen();
+}
+$('tut-next').addEventListener('click', function () { tutStep++; tutorialZeigen(); });
+$('tut-skip').addEventListener('click', tutorialAbschliessen);
+$('anleitung').addEventListener('click', function () { show('farm'); tutorialStarten(true); });
+
 var saved = token ? loadSaved() : null;
-if (saved) startOffline(saved);
+if (saved) { startOffline(saved); tutorialStarten(false); }
 else if (token) { $('key').value = token; connect(); }
 
 if ('serviceWorker' in navigator) {
