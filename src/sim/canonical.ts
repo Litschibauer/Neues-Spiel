@@ -46,6 +46,7 @@ export function canonicalize(state: State): string {
     `boxes=[${state.pendingBoxes.join(',')}]`,
     `geraeumt=[${state.clearedObstacles.join(',')}]`,
     `expandiert=[${(state.expandiert ?? []).join(',')}]`,
+    `claimed=[${(state.claimed ?? []).join(',')}]`,
   ].join('|');
 }
 
@@ -85,6 +86,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|FELL_TREE|${c.plot}`;
     case 'DISCARD':
       return `${c.seq}|${c.tick}|DISCARD|${c.item}|${c.amount}`;
+    case 'CLAIM_ACHIEVEMENT':
+      return `${c.seq}|${c.tick}|CLAIM_ACHIEVEMENT|${c.id}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

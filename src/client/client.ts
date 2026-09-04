@@ -129,6 +129,10 @@ export class Client {
     return this.apply({ type: 'DISCARD', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  claimAchievement(id: string): ActionResult {
+    return this.apply({ type: 'CLAIM_ACHIEVEMENT', id } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

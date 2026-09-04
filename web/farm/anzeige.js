@@ -663,55 +663,59 @@ function numberPick(label, get, lo, hi, set, maxLabel) {
   return row;
 }
 
-// Ziele/Erfolge — Meilensteine aus dem aktuellen Zustand abgeleitet.
-function zieleFuer(v) {
-  var gebaut = function (id) {
-    return v.plots.some(function (p) { return p.id === id && p.level > 0; });
-  };
-  var praefix = function (pre) {
-    return v.plots.some(function (p) { return p.id.indexOf(pre) === 0 && p.level > 0; });
-  };
-  var felder = v.plots.filter(function (p) { return p.id.indexOf('field-') === 0 && p.level > 0; }).length;
-  var freigeschaltet = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
-  var gold = v.currency.amount;
-
-  return [
-    { t: 'Stufe 3 erreichen', ok: v.level >= 3, hinweis: 'Stufe ' + v.level + ' / 3' },
-    { t: 'Stufe 8 erreichen', ok: v.level >= 8, hinweis: 'Stufe ' + v.level + ' / 8' },
-    { t: 'Stufe 15 erreichen', ok: v.level >= 15, hinweis: 'Stufe ' + v.level + ' / 15' },
-    { t: '1.000 Gold besitzen', ok: gold >= 1000, hinweis: gold + ' / 1.000' },
-    { t: '10.000 Gold besitzen', ok: gold >= 10000, hinweis: gold + ' / 10.000' },
-    { t: 'Erste Mühle bauen', ok: gebaut('mill') },
-    { t: 'Ersten Hühnerstall bauen', ok: praefix('coop-') },
-    { t: 'Kuhweide bauen', ok: praefix('pasture-') },
-    { t: 'Molkerei bauen', ok: gebaut('dairy') },
-    { t: 'Grill bauen', ok: gebaut('grill') },
-    { t: 'Backofen bauen', ok: gebaut('oven') },
-    { t: 'Apfelbaum pflanzen', ok: praefix('apple-tree') },
-    { t: 'Mine im Berg bauen', ok: gebaut('mine') },
-    { t: 'Schmiede bauen', ok: gebaut('forge') },
-    { t: 'Alle 6 Felder freischalten', ok: felder >= 6, hinweis: felder + ' / 6' },
-    { t: 'Erstes Land freimachen', ok: freigeschaltet >= 1, hinweis: freigeschaltet + ' freigeschaltet' },
-  ];
+// Ziele & Erfolge — echte Erfolge aus dem Regelwerk mit Belohnung + Einlösen.
+function erfolgErfuellt(a, v, builtIds, expandiert) {
+  if (a.kind === 'level') return v.level >= a.arg;
+  if (a.kind === 'gold') return v.currency.amount >= a.arg;
+  if (a.kind === 'plot') return builtIds.indexOf(a.arg) >= 0;
+  if (a.kind === 'plotPrefix') return builtIds.some(function (id) { return id.indexOf(a.arg) === 0; });
+  if (a.kind === 'expand') return expandiert >= a.arg;
+  return false;
 }
 
 function renderZiele(v) {
-  var box = $('ziele-liste');
-  if (!box) return;
-  var ziele = zieleFuer(v);
-  var erreicht = ziele.filter(function (z) { return z.ok; }).length;
-  var marke = $('ziele-zahl');
-  if (marke) marke.textContent = erreicht + '/' + ziele.length;
+  var liste = rules.achievements || [];
+  if (liste.length === 0) return;
+  var s = client.preview();
+  var claimed = s.claimed || [];
+  var builtIds = v.plots.filter(function (p) { return p.level > 0; }).map(function (p) { return p.id; });
+  var expandiert = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
 
+  var offen = 0;
+  liste.forEach(function (a) {
+    if (erfolgErfuellt(a, v, builtIds, expandiert) && claimed.indexOf(a.id) < 0) offen++;
+  });
+  var marke = $('ziele-zahl');
+  if (marke) marke.textContent = offen > 0 ? offen + ' 🎁' : claimed.length + '/' + liste.length;
+
+  // Die Liste nur zeichnen, wenn der Ziele-Screen offen ist.
+  if ($('ziele-bg').hidden) return;
+  var box = $('ziele-liste');
   box.textContent = '';
-  ziele.forEach(function (z) {
+  liste.forEach(function (a) {
+    var ist = claimed.indexOf(a.id) >= 0;
+    var fertig = erfolgErfuellt(a, v, builtIds, expandiert);
+    var einloesbar = fertig && !ist;
+    var belohnung = (a.gold > 0 ? a.gold + ' Gold' : '') +
+      (a.gold > 0 && a.xp > 0 ? ' · ' : '') + (a.xp > 0 ? a.xp + ' XP' : '');
+
     var row = document.createElement('div');
-    row.className = 'ziel' + (z.ok ? ' erreicht' : '');
+    row.className = 'ziel' + (ist ? ' erreicht' : '') + (einloesbar ? ' offen' : '');
+    var rechts = ist
+      ? '<span class="ziel-hinweis">eingelöst</span>'
+      : einloesbar
+        ? '<button type="button" class="ziel-los" data-id="' + a.id + '">Einlösen</button>'
+        : '<span class="ziel-hinweis">' + belohnung + '</span>';
     row.innerHTML =
-      '<span class="ziel-haken">' + (z.ok ? '✓' : '○') + '</span>' +
-      '<span class="ziel-text">' + z.t + '</span>' +
-      '<span class="ziel-hinweis">' + (z.ok ? 'geschafft' : (z.hinweis || '')) + '</span>';
+      '<span class="ziel-haken">' + (ist ? '✓' : fertig ? '★' : '○') + '</span>' +
+      '<span class="ziel-text">' + a.label +
+        '<span class="ziel-belohnung">Belohnung: ' + belohnung + '</span></span>' + rechts;
     box.appendChild(row);
+  });
+  box.querySelectorAll('.ziel-los').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      act('Erfolg eingelöst', client.claimAchievement(btn.getAttribute('data-id')), 'stufe');
+    });
   });
 }
 

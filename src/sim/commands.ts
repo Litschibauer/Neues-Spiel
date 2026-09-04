@@ -71,6 +71,9 @@ export type FellTreeCommand = CommandBase & { type: 'FELL_TREE'; plot: number };
 // Ware endgültig aus dem Lager löschen — ohne Gegenwert. Verlässt die Economy.
 export type DiscardCommand = CommandBase & { type: 'DISCARD'; item: number; amount: number };
 
+// Einen erreichten Erfolg einlösen — gibt einmalig die hinterlegte Belohnung.
+export type ClaimAchievementCommand = CommandBase & { type: 'CLAIM_ACHIEVEMENT'; id: string };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -95,6 +98,7 @@ export type Command =
   | HarvestTreeCommand
   | FellTreeCommand
   | DiscardCommand
+  | ClaimAchievementCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -161,7 +165,10 @@ export type SimErrorCode =
   | 'SKIP_DISABLED'
   | 'NOT_A_TREE'
   | 'TREE_NOT_RIPE'
-  | 'TREE_NOT_WITHERED';
+  | 'TREE_NOT_WITHERED'
+  | 'NO_SUCH_ACHIEVEMENT'
+  | 'ALREADY_CLAIMED'
+  | 'NOT_YET_EARNED';
 
 export class SimError extends Error {
   code: SimErrorCode;

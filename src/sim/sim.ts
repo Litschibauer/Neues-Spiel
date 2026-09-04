@@ -7,6 +7,7 @@ import {
   listingFee,
   blockiert,
   baumStufe,
+  achievementDone,
   obstacleLocked,
   nextLevel,
   itemUnlockLevel,
@@ -265,6 +266,27 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       // Ware wird ersatzlos vernichtet — kein Gold, kein Tausch.
       const next = cloneState(s);
       next.items = addItem(s.items, cmd.item, -cmd.amount);
+      return next;
+    }
+
+    case 'CLAIM_ACHIEVEMENT': {
+      const ach = rules.achievements?.find((a) => a.id === cmd.id);
+      if (!ach) throw new SimError('NO_SUCH_ACHIEVEMENT');
+      if ((s.claimed ?? []).includes(cmd.id)) throw new SimError('ALREADY_CLAIMED');
+
+      const builtIds = rules.plots.filter((_, i) => (s.plots[i]?.level ?? 0) > 0).map((p) => p.id);
+      const erfuellt = achievementDone(ach, {
+        level: levelOf(rules, s.xp),
+        gold: count(s, rules.currency),
+        builtIds,
+        expandiert: (s.expandiert ?? []).length,
+      });
+      if (!erfuellt) throw new SimError('NOT_YET_EARNED');
+
+      const next = cloneState(s);
+      if (ach.gold > 0) next.items = addItem(s.items, rules.currency, ach.gold);
+      next.xp = s.xp + ach.xp;
+      next.claimed = (s.claimed ?? []).concat(cmd.id);
       return next;
     }
 

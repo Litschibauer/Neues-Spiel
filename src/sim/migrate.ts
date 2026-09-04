@@ -252,6 +252,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['27->28', AUFS_RASTER],
   ['28->29', AUFS_RASTER],
   ['29->30', AUFS_RASTER],
+  ['30->31', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {
@@ -289,6 +290,11 @@ export function assertInvariants(state: State, rules: Ruleset): void {
   for (const id of state.expandiert ?? []) {
     if (!rules.expansions?.some((e) => e.id === id)) {
       problems.push(`freigeschaltetes Feld ${id} gibt es nicht`);
+    }
+  }
+  for (const id of state.claimed ?? []) {
+    if (!rules.achievements?.some((a) => a.id === id)) {
+      problems.push(`eingelöster Erfolg ${id} gibt es nicht`);
     }
   }
 

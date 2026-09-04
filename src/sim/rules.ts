@@ -141,6 +141,18 @@ export type PassiveDef = {
   recipe: number;
 };
 
+// Erfolg: erreichbar über eine einfache, datengetriebene Bedingung; gibt beim
+// Einlösen einmalig Gold + XP.
+export type AchievementKind = 'level' | 'gold' | 'plot' | 'plotPrefix' | 'expand';
+export type AchievementDef = {
+  id: string;
+  label: string;
+  kind: AchievementKind;
+  arg: number | string;
+  gold: number;
+  xp: number;
+};
+
 export type Ruleset = {
   version: number;
   items: readonly ItemDef[];
@@ -189,6 +201,7 @@ export type Ruleset = {
   // Admin-Postfach). Ist es voll, produziert nichts mehr von selbst nach — man
   // muss erst verkaufen/verbrauchen.
   siloUeberlauf?: boolean;
+  achievements?: readonly AchievementDef[];
 };
 
 const GOLD = 0;
@@ -1569,18 +1582,43 @@ const V30: Ruleset = {
   ],
 };
 
+// v31: Erfolge mit Belohnung. Erreichte Meilensteine geben einmalig Gold + XP,
+// eingelöst über einen cheat-sicheren Sim-Befehl.
+const V31: Ruleset = {
+  ...V30,
+  version: 31,
+  achievements: [
+    { id: 'lvl3', label: 'Stufe 3 erreichen', kind: 'level', arg: 3, gold: 250, xp: 30 },
+    { id: 'lvl8', label: 'Stufe 8 erreichen', kind: 'level', arg: 8, gold: 900, xp: 120 },
+    { id: 'lvl15', label: 'Stufe 15 erreichen', kind: 'level', arg: 15, gold: 3000, xp: 350 },
+    { id: 'gold1k', label: '1.000 Gold besitzen', kind: 'gold', arg: 1000, gold: 0, xp: 40 },
+    { id: 'gold10k', label: '10.000 Gold besitzen', kind: 'gold', arg: 10000, gold: 0, xp: 200 },
+    { id: 'mill', label: 'Erste Mühle bauen', kind: 'plot', arg: 'mill', gold: 150, xp: 20 },
+    { id: 'coop', label: 'Ersten Hühnerstall bauen', kind: 'plotPrefix', arg: 'coop-', gold: 200, xp: 25 },
+    { id: 'pasture', label: 'Kuhweide bauen', kind: 'plotPrefix', arg: 'pasture-', gold: 300, xp: 35 },
+    { id: 'dairy', label: 'Molkerei bauen', kind: 'plot', arg: 'dairy', gold: 400, xp: 45 },
+    { id: 'grill', label: 'Grill bauen', kind: 'plot', arg: 'grill', gold: 350, xp: 40 },
+    { id: 'oven', label: 'Backofen bauen', kind: 'plot', arg: 'oven', gold: 500, xp: 55 },
+    { id: 'apple', label: 'Apfelbaum pflanzen', kind: 'plotPrefix', arg: 'apple-tree', gold: 300, xp: 40 },
+    { id: 'mine', label: 'Mine im Berg bauen', kind: 'plot', arg: 'mine', gold: 800, xp: 90 },
+    { id: 'forge', label: 'Schmiede bauen', kind: 'plot', arg: 'forge', gold: 1000, xp: 110 },
+    { id: 'expand1', label: 'Erstes Land freimachen', kind: 'expand', arg: 1, gold: 250, xp: 30 },
+    { id: 'expand3', label: 'Drei Länder freimachen', kind: 'expand', arg: 3, gold: 900, xp: 100 },
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V30,
+  ...V31,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V30.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V30.plots.map((p) => {
+  recipes: V31.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V31.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1628,17 +1666,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [28, V28],
   [29, V29],
   [30, V30],
+  [31, V31],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30,
+  28, 29, 30, 31,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 30;
+export const LATEST_RULESET_VERSION = 31;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -1781,6 +1820,28 @@ export function levelStartedAt(rules: Ruleset, xp: number): number {
 
 export function nextLevel(rules: Ruleset, plot: number, level: number): LevelDef | null {
   return rules.plots[plot]?.levels[level] ?? null;
+}
+
+// Ist die Erfolgs-Bedingung erfüllt? Nimmt lose Werte statt State, um keinen
+// Ringimport rules<->state zu erzeugen. `builtIds` = IDs aller gebauten Plätze.
+export function achievementDone(
+  ach: AchievementDef,
+  ctx: { level: number; gold: number; builtIds: readonly string[]; expandiert: number },
+): boolean {
+  switch (ach.kind) {
+    case 'level':
+      return ctx.level >= (ach.arg as number);
+    case 'gold':
+      return ctx.gold >= (ach.arg as number);
+    case 'plot':
+      return ctx.builtIds.includes(ach.arg as string);
+    case 'plotPrefix':
+      return ctx.builtIds.some((id) => id.indexOf(ach.arg as string) === 0);
+    case 'expand':
+      return ctx.expandiert >= (ach.arg as number);
+    default:
+      return false;
+  }
 }
 
 export type DerivedTables = {

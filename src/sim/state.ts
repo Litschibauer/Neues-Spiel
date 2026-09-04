@@ -99,6 +99,8 @@ export type State = {
   clearedObstacles: readonly number[];
   expandiert: readonly string[];
   chestReadyAt: number;
+  // Bereits eingelöste Erfolge (Achievement-IDs).
+  claimed: readonly string[];
 };
 
 export function count(s: State, item: number): number {
@@ -180,6 +182,7 @@ export function initialState(rules: Ruleset): State {
     expandiert: [],
     chestReadyAt: 0,
     skipReadyAt: 0,
+    claimed: [],
   };
 }
 
@@ -236,6 +239,7 @@ export function normalizeState(s: State): State {
     clearedObstacles: s.clearedObstacles ?? [],
     expandiert: s.expandiert ?? [],
     chestReadyAt: s.chestReadyAt ?? 0,
+    claimed: s.claimed ?? [],
   };
 }
 
@@ -260,6 +264,7 @@ export function cloneState(s: State): State {
     expandiert: s.expandiert ?? [],
     chestReadyAt: s.chestReadyAt,
     skipReadyAt: s.skipReadyAt,
+    claimed: s.claimed ?? [],
   };
 }
 
