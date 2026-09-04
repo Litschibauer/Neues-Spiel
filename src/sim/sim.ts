@@ -290,6 +290,28 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    case 'REMOVE_PLOT': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
+      if (def.fixed) throw new SimError('CANT_REMOVE');
+
+      // Die Hälfte des eingesetzten Goldes zurück (nur Gold, keine Werkzeuge).
+      let goldZurueck = 0;
+      for (let l = 0; l < plot.level; l++) {
+        for (const c of def.levels[l]?.cost ?? []) {
+          if (c.item === rules.currency) goldZurueck += c.amount;
+        }
+      }
+      goldZurueck = Math.floor(goldZurueck / 2);
+
+      const next = cloneState(s);
+      if (goldZurueck > 0) next.items = addItem(s.items, rules.currency, goldZurueck);
+      next.plots = replaceAt(s.plots, cmd.plot, { level: 0, slots: [], gx: -1, gy: -1, tiere: [] });
+      return next;
+    }
+
     case 'SELL_NPC': {
       if (rules.sellNpcDisabled) throw new SimError('NPC_DISABLED');
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');

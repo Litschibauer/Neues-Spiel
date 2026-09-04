@@ -265,8 +265,38 @@ var ART = {
   'apple-tree': function (p) { return artAppleTree(p.baum ? p.baum.stufe : 'wachsen'); },
   'oven': function (p) { return artOven(p.busy); },
   'grill': function (p) { return artGrill(p.busy); },
+  'deco-fence': function () { return artFence(); },
+  'deco-flowers': function () { return artFlowers(); },
+  'deco-bench': function () { return artBench(); },
   fallback: function () { return artField(0, null); },
 };
+
+function artFence() {
+  return '<ellipse cx="50" cy="66" rx="40" ry="6" fill="var(--soil)" opacity=".2"/>' +
+    '<g fill="#b98a4e" stroke="#8a6535" stroke-width="1.5">' +
+    '<rect x="18" y="30" width="8" height="34" rx="1"/><rect x="46" y="30" width="8" height="34" rx="1"/>' +
+    '<rect x="74" y="30" width="8" height="34" rx="1"/></g>' +
+    '<g fill="#c99a5e" stroke="#8a6535" stroke-width="1.2">' +
+    '<rect x="12" y="38" width="76" height="6" rx="2"/><rect x="12" y="52" width="76" height="6" rx="2"/></g>';
+}
+
+function artFlowers() {
+  return '<ellipse cx="50" cy="66" rx="34" ry="6" fill="var(--soil)" opacity=".2"/>' +
+    '<path d="M20 64h60l-4-14H24z" fill="#6b4a2b"/>' +
+    '<g stroke="#4f8f4a" stroke-width="2">' +
+    '<line x1="34" y1="52" x2="34" y2="40"/><line x1="50" y1="52" x2="50" y2="34"/><line x1="66" y1="52" x2="66" y2="42"/></g>' +
+    '<circle cx="34" cy="38" r="6" fill="#e05a7a"/><circle cx="34" cy="38" r="2.4" fill="#ffe08a"/>' +
+    '<circle cx="50" cy="32" r="7" fill="#f0a63c"/><circle cx="50" cy="32" r="2.8" fill="#fff2c8"/>' +
+    '<circle cx="66" cy="40" r="6" fill="#8a6cd8"/><circle cx="66" cy="40" r="2.4" fill="#ffe08a"/>';
+}
+
+function artBench() {
+  return '<ellipse cx="50" cy="66" rx="36" ry="6" fill="var(--soil)" opacity=".2"/>' +
+    '<g fill="#9a6b3d" stroke="#6e4a29" stroke-width="1.4">' +
+    '<rect x="22" y="44" width="56" height="8" rx="2"/><rect x="22" y="30" width="56" height="7" rx="2"/>' +
+    '<rect x="26" y="52" width="6" height="12"/><rect x="68" y="52" width="6" height="12"/>' +
+    '<rect x="26" y="30" width="5" height="22"/><rect x="69" y="30" width="5" height="22"/></g>';
+}
 
 function artOven(working) {
   var glut = working

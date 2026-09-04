@@ -92,6 +92,8 @@ export type PlotDef = {
   flat?: boolean;
   animal?: AnimalDef;
   baum?: BaumDef;
+  // Reine Deko: kaufbar, platzierbar, abreißbar — ohne Funktion.
+  deco?: boolean;
 };
 
 export type BaumStufe = 'setzling' | 'wachsen' | 'reif' | 'verwelkt';
@@ -1607,18 +1609,40 @@ const V31: Ruleset = {
   ],
 };
 
+// v32: Dekorationen. Rein kosmetische Bauwerke, die man kauft, frei platziert
+// und wieder abreißen kann (halber Gold-Wert zurück).
+const deko = (id: string, label: string, kosten: number, ab: number, place: PlotPlace): PlotDef => ({
+  id,
+  startLevel: 0,
+  place,
+  size: { w: 1, h: 1 },
+  deco: true,
+  levels: [{ label, cost: gold(kosten), recipes: [], minPlayerLevel: ab }],
+});
+
+const V32: Ruleset = {
+  ...V31,
+  version: 32,
+  plots: [
+    ...V31.plots,
+    deko('deco-fence', 'Zaun', 50, 2, at(2, 47, 8, 10)),
+    deko('deco-flowers', 'Blumenbeet', 90, 3, at(59, 47, 8, 10)),
+    deko('deco-bench', 'Gartenbank', 140, 4, at(26, 62, 8, 10)),
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V31,
+  ...V32,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V31.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V31.plots.map((p) => {
+  recipes: V32.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V32.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1667,17 +1691,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [29, V29],
   [30, V30],
   [31, V31],
+  [32, V32],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31,
+  28, 29, 30, 31, 32,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 31;
+export const LATEST_RULESET_VERSION = 32;
 
 export const DEV_RULESET_VERSION = 1001;
 

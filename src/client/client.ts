@@ -133,6 +133,10 @@ export class Client {
     return this.apply({ type: 'CLAIM_ACHIEVEMENT', id } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  removePlot(plot: number): ActionResult {
+    return this.apply({ type: 'REMOVE_PLOT', plot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

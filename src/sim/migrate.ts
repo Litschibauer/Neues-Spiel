@@ -253,6 +253,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['28->29', AUFS_RASTER],
   ['29->30', AUFS_RASTER],
   ['30->31', AUFS_RASTER],
+  ['31->32', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

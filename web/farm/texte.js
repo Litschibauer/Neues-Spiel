@@ -12,6 +12,7 @@ var NAMES = {
   apple: 'Äpfel', 'apple-tree': 'Apfelbaum',
   flour: 'Mehl', bread: 'Brot', 'apple-pie': 'Apfelkuchen', 'fried-egg': 'Spiegeleier',
   oven: 'Backofen', grill: 'Grill',
+  'deco-fence': 'Zaun', 'deco-flowers': 'Blumenbeet', 'deco-bench': 'Gartenbank',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

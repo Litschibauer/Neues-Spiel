@@ -74,6 +74,9 @@ export type DiscardCommand = CommandBase & { type: 'DISCARD'; item: number; amou
 // Einen erreichten Erfolg einlösen — gibt einmalig die hinterlegte Belohnung.
 export type ClaimAchievementCommand = CommandBase & { type: 'CLAIM_ACHIEVEMENT'; id: string };
 
+// Ein gebautes Bauwerk abreißen — gibt die Hälfte des Gold-Einsatzes zurück.
+export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -99,6 +102,7 @@ export type Command =
   | FellTreeCommand
   | DiscardCommand
   | ClaimAchievementCommand
+  | RemovePlotCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -168,7 +172,8 @@ export type SimErrorCode =
   | 'TREE_NOT_WITHERED'
   | 'NO_SUCH_ACHIEVEMENT'
   | 'ALREADY_CLAIMED'
-  | 'NOT_YET_EARNED';
+  | 'NOT_YET_EARNED'
+  | 'CANT_REMOVE';
 
 export class SimError extends Error {
   code: SimErrorCode;

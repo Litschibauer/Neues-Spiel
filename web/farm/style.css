@@ -405,6 +405,10 @@
   .abfahrt[disabled] { background: var(--sunk); color: var(--muted); }
   .abfahrt.laden { width: auto; padding: .35rem .7rem; font-size: .78rem; flex: none; }
   .abfahrt.skip { background: var(--sunk); color: var(--muted); }
+  .platzknoepfe { display: flex; gap: .5rem; margin-top: .3rem; }
+  .platzknoepfe .abfahrt { flex: 1; }
+  .abfahrt.abreissen { background: var(--sunk); color: var(--bad); border: 1px solid var(--bad); }
+  .abfahrt.abreissen.sicher { background: var(--bad); color: #fff; border-color: var(--bad); }
 
   .plot .bar {
     position: absolute; left: 12%; right: 12%; bottom: .85rem;

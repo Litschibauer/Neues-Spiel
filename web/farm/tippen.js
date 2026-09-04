@@ -71,6 +71,9 @@ function tapPlot(i) {
         client.start(i, p.next.recipe), 'saat');
     return;
   }
+  // Gebautes, nicht-festes Bauwerk ohne andere Aktion (z. B. Deko): Menü zum
+  // Verschieben/Abreißen öffnen.
+  if (p.level > 0 && rules.plots[i] && !rules.plots[i].fixed) { openPicker(p, 0); return; }
   if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
   else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
   else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
@@ -188,12 +191,40 @@ function openStall(p) {
 
 function verschiebeKnopf(p, box) {
   if (!rules.grid || (rules.plots[p.index] && rules.plots[p.index].fixed)) return;
+  var reihe = document.createElement('div');
+  reihe.className = 'platzknoepfe';
+
   var knopf = document.createElement('button');
   knopf.type = 'button';
   knopf.className = 'abfahrt skip';
   knopf.textContent = 'Verschieben';
   knopf.addEventListener('click', function () { verschiebe(p.index); });
-  box.appendChild(knopf);
+  reihe.appendChild(knopf);
+
+  if (p.level > 0) {
+    var ab = document.createElement('button');
+    ab.type = 'button';
+    ab.className = 'abfahrt abreissen';
+    ab.textContent = 'Abreißen';
+    ab.addEventListener('click', function () { abreissen(p.index, ab); });
+    reihe.appendChild(ab);
+  }
+  box.appendChild(reihe);
+}
+
+// Zweimal tippen zum Bestätigen — kein hässlicher Browser-Dialog.
+function abreissen(i, btn) {
+  if (btn && !btn.dataset.sicher) {
+    btn.dataset.sicher = '1';
+    btn.textContent = 'Sicher? (halbes Gold zurück)';
+    btn.classList.add('sicher');
+    setTimeout(function () {
+      if (btn) { btn.dataset.sicher = ''; btn.textContent = 'Abreißen'; btn.classList.remove('sicher'); }
+    }, 3000);
+    return;
+  }
+  closePicker();
+  act(plotName(i) + ' abgerissen', client.removePlot(i), 'stufe');
 }
 
 function renderStall(p) {

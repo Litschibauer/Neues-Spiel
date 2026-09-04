@@ -88,6 +88,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|DISCARD|${c.item}|${c.amount}`;
     case 'CLAIM_ACHIEVEMENT':
       return `${c.seq}|${c.tick}|CLAIM_ACHIEVEMENT|${c.id}`;
+    case 'REMOVE_PLOT':
+      return `${c.seq}|${c.tick}|REMOVE_PLOT|${c.plot}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':
