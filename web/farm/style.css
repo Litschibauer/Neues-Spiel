@@ -433,12 +433,12 @@
 
   .card {
     width: 100%; background: var(--surface); border: 1px solid var(--line);
-    border-radius: 14px; box-shadow: var(--shadow); padding: .7rem .8rem;
-    display: flex; align-items: center; gap: .7rem; text-align: left;
+    border-radius: 12px; box-shadow: var(--shadow); padding: .55rem .7rem;
+    display: flex; align-items: center; gap: .6rem; text-align: left;
     transition: transform .12s;
   }
   .card:active { transform: scale(.985); }
-  .card + .card { margin-top: .5rem; }
+  .card + .card { margin-top: .4rem; }
   .card .body { flex: 1; min-width: 0; }
   .card .top { font-size: .85rem; font-weight: 620; letter-spacing: -.01em; }
   .card .sub { font-size: .7rem; color: var(--muted); }
@@ -486,14 +486,23 @@
     border-radius: 18px 18px 0 0; padding: 1rem .9rem calc(1rem + env(safe-area-inset-bottom));
     box-shadow: 0 -8px 32px rgba(0,0,0,.28);
     animation: rise .18s ease-out;
+    /* Keine Liste wird seitenfüllend: die Karte deckelt bei ~86 % der Höhe und
+       scrollt innen. Titel oben und Schließen unten bleiben dabei stehen. */
+    max-height: 86vh; overflow-y: auto; overscroll-behavior: contain;
   }
   @keyframes rise { from { transform: translateY(14px); opacity: .6; } }
   @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
-  .sheet h3 { font-size: .95rem; margin: 0 0 .7rem; }
+  .sheet h3 {
+    font-size: .95rem; position: sticky; top: 0; z-index: 3;
+    margin: -1rem -.9rem .7rem; padding: 1rem .9rem .55rem;
+    background: var(--surface);
+  }
   .sheet-close {
     width: 100%; height: 2.4rem; margin-top: .6rem; border-radius: 12px;
-    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border: 1px solid var(--line); background: var(--surface); color: var(--muted);
     font-size: .8rem; font-weight: 600;
+    position: sticky; bottom: 0; z-index: 3;
+    box-shadow: 0 -.7rem 0 .15rem var(--surface);
   }
   .opt { width: 100%; text-align: left; }
   /* Laufender Status im Menü: sichtbar, aber nicht anklickbar. */
