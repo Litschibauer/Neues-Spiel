@@ -322,6 +322,10 @@ var TUTORIAL = [
     text: 'Am Wagen unten wartet der Frachtbrief. Erfülle Aufträge und bekomme Gold und XP.' },
   { emoji: '🔨', titel: 'Bauen & aufsteigen',
     text: 'Mit dem Hammer baust du neue Gebäude: Ställe, Mühle, Backofen, Grill, Mine … Mit jeder Stufe kommt mehr dazu.' },
+  { emoji: '🎯', titel: 'Ziele & Erfolge',
+    text: 'Über das Zahnrad findest du Ziele und Erfolge. Erreichte Meilensteine löst du dort für Gold und XP ein.' },
+  { emoji: '🎁', titel: 'Jeden Tag ein Bonus',
+    text: 'Schau täglich vorbei: Der Tagesbonus wächst mit jedem Tag in Folge. Die Belohnung landet im Postfach.' },
   { emoji: '🛒', titel: 'Handeln',
     text: 'Im Verkaufsstand bietest du Waren anderen Höfen an. Viel Erfolg auf deinem Hof!' },
 ];

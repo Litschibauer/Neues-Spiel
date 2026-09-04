@@ -74,9 +74,11 @@ function tapPlot(i) {
   // Gebautes, nicht-festes Bauwerk ohne andere Aktion (z. B. Deko): Menü zum
   // Verschieben/Abreißen öffnen.
   if (p.level > 0 && rules.plots[i] && !rules.plots[i].fixed) { openPicker(p, 0); return; }
-  if (p.blocked === 'inputs') toast('Zutaten fehlen', true);
-  else if (p.blocked === 'level') toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true);
-  else if (p.blocked === 'cost') toast('Zu wenig ' + itemName(rules.currency), true);
+  if (p.blocked === 'inputs') { toast('Zutaten fehlen', true); return; }
+  if (p.blocked === 'level') { toast('Erst ab Stufe ' + p.upgrade.minPlayerLevel, true); return; }
+  if (p.blocked === 'cost') { toast('Zu wenig ' + itemName(rules.currency), true); return; }
+  // Fallback: jedes gebaute Bauwerk reagiert beim Tippen — nie ins Leere.
+  if (p.level > 0 && p.options.length >= 1) { openPicker(p, 0); return; }
 }
 
 function tapBaum(p) {
