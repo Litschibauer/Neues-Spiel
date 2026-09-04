@@ -483,7 +483,10 @@
   }
   .sheet {
     width: 100%; max-width: 30rem; background: var(--surface);
-    border-radius: 18px 18px 0 0; padding: 1rem .9rem calc(1rem + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    /* Kein Polster oben/unten am Scroll-Container — Titel und Schließen bringen
+       ihr eigenes mit, sonst lugt beim Scrollen Inhalt über/unter ihnen durch. */
+    padding: 0 .9rem;
     box-shadow: 0 -8px 32px rgba(0,0,0,.28);
     animation: rise .18s ease-out;
     /* Keine Liste wird seitenfüllend: die Karte deckelt bei ~86 % der Höhe und
@@ -494,15 +497,18 @@
   @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
   .sheet h3 {
     font-size: .95rem; position: sticky; top: 0; z-index: 3;
-    margin: -1rem -.9rem .7rem; padding: 1rem .9rem .55rem;
-    background: var(--surface);
+    margin: 0 -.9rem .7rem; padding: 1rem .9rem .55rem;
+    background: var(--surface); box-shadow: 0 1px 0 var(--line);
   }
   .sheet-close {
-    width: 100%; height: 2.4rem; margin-top: .6rem; border-radius: 12px;
+    width: 100%; height: 2.4rem; border-radius: 12px;
     border: 1px solid var(--line); background: var(--surface); color: var(--muted);
     font-size: .8rem; font-weight: 600;
     position: sticky; bottom: 0; z-index: 3;
-    box-shadow: 0 -.7rem 0 .15rem var(--surface);
+    /* Klebt bündig am unteren Rand (Home-Indikator als leerer Streifen darunter). */
+    margin: .6rem 0 env(safe-area-inset-bottom);
+    /* Deckt die .6rem-Lücke darüber ab, damit beim Scrollen nichts durchscheint. */
+    box-shadow: 0 -.6rem 0 .3rem var(--surface);
   }
   .opt { width: 100%; text-align: left; }
   /* Laufender Status im Menü: sichtbar, aber nicht anklickbar. */
