@@ -1020,7 +1020,21 @@ function zeichnePreiswahl(v, box) {
   box.appendChild(karte);
 }
 
-function renderBadges() {}
+function renderBadges(v) {
+  var punkt = $('zahnrad-punkt');
+  if (!punkt) return;
+  var liste = rules.achievements || [];
+  var offen = 0;
+  if (liste.length) {
+    var claimed = client.preview().claimed || [];
+    var builtIds = v.plots.filter(function (p) { return p.level > 0; }).map(function (p) { return p.id; });
+    var expandiert = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
+    liste.forEach(function (a) {
+      if (claimed.indexOf(a.id) < 0 && erfolgErfuellt(a, v, builtIds, expandiert)) offen++;
+    });
+  }
+  punkt.hidden = offen === 0;
+}
 
 function renderBauliste(v) {
   var box = $('bauliste');

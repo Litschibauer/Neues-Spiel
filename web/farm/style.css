@@ -230,6 +230,10 @@
     color: var(--muted); box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
   }
   .zahnrad:active { transform: scale(.94); }
+  .zahnrad .punkt {
+    position: absolute; top: -1px; right: -1px; width: .7rem; height: .7rem;
+    border-radius: 999px; background: var(--gold, #e0a800); border: 2px solid var(--surface);
+  }
   .hammer { right: 3rem; }
   .geschenk { right: 5.55rem; color: var(--on-accent); background: var(--accent); }
   .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
