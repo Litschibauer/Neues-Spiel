@@ -39,6 +39,16 @@ test('v29: Mehl, Brot, Apfelkuchen und Spiegeleier sind verdrahtet', () => {
   );
 });
 
+test('v30: alle neuen Waren tauchen in Aufträgen auf', () => {
+  const V30 = getRuleset(30);
+  const gefragt = new Set<number>();
+  for (const t of V30.requestTemplates) for (const w of t.wants) gefragt.add(w.item);
+  for (const id of ['apple', 'flour', 'bread', 'apple-pie', 'fried-egg', 'coal', 'iron-ore', 'gold-ore', 'iron-bar', 'gold-bar', 'cow-feed']) {
+    const i = V30.items.findIndex((x) => x.id === id);
+    assert.ok(gefragt.has(i), `kein Auftrag verlangt ${id}`);
+  }
+});
+
 test('die Mühle mahlt Weizen zu Mehl (Start → warten → Ernte)', () => {
   const MILL = V.plots.findIndex((p) => p.id === 'mill');
   const WHEAT = item('wheat');

@@ -1540,18 +1540,47 @@ const V29: Ruleset = {
   ],
 };
 
+// v30: Aufträge für ALLE Waren. Die Auftragsauswahl filtert ohnehin nach dem,
+// was ein Hof herstellen kann (reachableItems), darum erscheinen diese erst,
+// wenn Mine/Schmiede/Backofen/Grill/Apfelbaum gebaut sind. So hängen die neuen
+// Ketten endlich am Kern-Loop „Aufträge erfüllen".
+const V30: Ruleset = {
+  ...V29,
+  version: 30,
+  requestTemplates: [
+    ...V29.requestTemplates,
+    { id: 'cowfeed-order', wants: [want(COW_FEED, 4)], reward: gold(70), xp: 16 },
+    { id: 'coal-order', wants: [want(COAL, 6)], reward: gold(95), xp: 20 },
+    { id: 'iron-ore-order', wants: [want(IRON_ORE, 4)], reward: gold(135), xp: 28 },
+    { id: 'gold-ore-order', wants: [want(GOLD_ORE, 3)], reward: gold(200), xp: 40 },
+    { id: 'iron-bar-order', wants: [want(IRON_BAR, 2)], reward: gold(270), xp: 60 },
+    { id: 'gold-bar-order', wants: [want(GOLD_BAR, 1)], reward: gold(300), xp: 65 },
+    { id: 'apple-order', wants: [want(APPLE, 5)], reward: gold(120), xp: 24 },
+    { id: 'apple-big', wants: [want(APPLE, 12)], reward: gold(300), xp: 60 },
+    { id: 'flour-order', wants: [want(MEHL, 4)], reward: gold(85), xp: 18 },
+    { id: 'bread-order', wants: [want(BROT, 3)], reward: gold(195), xp: 42 },
+    { id: 'friedegg-order', wants: [want(SPIEGELEI, 3)], reward: gold(320), xp: 68 },
+    { id: 'pie-order', wants: [want(APFELKUCHEN, 1)], reward: gold(210), xp: 45 },
+    { id: 'pie-big', wants: [want(APFELKUCHEN, 2)], reward: gold(430), xp: 95 },
+    // Gemischte, wertvolle Aufträge für Fortgeschrittene.
+    { id: 'bakery-mix', wants: [want(BROT, 2), want(APFELKUCHEN, 1)], reward: gold(370), xp: 82 },
+    { id: 'forge-mix', wants: [want(IRON_BAR, 1), want(GOLD_BAR, 1)], reward: gold(450), xp: 100 },
+    { id: 'brunch-mix', wants: [want(SPIEGELEI, 2), want(BROT, 1)], reward: gold(300), xp: 66 },
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V29,
+  ...V30,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V29.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V29.plots.map((p) => {
+  recipes: V30.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  plots: V30.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1598,17 +1627,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [27, V27],
   [28, V28],
   [29, V29],
+  [30, V30],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29,
+  28, 29, 30,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 29;
+export const LATEST_RULESET_VERSION = 30;
 
 export const DEV_RULESET_VERSION = 1001;
 
