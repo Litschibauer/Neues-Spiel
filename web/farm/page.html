@@ -255,6 +255,13 @@
         </div>
         <span class="go" id="tonschalter">aus</span>
       </button>
+      <button class="card" id="ziele-auf">
+        <div class="body">
+          <div class="top">Ziele &amp; Erfolge</div>
+          <div class="sub">Was du als Nächstes anpacken kannst</div>
+        </div>
+        <span class="go" id="ziele-zahl">▶</span>
+      </button>
       <button class="card" id="anleitung">
         <div class="body">
           <div class="top">Anleitung ansehen</div>
@@ -270,6 +277,14 @@
       </button>
       <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
       <button class="sheet-close" id="rest-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="ziele-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ziele-titel">
+      <h3 id="ziele-titel">Ziele &amp; Erfolge</h3>
+      <div id="ziele-liste"></div>
+      <button class="sheet-close" id="ziele-close">Schließen</button>
     </div>
   </div>
 

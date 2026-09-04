@@ -681,6 +681,25 @@
   }
   .loesch-knoepfe .loesch-los { border-color: var(--bad); background: var(--bad); color: #fff; }
 
+  /* Ziele & Erfolge. */
+  .ziel {
+    display: flex; align-items: center; gap: .6rem; padding: .55rem .3rem;
+    border-bottom: 1px solid var(--line); font-size: .86rem;
+  }
+  .ziel:last-child { border-bottom: 0; }
+  .ziel-haken {
+    flex: none; width: 1.5rem; height: 1.5rem; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center; font-weight: 800;
+    background: var(--sunk); color: var(--muted);
+  }
+  .ziel.erreicht .ziel-haken { background: var(--accent); color: var(--on-accent); }
+  .ziel-text { flex: 1; }
+  .ziel.erreicht .ziel-text { color: var(--muted); }
+  .ziel-hinweis {
+    flex: none; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .ziel.erreicht .ziel-hinweis { color: var(--accent); font-weight: 600; }
+
   #zeitung.no-net, #fremd-stand.no-net { opacity: .45; pointer-events: none; }
   .note {
     margin: 0; font-size: .75rem; color: var(--warn);

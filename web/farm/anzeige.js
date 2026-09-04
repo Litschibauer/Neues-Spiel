@@ -27,6 +27,7 @@ function render() {
   renderHofinfo(v);
   renderBadges(v);
   renderBauliste(v);
+  renderZiele(v);
   renderSheet(v);
   bonusKnopf();
 }
@@ -660,6 +661,58 @@ function numberPick(label, get, lo, hi, set, maxLabel) {
   }
 
   return row;
+}
+
+// Ziele/Erfolge — Meilensteine aus dem aktuellen Zustand abgeleitet.
+function zieleFuer(v) {
+  var gebaut = function (id) {
+    return v.plots.some(function (p) { return p.id === id && p.level > 0; });
+  };
+  var praefix = function (pre) {
+    return v.plots.some(function (p) { return p.id.indexOf(pre) === 0 && p.level > 0; });
+  };
+  var felder = v.plots.filter(function (p) { return p.id.indexOf('field-') === 0 && p.level > 0; }).length;
+  var freigeschaltet = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
+  var gold = v.currency.amount;
+
+  return [
+    { t: 'Stufe 3 erreichen', ok: v.level >= 3, hinweis: 'Stufe ' + v.level + ' / 3' },
+    { t: 'Stufe 8 erreichen', ok: v.level >= 8, hinweis: 'Stufe ' + v.level + ' / 8' },
+    { t: 'Stufe 15 erreichen', ok: v.level >= 15, hinweis: 'Stufe ' + v.level + ' / 15' },
+    { t: '1.000 Gold besitzen', ok: gold >= 1000, hinweis: gold + ' / 1.000' },
+    { t: '10.000 Gold besitzen', ok: gold >= 10000, hinweis: gold + ' / 10.000' },
+    { t: 'Erste Mühle bauen', ok: gebaut('mill') },
+    { t: 'Ersten Hühnerstall bauen', ok: praefix('coop-') },
+    { t: 'Kuhweide bauen', ok: praefix('pasture-') },
+    { t: 'Molkerei bauen', ok: gebaut('dairy') },
+    { t: 'Grill bauen', ok: gebaut('grill') },
+    { t: 'Backofen bauen', ok: gebaut('oven') },
+    { t: 'Apfelbaum pflanzen', ok: praefix('apple-tree') },
+    { t: 'Mine im Berg bauen', ok: gebaut('mine') },
+    { t: 'Schmiede bauen', ok: gebaut('forge') },
+    { t: 'Alle 6 Felder freischalten', ok: felder >= 6, hinweis: felder + ' / 6' },
+    { t: 'Erstes Land freimachen', ok: freigeschaltet >= 1, hinweis: freigeschaltet + ' freigeschaltet' },
+  ];
+}
+
+function renderZiele(v) {
+  var box = $('ziele-liste');
+  if (!box) return;
+  var ziele = zieleFuer(v);
+  var erreicht = ziele.filter(function (z) { return z.ok; }).length;
+  var marke = $('ziele-zahl');
+  if (marke) marke.textContent = erreicht + '/' + ziele.length;
+
+  box.textContent = '';
+  ziele.forEach(function (z) {
+    var row = document.createElement('div');
+    row.className = 'ziel' + (z.ok ? ' erreicht' : '');
+    row.innerHTML =
+      '<span class="ziel-haken">' + (z.ok ? '✓' : '○') + '</span>' +
+      '<span class="ziel-text">' + z.t + '</span>' +
+      '<span class="ziel-hinweis">' + (z.ok ? 'geschafft' : (z.hinweis || '')) + '</span>';
+    box.appendChild(row);
+  });
 }
 
 function renderVorrat(v) {
