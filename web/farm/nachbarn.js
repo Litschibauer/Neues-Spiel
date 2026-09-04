@@ -3,6 +3,31 @@ var besuchCode = null;
 var besuchDaten = null;
 var besuchTimer = null;
 
+function ladeBestenliste() {
+  api('/api/bestenliste').then(zeichneBestenliste).catch(function () {
+    $('bestenliste-liste').innerHTML = '<p class="empty">Bestenliste gerade nicht erreichbar.</p>';
+  });
+}
+
+function zeichneBestenliste(d) {
+  $('bestenliste-eigen').innerHTML = d.ich
+    ? '<div class="rang-eigen">Dein Platz: <b>#' + d.ich.platz + '</b> von ' + d.gesamt +
+      ' · Stufe ' + d.ich.level + ' · ' + d.ich.xp + ' XP</div>'
+    : '';
+  var box = $('bestenliste-liste');
+  box.textContent = '';
+  (d.top || []).forEach(function (e) {
+    var row = document.createElement('div');
+    row.className = 'rang' + (e.ich ? ' ich' : '');
+    var platz = e.platz === 1 ? '🥇' : e.platz === 2 ? '🥈' : e.platz === 3 ? '🥉' : '#' + e.platz;
+    row.innerHTML =
+      '<span class="rang-platz">' + platz + '</span>' +
+      '<span class="rang-name">' + e.name + '</span>' +
+      '<span class="rang-wert">St. ' + e.level + ' · ' + e.xp + ' XP</span>';
+    box.appendChild(row);
+  });
+}
+
 function hofLaden() {
   return api('/api/hof').then(function (h) {
     eigenerHof = h;

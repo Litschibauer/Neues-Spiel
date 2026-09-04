@@ -8,7 +8,7 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState, normalizeState } from '../sim/state.ts';
-import { LATEST_RULESET_VERSION, RULESETS, getRuleset } from '../sim/rules.ts';
+import { LATEST_RULESET_VERSION, RULESETS, getRuleset, levelOf } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
@@ -606,6 +606,31 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         serverTime: Date.now(),
         isActiveDevice: game.isActiveDevice(deviceId),
         activeSince: game.activeDevice?.lastSyncMs ?? null,
+      });
+    }
+
+    if (url.pathname === '/api/bestenliste' && req.method === 'GET') {
+      const alle = accounts.list().map((a) => {
+        const cached = live.get(a.id);
+        const snap = cached ? cached.snapshot : accounts.load(a.id)?.snapshot;
+        const xp = snap?.state.xp ?? 0;
+        const rules = getRuleset(snap?.rulesetVersion ?? TARGET_RULESET);
+        return { id: a.id, name: sozial.karte(a.id)?.name ?? 'Hof', level: levelOf(rules, xp), xp };
+      });
+      alle.sort((x, y) => y.xp - x.xp || x.id.localeCompare(y.id));
+      const rang = alle.findIndex((e) => e.id === account.id) + 1;
+      const ich = rang > 0 ? alle[rang - 1]! : null;
+      return json(res, 200, {
+        gesamt: alle.length,
+        rang,
+        ich: ich ? { platz: rang, name: ich.name, level: ich.level, xp: ich.xp } : null,
+        top: alle.slice(0, 25).map((e, i) => ({
+          platz: i + 1,
+          name: e.name,
+          level: e.level,
+          xp: e.xp,
+          ich: e.id === account.id,
+        })),
       });
     }
 
