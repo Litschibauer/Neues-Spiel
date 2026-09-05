@@ -1,9 +1,25 @@
-var tonAn = localStorage.getItem('ns-ton') !== 'aus';
+// Lautstärke/Intensität als Prozent (0–100). Ein Regler je Bereich:
+//   ns-sfx = Soundeffekte, ns-vfx = visuelle Effekte (Funken/Konfetti/Wetter).
+function ladeProzent(key, standard) {
+  var v = parseInt(localStorage.getItem(key), 10);
+  if (isNaN(v)) {
+    // Migration vom alten An/Aus-Ton-Schalter.
+    if (key === 'ns-sfx' && localStorage.getItem('ns-ton') === 'aus') return 0;
+    return standard;
+  }
+  return Math.max(0, Math.min(100, v));
+}
+var sfxProz = ladeProzent('ns-sfx', 60);
+var vfxProz = ladeProzent('ns-vfx', 100);
+var SFX_BASIS = 0.35; // 100 % ⇒ Master-Gain 0.35 (angenehm laut, nicht schrill)
+function sfxFaktor() { return (sfxProz / 100) * SFX_BASIS; }
+function vfxFaktor() { return vfxProz / 100; }
+
 var audio = null;
 var meister = null;
 
 function tonBereit() {
-  if (!tonAn) return null;
+  if (sfxProz <= 0) return null;
   if (audio) {
     if (audio.state === 'suspended') audio.resume();
     return audio;
@@ -16,15 +32,22 @@ function tonBereit() {
     return null;
   }
   meister = audio.createGain();
-  meister.gain.value = 0.22;
+  meister.gain.value = sfxFaktor();
   meister.connect(audio.destination);
   return audio;
 }
 
-function tonSchalten(an) {
-  tonAn = an;
-  localStorage.setItem('ns-ton', an ? 'an' : 'aus');
-  if (an) { tonBereit(); klang('tipp'); }
+function sfxSetzen(p) {
+  sfxProz = Math.max(0, Math.min(100, p | 0));
+  try { localStorage.setItem('ns-sfx', String(sfxProz)); } catch (e) {}
+  if (meister) meister.gain.value = sfxFaktor();
+  if (sfxProz > 0) klang('tipp');
+}
+
+function vfxSetzen(p) {
+  vfxProz = Math.max(0, Math.min(100, p | 0));
+  try { localStorage.setItem('ns-vfx', String(vfxProz)); } catch (e) {}
+  if (typeof himmelMalen === 'function') himmelMalen();
 }
 
 function stimme(form, von, nach, dauer, laut, ab) {
@@ -120,7 +143,7 @@ var KLAENGE = {
 };
 
 function klang(name) {
-  if (!tonAn || document.hidden) return;
+  if (sfxProz <= 0 || document.hidden) return;
   var ctx = tonBereit();
   if (!ctx || ctx.state !== 'running') return;
   var mach = KLAENGE[name] || KLAENGE.tipp;
@@ -165,7 +188,8 @@ function funken(kasten, art) {
   var farbe = art === 'muenzen' ? '#f4c430' : '#7bbf5a';
   var cx = kasten.left + kasten.width / 2;
   var cy = kasten.top + kasten.height / 3;
-  var n = 6;
+  var n = Math.round(6 * vfxFaktor());
+  if (n <= 0) return;
   for (var i = 0; i < n; i++) {
     var f = document.createElement('span');
     f.className = 'funke';
@@ -183,8 +207,10 @@ function funken(kasten, art) {
 
 function konfetti() {
   if (magerModus()) return;
+  var anzahl = Math.round(26 * vfxFaktor());
+  if (anzahl <= 0) return;
   var farben = ['#f4c430', '#7bbf5a', '#e8734a', '#5aa9e6', '#c86bd6'];
-  for (var i = 0; i < 26; i++) {
+  for (var i = 0; i < anzahl; i++) {
     var k = document.createElement('span');
     k.className = 'konfetti';
     k.style.left = Math.round(Math.random() * 100) + 'vw';

@@ -2099,24 +2099,42 @@ try {
   );
   check('Der Rest sitzt hinterm Zahnrad', hinterZahnrad === 'true/true', hinterZahnrad);
 
-  const tonSchalter = await evaluate<string>(
+  const sfxRegler = await evaluate<string>(
     cdp,
     `(function () {
        document.getElementById('zahnrad').click();
-       var stand = function () { return document.getElementById('tonstand').textContent; };
-       var vorher = stand();
-       document.getElementById('tonknopf').click();
-       var danach = stand();
-       var gemerkt = localStorage.getItem('ns-ton');
-       document.getElementById('tonknopf').click();
+       var r = document.getElementById('sfx-regler');
+       r.value = '0';
+       r.dispatchEvent(new Event('input', { bubbles: true }));
+       var wert = document.getElementById('sfx-wert').textContent;
+       var gemerkt = localStorage.getItem('ns-sfx');
        document.getElementById('rest-close').click();
-       return vorher + '/' + danach + '/' + gemerkt + '/' + stand();
+       return wert + '/' + gemerkt;
      })()`,
   );
   check(
-    'Töne lassen sich abschalten, und das Gerät merkt es sich',
-    tonSchalter === 'an/aus/aus/an',
-    tonSchalter,
+    'Der Soundeffekt-Regler wirkt und das Gerät merkt sich den Wert',
+    sfxRegler === '0%/0',
+    sfxRegler,
+  );
+
+  const vfxRegler = await evaluate<string>(
+    cdp,
+    `(function () {
+       document.getElementById('zahnrad').click();
+       var r = document.getElementById('vfx-regler');
+       r.value = '40';
+       r.dispatchEvent(new Event('input', { bubbles: true }));
+       var wert = document.getElementById('vfx-wert').textContent;
+       var gemerkt = localStorage.getItem('ns-vfx');
+       document.getElementById('rest-close').click();
+       return wert + '/' + gemerkt;
+     })()`,
+  );
+  check(
+    'Der Effekt-Regler wirkt und das Gerät merkt sich den Wert',
+    vfxRegler === '40%/40',
+    vfxRegler,
   );
 
   const leeresFeld = await evaluate<string>(

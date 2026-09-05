@@ -251,13 +251,20 @@
       <h3 id="rest-titel">Einstellungen</h3>
       <div id="hofinfo"></div>
       <h2>Gerät</h2>
-      <button class="card" id="tonknopf">
+      <div class="card regler">
         <div class="body">
-          <div class="top">Töne</div>
-          <div class="sub" id="tonstand">an</div>
+          <div class="top">Soundeffekte <span class="regler-wert" id="sfx-wert">60&#37;</span></div>
+          <input type="range" id="sfx-regler" min="0" max="100" step="5" value="60"
+                 aria-label="Lautstärke der Soundeffekte">
         </div>
-        <span class="go" id="tonschalter">aus</span>
-      </button>
+      </div>
+      <div class="card regler">
+        <div class="body">
+          <div class="top">Effekte <span class="regler-wert" id="vfx-wert">100&#37;</span></div>
+          <input type="range" id="vfx-regler" min="0" max="100" step="5" value="100"
+                 aria-label="Stärke der visuellen Effekte">
+        </div>
+      </div>
       <button class="card" id="musikknopf">
         <div class="body">
           <div class="top">Musik</div>

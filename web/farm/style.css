@@ -472,6 +472,36 @@
   .card .pay .amount { font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
   .card .pay .xp { font-size: .66rem; color: var(--accent); font-weight: 650; }
 
+  /* Regler-Karten (Soundeffekte / Effekte). */
+  .card.regler { cursor: default; }
+  .card.regler:active { transform: none; }
+  .card.regler .body { display: flex; flex-direction: column; gap: .5rem; }
+  .card.regler .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .regler-wert { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card.regler input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 1.5rem;
+    background: transparent; margin: 0; cursor: pointer;
+  }
+  .card.regler input[type="range"]::-webkit-slider-runnable-track {
+    height: .4rem; border-radius: 999px; background: var(--sunk);
+  }
+  .card.regler input[type="range"]::-moz-range-track {
+    height: .4rem; border-radius: 999px; background: var(--sunk);
+  }
+  .card.regler input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; margin-top: -.5rem;
+    width: 1.4rem; height: 1.4rem; border-radius: 50%;
+    background: var(--leaf); border: 2px solid var(--surface); box-shadow: var(--shadow);
+  }
+  .card.regler input[type="range"]::-moz-range-thumb {
+    width: 1.4rem; height: 1.4rem; border-radius: 50%;
+    background: var(--leaf); border: 2px solid var(--surface); box-shadow: var(--shadow);
+  }
+  .card.regler input[type="range"]:focus-visible { outline: none; }
+  .card.regler input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf) 45%, transparent);
+  }
+
   .trade { display: block; }
   .trade .head { display: flex; align-items: baseline; gap: .4rem; margin-bottom: .5rem; }
   .trade .head .name { font-size: .85rem; font-weight: 620; }
