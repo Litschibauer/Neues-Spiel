@@ -44,17 +44,14 @@ function wetterFuer(fenster) {
 function himmelMalen() {
   var el = $('himmel');
   if (!el) return;
-  // Der VFX-Regler dämpft die Stimmung mit; bei 0 % ist das Feld schlicht.
-  var f = (typeof vfxFaktor === 'function') ? vfxFaktor() : 1;
   var d = new Date();
   var c = himmelBei(d.getHours() + d.getMinutes() / 60);
-  el.style.background = 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (c.a * f).toFixed(3) + ')';
+  el.style.background = 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + c.a + ')';
 
   var w = $('wetter');
   if (w) {
     var art = wetterFuer(Math.floor(Date.now() / (20 * 60 * 1000)));
-    w.className = 'wetter' + (f > 0 && art !== 'klar' ? ' ' + art : '');
-    w.style.opacity = f;
+    w.className = 'wetter' + (art !== 'klar' ? ' ' + art : '');
   }
 }
 

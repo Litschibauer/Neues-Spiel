@@ -153,8 +153,10 @@ const plantAll = `(function () {
      var n = 0;
      for (var k = 0; k < 12; k++) {
        var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-         var s = t.querySelector('.status').textContent;
-         return /→/.test(s) || / oder /.test(s);
+         var s = (t.querySelector('.status') || {}).textContent || '';
+         if (/→/.test(s) || / oder /.test(s)) return true;
+         var al = t.getAttribute('aria-label') || '';
+         return /^Feld [0-9]/.test(al) && !t.classList.contains('ripe') && !t.querySelector('.bar');
        });
        if (!tile) break;
        tile.click();
@@ -193,8 +195,10 @@ async function plantSomething(cdp: Cdp): Promise<boolean> {
     cdp,
     `(function () {
        var tile = [...document.querySelectorAll('#plots .plot')].find(function (p) {
-         var s = p.querySelector('.status').textContent;
-         return /→/.test(s) || / oder /.test(s);
+         var s = (p.querySelector('.status') || {}).textContent || '';
+         if (/→/.test(s) || / oder /.test(s)) return true;
+         var al = p.getAttribute('aria-label') || '';
+         return /^Feld [0-9]/.test(al) && !p.classList.contains('ripe') && !p.querySelector('.bar');
        });
        if (!tile) return false;
        tile.click();
@@ -902,8 +906,10 @@ try {
     cdp,
     `(function () {
        var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
-         var s = t.querySelector('.status').textContent;
-         return /→/.test(s) || / oder /.test(s);
+         var s = (t.querySelector('.status') || {}).textContent || '';
+         if (/→/.test(s) || / oder /.test(s)) return true;
+         var al = t.getAttribute('aria-label') || '';
+         return /^Feld [0-9]/.test(al) && !t.classList.contains('ripe') && !t.querySelector('.bar');
        });
        if (!tile) return 'kein Platz zum Starten';
        tile.click();
@@ -2118,23 +2124,23 @@ try {
     sfxRegler,
   );
 
-  const vfxRegler = await evaluate<string>(
+  const musikRegler = await evaluate<string>(
     cdp,
     `(function () {
        document.getElementById('zahnrad').click();
-       var r = document.getElementById('vfx-regler');
+       var r = document.getElementById('musik-regler');
        r.value = '40';
        r.dispatchEvent(new Event('input', { bubbles: true }));
-       var wert = document.getElementById('vfx-wert').textContent;
-       var gemerkt = localStorage.getItem('ns-vfx');
+       var wert = document.getElementById('musik-wert').textContent;
+       var gemerkt = localStorage.getItem('ns-musik-vol');
        document.getElementById('rest-close').click();
        return wert + '/' + gemerkt;
      })()`,
   );
   check(
-    'Der Effekt-Regler wirkt und das Gerät merkt sich den Wert',
-    vfxRegler === '40%/40',
-    vfxRegler,
+    'Der Musik-Regler wirkt und das Gerät merkt sich den Wert',
+    musikRegler === '40%/40',
+    musikRegler,
   );
 
   const leeresFeld = await evaluate<string>(
@@ -2952,7 +2958,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
        });
        if (!t) return { opts: 0, bundle: false, text: 'keine Mine' };
        t.click();
-       var opts = [...document.querySelectorAll('#pick-list .card.opt')];
+       var opts = [...document.querySelectorAll('#pick-list .card.opt:not(.ausbau)')];
        var mehrfach = opts.some(function (o) {
          return o.querySelectorAll('.yield img').length >= 2;
        });

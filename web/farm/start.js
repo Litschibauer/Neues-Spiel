@@ -287,31 +287,21 @@ $('keydone').addEventListener('click', function () {
   setLease(true, null);
 });
 (function () {
+  var mus = $('musik-regler');
   var sfx = $('sfx-regler');
-  var vfx = $('vfx-regler');
+  mus.value = musikVol;
   sfx.value = sfxProz;
-  vfx.value = vfxProz;
+  $('musik-wert').textContent = musikVol + '%';
   $('sfx-wert').textContent = sfxProz + '%';
-  $('vfx-wert').textContent = vfxProz + '%';
+  mus.addEventListener('input', function () {
+    $('musik-wert').textContent = mus.value + '%';
+    musikLautSetzen(parseInt(mus.value, 10));
+  });
   sfx.addEventListener('input', function () {
     $('sfx-wert').textContent = sfx.value + '%';
     sfxSetzen(parseInt(sfx.value, 10));
   });
-  vfx.addEventListener('input', function () {
-    $('vfx-wert').textContent = vfx.value + '%';
-    vfxSetzen(parseInt(vfx.value, 10));
-  });
 })();
-
-function musikAnzeigen() {
-  $('musikstand').textContent = musikAn ? 'an' : 'aus';
-  $('musikschalter').textContent = musikAn ? 'aus' : 'an';
-}
-$('musikknopf').addEventListener('click', function () {
-  musikSchalten(!musikAn);
-  musikAnzeigen();
-});
-musikAnzeigen();
 
 $('musik-play').addEventListener('click', musikPlayPause);
 $('musik-vor').addEventListener('click', musikVor);

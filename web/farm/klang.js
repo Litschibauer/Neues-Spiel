@@ -1,19 +1,12 @@
-// Lautstärke/Intensität als Prozent (0–100). Ein Regler je Bereich:
-//   ns-sfx = Soundeffekte, ns-vfx = visuelle Effekte (Funken/Konfetti/Wetter).
+// Lautstärke der Klick-/Spiel-Soundeffekte als Prozent (0–100), getrennt von
+// der Musik (die regelt musik.js). Merker: ns-sfx.
 function ladeProzent(key, standard) {
   var v = parseInt(localStorage.getItem(key), 10);
-  if (isNaN(v)) {
-    // Migration vom alten An/Aus-Ton-Schalter.
-    if (key === 'ns-sfx' && localStorage.getItem('ns-ton') === 'aus') return 0;
-    return standard;
-  }
-  return Math.max(0, Math.min(100, v));
+  return isNaN(v) ? standard : Math.max(0, Math.min(100, v));
 }
-var sfxProz = ladeProzent('ns-sfx', 60);
-var vfxProz = ladeProzent('ns-vfx', 100);
-var SFX_BASIS = 0.35; // 100 % ⇒ Master-Gain 0.35 (angenehm laut, nicht schrill)
+var sfxProz = ladeProzent('ns-sfx', 70);
+var SFX_BASIS = 0.9; // 100 % ⇒ Master-Gain 0.9 (klar hörbar über der Musik)
 function sfxFaktor() { return (sfxProz / 100) * SFX_BASIS; }
-function vfxFaktor() { return vfxProz / 100; }
 
 var audio = null;
 var meister = null;
@@ -40,14 +33,9 @@ function tonBereit() {
 function sfxSetzen(p) {
   sfxProz = Math.max(0, Math.min(100, p | 0));
   try { localStorage.setItem('ns-sfx', String(sfxProz)); } catch (e) {}
+  tonBereit(); // Kontext sicher anlegen/aufwecken, damit die Vorschau klingt.
   if (meister) meister.gain.value = sfxFaktor();
   if (sfxProz > 0) klang('tipp');
-}
-
-function vfxSetzen(p) {
-  vfxProz = Math.max(0, Math.min(100, p | 0));
-  try { localStorage.setItem('ns-vfx', String(vfxProz)); } catch (e) {}
-  if (typeof himmelMalen === 'function') himmelMalen();
 }
 
 function stimme(form, von, nach, dauer, laut, ab) {
@@ -188,8 +176,7 @@ function funken(kasten, art) {
   var farbe = art === 'muenzen' ? '#f4c430' : '#7bbf5a';
   var cx = kasten.left + kasten.width / 2;
   var cy = kasten.top + kasten.height / 3;
-  var n = Math.round(6 * vfxFaktor());
-  if (n <= 0) return;
+  var n = 6;
   for (var i = 0; i < n; i++) {
     var f = document.createElement('span');
     f.className = 'funke';
@@ -207,10 +194,8 @@ function funken(kasten, art) {
 
 function konfetti() {
   if (magerModus()) return;
-  var anzahl = Math.round(26 * vfxFaktor());
-  if (anzahl <= 0) return;
   var farben = ['#f4c430', '#7bbf5a', '#e8734a', '#5aa9e6', '#c86bd6'];
-  for (var i = 0; i < anzahl; i++) {
+  for (var i = 0; i < 26; i++) {
     var k = document.createElement('span');
     k.className = 'konfetti';
     k.style.left = Math.round(Math.random() * 100) + 'vw';

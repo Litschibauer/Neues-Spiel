@@ -1,11 +1,17 @@
-// Sanfte Hintergrundmusik als Playlist. Der Server liefert die Titelliste über
-// /musik/ und jeden Track unter /musik/<datei>. Wir mischen die Liste und spielen
-// Titel für Titel; getrennt vom Ton-Schalter, eigener Merker ns-musik.
-var musikAn = localStorage.getItem('ns-musik') !== 'aus';
+// Sanfte Hintergrundmusik als Playlist, komplett getrennt von den Soundeffekten.
+// Eigene Lautstärke in Prozent (Merker ns-musik-vol); der Server liefert die
+// Titelliste über /musik/ und jeden Track unter /musik/<datei>.
+var musikVol = (function () {
+  var v = parseInt(localStorage.getItem('ns-musik-vol'), 10);
+  if (!isNaN(v)) return Math.max(0, Math.min(100, v));
+  return localStorage.getItem('ns-musik') === 'aus' ? 0 : 60; // Migration alter Schalter
+})();
+var MUSIK_BASIS = 0.55; // 100 % ⇒ Element-Volume 0.55
+function musikLaut() { return (musikVol / 100) * MUSIK_BASIS; }
+function musikAktiv() { return musikVol > 0; }
 var ostEl = null;
 var ostGestartet = false;
 var ostKaputt = false;
-var OST_LAUT = 0.32;
 var liste = [];
 var listeGeladen = false;
 var pos = 0;
@@ -25,7 +31,7 @@ function musikEl() {
   ostEl.volume = 0;
   ostEl.addEventListener('ended', naechster);
   // Ein kaputter Track soll die Playlist nicht stoppen — einfach weiter.
-  ostEl.addEventListener('error', function () { if (musikAn && ostGestartet) naechster(); });
+  ostEl.addEventListener('error', function () { if (musikAktiv() && ostGestartet) naechster(); });
   return ostEl;
 }
 
@@ -41,7 +47,7 @@ function spiele(index) {
   el.volume = 0;
   var p = el.play();
   if (p && p.catch) p.catch(function () {});
-  musikFade(OST_LAUT, 1400);
+  musikFade(musikLaut(), 1400);
   barMalen();
 }
 
@@ -51,7 +57,7 @@ function naechster() { spiele(pos + 1); }
 function barMalen() {
   var bar = document.getElementById('musikbar');
   if (!bar) return;
-  var zeig = musikAn && ostGestartet && !ostKaputt && liste.length > 0;
+  var zeig = musikAktiv() && ostGestartet && !ostKaputt && liste.length > 0;
   bar.hidden = !zeig;
   if (!zeig) return;
   var name = document.getElementById('musik-name');
@@ -67,7 +73,7 @@ function barMalen() {
 function musikPlayPause() {
   if (!ostGestartet) { musikStart(); return; }
   if (!ostEl) return;
-  if (ostEl.paused) { ostEl.play().catch(function () {}); musikFade(OST_LAUT, 400); }
+  if (ostEl.paused) { ostEl.play().catch(function () {}); musikFade(musikLaut(), 400); }
   else { ostEl.pause(); }
   barMalen();
 }
@@ -87,7 +93,7 @@ function musikFade(ziel, dauer) {
 }
 
 function musikStart() {
-  if (!musikAn || ostGestartet || ostKaputt) return;
+  if (!musikAktiv() || ostGestartet || ostKaputt) return;
   ostGestartet = true;
   if (listeGeladen) { if (liste.length) spiele(0); return; }
   fetch('/musik/').then(function (r) { return r.ok ? r.json() : { tracks: [] }; })
@@ -99,22 +105,24 @@ function musikStart() {
     .catch(function () { listeGeladen = true; ostKaputt = true; });
 }
 
-function musikSchalten(an) {
-  musikAn = an;
-  try { localStorage.setItem('ns-musik', an ? 'an' : 'aus'); } catch (e) {}
-  if (an) {
+function musikLautSetzen(p) {
+  musikVol = Math.max(0, Math.min(100, p | 0));
+  try { localStorage.setItem('ns-musik-vol', String(musikVol)); } catch (e) {}
+  if (musikVol > 0) {
     if (!ostGestartet) musikStart();
-    else if (ostEl) { ostEl.play().catch(function () {}); musikFade(OST_LAUT, 700); }
+    else if (ostEl) {
+      if (ostEl.paused) ostEl.play().catch(function () {});
+      ostEl.volume = musikLaut(); // live, ohne Blende, damit man den Regler hört
+    }
   } else if (ostEl) {
-    musikFade(0, 450);
-    setTimeout(function () { if (!musikAn && ostEl) ostEl.pause(); }, 480);
+    ostEl.pause();
   }
   barMalen();
 }
 
 // Bei ausgeblendetem Tab pausieren, beim Zurückkommen weiterspielen (wenn an).
 document.addEventListener('visibilitychange', function () {
-  if (!ostEl || !musikAn || ostKaputt) return;
+  if (!ostEl || !musikAktiv() || ostKaputt) return;
   if (document.hidden) ostEl.pause();
   else ostEl.play().catch(function () {});
 });

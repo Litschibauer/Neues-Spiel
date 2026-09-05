@@ -214,6 +214,25 @@ function verschiebeKnopf(p, box) {
   box.appendChild(reihe);
 }
 
+// Ausbauen-Karte im Menü statt einer schwebenden „+ Kosten"-Blase am Platz.
+function ausbauKnopf(p, box) {
+  if (!p.upgrade || p.idle) return;
+  var u = p.upgrade;
+  var karte = document.createElement('button');
+  karte.type = 'button';
+  karte.className = 'card opt ausbau';
+  karte.disabled = !u.unlocked || !u.affordable;
+  var sub = u.unlocked
+    ? costText(u.cost) + (u.affordable ? '' : ' · Gold fehlt')
+    : 'ab Stufe ' + u.minPlayerLevel;
+  karte.innerHTML =
+    '<div class="body"><div class="top">Ausbauen · ' + u.label + '</div>' +
+    '<div class="sub">' + sub + '</div></div>' +
+    '<span class="yield">' + (u.unlocked ? '＋' : '🔒') + '</span>';
+  karte.addEventListener('click', function () { closePicker(); tapBuy(p.index); });
+  box.appendChild(karte);
+}
+
 // Zweimal tippen zum Bestätigen — kein hässlicher Browser-Dialog.
 function abreissen(i, btn) {
   if (btn && !btn.dataset.sicher) {
@@ -276,6 +295,7 @@ function renderStall(p) {
   }
 
   p.slots.forEach(function (s) { box.appendChild(stallRow(p, s)); });
+  ausbauKnopf(p, box);
   verschiebeKnopf(p, box);
 }
 
@@ -598,7 +618,7 @@ function zeichnePicker(p) {
   }
 
   // Rezepte nur zum Starten zeigen, wenn der Slot frei ist.
-  if (s0 && (s0.busy || s0.done)) { verschiebeKnopf(p, box); return; }
+  if (s0 && (s0.busy || s0.done)) { ausbauKnopf(p, box); verschiebeKnopf(p, box); return; }
 
   p.options.forEach(function (o) {
     var card = document.createElement('button');
@@ -628,6 +648,7 @@ function zeichnePicker(p) {
     if (o.unlocked && !o.affordable) nachkaufZeile(v, o, box);
   });
 
+  ausbauKnopf(p, box);
   verschiebeKnopf(p, box);
 }
 

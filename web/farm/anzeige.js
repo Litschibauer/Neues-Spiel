@@ -99,6 +99,10 @@ function plotStatus(p) {
   if (p.blocked === 'inputs') return 'Zutaten fehlen';
   if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
 
+  // Leeres, bepflanzbares Feld: kein „Weizen oder Mais" mehr — nur der Name „Feld".
+  var istFeld = rules.plots[p.index] && rules.plots[p.index].id.indexOf('field-') === 0;
+  if (istFeld) return '';
+
   if (p.options.length > 1) {
     var offen = p.options.filter(function (o) { return o.unlocked; });
     var spaeter = p.options.length - offen.length;
@@ -197,23 +201,7 @@ function renderPlots(v) {
     tile.addEventListener('pointerdown', function (e) { ziehStart(e, p.index, tile); });
     box.appendChild(tile);
 
-    if (p.upgrade && !p.idle) {
-      var up = document.createElement('button');
-      up.className = 'upgrade';
-      up.textContent = p.upgrade.unlocked
-        ? '+ ' + p.upgrade.cost.map(function (c) { return c.amount; }).join(' ')
-        : '+ Stufe ' + p.upgrade.minPlayerLevel;
-      up.setAttribute(
-        'aria-label',
-        p.upgrade.unlocked
-          ? p.upgrade.label + ' kaufen für ' + costText(p.upgrade.cost)
-          : p.upgrade.label + ' ab Stufe ' + p.upgrade.minPlayerLevel,
-      );
-      up.title = up.getAttribute('aria-label');
-      up.disabled = !p.upgrade.affordable;
-      up.addEventListener('click', function (e) { e.stopPropagation(); tapBuy(p.index); });
-      tile.appendChild(up);
-    }
+    // Der Ausbau (früher schwebende „+ Kosten"-Blase) sitzt jetzt im Tipp-Menü.
   });
 
   if (hatRaster()) weltFormat();
