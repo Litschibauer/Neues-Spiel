@@ -1,7 +1,15 @@
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, createReadStream } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  createReadStream,
+  readdirSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
@@ -325,23 +333,82 @@ const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
-// Optionale Hintergrundmusik unter /OST.mp3. Wird von der Platte GESTREAMT (nie
-// in den RAM geladen — die Datei kann groß sein). Reihenfolge der Suche:
-//   1. $NEUES_SPIEL_OST (fester Pfad)
-//   2. <Datenverzeichnis>/OST.mp3  (auf dem Server ablegen, außerhalb von git)
-//   3. web/OST.mp3                 (kleine Dateien direkt im Repo)
-// Zur Laufzeit aufgelöst, damit eine nachträglich abgelegte Datei ohne Neustart
-// gefunden wird.
-function ostPfad(): string | null {
+// Optionale Hintergrundmusik. Alle Tracks liegen in einem Ordner und werden von
+// der Platte GESTREAMT (nie in den RAM geladen — kann groß sein). Der Client holt
+// die Liste über /musik/ und spielt sie als zufällige Playlist ab.
+// Ordner-Suche (zur Laufzeit, damit nachträglich Abgelegtes ohne Neustart wirkt):
+//   1. $NEUES_SPIEL_MUSIK (fester Pfad)
+//   2. <Datenverzeichnis>/musik  (auf dem Server ablegen, außerhalb von git)
+//   3. web/musik                 (Tracks direkt im Repo)
+function musikDir(): string | null {
   const kandidaten = [
-    process.env.NEUES_SPIEL_OST?.trim(),
-    join(dirname(SAVE_PATH), 'OST.mp3'),
-    join(ROOT, 'web', 'OST.mp3'),
+    process.env.NEUES_SPIEL_MUSIK?.trim(),
+    join(dirname(SAVE_PATH), 'musik'),
+    join(ROOT, 'web', 'musik'),
   ];
   for (const p of kandidaten) {
     if (p && existsSync(p)) return p;
   }
   return null;
+}
+
+function musikListe(): string[] {
+  const dir = musikDir();
+  if (!dir) return [];
+  try {
+    return readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.mp3'))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+// Einen Audioausschnitt von der Platte streamen (Range- und HEAD-fähig).
+function streamAudio(req: IncomingMessage, res: ServerResponse, pfad: string): void {
+  const total = statSync(pfad).size;
+  const range = req.headers.range;
+  let start = 0;
+  let end = total - 1;
+  let status = 200;
+  const kopf: Record<string, string | number> = {
+    'content-type': 'audio/mpeg',
+    'accept-ranges': 'bytes',
+    'cache-control': 'public, max-age=86400',
+  };
+
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range);
+    start = m && m[1] ? parseInt(m[1], 10) : 0;
+    end = m && m[2] ? parseInt(m[2], 10) : total - 1;
+    if (Number.isNaN(start)) start = 0;
+    if (Number.isNaN(end) || end >= total) end = total - 1;
+    if (start > end || start >= total) {
+      res.writeHead(416, { 'content-range': `bytes */${total}` });
+      res.end();
+      return;
+    }
+    status = 206;
+    kopf['content-range'] = `bytes ${start}-${end}/${total}`;
+  }
+
+  kopf['content-length'] = end - start + 1;
+  res.writeHead(status, kopf);
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+
+  const strom = createReadStream(pfad, { start, end });
+  strom.on('error', () => {
+    try {
+      res.destroy();
+    } catch {
+      /* egal */
+    }
+  });
+  req.on('close', () => strom.destroy());
+  strom.pipe(res);
 }
 
 const SHELL_VERSION = (() => {
@@ -554,44 +621,36 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return res.end(swSource);
   }
 
-  if (url.pathname === '/OST.mp3' && (req.method === 'GET' || req.method === 'HEAD')) {
-    const pfad = ostPfad();
-    if (!pfad) return json(res, 404, { error: 'keine Musik hinterlegt' });
-    const total = statSync(pfad).size;
-    const range = req.headers.range;
+  // Playlist-Verzeichnis: Titelliste als JSON.
+  if (url.pathname === '/musik/' && req.method === 'GET') {
+    return json(res, 200, { tracks: musikListe() });
+  }
 
-    let start = 0;
-    let end = total - 1;
-    let status = 200;
-    const kopf: Record<string, string | number> = {
-      'content-type': 'audio/mpeg',
-      'accept-ranges': 'bytes',
-      'cache-control': 'public, max-age=86400',
-    };
-
-    if (range) {
-      const m = /bytes=(\d*)-(\d*)/.exec(range);
-      start = m && m[1] ? parseInt(m[1], 10) : 0;
-      end = m && m[2] ? parseInt(m[2], 10) : total - 1;
-      if (Number.isNaN(start)) start = 0;
-      if (Number.isNaN(end) || end >= total) end = total - 1;
-      if (start > end || start >= total) {
-        res.writeHead(416, { 'content-range': `bytes */${total}` });
-        return res.end();
-      }
-      status = 206;
-      kopf['content-range'] = `bytes ${start}-${end}/${total}`;
+  // Einzelner Track. Nur Dateien, die wirklich in der Liste stehen — kein
+  // Pfad-Ausbruch (../) möglich, weil gegen den Verzeichnisinhalt geprüft wird.
+  if (url.pathname.startsWith('/musik/') && (req.method === 'GET' || req.method === 'HEAD')) {
+    const dir = musikDir();
+    let name = '';
+    try {
+      name = decodeURIComponent(url.pathname.slice('/musik/'.length));
+    } catch {
+      return json(res, 400, { error: 'ungültiger Name' });
     }
+    if (!dir || !musikListe().includes(name)) {
+      return json(res, 404, { error: 'kein solcher Track' });
+    }
+    return streamAudio(req, res, join(dir, name));
+  }
 
-    kopf['content-length'] = end - start + 1;
-    res.writeHead(status, kopf);
-    if (req.method === 'HEAD') return res.end();
-
-    // Von der Platte streamen — nur der angeforderte Ausschnitt, nichts im RAM.
-    const strom = createReadStream(pfad, { start, end });
-    strom.on('error', () => { try { res.destroy(); } catch { /* egal */ } });
-    req.on('close', () => strom.destroy());
-    return strom.pipe(res);
+  // Rückwärtskompatibel: eine einzelne web/OST.mp3, falls jemand sie ablegt.
+  if (url.pathname === '/OST.mp3' && (req.method === 'GET' || req.method === 'HEAD')) {
+    const pfad = [
+      process.env.NEUES_SPIEL_OST?.trim(),
+      join(dirname(SAVE_PATH), 'OST.mp3'),
+      join(ROOT, 'web', 'OST.mp3'),
+    ].find((p) => p && existsSync(p));
+    if (!pfad) return json(res, 404, { error: 'keine Musik hinterlegt' });
+    return streamAudio(req, res, pfad);
   }
 
   if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {

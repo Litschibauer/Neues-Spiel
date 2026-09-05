@@ -1,21 +1,46 @@
-// Sanfte Hintergrundmusik (optional). Spielt /OST.mp3, sobald der Server eine
-// Datei web/OST.mp3 ausliefert — nach der ersten Nutzer-Geste (Autoplay-Regeln).
-// Getrennt vom Ton-Schalter, eigener Merker ns-musik.
+// Sanfte Hintergrundmusik als Playlist. Der Server liefert die Titelliste über
+// /musik/ und jeden Track unter /musik/<datei>. Wir mischen die Liste und spielen
+// Titel für Titel; getrennt vom Ton-Schalter, eigener Merker ns-musik.
 var musikAn = localStorage.getItem('ns-musik') !== 'aus';
 var ostEl = null;
 var ostGestartet = false;
 var ostKaputt = false;
 var OST_LAUT = 0.32;
+var liste = [];
+var listeGeladen = false;
+var pos = 0;
 
-function musikBereit() {
-  if (ostEl || ostKaputt) return ostEl;
-  ostEl = new Audio('/OST.mp3');
-  ostEl.loop = true;
+function mische(a) {
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+function musikEl() {
+  if (ostEl) return ostEl;
+  ostEl = new Audio();
   ostEl.preload = 'none';
   ostEl.volume = 0;
-  ostEl.addEventListener('error', function () { ostKaputt = true; });
+  ostEl.addEventListener('ended', naechster);
+  // Ein kaputter Track soll die Playlist nicht stoppen — einfach weiter.
+  ostEl.addEventListener('error', function () { if (musikAn && ostGestartet) naechster(); });
   return ostEl;
 }
+
+function spiele(index) {
+  if (!liste.length) return;
+  pos = ((index % liste.length) + liste.length) % liste.length;
+  var el = musikEl();
+  el.src = '/musik/' + encodeURIComponent(liste[pos]);
+  el.volume = 0;
+  var p = el.play();
+  if (p && p.catch) p.catch(function () {});
+  musikFade(OST_LAUT, 1400);
+}
+
+function naechster() { spiele(pos + 1); }
 
 function musikFade(ziel, dauer) {
   if (!ostEl) return;
@@ -30,12 +55,15 @@ function musikFade(ziel, dauer) {
 
 function musikStart() {
   if (!musikAn || ostGestartet || ostKaputt) return;
-  var el = musikBereit();
-  if (!el) return;
-  var p = el.play();
-  if (p && p.catch) p.catch(function () {});
   ostGestartet = true;
-  musikFade(OST_LAUT, 1400);
+  if (listeGeladen) { if (liste.length) spiele(0); return; }
+  fetch('/musik/').then(function (r) { return r.ok ? r.json() : { tracks: [] }; })
+    .then(function (d) {
+      listeGeladen = true;
+      liste = mische((d && d.tracks) || []);
+      if (liste.length) spiele(0); else ostKaputt = true;
+    })
+    .catch(function () { listeGeladen = true; ostKaputt = true; });
 }
 
 function musikSchalten(an) {
