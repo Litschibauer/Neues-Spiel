@@ -1042,6 +1042,44 @@ const evictTimer = setInterval(() => {
 }, 60_000);
 evictTimer.unref();
 
+// NPC-/Bot-Käufer: gelegentlicher, kontrollierter Economy-Sink. Zentral über
+// Umgebungsvariablen konfigurierbar. Standard: alle 5 Minuten eine Runde, in der
+// mit 15 % Wahrscheinlichkeit höchstens ein Angebot gekauft wird — und nur, wenn
+// der Markt gut gefüllt ist und der betroffene Stand danach noch Ware hat.
+// Offline-Verkäufer bekommen ihr Gold über die bestehende Abrechnung: der Kauf
+// legt eine Settlement an (persistiert), die beim nächsten /state oder /sync des
+// Verkäufers gutgeschrieben wird. Wer gerade online ist, wird sofort abgerechnet.
+const NPC_KAUF = {
+  everyMs: Number(process.env.NEUES_SPIEL_NPC_EVERY_MS ?? 5 * 60_000),
+  chance: Number(process.env.NEUES_SPIEL_NPC_CHANCE ?? 0.15),
+  maxProRunde: Number(process.env.NEUES_SPIEL_NPC_MAX ?? 1),
+  minBuch: Number(process.env.NEUES_SPIEL_NPC_MIN_BOOK ?? 8),
+  minAlterMs: Number(process.env.NEUES_SPIEL_NPC_MIN_AGE_MS ?? 10 * 60_000),
+  behaltenProStand: Number(process.env.NEUES_SPIEL_NPC_KEEP ?? 1),
+};
+if (NPC_KAUF.everyMs > 0 && NPC_KAUF.chance > 0) {
+  const npcTimer = setInterval(() => {
+    let betroffen: string[] = [];
+    try {
+      betroffen = market.npcKauf(NPC_KAUF, Date.now());
+    } catch (err) {
+      console.error(`[markt] NPC-Kauf fehlgeschlagen: ${(err as Error).message}`);
+      return;
+    }
+    for (const sellerId of betroffen) {
+      const g = live.get(sellerId);
+      if (g) {
+        settleSales(market, sellerId, g);
+        events.nudge(sellerId, 'farm');
+      }
+      events.broadcast('market', sellerId);
+      console.log(`[markt] NPC kauft ein Angebot bei ${sellerId}`);
+    }
+    if (betroffen.length > 0) market.flush();
+  }, NPC_KAUF.everyMs);
+  npcTimer.unref();
+}
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     console.log(`\n${signal} — speichere und beende.`);

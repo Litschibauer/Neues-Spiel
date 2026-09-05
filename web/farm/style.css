@@ -1093,7 +1093,7 @@
 
   /* Einführung für neue Höfe. */
   .tut-bg {
-    position: fixed; inset: 0; z-index: 60; display: flex; align-items: center;
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center;
     justify-content: center; padding: 1.2rem; background: rgba(0,0,0,.55);
   }
   .tut-card {

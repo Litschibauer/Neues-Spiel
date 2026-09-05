@@ -368,8 +368,6 @@ try {
 
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/feldtest` });
   await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
-  // Einführungs-Overlay im Test unterdrücken (gleiche Origin → bleibt gesetzt).
-  await evaluate(cdp, `localStorage.setItem('ns-tutorial', 'done')`);
   await evaluate(cdp, `document.getElementById('create').click()`);
   await waitFor(cdp, '!document.getElementById("keybox").hidden', 'Schlüssel gezeigt');
 
@@ -737,6 +735,17 @@ try {
     20_000,
   );
   check('Das Spiel startet mit dem gespeicherten Hof — ohne Schlüsseleingabe', true);
+
+  // Der neue Hof bekommt die Einführung sofort und ganz oben (z-Index über allem).
+  // Danach im Test wegklicken, damit die weiteren Schritte an den Hof herankommen.
+  await sleep(250);
+  const tutAuf = await evaluate<boolean>(
+    cdp,
+    `!!document.getElementById('tut-bg') && !document.getElementById('tut-bg').hidden`,
+  );
+  check('Ein neuer Hof bekommt sofort die Einführung', tutAuf, String(tutAuf));
+  await evaluate(cdp, `(function(){ var s=document.getElementById('tut-skip'); if (s) s.click(); })()`);
+  await sleep(150);
 
   const shown = await evaluate<{ gold: string; plots: number; lvl: string }>(
     cdp,

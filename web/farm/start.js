@@ -342,11 +342,17 @@ var TUTORIAL = [
 ];
 var tutStep = 0;
 
+// Pro Hof gemerkt: ein neuer Hof zeigt die Einführung, auch wenn auf demselben
+// Gerät schon ein anderer Hof sie durchlaufen hat. Derselbe Hof sieht sie nie
+// wieder — weder nach Neuladen noch bei späteren Logins.
+function tutSchluessel() {
+  return accountId ? 'ns-tut-' + accountId : 'ns-tutorial';
+}
 function tutorialFertig() {
-  try { return localStorage.getItem('ns-tutorial') === 'done'; } catch (e) { return false; }
+  try { return localStorage.getItem(tutSchluessel()) === 'done'; } catch (e) { return false; }
 }
 function tutorialAbschliessen() {
-  try { localStorage.setItem('ns-tutorial', 'done'); } catch (e) {}
+  try { localStorage.setItem(tutSchluessel(), 'done'); } catch (e) {}
   $('tut-bg').hidden = true;
 }
 function tutorialZeigen() {

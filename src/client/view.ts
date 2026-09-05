@@ -65,6 +65,8 @@ export type PlotView = {
   blocked: Blocker;
   stall: StallView | null;
   baum: BaumView | null;
+  // Reine Dekoration (Zaun, Blumenbeet …): kein Betrieb, keine Aktion.
+  deco: boolean;
   upgrade: {
     label: string;
     cost: readonly Stack[];
@@ -292,6 +294,8 @@ export type BuildView = {
   unlocked: boolean;
   affordable: boolean;
   size: { w: number; h: number };
+  // Reine Dekoration — im Baumenü als eigene Kategorie geführt.
+  deco: boolean;
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -488,6 +492,7 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     blocked,
     stall,
     baum,
+    deco: def.deco === true,
     upgrade,
   };
 }
@@ -628,6 +633,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
           unlocked: level >= nötig,
           affordable: level >= nötig && stufe.cost.every((c) => count(state, c.item) >= c.amount),
           size: sizeOf(rules, i),
+          deco: def.deco === true,
         },
       ];
     }),

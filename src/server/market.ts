@@ -259,6 +259,60 @@ export class Market {
     return this.settlements.get(sellerId) ?? [];
   }
 
+  // Gelegentlicher NPC-/Bot-Kauf als kleiner Economy-Sink (wie Tom/Greg in
+  // Hay Day). Bewusst selten und kontrolliert: greift nur, wenn der Markt gut
+  // gefüllt ist, kauft höchstens ein paar Angebote je Runde, leert nie einen
+  // Stand (jeder Stand behält mindestens `behaltenProStand` Angebote) und rührt
+  // frisch eingestellte Ware nicht an (`minAlterMs`). Gibt die betroffenen
+  // Verkäufer zurück, damit der Aufrufer sie abrechnen/benachrichtigen kann.
+  npcKauf(
+    opts: {
+      chance: number;
+      maxProRunde: number;
+      minBuch: number;
+      minAlterMs: number;
+      behaltenProStand: number;
+    },
+    nowMs: number,
+  ): string[] {
+    if (this.book.size < opts.minBuch) return [];
+    if (opts.chance <= 0 || Math.random() >= opts.chance) return [];
+
+    const proStand = new Map<string, BookEntry[]>();
+    for (const e of this.book.values()) {
+      const list = proStand.get(e.sellerId) ?? [];
+      list.push(e);
+      proStand.set(e.sellerId, list);
+    }
+
+    const kandidaten: BookEntry[] = [];
+    for (const [, list] of proStand) {
+      if (list.length <= opts.behaltenProStand) continue;
+      for (const e of list) if (nowMs - e.listedMs >= opts.minAlterMs) kandidaten.push(e);
+    }
+    if (kandidaten.length === 0) return [];
+
+    const wollen = 1 + Math.floor(Math.random() * Math.max(1, opts.maxProRunde));
+    const betroffen = new Set<string>();
+    const gekauftProStand = new Map<string, number>();
+    let gekauft = 0;
+    let versuche = kandidaten.length;
+
+    while (gekauft < wollen && kandidaten.length > 0 && versuche-- > 0) {
+      const i = Math.floor(Math.random() * kandidaten.length);
+      const e = kandidaten.splice(i, 1)[0]!;
+      const gesamt = (proStand.get(e.sellerId) ?? []).length;
+      const schon = gekauftProStand.get(e.sellerId) ?? 0;
+      if (gesamt - schon <= opts.behaltenProStand) continue; // Stand nie leeren
+      if (!this.claim(e.id, 'npc', nowMs)) continue;
+      gekauftProStand.set(e.sellerId, schon + 1);
+      betroffen.add(e.sellerId);
+      gekauft++;
+    }
+
+    return [...betroffen];
+  }
+
   forget(sellerId: string): void {
     this.runde.delete(sellerId);
     this.ausgaben.delete(sellerId);

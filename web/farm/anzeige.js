@@ -53,6 +53,8 @@ function renderPurse(v) {
 }
 
 function plotStatus(p) {
+  // Reine Dekoration hat keine Aufgabe — kein „nichts zu tun" anzeigen.
+  if (p.deco) return '';
   if (p.baum) {
     var b = p.baum;
     if (b.stufe === 'reif') return 'reif · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item) + ' ernten';
@@ -1033,16 +1035,40 @@ function renderBauliste(v) {
       'Beim nächsten Sync nach einem Server-Update wandert er darauf.</p>';
     return;
   }
-  if (v.buildable.length === 0) {
+  // Dekoration ist eine eigene Kategorie, getrennt von den Bauwerken.
+  var bauwerke = v.buildable.filter(function (b) { return !b.deco; });
+  var deko = v.buildable.filter(function (b) { return b.deco; });
+
+  if (bauwerke.length === 0 && deko.length === 0) {
     box.innerHTML = '<p class="empty">Alles gebaut.</p>';
     return;
   }
 
-  // Gleiche Bauwerke (z. B. mehrere Apfelbäume) zu einer Karte zusammenfassen —
-  // sie zeigt, wie viele noch frei sind, und baut den nächsten davon.
+  bauSektion(box, 'Bauwerke', bauwerke, bauwerke.length === 0 ? 'Alles gebaut.' : null);
+  bauSektion(box, 'Dekoration', deko, 'Keine Dekoration verfügbar.');
+}
+
+// Eine Kategorie im Baumenü: Überschrift, dann gruppierte Karten. Fehlt Ware,
+// erscheint der Leer-Hinweis — aber nur, wenn wirklich nichts da ist.
+function bauSektion(box, titel, liste, leerText) {
+  var h = document.createElement('h2');
+  h.textContent = titel;
+  box.appendChild(h);
+
+  if (liste.length === 0) {
+    if (leerText) {
+      var leer = document.createElement('p');
+      leer.className = 'empty';
+      leer.textContent = leerText;
+      box.appendChild(leer);
+    }
+    return;
+  }
+
+  // Gleiche Bauwerke (z. B. mehrere Apfelbäume) zu einer Karte zusammenfassen.
   var gruppen = [];
   var index = {};
-  v.buildable.forEach(function (b) {
+  liste.forEach(function (b) {
     var name = plotName(b.plot);
     if (index[name] === undefined) { index[name] = gruppen.length; gruppen.push({ b: b, name: name, anzahl: 0 }); }
     gruppen[index[name]].anzahl++;
