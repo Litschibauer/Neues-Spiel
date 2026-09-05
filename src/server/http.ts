@@ -1,7 +1,7 @@
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, createReadStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
@@ -325,12 +325,24 @@ const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
-// Optionale Hintergrundmusik: liegt eine web/OST.mp3 vor, wird sie unter /OST.mp3
-// ausgeliefert (mit Range-Support). Fehlt sie, spielt der Client einfach nichts.
-const OST_AUDIO = (() => {
-  const path = join(ROOT, 'web', 'OST.mp3');
-  return existsSync(path) ? readFileSync(path) : null;
-})();
+// Optionale Hintergrundmusik unter /OST.mp3. Wird von der Platte GESTREAMT (nie
+// in den RAM geladen — die Datei kann groß sein). Reihenfolge der Suche:
+//   1. $NEUES_SPIEL_OST (fester Pfad)
+//   2. <Datenverzeichnis>/OST.mp3  (auf dem Server ablegen, außerhalb von git)
+//   3. web/OST.mp3                 (kleine Dateien direkt im Repo)
+// Zur Laufzeit aufgelöst, damit eine nachträglich abgelegte Datei ohne Neustart
+// gefunden wird.
+function ostPfad(): string | null {
+  const kandidaten = [
+    process.env.NEUES_SPIEL_OST?.trim(),
+    join(dirname(SAVE_PATH), 'OST.mp3'),
+    join(ROOT, 'web', 'OST.mp3'),
+  ];
+  for (const p of kandidaten) {
+    if (p && existsSync(p)) return p;
+  }
+  return null;
+}
 
 const SHELL_VERSION = (() => {
   const fingerprint = createHash('sha256')
@@ -542,36 +554,44 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return res.end(swSource);
   }
 
-  if (url.pathname === '/OST.mp3' && req.method === 'GET') {
-    if (!OST_AUDIO) return json(res, 404, { error: 'keine Musik hinterlegt' });
-    const total = OST_AUDIO.length;
+  if (url.pathname === '/OST.mp3' && (req.method === 'GET' || req.method === 'HEAD')) {
+    const pfad = ostPfad();
+    if (!pfad) return json(res, 404, { error: 'keine Musik hinterlegt' });
+    const total = statSync(pfad).size;
     const range = req.headers.range;
+
+    let start = 0;
+    let end = total - 1;
+    let status = 200;
+    const kopf: Record<string, string | number> = {
+      'content-type': 'audio/mpeg',
+      'accept-ranges': 'bytes',
+      'cache-control': 'public, max-age=86400',
+    };
+
     if (range) {
       const m = /bytes=(\d*)-(\d*)/.exec(range);
-      let start = m && m[1] ? parseInt(m[1], 10) : 0;
-      let end = m && m[2] ? parseInt(m[2], 10) : total - 1;
+      start = m && m[1] ? parseInt(m[1], 10) : 0;
+      end = m && m[2] ? parseInt(m[2], 10) : total - 1;
       if (Number.isNaN(start)) start = 0;
       if (Number.isNaN(end) || end >= total) end = total - 1;
-      if (start > end) {
+      if (start > end || start >= total) {
         res.writeHead(416, { 'content-range': `bytes */${total}` });
         return res.end();
       }
-      res.writeHead(206, {
-        'content-type': 'audio/mpeg',
-        'content-range': `bytes ${start}-${end}/${total}`,
-        'accept-ranges': 'bytes',
-        'content-length': end - start + 1,
-        'cache-control': 'public, max-age=3600',
-      });
-      return res.end(OST_AUDIO.subarray(start, end + 1));
+      status = 206;
+      kopf['content-range'] = `bytes ${start}-${end}/${total}`;
     }
-    res.writeHead(200, {
-      'content-type': 'audio/mpeg',
-      'accept-ranges': 'bytes',
-      'content-length': total,
-      'cache-control': 'public, max-age=3600',
-    });
-    return res.end(OST_AUDIO);
+
+    kopf['content-length'] = end - start + 1;
+    res.writeHead(status, kopf);
+    if (req.method === 'HEAD') return res.end();
+
+    // Von der Platte streamen — nur der angeforderte Ausschnitt, nichts im RAM.
+    const strom = createReadStream(pfad, { start, end });
+    strom.on('error', () => { try { res.destroy(); } catch { /* egal */ } });
+    req.on('close', () => strom.destroy());
+    return strom.pipe(res);
   }
 
   if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {
