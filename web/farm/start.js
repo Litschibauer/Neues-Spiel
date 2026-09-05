@@ -313,6 +313,10 @@ $('musikknopf').addEventListener('click', function () {
 });
 musikAnzeigen();
 
+$('musik-play').addEventListener('click', musikPlayPause);
+$('musik-vor').addEventListener('click', musikVor);
+$('musik-next').addEventListener('click', musikNext);
+
 $('connect').addEventListener('click', connect);
 $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
 $('takeover').addEventListener('click', function () {

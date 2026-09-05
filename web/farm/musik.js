@@ -29,6 +29,10 @@ function musikEl() {
   return ostEl;
 }
 
+function trackName(datei) {
+  return (typeof MUSIK_NAMEN === 'object' && MUSIK_NAMEN[datei]) || 'Musik';
+}
+
 function spiele(index) {
   if (!liste.length) return;
   pos = ((index % liste.length) + liste.length) % liste.length;
@@ -38,9 +42,38 @@ function spiele(index) {
   var p = el.play();
   if (p && p.catch) p.catch(function () {});
   musikFade(OST_LAUT, 1400);
+  barMalen();
 }
 
 function naechster() { spiele(pos + 1); }
+
+// Kleine, dezente Musikleiste: Titel + Zurück/Pause/Weiter.
+function barMalen() {
+  var bar = document.getElementById('musikbar');
+  if (!bar) return;
+  var zeig = musikAn && ostGestartet && !ostKaputt && liste.length > 0;
+  bar.hidden = !zeig;
+  if (!zeig) return;
+  var name = document.getElementById('musik-name');
+  if (name) name.textContent = trackName(liste[pos]);
+  var play = document.getElementById('musik-play');
+  if (play) {
+    var pausiert = !ostEl || ostEl.paused;
+    play.textContent = pausiert ? '▶' : '⏸';
+    play.setAttribute('aria-label', pausiert ? 'Weiter' : 'Pause');
+  }
+}
+
+function musikPlayPause() {
+  if (!ostGestartet) { musikStart(); return; }
+  if (!ostEl) return;
+  if (ostEl.paused) { ostEl.play().catch(function () {}); musikFade(OST_LAUT, 400); }
+  else { ostEl.pause(); }
+  barMalen();
+}
+
+function musikVor() { if (liste.length) spiele(pos - 1); }
+function musikNext() { if (liste.length) naechster(); }
 
 function musikFade(ziel, dauer) {
   if (!ostEl) return;
@@ -76,6 +109,7 @@ function musikSchalten(an) {
     musikFade(0, 450);
     setTimeout(function () { if (!musikAn && ostEl) ostEl.pause(); }, 480);
   }
+  barMalen();
 }
 
 // Bei ausgeblendetem Tab pausieren, beim Zurückkommen weiterspielen (wenn an).
