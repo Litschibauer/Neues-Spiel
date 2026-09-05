@@ -110,6 +110,8 @@
           <button class="moebel" id="stand"></button>
           <button class="moebel" id="nachbarn"></button>
         </div>
+        <div class="himmel" id="himmel" aria-hidden="true"></div>
+        <div class="wetter" id="wetter" aria-hidden="true"></div>
         <button class="zahnrad hammer" id="bauen" aria-label="Bauen">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -256,6 +258,13 @@
         </div>
         <span class="go" id="tonschalter">aus</span>
       </button>
+      <button class="card" id="musikknopf">
+        <div class="body">
+          <div class="top">Musik</div>
+          <div class="sub" id="musikstand">an</div>
+        </div>
+        <span class="go" id="musikschalter">aus</span>
+      </button>
       <button class="card" id="ziele-auf">
         <div class="body">
           <div class="top">Ziele &amp; Erfolge</div>
@@ -347,11 +356,15 @@
 
   <!--INCLUDE:farm/klang.js-->
 
+  <!--INCLUDE:farm/musik.js-->
+
   <!--ICONS-->
 
   <!--INCLUDE:farm/raster.js-->
 
   <!--INCLUDE:farm/bilder.js-->
+
+  <!--INCLUDE:farm/wetter.js-->
 
   <!--INCLUDE:farm/anzeige.js-->
 

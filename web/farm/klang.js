@@ -134,9 +134,13 @@ document.addEventListener('pointerdown', function weck() {
 
 var flieger = 0;
 
+function magerModus() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function zahlAuf(kasten, text, art) {
   if (!kasten || flieger > 6) return;
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (magerModus()) return;
   if (!kasten.width) return;
 
   var el = document.createElement('span');
@@ -146,11 +150,50 @@ function zahlAuf(kasten, text, art) {
   el.style.top = Math.round(kasten.top + kasten.height / 3) + 'px';
   document.body.appendChild(el);
 
+  // Kleiner Funkenstoß beim Ernten und bei Münzen — macht Aktionen saftiger.
+  if (art === 'ware' || art === 'muenzen') funken(kasten, art);
+
   flieger++;
   setTimeout(function () {
     el.remove();
     flieger--;
   }, 900);
+}
+
+function funken(kasten, art) {
+  if (!kasten || !kasten.width || magerModus()) return;
+  var farbe = art === 'muenzen' ? '#f4c430' : '#7bbf5a';
+  var cx = kasten.left + kasten.width / 2;
+  var cy = kasten.top + kasten.height / 3;
+  var n = 6;
+  for (var i = 0; i < n; i++) {
+    var f = document.createElement('span');
+    f.className = 'funke';
+    var winkel = (Math.PI * 2 * i) / n + Math.random() * 0.7;
+    var weite = 20 + Math.random() * 22;
+    f.style.left = Math.round(cx) + 'px';
+    f.style.top = Math.round(cy) + 'px';
+    f.style.setProperty('--dx', Math.round(Math.cos(winkel) * weite) + 'px');
+    f.style.setProperty('--dy', Math.round(Math.sin(winkel) * weite - 8) + 'px');
+    f.style.background = farbe;
+    document.body.appendChild(f);
+    (function (el) { setTimeout(function () { el.remove(); }, 660); })(f);
+  }
+}
+
+function konfetti() {
+  if (magerModus()) return;
+  var farben = ['#f4c430', '#7bbf5a', '#e8734a', '#5aa9e6', '#c86bd6'];
+  for (var i = 0; i < 26; i++) {
+    var k = document.createElement('span');
+    k.className = 'konfetti';
+    k.style.left = Math.round(Math.random() * 100) + 'vw';
+    k.style.background = farben[i % farben.length];
+    k.style.animationDelay = (Math.random() * 0.25).toFixed(2) + 's';
+    k.style.animationDuration = (1.1 + Math.random() * 0.9).toFixed(2) + 's';
+    document.body.appendChild(k);
+    (function (el) { setTimeout(function () { el.remove(); }, 2400); })(k);
+  }
 }
 
 var stufeGesehen = -1;
@@ -193,6 +236,7 @@ function feiereStufe(level) {
   $('stufe-feier').hidden = false;
 
   klang('stufe');
+  konfetti();
   if (navigator.vibrate) { try { navigator.vibrate([0, 40, 40, 60]); } catch (e) {} }
 
   if (feierTimer) clearTimeout(feierTimer);

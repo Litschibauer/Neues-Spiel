@@ -24,6 +24,10 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/api/')) return;
 
+  // Hintergrundmusik nie cachen: groß, optional und wird per Range-Anfrage
+  // gestreamt (206-Antworten dürfen nicht im Cache landen). Immer direkt vom Netz.
+  if (url.pathname === '/OST.mp3') return;
+
   const speichere = (response) => {
     if (response && response.ok) {
       const copy = response.clone();

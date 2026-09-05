@@ -296,6 +296,16 @@ $('tonknopf').addEventListener('click', function () {
 });
 tonAnzeigen();
 
+function musikAnzeigen() {
+  $('musikstand').textContent = musikAn ? 'an' : 'aus';
+  $('musikschalter').textContent = musikAn ? 'aus' : 'an';
+}
+$('musikknopf').addEventListener('click', function () {
+  musikSchalten(!musikAn);
+  musikAnzeigen();
+});
+musikAnzeigen();
+
 $('connect').addEventListener('click', connect);
 $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
 $('takeover').addEventListener('click', function () {

@@ -325,6 +325,13 @@ const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
+// Optionale Hintergrundmusik: liegt eine web/OST.mp3 vor, wird sie unter /OST.mp3
+// ausgeliefert (mit Range-Support). Fehlt sie, spielt der Client einfach nichts.
+const OST_AUDIO = (() => {
+  const path = join(ROOT, 'web', 'OST.mp3');
+  return existsSync(path) ? readFileSync(path) : null;
+})();
+
 const SHELL_VERSION = (() => {
   const fingerprint = createHash('sha256')
     .update(farmPage ?? 'kein-build')
@@ -533,6 +540,38 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       'cache-control': 'no-cache',
     });
     return res.end(swSource);
+  }
+
+  if (url.pathname === '/OST.mp3' && req.method === 'GET') {
+    if (!OST_AUDIO) return json(res, 404, { error: 'keine Musik hinterlegt' });
+    const total = OST_AUDIO.length;
+    const range = req.headers.range;
+    if (range) {
+      const m = /bytes=(\d*)-(\d*)/.exec(range);
+      let start = m && m[1] ? parseInt(m[1], 10) : 0;
+      let end = m && m[2] ? parseInt(m[2], 10) : total - 1;
+      if (Number.isNaN(start)) start = 0;
+      if (Number.isNaN(end) || end >= total) end = total - 1;
+      if (start > end) {
+        res.writeHead(416, { 'content-range': `bytes */${total}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        'content-type': 'audio/mpeg',
+        'content-range': `bytes ${start}-${end}/${total}`,
+        'accept-ranges': 'bytes',
+        'content-length': end - start + 1,
+        'cache-control': 'public, max-age=3600',
+      });
+      return res.end(OST_AUDIO.subarray(start, end + 1));
+    }
+    res.writeHead(200, {
+      'content-type': 'audio/mpeg',
+      'accept-ranges': 'bytes',
+      'content-length': total,
+      'cache-control': 'public, max-age=3600',
+    });
+    return res.end(OST_AUDIO);
   }
 
   if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {
