@@ -296,6 +296,8 @@ export type BuildView = {
   size: { w: number; h: number };
   // Reine Dekoration — im Baumenü als eigene Kategorie geführt.
   deco: boolean;
+  // Eingepackte Deko: bereits im Besitz, kostenlos wieder aufstellbar.
+  packed: boolean;
 };
 
 function recipesAt(rules: Ruleset, plot: number, level: number): readonly number[] {
@@ -623,17 +625,21 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       if (!stufe) return [];
       const level = levelOf(rules, state.xp);
       const nötig = stufe.minPlayerLevel ?? 1;
+      const packed = (state.eingepackt ?? []).includes(i);
       return [
         {
           plot: i,
           id: def.id,
           label: stufe.label,
-          cost: stufe.cost.map((c) => ({ item: c.item, amount: c.amount })),
+          // Eingepackte Deko kostet nichts mehr — man besitzt sie schon.
+          cost: packed ? [] : stufe.cost.map((c) => ({ item: c.item, amount: c.amount })),
           minPlayerLevel: nötig,
           unlocked: level >= nötig,
-          affordable: level >= nötig && stufe.cost.every((c) => count(state, c.item) >= c.amount),
+          affordable:
+            level >= nötig && (packed || stufe.cost.every((c) => count(state, c.item) >= c.amount)),
           size: sizeOf(rules, i),
           deco: def.deco === true,
+          packed,
         },
       ];
     }),

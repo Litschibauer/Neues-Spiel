@@ -298,6 +298,10 @@ export function assertInvariants(state: State, rules: Ruleset): void {
       problems.push(`eingelöster Erfolg ${id} gibt es nicht`);
     }
   }
+  for (const i of state.eingepackt ?? []) {
+    if (!rules.plots[i]?.deco) problems.push(`eingepackter Platz ${i} ist keine Dekoration`);
+    if ((state.plots[i]?.level ?? 0) > 0) problems.push(`eingepackter Platz ${i} steht doch`);
+  }
 
   if (state.orders.length > rules.orderSlots) {
     problems.push(`zu viele Aufträge: ${state.orders.length} > ${rules.orderSlots}`);

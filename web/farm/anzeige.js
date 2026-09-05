@@ -1086,10 +1086,12 @@ function bauSektion(box, titel, liste, leerText) {
         (b.label && b.label !== g.name && g.name.indexOf(b.label) !== 0
           ? ' · ' + b.label
           : '') + '</div>' +
-      '<div class="sub">' + (b.unlocked
-        ? stacksMitBild(b.cost) + ' · ' + b.size.w + '×' + b.size.h + ' Felder'
-        : 'ab Stufe ' + b.minPlayerLevel) + '</div></div>' +
-      '<span class="go">' + (b.unlocked ? 'Bauen' : '🔒') + '</span>';
+      '<div class="sub">' + (!b.unlocked
+        ? 'ab Stufe ' + b.minPlayerLevel
+        : b.packed
+          ? 'eingepackt · kostenlos · ' + b.size.w + '×' + b.size.h + ' Felder'
+          : stacksMitBild(b.cost) + ' · ' + b.size.w + '×' + b.size.h + ' Felder') + '</div></div>' +
+      '<span class="go">' + (!b.unlocked ? '🔒' : b.packed ? 'Aufstellen' : 'Bauen') + '</span>';
     karte.addEventListener('click', function () { baueUndSetze(b.plot); });
     box.appendChild(karte);
   });

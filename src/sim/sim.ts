@@ -195,17 +195,22 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (levelOf(rules, s.xp) < (level.minPlayerLevel ?? 1)) {
         throw new SimError('PLAYER_LEVEL_TOO_LOW');
       }
-      for (const price of level.cost) {
-        if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
+      // Eingepackte Dekoration stellt man kostenlos wieder auf.
+      const eingepackt = (s.eingepackt ?? []).includes(cmd.plot);
+      if (!eingepackt) {
+        for (const price of level.cost) {
+          if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
+        }
       }
 
       const next = cloneState(s);
-      if (level.cost.length > 0) {
+      if (!eingepackt && level.cost.length > 0) {
         next.items = addItems(
           s.items,
           level.cost.map((c): [number, number] => [c.item, -c.amount]),
         );
       }
+      if (eingepackt) next.eingepackt = (s.eingepackt ?? []).filter((i) => i !== cmd.plot);
       const gebaut = {
         ...plot,
         level: plot.level + 1,
@@ -309,6 +314,22 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const next = cloneState(s);
       if (goldZurueck > 0) next.items = addItem(s.items, rules.currency, goldZurueck);
       next.plots = replaceAt(s.plots, cmd.plot, { level: 0, slots: [], gx: -1, gy: -1, tiere: [] });
+      return next;
+    }
+
+    case 'PACK_PLOT': {
+      const def = rules.plots[cmd.plot];
+      const plot = s.plots[cmd.plot];
+      if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+      if (plot.level <= 0) throw new SimError('PLOT_LOCKED');
+      // Nur Dekoration lässt sich einpacken (behalten & kostenlos neu aufstellen).
+      if (!def.deco) throw new SimError('NOT_PACKABLE');
+
+      const next = cloneState(s);
+      next.plots = replaceAt(s.plots, cmd.plot, { level: 0, slots: [], gx: -1, gy: -1, tiere: [] });
+      next.eingepackt = (s.eingepackt ?? []).includes(cmd.plot)
+        ? (s.eingepackt ?? [])
+        : (s.eingepackt ?? []).concat(cmd.plot);
       return next;
     }
 

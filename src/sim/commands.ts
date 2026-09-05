@@ -77,6 +77,9 @@ export type ClaimAchievementCommand = CommandBase & { type: 'CLAIM_ACHIEVEMENT';
 // Ein gebautes Bauwerk abreißen — gibt die Hälfte des Gold-Einsatzes zurück.
 export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: number };
 
+// Dekoration einpacken — vom Feld nehmen und behalten (kostenlos wieder aufstellbar).
+export type PackPlotCommand = CommandBase & { type: 'PACK_PLOT'; plot: number };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -103,6 +106,7 @@ export type Command =
   | DiscardCommand
   | ClaimAchievementCommand
   | RemovePlotCommand
+  | PackPlotCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -173,7 +177,8 @@ export type SimErrorCode =
   | 'NO_SUCH_ACHIEVEMENT'
   | 'ALREADY_CLAIMED'
   | 'NOT_YET_EARNED'
-  | 'CANT_REMOVE';
+  | 'CANT_REMOVE'
+  | 'NOT_PACKABLE';
 
 export class SimError extends Error {
   code: SimErrorCode;

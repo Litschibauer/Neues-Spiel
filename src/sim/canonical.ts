@@ -47,6 +47,7 @@ export function canonicalize(state: State): string {
     `geraeumt=[${state.clearedObstacles.join(',')}]`,
     `expandiert=[${(state.expandiert ?? []).join(',')}]`,
     `claimed=[${(state.claimed ?? []).join(',')}]`,
+    `eingepackt=[${(state.eingepackt ?? []).join(',')}]`,
   ].join('|');
 }
 
@@ -90,6 +91,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CLAIM_ACHIEVEMENT|${c.id}`;
     case 'REMOVE_PLOT':
       return `${c.seq}|${c.tick}|REMOVE_PLOT|${c.plot}`;
+    case 'PACK_PLOT':
+      return `${c.seq}|${c.tick}|PACK_PLOT|${c.plot}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

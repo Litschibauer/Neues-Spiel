@@ -101,6 +101,9 @@ export type State = {
   chestReadyAt: number;
   // Bereits eingelöste Erfolge (Achievement-IDs).
   claimed: readonly string[];
+  // Eingepackte Dekoration: Platz-Indizes, die man besitzt, aber gerade nicht
+  // aufgestellt hat. Wieder-Aufstellen ist kostenlos.
+  eingepackt: readonly number[];
 };
 
 export function count(s: State, item: number): number {
@@ -183,6 +186,7 @@ export function initialState(rules: Ruleset): State {
     chestReadyAt: 0,
     skipReadyAt: 0,
     claimed: [],
+    eingepackt: [],
   };
 }
 
@@ -240,6 +244,7 @@ export function normalizeState(s: State): State {
     expandiert: s.expandiert ?? [],
     chestReadyAt: s.chestReadyAt ?? 0,
     claimed: s.claimed ?? [],
+    eingepackt: s.eingepackt ?? [],
   };
 }
 
@@ -265,6 +270,7 @@ export function cloneState(s: State): State {
     chestReadyAt: s.chestReadyAt,
     skipReadyAt: s.skipReadyAt,
     claimed: s.claimed ?? [],
+    eingepackt: s.eingepackt ?? [],
   };
 }
 

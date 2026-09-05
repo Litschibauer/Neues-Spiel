@@ -203,7 +203,18 @@ function verschiebeKnopf(p, box) {
   knopf.addEventListener('click', function () { verschiebe(p.index); });
   reihe.appendChild(knopf);
 
-  if (p.level > 0) {
+  if (p.level > 0 && p.deco) {
+    // Dekoration wird eingepackt (behalten & kostenlos wieder aufstellen).
+    var ein = document.createElement('button');
+    ein.type = 'button';
+    ein.className = 'abfahrt skip';
+    ein.textContent = 'Einpacken';
+    ein.addEventListener('click', function () {
+      closePicker();
+      act(plotName(p.index) + ' eingepackt', client.packPlot(p.index), 'kauf');
+    });
+    reihe.appendChild(ein);
+  } else if (p.level > 0) {
     var ab = document.createElement('button');
     ab.type = 'button';
     ab.className = 'abfahrt abreissen';
