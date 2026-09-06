@@ -80,6 +80,9 @@ export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: numbe
 // Dekoration einpacken — vom Feld nehmen und behalten (kostenlos wieder aufstellbar).
 export type PackPlotCommand = CommandBase & { type: 'PACK_PLOT'; plot: number };
 
+// Angelsee: Angel auswerfen — verbraucht einen Köder, bringt einen Fisch.
+export type CastLineCommand = CommandBase & { type: 'CAST_LINE' };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -107,6 +110,7 @@ export type Command =
   | ClaimAchievementCommand
   | RemovePlotCommand
   | PackPlotCommand
+  | CastLineCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -178,7 +182,9 @@ export type SimErrorCode =
   | 'ALREADY_CLAIMED'
   | 'NOT_YET_EARNED'
   | 'CANT_REMOVE'
-  | 'NOT_PACKABLE';
+  | 'NOT_PACKABLE'
+  | 'NO_FISHING'
+  | 'NO_BAIT';
 
 export class SimError extends Error {
   code: SimErrorCode;

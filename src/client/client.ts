@@ -141,6 +141,10 @@ export class Client {
     return this.apply({ type: 'PACK_PLOT', plot } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  castLine(): ActionResult {
+    return this.apply({ type: 'CAST_LINE' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

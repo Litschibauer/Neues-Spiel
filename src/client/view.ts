@@ -283,7 +283,20 @@ export type FarmView = {
   buildable: readonly BuildView[];
   obstacles: readonly ObstacleView[];
   expansions: readonly ExpansionView[];
+  angeln: AngelView;
 };
+
+// Angelsee (eigene Dimension). null, wenn das Regelwerk keinen See kennt.
+export type AngelView = {
+  available: boolean;
+  minLevel: number;
+  bait: number;
+  baitItem: number;
+  baitPrice: number;
+  xp: number;
+  gefangen: number;
+  table: readonly { item: number; chance: number }[];
+} | null;
 
 export type BuildView = {
   plot: number;
@@ -695,6 +708,23 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       gy: c.gy,
     })),
     openBoxes: state.pendingBoxes.length,
+    angeln: angelView(state, rules),
+  };
+}
+
+function angelView(state: State, rules: Ruleset): AngelView {
+  const f = rules.fishing;
+  if (!f) return null;
+  const total = f.table.reduce((n, t) => n + t.weight, 0);
+  return {
+    available: levelOf(rules, state.xp) >= f.minLevel,
+    minLevel: f.minLevel,
+    bait: count(state, f.bait),
+    baitItem: f.bait,
+    baitPrice: rules.items[f.bait]?.npcBuyPrice ?? 0,
+    xp: f.xp,
+    gefangen: state.angelFang ?? 0,
+    table: f.table.map((t) => ({ item: t.item, chance: Math.round((t.weight * 100) / total) })),
   };
 }
 

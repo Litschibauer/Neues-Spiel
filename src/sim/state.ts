@@ -104,6 +104,9 @@ export type State = {
   // Eingepackte Dekoration: Platz-Indizes, die man besitzt, aber gerade nicht
   // aufgestellt hat. Wieder-Aufstellen ist kostenlos.
   eingepackt: readonly number[];
+  // Angelsee: Anzahl bisher gefangener Fische. Dient als Fortschritt UND als
+  // Zähler für den deterministischen Fang.
+  angelFang: number;
 };
 
 export function count(s: State, item: number): number {
@@ -187,6 +190,7 @@ export function initialState(rules: Ruleset): State {
     skipReadyAt: 0,
     claimed: [],
     eingepackt: [],
+    angelFang: 0,
   };
 }
 
@@ -245,6 +249,7 @@ export function normalizeState(s: State): State {
     chestReadyAt: s.chestReadyAt ?? 0,
     claimed: s.claimed ?? [],
     eingepackt: s.eingepackt ?? [],
+    angelFang: s.angelFang ?? 0,
   };
 }
 
@@ -271,6 +276,7 @@ export function cloneState(s: State): State {
     skipReadyAt: s.skipReadyAt,
     claimed: s.claimed ?? [],
     eingepackt: s.eingepackt ?? [],
+    angelFang: s.angelFang ?? 0,
   };
 }
 

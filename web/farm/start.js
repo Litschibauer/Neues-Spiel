@@ -91,19 +91,20 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'see'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'see'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
     if (e.target === $(name + '-bg')) show(zurueck);
   });
 });
+$('see-auf').addEventListener('click', function () { oeffneSee(); });
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('brett').addEventListener('click', function () { show('brett'); });

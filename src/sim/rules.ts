@@ -204,6 +204,16 @@ export type Ruleset = {
   // muss erst verkaufen/verbrauchen.
   siloUeberlauf?: boolean;
   achievements?: readonly AchievementDef[];
+  // Eigene Dimension „Angelsee": ab minLevel erreichbar, Auswerfen verbraucht
+  // einen Köder (bait) und bringt einen Fisch aus der gewichteten Tabelle. Der
+  // Fang ist deterministisch aus dem Zustand abgeleitet (siehe sim.ts), also
+  // cheat-sicher und exakt reproduzierbar.
+  fishing?: {
+    minLevel: number;
+    bait: number;
+    xp: number;
+    table: readonly { item: number; weight: number }[];
+  };
 };
 
 const GOLD = 0;
@@ -1631,12 +1641,52 @@ const V32: Ruleset = {
   ],
 };
 
+// v33: Der Angelsee — eine eigene Dimension. Erreichbar über das Boot, eigene
+// Ansicht. Köder kaufen, auswerfen, Fisch fangen (deterministisch), verkaufen
+// oder in Aufträge geben.
+const BAIT = 29;
+const FISH_PERCH = 30; // Barsch
+const FISH_TROUT = 31; // Forelle
+const FISH_CARP = 32; // Karpfen
+const FISH_PIKE = 33; // Hecht
+
+const V33: Ruleset = {
+  ...V32,
+  version: 33,
+  items: [
+    ...V32.items,
+    { id: 'bait', storable: true, npcPrice: 0, npcBuyPrice: 8 },
+    { id: 'fish-perch', storable: true, npcPrice: 45, npcBuyPrice: 0 },
+    { id: 'fish-trout', storable: true, npcPrice: 80, npcBuyPrice: 0 },
+    { id: 'fish-carp', storable: true, npcPrice: 130, npcBuyPrice: 0 },
+    { id: 'fish-pike', storable: true, npcPrice: 240, npcBuyPrice: 0 },
+  ],
+  fishing: {
+    minLevel: 4,
+    bait: BAIT,
+    xp: 12,
+    table: [
+      { item: FISH_PERCH, weight: 50 },
+      { item: FISH_TROUT, weight: 28 },
+      { item: FISH_CARP, weight: 16 },
+      { item: FISH_PIKE, weight: 6 },
+    ],
+  },
+  requestTemplates: [
+    ...V32.requestTemplates,
+    { id: 'perch-order', wants: [want(FISH_PERCH, 3)], reward: gold(170), xp: 34 },
+    { id: 'trout-order', wants: [want(FISH_TROUT, 2)], reward: gold(190), xp: 40 },
+    { id: 'fish-mix', wants: [want(FISH_PERCH, 2), want(FISH_TROUT, 1)], reward: gold(260), xp: 55 },
+    { id: 'pike-order', wants: [want(FISH_PIKE, 1)], reward: gold(300), xp: 62 },
+  ],
+};
+
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V32,
+  ...V33,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
@@ -1692,17 +1742,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [30, V30],
   [31, V31],
   [32, V32],
+  [33, V33],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32,
+  28, 29, 30, 31, 32, 33,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 32;
+export const LATEST_RULESET_VERSION = 33;
 
 export const DEV_RULESET_VERSION = 1001;
 

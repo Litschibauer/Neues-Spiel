@@ -1,5 +1,5 @@
 import type { Ruleset } from '../sim/rules.ts';
-import { levelRecipes } from '../sim/rules.ts';
+import { levelRecipes, levelOf } from '../sim/rules.ts';
 import type { Request, State } from '../sim/state.ts';
 
 export function reachableItems(state: State, rules: Ruleset): Set<number> {
@@ -9,6 +9,12 @@ export function reachableItems(state: State, rules: Ruleset): Set<number> {
     if (item.npcBuyPrice > 0) reachable.add(i);
     else if ((state.items[i] ?? 0) > 0) reachable.add(i);
   });
+
+  // Fische sind erreichbar, sobald der Angelsee offen ist — so tauchen Fisch-
+  // Aufträge auf, auch bevor man den ersten selbst gefangen hat.
+  if (rules.fishing && levelOf(rules, state.xp) >= rules.fishing.minLevel) {
+    for (const t of rules.fishing.table) reachable.add(t.item);
+  }
 
   const available: number[] = [];
   state.plots.forEach((plot, i) => {

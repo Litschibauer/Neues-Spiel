@@ -268,7 +268,8 @@
     border-radius: 999px; background: var(--gold, #e0a800); border: 2px solid var(--surface);
   }
   .hammer { right: 3rem; }
-  .geschenk { right: 5.55rem; color: var(--on-accent); background: var(--accent); }
+  .see-knopf { right: 5.55rem; color: #fff; background: #3b8fb3; }
+  .geschenk { right: 8.1rem; color: var(--on-accent); background: var(--accent); }
   .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
   @keyframes winken {
     0%, 70%, 100% { transform: rotate(0); }
@@ -913,6 +914,29 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     margin-left: .25rem; max-width: 42vw;
   }
+
+  /* Angelsee (eigene Dimension). */
+  .see-szene {
+    border-radius: 12px; overflow: hidden; margin-bottom: .8rem;
+    aspect-ratio: 100 / 46; background: #2b6f92; box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .see-szene svg { display: block; width: 100%; height: 100%; }
+  .see-kopf { display: flex; justify-content: space-between; font-size: .82rem; margin-bottom: .6rem; }
+  .see-kopf .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
+  .see-werfen { width: 100%; margin-bottom: .5rem; }
+  .see-koeder {
+    width: 100%; height: 2.4rem; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--sunk); color: var(--ink); font-weight: 600; font-size: .8rem; cursor: pointer;
+  }
+  .see-koeder:disabled { opacity: .5; }
+  .see-fische { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; margin-top: .8rem; }
+  .see-fisch {
+    display: flex; flex-direction: column; align-items: center; gap: .15rem;
+    background: var(--sunk); border-radius: 10px; padding: .45rem .2rem;
+  }
+  .see-fisch .ic.gross { width: 1.9em; height: 1.9em; }
+  .see-fisch .n { font-size: .6rem; font-weight: 700; }
+  .see-fisch .c { font-size: .58rem; color: var(--muted); }
 
   #pfad-kopf {
     background: var(--surface); border: 1px solid var(--line); border-radius: 16px;

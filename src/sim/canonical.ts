@@ -48,6 +48,7 @@ export function canonicalize(state: State): string {
     `expandiert=[${(state.expandiert ?? []).join(',')}]`,
     `claimed=[${(state.claimed ?? []).join(',')}]`,
     `eingepackt=[${(state.eingepackt ?? []).join(',')}]`,
+    `angelFang=${state.angelFang ?? 0}`,
   ].join('|');
 }
 
@@ -93,6 +94,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|REMOVE_PLOT|${c.plot}`;
     case 'PACK_PLOT':
       return `${c.seq}|${c.tick}|PACK_PLOT|${c.plot}`;
+    case 'CAST_LINE':
+      return `${c.seq}|${c.tick}|CAST_LINE`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

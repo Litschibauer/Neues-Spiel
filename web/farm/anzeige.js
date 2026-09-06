@@ -30,6 +30,8 @@ function render() {
   renderZiele(v);
   renderSheet(v);
   bonusKnopf();
+  seeKnopf(v);
+  if (view === 'see') renderSee(v);
 }
 
 function renderPurse(v) {
@@ -1111,6 +1113,8 @@ function renderHofinfo(v) {
 }
 
 var CODES = {
+  NO_BAIT: 'Kein Köder mehr',
+  NO_FISHING: 'Der Angelsee ist noch nicht offen',
   CELL_TAKEN: 'Da steht schon etwas',
   OFF_GRID: 'Da ist kein Platz',
   NOT_PLACED: 'Erst hinstellen',

@@ -13,6 +13,8 @@ var NAMES = {
   flour: 'Mehl', bread: 'Brot', 'apple-pie': 'Apfelkuchen', 'fried-egg': 'Spiegeleier',
   oven: 'Backofen', grill: 'Grill',
   'deco-fence': 'Zaun', 'deco-flowers': 'Blumenbeet', 'deco-bench': 'Gartenbank',
+  bait: 'Köder', 'fish-perch': 'Barsch', 'fish-trout': 'Forelle',
+  'fish-carp': 'Karpfen', 'fish-pike': 'Hecht',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

@@ -333,6 +333,38 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    case 'CAST_LINE': {
+      const f = rules.fishing;
+      if (!f || levelOf(rules, s.xp) < f.minLevel) throw new SimError('NO_FISHING');
+      if (count(s, f.bait) < 1) throw new SimError('NO_BAIT');
+
+      // Deterministischer Fang: reiner Integer-Hash aus Tick + Fang-Zähler,
+      // dann gewichtete Auswahl aus der Fisch-Tabelle. Kein Zufall aus der
+      // Umgebung, also exakt reproduzierbar und cheat-sicher.
+      let h = (1 + (s.tick % 1000003) + ((s.angelFang ?? 0) % 1000003) * 101) % 1000003;
+      h = (h * 48271) % 2147483647;
+      const gesamt = f.table.reduce((n, t) => n + t.weight, 0);
+      let r = h % gesamt;
+      let fisch = f.table[f.table.length - 1]!.item;
+      for (const t of f.table) {
+        if (r < t.weight) {
+          fisch = t.item;
+          break;
+        }
+        r -= t.weight;
+      }
+
+      // Köder verbraucht, Fisch dazu — beide lagerfähig, also kein Nettozuwachs.
+      const next = cloneState(s);
+      next.items = addItems(s.items, [
+        [f.bait, -1],
+        [fisch, 1],
+      ]);
+      next.xp = s.xp + f.xp;
+      next.angelFang = (s.angelFang ?? 0) + 1;
+      return next;
+    }
+
     case 'SELL_NPC': {
       if (rules.sellNpcDisabled) throw new SimError('NPC_DISABLED');
       if (!Number.isInteger(cmd.amount) || cmd.amount <= 0) throw new SimError('BAD_AMOUNT');
