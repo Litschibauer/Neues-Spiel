@@ -208,12 +208,25 @@ function kameraMitte() {
   kameraAnwenden();
 }
 
+function istQuer() {
+  var k = $('hof').getBoundingClientRect();
+  return k.width > k.height * 1.4;
+}
+
 function kameraStart() {
   weltFormat();
   var k = $('hof').getBoundingClientRect();
   if (k.width <= 0) return;
-  var ziel = Math.min(raster().w, 15);
-  var z = (k.width * gesamtReihen()) / (k.height * ziel);
+  var z;
+  if (istQuer()) {
+    // Querformat: der breite Hof passt in der Höhe komplett hinein, man schwenkt
+    // waagerecht. z = 1 füllt genau die Höhe (welt ist 100 % hoch).
+    z = 1;
+  } else {
+    // Hochformat: rund 15 Spalten breit zeigen, senkrecht schwenken.
+    var ziel = Math.min(raster().w, 15);
+    z = (k.width * gesamtReihen()) / (k.height * ziel);
+  }
   kamera.z = Math.max(zoomMin(), Math.min(4.5, z));
   kamera.x = 0;
   kamera.y = 0;

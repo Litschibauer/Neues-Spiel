@@ -214,7 +214,17 @@ function begin(restored) {
     render();
   });
   window.addEventListener('pagehide', function () { save(); stopLive(); });
-  window.addEventListener('resize', function () { if (kamera.gesetzt) kameraAnwenden(); });
+  // Beim Drehen (Hoch-/Querformat) die Kamera neu einpassen; sonst nur nachziehen.
+  var warQuer = null;
+  function aufGroesse() {
+    if (!kamera.gesetzt) return;
+    var jetzt = istQuer();
+    if (warQuer === null) warQuer = jetzt;
+    if (jetzt !== warQuer) { warQuer = jetzt; kameraStart(); }
+    else kameraAnwenden();
+  }
+  window.addEventListener('resize', aufGroesse);
+  window.addEventListener('orientationchange', function () { setTimeout(aufGroesse, 100); });
   startLive();
   return true;
 }
