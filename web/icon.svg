@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Neues Spiel — Hof">
+  <defs>
+    <linearGradient id="himmel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fa06e"/>
+      <stop offset="1" stop-color="#246a4b"/>
+    </linearGradient>
+    <linearGradient id="korn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffde7a"/>
+      <stop offset="1" stop-color="#e7a638"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Voller Hintergrund; Motiv sitzt in der sicheren Mitte (maskierbar). -->
+  <rect width="512" height="512" fill="url(#himmel)"/>
+  <path d="M0 430 Q256 372 512 430 L512 512 L0 512 Z" fill="#2f855e"/>
+
+  <!-- Weizengarbe -->
+  <g stroke="#c07f26" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Halme bis zur Bindung -->
+    <g fill="none">
+      <path d="M256 372 L256 128"/>
+      <path d="M256 372 L188 150"/>
+      <path d="M256 372 L324 150"/>
+    </g>
+
+    <g fill="url(#korn)">
+      <!-- Mittlere Ähre -->
+      <g>
+        <ellipse cx="256" cy="126" rx="18" ry="30"/>
+        <ellipse cx="228" cy="160" rx="16" ry="26" transform="rotate(-26 228 160)"/>
+        <ellipse cx="284" cy="160" rx="16" ry="26" transform="rotate(26 284 160)"/>
+        <ellipse cx="230" cy="204" rx="16" ry="26" transform="rotate(-26 230 204)"/>
+        <ellipse cx="282" cy="204" rx="16" ry="26" transform="rotate(26 282 204)"/>
+        <ellipse cx="232" cy="248" rx="16" ry="26" transform="rotate(-26 232 248)"/>
+        <ellipse cx="280" cy="248" rx="16" ry="26" transform="rotate(26 280 248)"/>
+      </g>
+      <!-- Linke Ähre -->
+      <g transform="rotate(-24 256 372)">
+        <ellipse cx="256" cy="120" rx="16" ry="27"/>
+        <ellipse cx="231" cy="152" rx="14" ry="23" transform="rotate(-26 231 152)"/>
+        <ellipse cx="281" cy="152" rx="14" ry="23" transform="rotate(26 281 152)"/>
+        <ellipse cx="233" cy="192" rx="14" ry="23" transform="rotate(-26 233 192)"/>
+        <ellipse cx="279" cy="192" rx="14" ry="23" transform="rotate(26 279 192)"/>
+      </g>
+      <!-- Rechte Ähre -->
+      <g transform="rotate(24 256 372)">
+        <ellipse cx="256" cy="120" rx="16" ry="27"/>
+        <ellipse cx="231" cy="152" rx="14" ry="23" transform="rotate(-26 231 152)"/>
+        <ellipse cx="281" cy="152" rx="14" ry="23" transform="rotate(26 281 152)"/>
+        <ellipse cx="233" cy="192" rx="14" ry="23" transform="rotate(-26 233 192)"/>
+        <ellipse cx="279" cy="192" rx="14" ry="23" transform="rotate(26 279 192)"/>
+      </g>
+    </g>
+
+    <!-- Bindung -->
+    <path d="M206 374 Q256 356 306 374" fill="none" stroke="#8a561c" stroke-width="20"/>
+    <path d="M206 396 Q256 378 306 396" fill="none" stroke="#a56a26" stroke-width="15"/>
+  </g>
+</svg>

@@ -333,6 +333,18 @@ const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 
+// App-/PWA-Icon. Bevorzugt web/icon.png (schönes Master-Bild fürs Spiel & die
+// spätere iOS-App), sonst das mitgelieferte SVG als Fallback. Beide werden unter
+// /icon.png bzw. /icon.svg ausgeliefert; das Manifest listet beide.
+const ICON_SVG = (() => {
+  const p = join(ROOT, 'web', 'icon.svg');
+  return existsSync(p) ? readFileSync(p, 'utf8') : null;
+})();
+const ICON_PNG = (() => {
+  const p = join(ROOT, 'web', 'icon.png');
+  return existsSync(p) ? readFileSync(p) : null;
+})();
+
 // Optionale Hintergrundmusik. Alle Tracks liegen in einem Ordner und werden von
 // der Platte GESTREAMT (nie in den RAM geladen — kann groß sein). Der Client holt
 // die Liste über /musik/ und spielt sie als zufällige Playlist ab.
@@ -433,7 +445,12 @@ const MANIFEST = JSON.stringify({
   display: 'standalone',
   background_color: '#f2f5f6',
   theme_color: '#0f7f81',
-  icons: [],
+  // PNG bevorzugt (falls hinterlegt), SVG als Fallback. Ein fehlendes Icon in
+  // der Liste ignoriert der Browser einfach und nimmt das nächste.
+  icons: [
+    { src: '/icon.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+  ],
 });
 
 const ADMIN_ENABLED = CONFIG.adminEnabled;
@@ -651,6 +668,21 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     ].find((p) => p && existsSync(p));
     if (!pfad) return json(res, 404, { error: 'keine Musik hinterlegt' });
     return streamAudio(req, res, pfad);
+  }
+
+  if (url.pathname === '/icon.png' && req.method === 'GET') {
+    if (!ICON_PNG) return json(res, 404, { error: 'kein PNG-Icon' });
+    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'public, max-age=86400' });
+    return res.end(ICON_PNG);
+  }
+
+  if (url.pathname === '/icon.svg' && req.method === 'GET') {
+    if (!ICON_SVG) return json(res, 404, { error: 'kein SVG-Icon' });
+    res.writeHead(200, {
+      'content-type': 'image/svg+xml; charset=utf-8',
+      'cache-control': 'public, max-age=86400',
+    });
+    return res.end(ICON_SVG);
   }
 
   if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {
