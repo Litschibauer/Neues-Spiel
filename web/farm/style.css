@@ -938,6 +938,29 @@
   .see-fisch .n { font-size: .6rem; font-weight: 700; }
   .see-fisch .c { font-size: .58rem; color: var(--muted); }
 
+  /* Untere Leiste in der Angel-Dimension. */
+  .see-hud {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(.5rem + env(safe-area-inset-bottom)); z-index: 35;
+    display: flex; align-items: center; gap: .5rem;
+    padding: .3rem .4rem .3rem .7rem; border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    border: 1px solid var(--line); box-shadow: var(--shadow);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .see-hud-info { font-size: .78rem; font-weight: 600; white-space: nowrap; }
+  .see-hud-info .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
+  .see-hud button {
+    border: 0; border-radius: 999px; padding: .38rem .7rem; font-size: .74rem;
+    font-weight: 700; cursor: pointer; background: var(--accent); color: var(--on-accent);
+  }
+  .see-hud button:disabled { background: var(--sunk); color: var(--muted); }
+  #see-hud-zurueck { background: #3b8fb3; color: #fff; }
+  /* Angelstelle pulsiert leicht, damit man sie als antippbar erkennt. */
+  .see-spot .art { animation: seepuls 2.4s ease-in-out infinite; transform-origin: center; }
+  @keyframes seepuls { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .see-spot .art { animation: none; } }
+
   #pfad-kopf {
     background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
     box-shadow: var(--shadow); padding: 1rem; margin-bottom: 1rem;

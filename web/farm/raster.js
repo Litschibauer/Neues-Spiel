@@ -1,11 +1,26 @@
 var BAND = 3;
 
+// Zweite Dimension: der Angelsee hat ein EIGENES Raster. Umschalten über das
+// Boot. Rein clientseitig — der Sim kennt nur den einen Hof-Zustand.
+var seeAktiv = false;
+var SEE_GRID = { w: 24, h: 13 };
+
 function hatRaster() {
-  return !!rules.grid;
+  return seeAktiv ? true : !!rules.grid;
 }
 
 function raster() {
+  if (seeAktiv) return SEE_GRID;
   return rules.grid || { w: 1, h: 1 };
+}
+
+function wechselZone(zuSee) {
+  if (seeAktiv === !!zuSee) return;
+  seeAktiv = !!zuSee;
+  kamera.gesetzt = false; // Kamera neu aufs andere Raster einpassen
+  var sc = $('scene');
+  if (sc) sc.dataset.stand = ''; // Szene wird beim nächsten render() neu gemalt
+  render();
 }
 
 function gesamtReihen() {

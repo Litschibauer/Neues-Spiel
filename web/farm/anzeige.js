@@ -6,6 +6,15 @@ function render() {
   var v = NS.farmView(s, rules, marktLive());
 
   renderPurse(v);
+
+  // Angel-Dimension: eigenes Raster, eigene Objekte — die Hof-Renderer bleiben aus.
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) {
+    renderPlots(v);
+    seeHudMalen(v);
+    seeKnopf(v);
+    return;
+  }
+
   renderPlots(v);
   renderTruck(v);
   renderMoebel(v);
@@ -31,7 +40,7 @@ function render() {
   renderSheet(v);
   bonusKnopf();
   seeKnopf(v);
-  if (view === 'see') renderSee(v);
+  $('see-hud').hidden = true;
 }
 
 function renderPurse(v) {
@@ -125,6 +134,7 @@ function plotStatus(p) {
 
 function renderPlots(v) {
   if (ziehen && ziehen.aktiv) return;
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) { renderSeeWelt(v); return; }
   $('hof').classList.toggle('kein-raster', !hatRaster());
 
   var scene = $('scene');
@@ -235,6 +245,7 @@ var MOEBEL_ORTE = {
   stand: [12, -2.5, 3, 2],
   wagen: [16, -2.5, 4, 2],
   kiste: [21, -2.5, 2, 2],
+  boot: [1, 10, 6, 3],
 };
 
 function setzeMoebel(id) {
@@ -254,6 +265,23 @@ function setzeMoebel(id) {
 }
 
 function renderMoebel(v) {
+  // Aus dem See zurück: Hof-Möbel wieder zeigen.
+  ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(function (id) { $(id).hidden = false; });
+
+  // Boot zum Angelsee (nur auf dem Hof, wenn der See offen ist).
+  var boot = $('boot');
+  if (boot) {
+    var zeig = v.angeln && v.angeln.available && hatRaster();
+    boot.hidden = !zeig;
+    if (zeig) {
+      boot.innerHTML =
+        '<svg class="art" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">' +
+        artSeeObj('dock') + '</svg>';
+      boot.setAttribute('aria-label', 'Zum Angelsee');
+      setzeMoebel('boot');
+    }
+  }
+
   var bereit = v.truck.board.filter(function (z) { return z.deliverable; }).length;
   moebel($('brett'), artBrett(v.truck.board.length), 'Brett', bereit);
   moebel($('lagerhaus'), artLager(v.silo.full), 'Lager',

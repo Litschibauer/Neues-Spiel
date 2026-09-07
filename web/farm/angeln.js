@@ -1,79 +1,99 @@
-// Der Angelsee — eine eigene Dimension. Erreichbar über das Boot-Symbol, wenn
-// der Hof die nötige Stufe hat. Köder kaufen, auswerfen, Fisch fangen (der Fang
-// selbst ist deterministisch im Sim, hier nur Anzeige & Bedienung).
+// Der Angelsee — eine eigene Dimension mit EIGENEM Raster. Über das Boot auf dem
+// Hof reist man hinüber (wechselZone), dort gibt es Wasser, Inseln, ein
+// Strandhaus und Angelstellen zum Antippen. Das Fangen selbst ist der
+// deterministische Sim-Befehl CAST_LINE — hier nur Darstellung & Bedienung.
 
-// Boot-Knopf auf dem Hof nur zeigen, wenn der See offen ist.
+// Boot-Knopf im HUD nur zeigen, wenn der See offen ist (und man auf dem Hof ist).
 function seeKnopf(v) {
   var knopf = $('see-auf');
   if (!knopf) return;
-  knopf.hidden = !(v.angeln && v.angeln.available);
+  var imSee = typeof seeAktiv !== 'undefined' && seeAktiv;
+  knopf.hidden = imSee || !(v.angeln && v.angeln.available);
 }
 
 function oeffneSee() {
   var v = NS.farmView(client.preview(), rules, navigator.onLine);
   if (!v.angeln) { toast('Hier gibt es keinen See', true); return; }
-  if (!v.angeln.available) {
-    toast('Der Angelsee öffnet ab Stufe ' + v.angeln.minLevel, true);
-    return;
-  }
-  show('see');
+  if (!v.angeln.available) { toast('Der Angelsee öffnet ab Stufe ' + v.angeln.minLevel, true); return; }
+  wechselZone(true);
 }
 
-var seeSzeneGemalt = false;
+// Das See-Raster mit seinen Objekten. Wird bei jedem render() im See gemalt.
+function renderSeeWelt(v) {
+  ['brett', 'lagerhaus', 'stand', 'nachbarn', 'wagen', 'kiste', 'boot'].forEach(function (id) {
+    var e = $(id); if (e) e.hidden = true;
+  });
+  ['hindernisse', 'erweiterungen', 'kisten'].forEach(function (id) {
+    var e = $(id); if (e) e.textContent = '';
+  });
 
-function renderSee(v) {
-  var a = v.angeln;
-  if (!a) return;
-
-  var szene = $('see-szene');
-  if (szene && !seeSzeneGemalt) {
-    szene.innerHTML = artSee();
-    seeSzeneGemalt = true;
+  $('hof').classList.remove('kein-raster');
+  var scene = $('scene');
+  if (scene && scene.dataset.stand !== 'see') {
+    scene.innerHTML = artScene();
+    scene.dataset.stand = 'see';
   }
 
-  var box = $('see-inhalt');
-  if (!box) return;
+  var box = $('plots');
   box.textContent = '';
 
-  var kopf = document.createElement('div');
-  kopf.className = 'see-kopf';
-  kopf.innerHTML =
-    '<span>' + iconTag('bait') + ' <b>' + a.bait + '</b> Köder</span>' +
-    '<span>🎣 ' + a.gefangen + ' gefangen</span>';
-  box.appendChild(kopf);
+  var objekte = [
+    { art: 'haus', gx: 1, gy: 0, w: 6, h: 3, label: 'Strandhaus' },
+    { art: 'dock', gx: 1, gy: 9, w: 6, h: 3, tap: 'zurueck', label: 'Zum Hof' },
+    { art: 'spot', gx: 10, gy: 4, w: 2, h: 2, tap: 'angeln' },
+    { art: 'spot', gx: 15, gy: 8, w: 2, h: 2, tap: 'angeln' },
+    { art: 'spot', gx: 19, gy: 3, w: 2, h: 2, tap: 'angeln' },
+    { art: 'spot', gx: 20, gy: 9, w: 2, h: 2, tap: 'angeln' },
+  ];
 
-  var werfen = document.createElement('button');
-  werfen.className = 'primär see-werfen';
-  werfen.disabled = a.bait < 1 || !isActive;
-  werfen.textContent = a.bait < 1 ? 'Kein Köder — erst kaufen' : 'Auswerfen · −1 Köder';
-  werfen.addEventListener('click', angelWurf);
-  box.appendChild(werfen);
-
-  var kosten = a.baitPrice * 5;
-  var kauf = document.createElement('button');
-  kauf.className = 'see-koeder';
-  kauf.disabled = v.currency.amount < kosten || !isActive;
-  kauf.innerHTML = '5 Köder kaufen · ' + kosten + ' ' + itemName(rules.currency);
-  kauf.addEventListener('click', function () {
-    act('5 Köder gekauft', client.buyNpc(a.baitItem, 5), 'kauf');
+  objekte.forEach(function (o) {
+    var k = feldKasten(o.gx, o.gy, o.w, o.h);
+    var tile = document.createElement('button');
+    tile.className = 'plot see-obj' + (o.tap === 'angeln' ? ' see-spot' : '');
+    tile.style.left = k.left + '%';
+    tile.style.top = k.top + '%';
+    tile.style.width = k.breite + '%';
+    tile.style.height = k.hoehe + '%';
+    tile.style.zIndex = String(1 + Math.round((o.gy + o.h) * 2));
+    tile.innerHTML =
+      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
+      artSeeObj(o.art) + '</svg>';
+    if (o.label) {
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = '<div class="name">' + o.label + '</div>';
+      tile.appendChild(meta);
+    }
+    tile.setAttribute('aria-label', o.label || 'Angelstelle');
+    tile.addEventListener('click', function () { seeObjTap(o, tile); });
+    box.appendChild(tile);
   });
-  box.appendChild(kauf);
 
-  var liste = document.createElement('div');
-  liste.className = 'see-fische';
-  a.table.forEach(function (t) {
-    var karte = document.createElement('div');
-    karte.className = 'see-fisch';
-    karte.innerHTML =
-      iconTag(rules.items[t.item].id, 'gross') +
-      '<span class="n">' + nameOf(rules.items[t.item].id) + '</span>' +
-      '<span class="c">' + t.chance + '%</span>';
-    liste.appendChild(karte);
-  });
-  box.appendChild(liste);
+  if (hatRaster()) weltFormat();
+  if (!kamera.gesetzt && $('hof').getBoundingClientRect().width > 0) kameraStart();
 }
 
-function angelWurf() {
+function seeObjTap(o, tile) {
+  if (o.tap === 'zurueck') { wechselZone(false); return; }
+  if (o.tap === 'angeln') { angelWurf(tile); return; }
+  toast('Das Strandhaus des Anglers 🎣');
+}
+
+// Untere Leiste im See: Köder-Vorrat, Fänge, Köder kaufen, zurück zum Hof.
+function seeHudMalen(v) {
+  var hud = $('see-hud');
+  if (!hud) return;
+  hud.hidden = false;
+  var a = v.angeln;
+  $('see-hud-info').innerHTML =
+    iconTag('bait') + ' <b>' + (a ? a.bait : 0) + '</b> · 🎣 ' + (a ? a.gefangen : 0);
+  var kb = $('see-hud-koeder');
+  var kosten = a ? a.baitPrice * 5 : 0;
+  kb.disabled = !a || v.currency.amount < kosten || !isActive;
+  kb.textContent = '5 Köder · ' + kosten + ' Gold';
+}
+
+function angelWurf(tile) {
   if (!isActive) return;
   var vorher = client.preview().items.slice();
   var res = client.castLine();
@@ -96,30 +116,7 @@ function angelWurf() {
   render();
   if (fisch >= 0) {
     toast('Gefangen: ' + itemName(fisch) + '! 🐟', false);
-    var knopf = document.querySelector('.see-werfen');
-    if (knopf) zahlAuf(knopf.getBoundingClientRect(), '+1 ' + itemName(fisch), 'ware');
+    var box = tile && tile.getBoundingClientRect ? tile.getBoundingClientRect() : null;
+    if (box && box.width) zahlAuf(box, '+1 ' + itemName(fisch), 'ware');
   }
-}
-
-// Wasser-Szene mit Steg und Boot (rein dekorativ).
-function artSee() {
-  return (
-    '<svg viewBox="0 0 100 60" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
-    '<defs><linearGradient id="see-w" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0" stop-color="#4aa3c7"/><stop offset="1" stop-color="#2b6f92"/>' +
-    '</linearGradient></defs>' +
-    '<rect width="100" height="60" fill="url(#see-w)"/>' +
-    '<rect width="100" height="14" fill="#7fc2dd" opacity=".5"/>' +
-    '<path d="M0 22h100M0 30h100M0 40h100M0 50h100" stroke="#ffffff" stroke-width=".5" opacity=".25"/>' +
-    '<ellipse cx="50" cy="26" rx="30" ry="6" fill="#1f5875" opacity=".35"/>' +
-    // Steg
-    '<rect x="6" y="34" width="34" height="5" rx="1" fill="#8a5a2b"/>' +
-    '<rect x="10" y="39" width="3" height="10" fill="#6f4720"/>' +
-    '<rect x="33" y="39" width="3" height="10" fill="#6f4720"/>' +
-    // kleines Boot
-    '<path d="M60 30h22l-4 7H64z" fill="#c0692e"/>' +
-    '<rect x="70" y="18" width="1.4" height="13" fill="#7a5230"/>' +
-    '<path d="M71.4 19l8 5-8 3z" fill="#f2f2f2"/>' +
-    '</svg>'
-  );
 }

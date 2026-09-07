@@ -91,13 +91,13 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'see'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'see'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -105,6 +105,12 @@ function show(next) {
   });
 });
 $('see-auf').addEventListener('click', function () { oeffneSee(); });
+$('boot').addEventListener('click', function () { oeffneSee(); });
+$('see-hud-zurueck').addEventListener('click', function () { wechselZone(false); });
+$('see-hud-koeder').addEventListener('click', function () {
+  var a = NS.farmView(client.preview(), rules, navigator.onLine).angeln;
+  if (a) act('5 Köder gekauft', client.buyNpc(a.baitItem, 5), 'kauf');
+});
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('brett').addEventListener('click', function () { show('brett'); });

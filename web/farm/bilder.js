@@ -24,10 +24,67 @@ function artTuempel() {
 }
 
 function artScene() {
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) return artSeeScene();
   if (!hatRaster()) {
     return '<rect x="0" y="0" width="100" height="130" fill="var(--meadow)"/>' + artBoden(bauModus);
   }
   return '<rect x="0" y="0" width="100" height="100" fill="var(--meadow)"/>' + artBoden(bauModus);
+}
+
+// Der Wasser-Hintergrund der Angel-Dimension: Sandstrand-Streifen oben, Wasser
+// darunter, ein paar dekorative Inseln.
+function artSeeScene() {
+  var ufer = projiziere(0, 0).y;
+  var out = '<rect x="0" y="0" width="100" height="100" fill="#2b6f92"/>';
+  out += '<rect x="0" y="0" width="100" height="' + ufer + '" fill="#e6d6a8"/>';
+  out += '<rect x="0" y="' + ufer + '" width="100" height="2.2" fill="#dcc796"/>';
+  for (var i = 1; i < 9; i++) {
+    var y = ufer + ((100 - ufer) * i) / 9;
+    out += '<path d="M0 ' + y + 'H100" stroke="#ffffff" stroke-width=".4" opacity=".15"/>';
+  }
+  out += seeInsel(28, 58, 11, 5) + seeInsel(64, 74, 8, 4) + seeInsel(80, 44, 6, 3.2);
+  return out;
+}
+function seeInsel(cx, cy, rx, ry) {
+  return (
+    '<ellipse cx="' + cx + '" cy="' + (cy + ry * 0.5) + '" rx="' + (rx + 1) + '" ry="' + (ry + 1) +
+    '" fill="#1f5875" opacity=".4"/>' +
+    '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="#e6d6a8"/>' +
+    '<ellipse cx="' + cx + '" cy="' + (cy - ry * 0.3) + '" rx="' + (rx * 0.7) + '" ry="' + (ry * 0.7) +
+    '" fill="#4f9a58"/>'
+  );
+}
+
+// Objekte auf dem See-Raster (in 0..100/0..80 gezeichnet, wie die Plätze).
+function artSeeObj(art) {
+  if (art === 'haus') {
+    return (
+      '<rect x="8" y="70" width="84" height="8" rx="2" fill="#caa46a"/>' +
+      '<rect x="20" y="34" width="60" height="34" rx="2" fill="#c58a52"/>' +
+      '<path d="M14 36 50 10 86 36z" fill="#9c4f36"/>' +
+      '<rect x="40" y="46" width="20" height="22" rx="1" fill="#6f4326"/>' +
+      '<rect x="26" y="42" width="12" height="12" rx="1" fill="#7fc2dd"/>' +
+      '<rect x="62" y="42" width="12" height="12" rx="1" fill="#7fc2dd"/>'
+    );
+  }
+  if (art === 'dock') {
+    return (
+      '<rect x="6" y="30" width="60" height="10" rx="2" fill="#8a5a2b"/>' +
+      '<rect x="14" y="40" width="5" height="26" fill="#6f4720"/>' +
+      '<rect x="50" y="40" width="5" height="26" fill="#6f4720"/>' +
+      '<path d="M60 44h30l-6 12H66z" fill="#c0692e"/>' +
+      '<rect x="74" y="18" width="2" height="26" fill="#7a5230"/>' +
+      '<path d="M76 20l14 8-14 5z" fill="#f2f2f2"/>'
+    );
+  }
+  // Angelstelle: heller Wasserkreis mit Ringen + Schwimmer.
+  return (
+    '<ellipse cx="50" cy="44" rx="34" ry="24" fill="#7fc2dd" opacity=".55"/>' +
+    '<ellipse cx="50" cy="44" rx="22" ry="15" fill="none" stroke="#ffffff" stroke-width="2" opacity=".5"/>' +
+    '<ellipse cx="50" cy="44" rx="11" ry="7" fill="none" stroke="#ffffff" stroke-width="2" opacity=".6"/>' +
+    '<circle cx="50" cy="44" r="5" fill="#e5473b"/>' +
+    '<rect x="48.5" y="34" width="3" height="10" fill="#ffffff"/>'
+  );
 }
 
 function artTruck(unterwegs, voll) {
