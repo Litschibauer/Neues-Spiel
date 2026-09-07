@@ -83,6 +83,13 @@ export type PackPlotCommand = CommandBase & { type: 'PACK_PLOT'; plot: number };
 // Angelsee: Angel auswerfen — verbraucht einen Köder, bringt einen Fisch.
 export type CastLineCommand = CommandBase & { type: 'CAST_LINE' };
 
+// Angelsee: das kaputte Boot am Hof reparieren (Gold + Material). Danach ist
+// der See offen.
+export type RepairBoatCommand = CommandBase & { type: 'REPAIR_BOAT' };
+
+// Angelsee: Köder im Strandhaus herstellen (aus Weizen).
+export type CraftBaitCommand = CommandBase & { type: 'CRAFT_BAIT' };
+
 export type Command =
   | StartCommand
   | CollectCommand
@@ -111,6 +118,8 @@ export type Command =
   | RemovePlotCommand
   | PackPlotCommand
   | CastLineCommand
+  | RepairBoatCommand
+  | CraftBaitCommand
   | ClearObstacleCommand;
 
 export type SimErrorCode =
@@ -184,7 +193,10 @@ export type SimErrorCode =
   | 'CANT_REMOVE'
   | 'NOT_PACKABLE'
   | 'NO_FISHING'
-  | 'NO_BAIT';
+  | 'NO_BAIT'
+  | 'BOAT_DONE'
+  | 'NO_REPAIR'
+  | 'NO_CRAFT';
 
 export class SimError extends Error {
   code: SimErrorCode;

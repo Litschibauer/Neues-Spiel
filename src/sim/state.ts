@@ -107,6 +107,8 @@ export type State = {
   // Angelsee: Anzahl bisher gefangener Fische. Dient als Fortschritt UND als
   // Zähler für den deterministischen Fang.
   angelFang: number;
+  // Angelsee: Ist das Boot am Hof repariert? Erst dann ist der See offen.
+  bootRepariert: boolean;
 };
 
 export function count(s: State, item: number): number {
@@ -191,6 +193,7 @@ export function initialState(rules: Ruleset): State {
     claimed: [],
     eingepackt: [],
     angelFang: 0,
+    bootRepariert: false,
   };
 }
 
@@ -250,6 +253,7 @@ export function normalizeState(s: State): State {
     claimed: s.claimed ?? [],
     eingepackt: s.eingepackt ?? [],
     angelFang: s.angelFang ?? 0,
+    bootRepariert: s.bootRepariert ?? false,
   };
 }
 
@@ -277,6 +281,7 @@ export function cloneState(s: State): State {
     claimed: s.claimed ?? [],
     eingepackt: s.eingepackt ?? [],
     angelFang: s.angelFang ?? 0,
+    bootRepariert: s.bootRepariert ?? false,
   };
 }
 

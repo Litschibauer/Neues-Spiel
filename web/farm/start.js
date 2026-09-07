@@ -104,13 +104,9 @@ function show(next) {
     if (e.target === $(name + '-bg')) show(zurueck);
   });
 });
-$('see-auf').addEventListener('click', function () { oeffneSee(); });
-$('boot').addEventListener('click', function () { oeffneSee(); });
-$('see-hud-zurueck').addEventListener('click', function () { wechselZone(false); });
-$('see-hud-koeder').addEventListener('click', function () {
-  var a = NS.farmView(client.preview(), rules, navigator.onLine).angeln;
-  if (a) act('5 Köder gekauft', client.buyNpc(a.baitItem, 5), 'kauf');
-});
+// Zum See geht es nur noch über das Boot am Hof. Der Rückweg ist der Steg im
+// See selbst („Zum Hof"), Köder stellt man im Strandhaus her — keine HUD-Knöpfe.
+$('boot').addEventListener('click', function () { bootTap(); });
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('brett').addEventListener('click', function () { show('brett'); });

@@ -32,7 +32,8 @@ function artScene() {
 }
 
 // Der Wasser-Hintergrund der Angel-Dimension: Sandstrand-Streifen oben, Wasser
-// darunter, ein paar dekorative Inseln.
+// darunter. Die Inseln sind jetzt die Angelstellen selbst (artSeeObj 'spot'),
+// darum keine losen Deko-Inseln mehr — jede Insel lässt sich befischen.
 function artSeeScene() {
   var ufer = projiziere(0, 0).y;
   var out = '<rect x="0" y="0" width="100" height="100" fill="#2b6f92"/>';
@@ -42,17 +43,7 @@ function artSeeScene() {
     var y = ufer + ((100 - ufer) * i) / 9;
     out += '<path d="M0 ' + y + 'H100" stroke="#ffffff" stroke-width=".4" opacity=".15"/>';
   }
-  out += seeInsel(28, 58, 11, 5) + seeInsel(64, 74, 8, 4) + seeInsel(80, 44, 6, 3.2);
   return out;
-}
-function seeInsel(cx, cy, rx, ry) {
-  return (
-    '<ellipse cx="' + cx + '" cy="' + (cy + ry * 0.5) + '" rx="' + (rx + 1) + '" ry="' + (ry + 1) +
-    '" fill="#1f5875" opacity=".4"/>' +
-    '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="#e6d6a8"/>' +
-    '<ellipse cx="' + cx + '" cy="' + (cy - ry * 0.3) + '" rx="' + (rx * 0.7) + '" ry="' + (ry * 0.7) +
-    '" fill="#4f9a58"/>'
-  );
 }
 
 // Objekte auf dem See-Raster (in 0..100/0..80 gezeichnet, wie die Plätze).
@@ -77,14 +68,49 @@ function artSeeObj(art) {
       '<path d="M76 20l14 8-14 5z" fill="#f2f2f2"/>'
     );
   }
-  // Angelstelle: heller Wasserkreis mit Ringen + Schwimmer.
+  // Angelstelle = kleine Insel mit Angelloch. Sand + Gras + dunkles Wasserloch
+  // mit Schwimmer und Ringen. So sitzt jeder Schwimmer sichtbar an einer Insel.
   return (
-    '<ellipse cx="50" cy="44" rx="34" ry="24" fill="#7fc2dd" opacity=".55"/>' +
-    '<ellipse cx="50" cy="44" rx="22" ry="15" fill="none" stroke="#ffffff" stroke-width="2" opacity=".5"/>' +
-    '<ellipse cx="50" cy="44" rx="11" ry="7" fill="none" stroke="#ffffff" stroke-width="2" opacity=".6"/>' +
-    '<circle cx="50" cy="44" r="5" fill="#e5473b"/>' +
-    '<rect x="48.5" y="34" width="3" height="10" fill="#ffffff"/>'
+    '<ellipse cx="50" cy="52" rx="42" ry="24" fill="#1f5875" opacity=".35"/>' +
+    '<ellipse cx="50" cy="46" rx="40" ry="24" fill="#e6d6a8"/>' +
+    '<ellipse cx="50" cy="42" rx="30" ry="17" fill="#4f9a58"/>' +
+    '<ellipse cx="62" cy="46" rx="13" ry="9" fill="#2b6f92"/>' +
+    '<ellipse cx="62" cy="46" rx="9" ry="6" fill="none" stroke="#ffffff" stroke-width="1.6" opacity=".5"/>' +
+    '<ellipse cx="62" cy="46" rx="4.5" ry="3" fill="none" stroke="#ffffff" stroke-width="1.6" opacity=".6"/>' +
+    '<circle cx="62" cy="46" r="3.4" fill="#e5473b"/>' +
+    '<rect x="60.7" y="39" width="2.6" height="7" fill="#ffffff"/>'
   );
+}
+
+// Das Boot am Hof — der Zugang zur Angel-Dimension. Steht immer da: kaputt (grau,
+// Loch im Rumpf, kein Segel) bis man es repariert, danach heil mit Segel auf
+// einem kleinen Wassersteg.
+function artHofBoot(repariert) {
+  var wasser = repariert ? '#3f86ab' : '#5a6b74';
+  var out =
+    '<ellipse cx="50" cy="50" rx="46" ry="15" fill="' + wasser + '"/>' +
+    '<ellipse cx="50" cy="50" rx="46" ry="15" fill="none" stroke="#ffffff" stroke-width=".8" opacity=".18"/>' +
+    // Steg
+    '<rect x="4" y="20" width="30" height="7" rx="1.5" fill="#8a5a2b"/>' +
+    '<rect x="10" y="27" width="4" height="20" fill="#6f4720"/>' +
+    '<rect x="26" y="27" width="4" height="20" fill="#6f4720"/>';
+  if (repariert) {
+    out +=
+      '<path d="M30 40h46l-8 16H38z" fill="#c0692e"/>' +
+      '<path d="M30 40h46l-2 4H32z" fill="#a9551f"/>' +
+      '<rect x="51" y="10" width="2.5" height="30" fill="#7a5230"/>' +
+      '<path d="M54 12l18 9-18 6z" fill="#f2f2f2"/>';
+  } else {
+    // Kaputt: schief liegender, grauer Rumpf mit Loch und losem Brett.
+    out +=
+      '<path d="M30 42h46l-8 15H38z" fill="#8f7a62"/>' +
+      '<path d="M52 44l7 12h-11z" fill="' + wasser + '"/>' + // Loch im Rumpf
+      '<path d="M34 46h16" stroke="#5f4d38" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<rect x="60" y="34" width="20" height="3.4" rx="1" fill="#8f7a62" transform="rotate(-18 70 36)"/>' +
+      '<circle cx="24" cy="16" r="9" fill="#e8a33d"/>' +
+      '<path d="M24 11v6M24 20v1.6" stroke="#5b3d12" stroke-width="2.4" stroke-linecap="round"/>';
+  }
+  return out;
 }
 
 function artTruck(unterwegs, voll) {

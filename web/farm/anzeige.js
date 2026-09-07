@@ -11,7 +11,7 @@ function render() {
   if (typeof seeAktiv !== 'undefined' && seeAktiv) {
     renderPlots(v);
     seeHudMalen(v);
-    seeKnopf(v);
+    renderSheet(v); // Strandhaus-Menü (Köder) frisch halten
     return;
   }
 
@@ -39,7 +39,6 @@ function render() {
   renderZiele(v);
   renderSheet(v);
   bonusKnopf();
-  seeKnopf(v);
   $('see-hud').hidden = true;
 }
 
@@ -245,7 +244,7 @@ var MOEBEL_ORTE = {
   stand: [12, -2.5, 3, 2],
   wagen: [16, -2.5, 4, 2],
   kiste: [21, -2.5, 2, 2],
-  boot: [1, 10, 6, 3],
+  boot: [0, 10, 6, 3],
 };
 
 function setzeMoebel(id) {
@@ -268,16 +267,20 @@ function renderMoebel(v) {
   // Aus dem See zurück: Hof-Möbel wieder zeigen.
   ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(function (id) { $(id).hidden = false; });
 
-  // Boot zum Angelsee (nur auf dem Hof, wenn der See offen ist).
+  // Boot zum Angelsee — steht IMMER am Hof (auch kaputt). Repariert man es,
+  // fährt es wieder und öffnet den See.
   var boot = $('boot');
   if (boot) {
-    var zeig = v.angeln && v.angeln.available && hatRaster();
-    boot.hidden = !zeig;
-    if (zeig) {
+    var zeigBoot = v.angeln && hatRaster();
+    boot.hidden = !zeigBoot;
+    if (zeigBoot) {
+      var heil = !!(v.angeln.boot && v.angeln.boot.repariert);
+      boot.classList.toggle('kaputt', !heil);
       boot.innerHTML =
         '<svg class="art" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">' +
-        artSeeObj('dock') + '</svg>';
-      boot.setAttribute('aria-label', 'Zum Angelsee');
+        artHofBoot(heil) + '</svg>' +
+        (heil ? '' : '<span class="badge">🔧</span>');
+      boot.setAttribute('aria-label', heil ? 'Zum Angelsee' : 'Kaputtes Boot — reparieren');
       setzeMoebel('boot');
     }
   }
@@ -1143,6 +1146,9 @@ function renderHofinfo(v) {
 var CODES = {
   NO_BAIT: 'Kein Köder mehr',
   NO_FISHING: 'Der Angelsee ist noch nicht offen',
+  BOAT_DONE: 'Das Boot ist schon repariert',
+  NO_REPAIR: 'Hier gibt es nichts zu reparieren',
+  NO_CRAFT: 'Das lässt sich hier nicht herstellen',
   CELL_TAKEN: 'Da steht schon etwas',
   OFF_GRID: 'Da ist kein Platz',
   NOT_PLACED: 'Erst hinstellen',

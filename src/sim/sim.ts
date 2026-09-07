@@ -333,9 +333,50 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       return next;
     }
 
+    case 'REPAIR_BOAT': {
+      const f = rules.fishing;
+      if (!f || !f.repair) throw new SimError('NO_REPAIR');
+      if (s.bootRepariert) throw new SimError('BOAT_DONE');
+      if (levelOf(rules, s.xp) < f.minLevel) throw new SimError('PLAYER_LEVEL_TOO_LOW');
+      for (const price of f.repair) {
+        if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
+      }
+      const next = cloneState(s);
+      next.items = addItems(
+        s.items,
+        f.repair.map((c): [number, number] => [c.item, -c.amount]),
+      );
+      next.bootRepariert = true;
+      return next;
+    }
+
+    case 'CRAFT_BAIT': {
+      const f = rules.fishing;
+      if (!f || !f.craft) throw new SimError('NO_CRAFT');
+      // Köder stellt man am See her — also erst, wenn das Boot fährt.
+      if (f.repair && !s.bootRepariert) throw new SimError('NO_FISHING');
+      for (const price of f.craft.input) {
+        if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
+      }
+      if (rules.items[f.bait]?.storable && spaceLeft(s, rules) < f.craft.output) {
+        throw new SimError('SILO_FULL');
+      }
+      const next = cloneState(s);
+      next.items = addItems(s.items, [
+        ...f.craft.input.map((c): [number, number] => [c.item, -c.amount]),
+        [f.bait, f.craft.output],
+      ]);
+      return next;
+    }
+
     case 'CAST_LINE': {
       const f = rules.fishing;
-      if (!f || levelOf(rules, s.xp) < f.minLevel) throw new SimError('NO_FISHING');
+      if (!f) throw new SimError('NO_FISHING');
+      // Neue Regel: Der See ist offen, sobald das Boot repariert ist. Ohne
+      // repair-Konfiguration gilt die alte Stufen-Schranke (Abwärtskompatibilität).
+      if (f.repair ? !s.bootRepariert : levelOf(rules, s.xp) < f.minLevel) {
+        throw new SimError('NO_FISHING');
+      }
       if (count(s, f.bait) < 1) throw new SimError('NO_BAIT');
 
       // Deterministischer Fang: reiner Integer-Hash aus Tick + Fang-Zähler,

@@ -8,23 +8,64 @@ import { reachableItems } from '../src/server/requests.ts';
 const V = getRuleset(LATEST_RULESET_VERSION);
 const F = V.fishing!;
 const cast = (tick: number, seq = 1) => ({ seq, tick, type: 'CAST_LINE' as const });
+const repair = (tick = 0, seq = 1) => ({ seq, tick, type: 'REPAIR_BOAT' as const });
+const craft = (tick = 0, seq = 1) => ({ seq, tick, type: 'CRAFT_BAIT' as const });
 
-function angelbereit() {
-  // Genug XP (über minLevel) und ein paar Köder im Lager.
-  const base = initialState(V);
+function mitItems(base = initialState(V), paare: [number, number][] = []) {
   const items = base.items.slice();
-  items[F.bait] = 5;
-  return { ...base, xp: 100000, items };
+  for (const [i, n] of paare) items[i] = n;
+  return { ...base, items };
 }
 
-test('ohne freigeschalteten See (zu niedrige Stufe) geht Angeln nicht', () => {
-  const s = { ...initialState(V), items: initialState(V).items.map((_, i) => (i === F.bait ? 5 : 0)) };
+function angelbereit() {
+  // Boot repariert, genug XP und ein paar Köder im Lager.
+  const base = mitItems(initialState(V), [[F.bait, 5]]);
+  return { ...base, xp: 100000, bootRepariert: true };
+}
+
+test('solange das Boot kaputt ist, ist der See zu', () => {
+  const s = mitItems(initialState(V), [[F.bait, 5]]);
   assert.throws(() => simulate(s, cast(0), V), { code: 'NO_FISHING' });
 });
 
-test('ohne Köder beißt nichts', () => {
-  const s = { ...initialState(V), xp: 100000 };
+test('ohne Köder beißt nichts (See offen)', () => {
+  const s = { ...initialState(V), xp: 100000, bootRepariert: true };
   assert.throws(() => simulate(s, cast(0), V), { code: 'NO_BAIT' });
+});
+
+test('Boot reparieren braucht die Stufe und zahlt Gold + Material', () => {
+  // Zu niedrige Stufe → geht nicht.
+  const reich = mitItems({ ...initialState(V), xp: 0 }, F.repair!.map((c) => [c.item, c.amount] as [number, number]));
+  assert.throws(() => simulate(reich, repair(), V), { code: 'PLAYER_LEVEL_TOO_LOW' });
+
+  // Stufe da, aber kein Material → geht nicht.
+  const pleite = { ...initialState(V), xp: 100000 };
+  assert.throws(() => simulate(pleite, repair(), V), { code: 'CANT_AFFORD' });
+
+  // Stufe + Material → Boot fährt, Kosten abgezogen.
+  const bereit = mitItems({ ...initialState(V), xp: 100000 }, F.repair!.map((c) => [c.item, c.amount] as [number, number]));
+  const nach = simulate(bereit, repair(), V);
+  assert.equal(nach.bootRepariert, true, 'Boot repariert');
+  for (const c of F.repair!) assert.equal(nach.items[c.item], 0, 'Material weg');
+});
+
+test('ein repariertes Boot bleibt repariert — kein zweites Mal zahlen', () => {
+  const bereit = mitItems({ ...initialState(V), xp: 100000, bootRepariert: true }, F.repair!.map((c) => [c.item, c.amount] as [number, number]));
+  assert.throws(() => simulate(bereit, repair(), V), { code: 'BOAT_DONE' });
+});
+
+test('Köder stellt man am See her — Weizen rein, Köder raus', () => {
+  const input = F.craft!.input.map((c) => [c.item, c.amount] as [number, number]);
+  const s = mitItems({ ...initialState(V), xp: 100000, bootRepariert: true }, input);
+  const nach = simulate(s, craft(), V);
+  assert.equal(nach.items[F.bait], F.craft!.output, 'Köder hergestellt');
+  for (const c of F.craft!.input) assert.equal(nach.items[c.item], 0, 'Zutat verbraucht');
+});
+
+test('Köder herstellen geht nur bei offenem See', () => {
+  const input = F.craft!.input.map((c) => [c.item, c.amount] as [number, number]);
+  const s = mitItems({ ...initialState(V), xp: 100000 }, input); // Boot noch kaputt
+  assert.throws(() => simulate(s, craft(), V), { code: 'NO_FISHING' });
 });
 
 test('Auswerfen verbraucht einen Köder und bringt genau einen Fisch', () => {
@@ -59,8 +100,8 @@ test('über viele Würfe kommen mehrere Fischarten vor (Verteilung)', () => {
 });
 
 test('Fische sind auftragsfähig, sobald der See offen ist', () => {
-  const zu = reachableItems({ ...initialState(V), xp: 0 }, V);
-  const auf = reachableItems({ ...initialState(V), xp: 100000 }, V);
-  assert.ok(!zu.has(F.table[0]!.item), 'vor Freischaltung kein Fisch-Auftrag');
-  assert.ok(auf.has(F.table[0]!.item), 'nach Freischaltung schon');
+  const zu = reachableItems({ ...initialState(V), xp: 100000 }, V); // Stufe da, Boot kaputt
+  const auf = reachableItems({ ...initialState(V), xp: 100000, bootRepariert: true }, V);
+  assert.ok(!zu.has(F.table[0]!.item), 'vor der Reparatur kein Fisch-Auftrag');
+  assert.ok(auf.has(F.table[0]!.item), 'nach der Reparatur schon');
 });

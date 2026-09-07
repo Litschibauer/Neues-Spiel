@@ -204,15 +204,24 @@ export type Ruleset = {
   // muss erst verkaufen/verbrauchen.
   siloUeberlauf?: boolean;
   achievements?: readonly AchievementDef[];
-  // Eigene Dimension „Angelsee": ab minLevel erreichbar, Auswerfen verbraucht
-  // einen Köder (bait) und bringt einen Fisch aus der gewichteten Tabelle. Der
-  // Fang ist deterministisch aus dem Zustand abgeleitet (siehe sim.ts), also
-  // cheat-sicher und exakt reproduzierbar.
+  // Eigene Dimension „Angelsee": Das Boot auf dem Hof steht kaputt da; ab
+  // minLevel lässt es sich mit `repair` (Gold + Material) wieder flottmachen.
+  // Erst danach ist der See offen. Köder werden nicht gekauft, sondern im
+  // Strandhaus aus `craft.input` hergestellt. Auswerfen verbraucht einen Köder
+  // (bait) und bringt einen Fisch aus der gewichteten Tabelle. Der Fang ist
+  // deterministisch aus dem Zustand abgeleitet (siehe sim.ts), also cheat-sicher
+  // und exakt reproduzierbar.
   fishing?: {
     minLevel: number;
     bait: number;
     xp: number;
     table: readonly { item: number; weight: number }[];
+    // Boot reparieren: Kosten (Gold + Material). Fehlt das Feld, gilt die alte
+    // Regel (nur ab minLevel, ohne Reparatur).
+    repair?: readonly ItemStack[];
+    // Köder herstellen: Eingabe → so viele Köder. Fehlt das Feld, bleibt der
+    // alte Kauf-Weg (npcBuyPrice).
+    craft?: { input: readonly ItemStack[]; output: number };
   };
 };
 
@@ -1655,7 +1664,9 @@ const V33: Ruleset = {
   version: 33,
   items: [
     ...V32.items,
-    { id: 'bait', storable: true, npcPrice: 0, npcBuyPrice: 8 },
+    // Köder wird nicht mehr gekauft (npcBuyPrice 0), sondern im Strandhaus aus
+    // Weizen hergestellt (fishing.craft).
+    { id: 'bait', storable: true, npcPrice: 0, npcBuyPrice: 0 },
     { id: 'fish-perch', storable: true, npcPrice: 45, npcBuyPrice: 0 },
     { id: 'fish-trout', storable: true, npcPrice: 80, npcBuyPrice: 0 },
     { id: 'fish-carp', storable: true, npcPrice: 130, npcBuyPrice: 0 },
@@ -1671,6 +1682,10 @@ const V33: Ruleset = {
       { item: FISH_CARP, weight: 16 },
       { item: FISH_PIKE, weight: 6 },
     ],
+    // Das Boot am Hof steht kaputt da; so macht man es wieder flott.
+    repair: [want(GOLD, 250), want(PLANK, 5), want(NAIL, 5)],
+    // Köder im Strandhaus herstellen: 2 Weizen → 5 Köder.
+    craft: { input: [want(WHEAT, 2)], output: 5 },
   },
   requestTemplates: [
     ...V32.requestTemplates,

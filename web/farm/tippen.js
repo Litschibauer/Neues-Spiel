@@ -318,6 +318,8 @@ function renderSheet(v) {
     else closePicker();
     return;
   }
+  if (sheet.mode === 'boot') { zeichneBootSheet(v); return; }
+  if (sheet.mode === 'koeder') { zeichneKoederSheet(v); return; }
   if (sheet.mode === null || sheet.plot === null) return;
   var p = v.plots[sheet.plot];
   if (!p) return;

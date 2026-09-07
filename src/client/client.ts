@@ -145,6 +145,14 @@ export class Client {
     return this.apply({ type: 'CAST_LINE' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  repairBoat(): ActionResult {
+    return this.apply({ type: 'REPAIR_BOAT' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  craftBait(): ActionResult {
+    return this.apply({ type: 'CRAFT_BAIT' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   buyNpc(item: number, amount: number): ActionResult {
     return this.apply({ type: 'BUY_NPC', item, amount } as Omit<Command, 'seq' | 'tick'>);
   }

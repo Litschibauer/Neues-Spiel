@@ -11,9 +11,11 @@ export function reachableItems(state: State, rules: Ruleset): Set<number> {
   });
 
   // Fische sind erreichbar, sobald der Angelsee offen ist — so tauchen Fisch-
-  // Aufträge auf, auch bevor man den ersten selbst gefangen hat.
-  if (rules.fishing && levelOf(rules, state.xp) >= rules.fishing.minLevel) {
-    for (const t of rules.fishing.table) reachable.add(t.item);
+  // Aufträge auf, auch bevor man den ersten selbst gefangen hat. Offen heißt:
+  // Boot repariert (bzw. ohne Reparatur-Konfiguration die alte Stufen-Schranke).
+  const f = rules.fishing;
+  if (f && (f.repair ? state.bootRepariert : levelOf(rules, state.xp) >= f.minLevel)) {
+    for (const t of f.table) reachable.add(t.item);
   }
 
   const available: number[] = [];

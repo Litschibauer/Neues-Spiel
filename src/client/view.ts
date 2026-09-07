@@ -288,7 +288,7 @@ export type FarmView = {
 
 // Angelsee (eigene Dimension). null, wenn das Regelwerk keinen See kennt.
 export type AngelView = {
-  available: boolean;
+  available: boolean; // See offen? (Boot repariert)
   minLevel: number;
   bait: number;
   baitItem: number;
@@ -296,6 +296,19 @@ export type AngelView = {
   xp: number;
   gefangen: number;
   table: readonly { item: number; chance: number }[];
+  // Boot am Hof: reparieren (kaputt → fährt wieder).
+  boot: {
+    repariert: boolean;
+    reparierbar: boolean; // Stufe erreicht?
+    kosten: readonly Stack[];
+    bezahlbar: boolean;
+  };
+  // Köder im Strandhaus herstellen.
+  koeder: {
+    input: readonly Stack[];
+    output: number;
+    bezahlbar: boolean;
+  } | null;
 } | null;
 
 export type BuildView = {
@@ -716,8 +729,12 @@ function angelView(state: State, rules: Ruleset): AngelView {
   const f = rules.fishing;
   if (!f) return null;
   const total = f.table.reduce((n, t) => n + t.weight, 0);
+  const stufeReicht = levelOf(rules, state.xp) >= f.minLevel;
+  const repariert = f.repair ? !!state.bootRepariert : stufeReicht;
+  const reparaturKosten = (f.repair ?? []).map((c) => ({ item: c.item, amount: c.amount }));
   return {
-    available: levelOf(rules, state.xp) >= f.minLevel,
+    // Der See ist offen, sobald das Boot fährt (bzw. ohne Reparatur ab Stufe).
+    available: repariert,
     minLevel: f.minLevel,
     bait: count(state, f.bait),
     baitItem: f.bait,
@@ -725,6 +742,19 @@ function angelView(state: State, rules: Ruleset): AngelView {
     xp: f.xp,
     gefangen: state.angelFang ?? 0,
     table: f.table.map((t) => ({ item: t.item, chance: Math.round((t.weight * 100) / total) })),
+    boot: {
+      repariert,
+      reparierbar: stufeReicht,
+      kosten: reparaturKosten,
+      bezahlbar: (f.repair ?? []).every((c) => count(state, c.item) >= c.amount),
+    },
+    koeder: f.craft
+      ? {
+          input: f.craft.input.map((c) => ({ item: c.item, amount: c.amount })),
+          output: f.craft.output,
+          bezahlbar: f.craft.input.every((c) => count(state, c.item) >= c.amount),
+        }
+      : null,
   };
 }
 

@@ -950,12 +950,6 @@
   }
   .see-hud-info { font-size: .78rem; font-weight: 600; white-space: nowrap; }
   .see-hud-info .ic { width: 1.1em; height: 1.1em; vertical-align: -.2em; }
-  .see-hud button {
-    border: 0; border-radius: 999px; padding: .38rem .7rem; font-size: .74rem;
-    font-weight: 700; cursor: pointer; background: var(--accent); color: var(--on-accent);
-  }
-  .see-hud button:disabled { background: var(--sunk); color: var(--muted); }
-  #see-hud-zurueck { background: #3b8fb3; color: #fff; }
   /* Angelstelle pulsiert leicht, damit man sie als antippbar erkennt. */
   .see-spot .art { animation: seepuls 2.4s ease-in-out infinite; transform-origin: center; }
   @keyframes seepuls { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }

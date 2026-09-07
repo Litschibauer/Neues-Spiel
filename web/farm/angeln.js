@@ -1,24 +1,66 @@
 // Der Angelsee — eine eigene Dimension mit EIGENEM Raster. Über das Boot auf dem
-// Hof reist man hinüber (wechselZone), dort gibt es Wasser, Inseln, ein
-// Strandhaus und Angelstellen zum Antippen. Das Fangen selbst ist der
-// deterministische Sim-Befehl CAST_LINE — hier nur Darstellung & Bedienung.
+// Hof reist man hinüber (wechselZone). Das Boot steht immer da, anfangs kaputt:
+// Erst reparieren (Gold + Material), dann fährt es. Im See gibt es Wasser,
+// Insel-Angelstellen und ein Strandhaus, in dem man Köder herstellt. Das Fangen
+// selbst ist der deterministische Sim-Befehl CAST_LINE — hier nur Darstellung.
 
-// Boot-Knopf im HUD nur zeigen, wenn der See offen ist (und man auf dem Hof ist).
-function seeKnopf(v) {
-  var knopf = $('see-auf');
-  if (!knopf) return;
-  var imSee = typeof seeAktiv !== 'undefined' && seeAktiv;
-  knopf.hidden = imSee || !(v.angeln && v.angeln.available);
+// Tippen aufs Hof-Boot: heil → rüber zum See, kaputt → Reparatur-Menü.
+function bootTap() {
+  if (!isActive) return;
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  var a = v.angeln;
+  if (!a) { toast('Hier gibt es keinen See', true); return; }
+  if (a.boot.repariert) { wechselZone(true); return; }
+  oeffneBootReparatur();
 }
 
-function oeffneSee() {
+function oeffneBootReparatur() {
+  sheet = { plot: null, mode: 'boot', slot: 0 };
+  pickerPlot = -1;
   var v = NS.farmView(client.preview(), rules, navigator.onLine);
-  if (!v.angeln) { toast('Hier gibt es keinen See', true); return; }
-  if (!v.angeln.available) { toast('Der Angelsee öffnet ab Stufe ' + v.angeln.minLevel, true); return; }
-  wechselZone(true);
+  zeichneBootSheet(v);
+  $('pick-bg').hidden = false;
+}
+
+function zeichneBootSheet(v) {
+  var a = v.angeln;
+  if (!a) { closePicker(); return; }
+  $('pick-title').textContent = 'Kaputtes Boot';
+
+  var box = $('pick-list');
+  box.textContent = '';
+
+  var text = document.createElement('p');
+  text.className = 'empty';
+  text.innerHTML = a.boot.reparierbar
+    ? 'Das alte Boot ist morsch und leck. Mach es mit Gold und Material wieder flott — dann bringt es dich zum Angelsee. 🎣'
+    : 'Das alte Boot ist morsch und leck. Ab Stufe ' + a.minLevel +
+      ' kannst du es reparieren und zum Angelsee fahren.';
+  box.appendChild(text);
+
+  var knopf = document.createElement('button');
+  knopf.type = 'button';
+  knopf.className = 'abfahrt';
+  knopf.disabled = !a.boot.reparierbar || !a.boot.bezahlbar;
+  knopf.innerHTML = a.boot.reparierbar
+    ? 'Reparieren · ' + stacksMitBild(a.boot.kosten) + (a.boot.bezahlbar ? '' : ' · fehlt')
+    : 'ab Stufe ' + a.minLevel;
+  knopf.addEventListener('click', function () {
+    var res = client.repairBoat();
+    if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+    toast('Das Boot fährt wieder! 🎣');
+    klang('stufe');
+    save();
+    scheduleSync();
+    closePicker();
+    wechselZone(true); // gleich rüber zum See
+  });
+  box.appendChild(knopf);
 }
 
 // Das See-Raster mit seinen Objekten. Wird bei jedem render() im See gemalt.
+// Die Angelstellen sind kleine Inseln (siehe artSeeObj 'spot'), am Strand oben
+// links das Strandhaus (Köder herstellen), rechts der Steg zurück zum Hof.
 function renderSeeWelt(v) {
   ['brett', 'lagerhaus', 'stand', 'nachbarn', 'wagen', 'kiste', 'boot'].forEach(function (id) {
     var e = $(id); if (e) e.hidden = true;
@@ -38,12 +80,13 @@ function renderSeeWelt(v) {
   box.textContent = '';
 
   var objekte = [
-    { art: 'haus', gx: 1, gy: 0, w: 6, h: 3, label: 'Strandhaus' },
-    { art: 'dock', gx: 1, gy: 9, w: 6, h: 3, tap: 'zurueck', label: 'Zum Hof' },
-    { art: 'spot', gx: 10, gy: 4, w: 2, h: 2, tap: 'angeln' },
-    { art: 'spot', gx: 15, gy: 8, w: 2, h: 2, tap: 'angeln' },
-    { art: 'spot', gx: 19, gy: 3, w: 2, h: 2, tap: 'angeln' },
-    { art: 'spot', gx: 20, gy: 9, w: 2, h: 2, tap: 'angeln' },
+    { art: 'haus', gx: 1, gy: 0, w: 5, h: 3, tap: 'haus', label: 'Strandhaus' },
+    { art: 'dock', gx: 18, gy: 0, w: 5, h: 3, tap: 'zurueck', label: 'Zum Hof' },
+    { art: 'spot', gx: 3, gy: 5, w: 4, h: 3, tap: 'angeln' },
+    { art: 'spot', gx: 15, gy: 4, w: 4, h: 3, tap: 'angeln' },
+    { art: 'spot', gx: 9, gy: 8, w: 4, h: 3, tap: 'angeln' },
+    { art: 'spot', gx: 19, gy: 9, w: 4, h: 3, tap: 'angeln' },
+    { art: 'spot', gx: 4, gy: 10, w: 4, h: 3, tap: 'angeln' },
   ];
 
   objekte.forEach(function (o) {
@@ -76,21 +119,78 @@ function renderSeeWelt(v) {
 function seeObjTap(o, tile) {
   if (o.tap === 'zurueck') { wechselZone(false); return; }
   if (o.tap === 'angeln') { angelWurf(tile); return; }
-  toast('Das Strandhaus des Anglers 🎣');
+  if (o.tap === 'haus') { oeffneKoeder(); return; }
 }
 
-// Untere Leiste im See: Köder-Vorrat, Fänge, Köder kaufen, zurück zum Hof.
+// Untere Leiste im See: nur noch Anzeige (Köder-Vorrat, Fänge). Zurück geht es
+// über den Steg, Köder gibt es im Strandhaus — keine HUD-Knöpfe mehr.
 function seeHudMalen(v) {
   var hud = $('see-hud');
   if (!hud) return;
   hud.hidden = false;
   var a = v.angeln;
   $('see-hud-info').innerHTML =
-    iconTag('bait') + ' <b>' + (a ? a.bait : 0) + '</b> · 🎣 ' + (a ? a.gefangen : 0);
-  var kb = $('see-hud-koeder');
-  var kosten = a ? a.baitPrice * 5 : 0;
-  kb.disabled = !a || v.currency.amount < kosten || !isActive;
-  kb.textContent = '5 Köder · ' + kosten + ' Gold';
+    iconTag('bait') + ' <b>' + (a ? a.bait : 0) + '</b> Köder · 🎣 ' + (a ? a.gefangen : 0) + ' Fänge';
+}
+
+// Strandhaus: Köder aus Weizen herstellen; zeigt auch, was im See beißt.
+function oeffneKoeder() {
+  sheet = { plot: null, mode: 'koeder', slot: 0 };
+  pickerPlot = -1;
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  zeichneKoederSheet(v);
+  $('pick-bg').hidden = false;
+}
+
+function zeichneKoederSheet(v) {
+  var a = v.angeln;
+  if (!a) { closePicker(); return; }
+  $('pick-title').textContent = 'Strandhaus — Köder herstellen';
+
+  var box = $('pick-list');
+  box.textContent = '';
+
+  var stand = document.createElement('p');
+  stand.className = 'empty';
+  stand.innerHTML = 'Im Lager: ' + iconTag('bait') + ' <b>' + a.bait + '</b> Köder';
+  box.appendChild(stand);
+
+  if (a.koeder) {
+    var karte = document.createElement('button');
+    karte.type = 'button';
+    karte.className = 'card opt';
+    karte.disabled = !a.koeder.bezahlbar;
+    karte.innerHTML =
+      '<div class="body"><div class="top">' + iconTag('bait') + a.koeder.output + ' Köder herstellen</div>' +
+      '<div class="sub">' + stacksMitBild(a.koeder.input) +
+      (a.koeder.bezahlbar ? '' : ' · fehlt') + '</div></div>' +
+      '<span class="yield">＋</span>';
+    karte.addEventListener('click', function () {
+      var res = client.craftBait();
+      if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+      toast(a.koeder.output + ' Köder hergestellt');
+      klang('kauf');
+      save();
+      scheduleSync();
+      render();
+    });
+    box.appendChild(karte);
+  }
+
+  var titel = document.createElement('p');
+  titel.className = 'empty';
+  titel.style.marginBottom = '0';
+  titel.textContent = 'Das beißt hier:';
+  box.appendChild(titel);
+
+  a.table.forEach(function (f) {
+    var zeile = document.createElement('div');
+    zeile.className = 'card opt';
+    zeile.innerHTML =
+      '<div class="body"><div class="top">' + itemIcon(f.item) + itemName(f.item) + '</div></div>' +
+      '<span class="yield">' + f.chance + ' %</span>';
+    box.appendChild(zeile);
+  });
 }
 
 function angelWurf(tile) {
