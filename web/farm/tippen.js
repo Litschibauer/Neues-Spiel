@@ -347,7 +347,6 @@ function schwenkZu(e) {
     if (Math.abs(dx) + Math.abs(dy) < 10) return false;
     schwenk.aktiv = true;
     $('hof').classList.add('schwenkt');
-    if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
   }
   kamera.x = schwenk.kx + dx;
   kamera.y = schwenk.ky + dy;
@@ -375,13 +374,16 @@ function ziehStart(e, plot, tile) {
     y: e.clientY,
     aktiv: false,
     ziel: null,
-    timer: setTimeout(function () { ziehLos(e); }, 420),
+    timer: setTimeout(function () { ziehLos(e); }, 200),
   };
 }
 
 function ziehLos(e) {
   if (!ziehen) return;
   ziehen.aktiv = true;
+  // Der Schwenk, der beim selben Fingerdruck mit angestoßen wurde, tritt zurück:
+  // Jetzt wird verschoben, nicht geschwenkt.
+  if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
   bauModus = true;
   $('hof').classList.add('setzt');
   ziehen.tile.classList.add('zieht');
@@ -434,11 +436,19 @@ function ziehEnde() {
 
 document.addEventListener('pointermove', function (e) {
   if (ziehen && ziehen.aktiv) { e.preventDefault(); ziehZu(e); return; }
-  if (schwenk) { if (schwenkZu(e)) e.preventDefault(); return; }
+  // Solange ein Platz-Griff aussteht, hat er Vorrang: Der Schwenk darf ihn NICHT
+  // stehlen. Erst wenn der Finger klar wegwischt (großer Weg, bevor der Halte-
+  // Timer greift), ist es doch ein Schwenk — dann übergeben wir sauber.
   if (ziehen && !ziehen.aktiv) {
     var weit = Math.abs(e.clientX - ziehen.x) + Math.abs(e.clientY - ziehen.y);
-    if (weit > 12) { clearTimeout(ziehen.timer); ziehen = null; }
+    if (weit > 16) {
+      clearTimeout(ziehen.timer);
+      ziehen = null;
+      if (schwenk && schwenkZu(e)) e.preventDefault();
+    }
+    return;
   }
+  if (schwenk) { if (schwenkZu(e)) e.preventDefault(); return; }
 }, { passive: false });
 
 document.addEventListener('pointerup', function (e) { ziehEnde(); schwenkEnde(); });
