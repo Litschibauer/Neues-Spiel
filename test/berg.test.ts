@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRuleset, obstacleLocked } from '../src/sim/rules.ts';
+import { getRuleset, obstacleLocked, landLocked, LATEST_RULESET_VERSION } from '../src/sim/rules.ts';
 import { initialState } from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 import { farmView } from '../src/client/view.ts';
@@ -65,6 +65,46 @@ test('das Ansichtsmodell zeigt gesperrte Hindernisse als graue Vorschau', () => 
 
   const auf = farmView({ ...s, expandiert: ['w1'] }, V, false).obstacles.filter(inW1);
   assert.ok(auf.length > 0 && auf.every((o) => !o.locked), 'freigeschaltet: nicht mehr gesperrt');
+});
+
+test('die Mine steht im Sperrland und lässt sich erst nach dem Freimachen bauen', () => {
+  const L = getRuleset(LATEST_RULESET_VERSION);
+  const mine = L.plots.findIndex((p) => p.id === 'mine');
+  const s = initialState(L);
+  const p = s.plots[mine]!;
+  assert.ok(p.gx >= 0, 'die Mine ist platziert');
+  assert.equal(landLocked(L, p.gx, p.gy, 2, 2, s.expandiert), true, 'sie liegt im gesperrten Land');
+
+  // Welche Erweiterung deckt die Mine? Die brauchen wir zum Freimachen.
+  const feld = (L.expansions ?? []).find(
+    (e) => p.gx < e.gx + e.w && e.gx < p.gx + 2 && p.gy < e.gy + e.h && e.gy < p.gy + 2,
+  )!;
+  assert.ok(feld, 'die Mine liegt in einer Erweiterung');
+
+  const reich = {
+    ...s,
+    xp: 10_000_000,
+    items: s.items.map((v, i) => (i === 0 ? 99_999 : i === 10 || i === 11 ? 99 : v)),
+  };
+  assert.throws(
+    () => simulate(reich, { seq: 1, tick: 0, type: 'BUY', plot: mine }, L),
+    { code: 'LAND_LOCKED' },
+    'gesperrt: kein Bau',
+  );
+
+  // Im Baumenü taucht die Mine erst nach dem Freimachen auf.
+  assert.ok(
+    !farmView(reich, L, false).buildable.some((b) => b.plot === mine),
+    'gesperrt: nicht im Baumenü',
+  );
+
+  const frei = { ...reich, expandiert: [feld.id] };
+  const nach = simulate(frei, { seq: 1, tick: 0, type: 'BUY', plot: mine }, L);
+  assert.equal(nach.plots[mine]!.level, 1, 'freigemacht: Mine gebaut');
+  assert.ok(
+    farmView(frei, L, false).buildable.some((b) => b.plot === mine),
+    'freigemacht: im Baumenü',
+  );
 });
 
 test('freigeschaltetes Land ist gemischt bewachsen — Bäume, Steine und Teiche', () => {

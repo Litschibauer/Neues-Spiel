@@ -367,6 +367,7 @@ function renderErweiterungen(v) {
     knopf.style.width = kasten.width + '%';
     knopf.style.height = kasten.height + '%';
     knopf.style.zIndex = String(2 + Math.round(kasten.tiefe * 2));
+    knopf.dataset.feld = e.id;
     knopf.innerHTML =
       '<svg class="wuchs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
       sperrGebuesch(e) + '</svg>' +
@@ -1149,6 +1150,7 @@ var CODES = {
   BOAT_DONE: 'Das Boot ist schon repariert',
   NO_REPAIR: 'Hier gibt es nichts zu reparieren',
   NO_CRAFT: 'Das lässt sich hier nicht herstellen',
+  LAND_LOCKED: 'Erst das Land drumherum freimachen',
   CELL_TAKEN: 'Da steht schon etwas',
   OFF_GRID: 'Da ist kein Platz',
   NOT_PLACED: 'Erst hinstellen',

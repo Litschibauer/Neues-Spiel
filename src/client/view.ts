@@ -8,6 +8,7 @@ import {
   itemUnlockLevel,
   baumStufe,
   obstacleLocked,
+  landLocked,
   offerLimits,
   recipeMinLevel,
   recipeUnlocked,
@@ -649,6 +650,10 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       if (plot.level > 0) return [];
       const stufe = def.levels[0];
       if (!stufe) return [];
+      // Feste Bauwerke im Sperrland (Mine) tauchen erst auf, wenn das Land frei
+      // ist — sonst könnte man sie „blind" unter der Sperre bauen.
+      const g = sizeOf(rules, i);
+      if (landLocked(rules, plot.gx, plot.gy, g.w, g.h, state.expandiert)) return [];
       const level = levelOf(rules, state.xp);
       const nötig = stufe.minPlayerLevel ?? 1;
       const packed = (state.eingepackt ?? []).includes(i);

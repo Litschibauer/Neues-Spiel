@@ -196,7 +196,8 @@ export type SimErrorCode =
   | 'NO_BAIT'
   | 'BOAT_DONE'
   | 'NO_REPAIR'
-  | 'NO_CRAFT';
+  | 'NO_CRAFT'
+  | 'LAND_LOCKED';
 
 export class SimError extends Error {
   code: SimErrorCode;

@@ -9,6 +9,7 @@ import {
   baumStufe,
   achievementDone,
   obstacleLocked,
+  landLocked,
   nextLevel,
   itemUnlockLevel,
   offerLimits,
@@ -181,6 +182,14 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       const def = rules.plots[cmd.plot];
       const plot = s.plots[cmd.plot];
       if (!def || !plot) throw new SimError('NO_SUCH_PLOT');
+
+      // Festes Bauwerk mitten im Sperrland (z. B. die Mine): erst das Land
+      // freimachen. Verschiebbare Plätze stehen bei level 0 auf gx -1 und sind
+      // damit nicht betroffen — die prüft ohnehin passtHin beim Hinstellen.
+      const groesse = def.size ?? { w: 1, h: 1 };
+      if (landLocked(rules, plot.gx, plot.gy, groesse.w, groesse.h, s.expandiert)) {
+        throw new SimError('LAND_LOCKED');
+      }
 
       const level = nextLevel(rules, cmd.plot, plot.level);
       const capacity = level ? slotsAt(rules, cmd.plot, plot.level + 1) : 0;

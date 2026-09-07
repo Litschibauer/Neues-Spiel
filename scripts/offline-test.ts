@@ -565,11 +565,8 @@ try {
     { seq: 2, tick: 0, type: 'LIST_ORDER', item: 1, amount: 10, price: 3 },
   ]);
   check('Der zweite Hof stellt einen Auftrag ein', listed.ok, listed.reason ?? listed.kind);
-  check(
-    'Der Auftrag steht im Buch',
-    ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number })
-      .offers === 1,
-  );
+  const _hb = (await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number };
+  check('Der Auftrag steht im Buch', _hb.offers === 1, `offers=${_hb.offers}`);
 
   await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=500`, 'POST');
   await evaluate(cdp, `document.getElementById('sync').click()`);
@@ -2913,10 +2910,15 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await api(`/api/admin/grant?account=${status.accountId}&item=nail&amount=40`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=20000`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=shovel&amount=3`, 'POST');
+  // Die Mine liegt jetzt im Sperrland — erst das Land freimachen. Dafür das
+  // passende Werkzeug (Karte, Schlegel, Pflock) ins Postfach legen.
+  await api(`/api/admin/grant?account=${status.accountId}&item=map&amount=10`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=mallet&amount=10`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=stake&amount=12`, 'POST');
   await sleep(500);
   await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
   await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Bau-Material im Postfach');
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 14; i++) {
     const c = await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`);
     if (!c) break;
     await evaluate(cdp, `document.querySelector('#mail .card').click()`);
@@ -2930,7 +2932,26 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   })()`);
   await sleep(200);
 
-  // Die Mine ist fest — man baut sie an ihrem Platz am Berg, ohne Hinstellen.
+  // Die Mine liegt im Sperrland (Erweiterung m1) — erst das Land freimachen,
+  // sonst bleibt sie unter der Sperre und lässt sich nicht bauen (LAND_LOCKED).
+  // Über die Oberfläche: die Sperr-Kachel antippen, dann „Land freischalten".
+  await evaluate(cdp, `(function () {
+    var t = document.querySelector('.feld-sperre[data-feld="m1"]');
+    if (t) t.click();
+  })()`);
+  await sleep(300);
+  const landFrei = await evaluate<boolean>(cdp, `(function () {
+    var b = document.querySelector('#erweiterung-inhalt .primär');
+    if (b && !b.disabled) { b.click(); return true; }
+    return false;
+  })()`);
+  await sleep(400);
+  await api(`/api/admin/time?account=${status.accountId}&seconds=1`, 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await sleep(400);
+  check('Das Land um die Mine lässt sich freimachen', landFrei);
+
+  // Die Mine ist fest — man baut sie an ihrem (nun freien) Platz am Berg.
   const mineGebaut = await evaluate<{ gefunden: boolean; nachStufe: number; idx: number }>(
     cdp,
     `(function () {

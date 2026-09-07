@@ -406,7 +406,13 @@ export function assertInvariants(state: State, rules: Ruleset): void {
       if (p.gx + groesse.w > raster.w || p.gy + groesse.h > raster.h || p.gy < 0) {
         problems.push(`Platz ${i} steht außerhalb des Rasters: ${p.gx},${p.gy}`);
       }
-      if (blockiert(rules, p.gx, p.gy, groesse.w, groesse.h, state.clearedObstacles, state.expandiert)) {
+      // Feste Bauwerke (z. B. die Mine) darf das Regelwerk bewusst ins Sperrland
+      // setzen — der Bau ist dort ohnehin gesperrt (LAND_LOCKED), bis das Land
+      // frei ist. Nur frei setzbare Plätze müssen auf freiem Feld stehen.
+      if (
+        !rules.plots[i]?.fixed &&
+        blockiert(rules, p.gx, p.gy, groesse.w, groesse.h, state.clearedObstacles, state.expandiert)
+      ) {
         problems.push(`Platz ${i} steht auf einem Hindernis oder gesperrten Feld`);
       }
       for (const [j, other] of state.plots.entries()) {

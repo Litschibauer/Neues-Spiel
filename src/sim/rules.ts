@@ -1662,6 +1662,10 @@ const FISH_PIKE = 33; // Hecht
 const V33: Ruleset = {
   ...V32,
   version: 33,
+  // Die Mine steht jetzt mitten im gesperrten Land (Erweiterung m1, gx39–49).
+  // Vorher saß sie ganz rechts auf offenem Boden — jetzt muss man erst das Land
+  // freimachen, um sie zu bauen. Sie bleibt fest (fixed), also nicht verschiebbar.
+  plots: V32.plots.map((p) => (p.id === 'mine' ? { ...p, place: at(91, 26, 3, 3) } : p)),
   items: [
     ...V32.items,
     // Köder wird nicht mehr gekauft (npcBuyPrice 0), sondern im Strandhaus aus
@@ -1707,7 +1711,8 @@ const DEV: Ruleset = {
   truckAwayTicks: 9,
   chestEveryTicks: 60,
   recipes: V32.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  plots: V32.plots.map((p) => {
+  // Auf V33.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
+  plots: V33.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1846,6 +1851,25 @@ export function obstacleLocked(
   for (const e of rules.expansions ?? []) {
     if (expandiert.includes(e.id)) continue;
     if (ueberlappt(h.gx, h.gy, h.w, h.h, e.gx, e.gy, e.w, e.h)) return true;
+  }
+  return false;
+}
+
+// Liegt ein Feld (gx,gy,w,h) in noch gesperrtem Land? Genutzt für feste Bauwerke
+// wie die Mine, die mitten in einer Erweiterung stehen: bauen geht erst, wenn
+// das Land drumherum frei ist.
+export function landLocked(
+  rules: Ruleset,
+  gx: number,
+  gy: number,
+  w: number,
+  h: number,
+  expandiert: readonly string[],
+): boolean {
+  if (gx < 0 || gy < 0) return false;
+  for (const e of rules.expansions ?? []) {
+    if (expandiert.includes(e.id)) continue;
+    if (ueberlappt(gx, gy, w, h, e.gx, e.gy, e.w, e.h)) return true;
   }
   return false;
 }
