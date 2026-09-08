@@ -110,6 +110,11 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       create index push_abos_konto on push_abos (konto);
     `);
   },
+
+  (db) => {
+    // 'web' = Browser über Web-Push, 'ios' = native App über APNs.
+    db.exec(`alter table push_abos add column art text not null default 'web';`);
+  },
 ];
 
 function migrate(db: Db): void {

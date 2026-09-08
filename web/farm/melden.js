@@ -6,11 +6,21 @@
 // Schalter umlegt (nie beim Start), und ein Abo wird bei jedem Start erneuert,
 // weil der Browser es jederzeit austauschen darf.
 
-var meldenBereit = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+// In der nativen App läuft der Weg über Apple, nicht über Web-Push: Apple
+// unterstützt Web-Push nur für PWAs auf dem Startbildschirm, nicht in der
+// WKWebView einer App. Capacitor liefert uns dort ein Geräte-Token.
+function meldenNativ() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform &&
+    window.Capacitor.isNativePlatform() &&
+    window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications);
+}
+
+var meldenBereit = meldenNativ() ||
+  ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
 
 function meldenStand() {
   if (!meldenBereit) return 'geht-nicht';
-  if (Notification.permission === 'denied') return 'blockiert';
+  if (!meldenNativ() && Notification.permission === 'denied') return 'blockiert';
   try { return localStorage.getItem('ns-melden') === 'an' ? 'an' : 'aus'; } catch (e) { return 'aus'; }
 }
 
@@ -40,8 +50,41 @@ function meldenAbo(reg) {
   });
 }
 
+// Native App: um Erlaubnis fragen, registrieren, und das Token, das Apple uns
+// über den 'registration'-Rückruf gibt, an den Server schicken.
+function meldenAnmeldenNativ() {
+  var Push = window.Capacitor.Plugins.PushNotifications;
+  return Push.requestPermissions().then(function (erg) {
+    if (!erg || erg.receive !== 'granted') return 'blockiert';
+    return new Promise(function (fertig) {
+      var erledigt = false;
+      Push.addListener('registration', function (t) {
+        if (erledigt) return;
+        erledigt = true;
+        fetch('/api/push/abo', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+          body: JSON.stringify({ art: 'ios', token: String(t && t.value ? t.value : '') }),
+        })
+          .then(function () { meldenMerken(true); fertig('an'); })
+          .catch(function () { fertig('fehler'); });
+      });
+      Push.addListener('registrationError', function () {
+        if (erledigt) return;
+        erledigt = true;
+        fertig('fehler');
+      });
+      Push.register();
+      // Kommt binnen zehn Sekunden nichts, hat die App keine Push-Berechtigung
+      // im Profil — dann lieber ehrlich scheitern als ewig warten.
+      setTimeout(function () { if (!erledigt) { erledigt = true; fertig('fehler'); } }, 10000);
+    });
+  }).catch(function () { return 'fehler'; });
+}
+
 function meldenAnmelden() {
   if (!meldenBereit) return Promise.resolve('geht-nicht');
+  if (meldenNativ()) return meldenAnmeldenNativ();
   return Notification.requestPermission()
     .then(function (erlaubnis) {
       if (erlaubnis !== 'granted') return 'blockiert';
@@ -62,6 +105,12 @@ function meldenAnmelden() {
 function meldenAbmelden() {
   meldenMerken(false);
   if (!meldenBereit) return Promise.resolve('aus');
+  if (meldenNativ()) {
+    // Auf dem Gerät bleibt die Registrierung; der Server hört einfach auf zu
+    // senden, sobald das Abo weg ist. Genau dafür merkt sich der Schalter den
+    // Stand lokal.
+    return Promise.resolve('aus');
+  }
   return navigator.serviceWorker.ready
     .then(function (reg) { return reg.pushManager.getSubscription(); })
     .then(function (abo) {
@@ -78,8 +127,14 @@ function meldenAbmelden() {
 // Beim Start still auffrischen: Der Browser darf ein Abo jederzeit austauschen,
 // dann kennt der Server den neuen Endpunkt noch nicht.
 function meldenAuffrischen() {
-  if (!meldenBereit || meldenStand() !== 'an' || Notification.permission !== 'granted') return;
-  if (!token) return;
+  if (!meldenBereit || meldenStand() !== 'an' || !token) return;
+  if (meldenNativ()) {
+    // Apple darf das Token austauschen — einmal neu registrieren, der Server
+    // legt es unter demselben Hof ab.
+    meldenAnmeldenNativ();
+    return;
+  }
+  if (Notification.permission !== 'granted') return;
   navigator.serviceWorker.ready
     .then(meldenAbo)
     .then(function (abo) {

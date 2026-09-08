@@ -253,7 +253,9 @@
     api('/api/admin/push/stand')
       .then(function (d) {
         $('pushstand').textContent =
-          'Erreichbar: ' + d.hoefe + ' Höfe · ' + d.abos + ' Geräte';
+          'Erreichbar: ' + d.hoefe + ' Höfe · ' + d.abos + ' Geräte' +
+          ' (' + d.web + ' Browser, ' + d.ios + ' App)' +
+          (d.ios > 0 && !d.apnsBereit ? ' — Achtung: Apple-Schlüssel fehlt, App-Geräte bekommen nichts' : '');
       })
       .catch(function (e) { $('pushstand').textContent = 'Erreichbar: ' + e.message; });
   }

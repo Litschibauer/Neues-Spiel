@@ -3063,6 +3063,187 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `Kohle ${kohleNach}, Eisenerz ${eisenNach}`,
   );
 
+  console.log('\n9x. Angelsee: Boot, Köder sieden, Reusen legen und einholen');
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=2000`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=20`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=nail&amount=20`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=wheat&amount=40`, 'POST');
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Material fürs Boot im Postfach');
+  for (let i = 0; i < 10; i++) {
+    if (!(await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`))) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(200);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(250);
+
+  // Das Boot steht kaputt am Hof; tippen öffnet die Reparatur.
+  await evaluate(cdp, `document.getElementById('boot').click()`);
+  await sleep(400);
+  const reparaturAuf = await evaluate<string>(
+    cdp,
+    `(document.getElementById('pick-title') || {}).textContent || ''`,
+  );
+  check('Das kaputte Boot bietet die Reparatur an', /Boot/i.test(reparaturAuf), reparaturAuf);
+
+  await evaluate(cdp, `(function () {
+    var b = [...document.querySelectorAll('#pick-list button')].find(function (x) { return /Reparieren/i.test(x.textContent); });
+    if (b) b.click();
+  })()`);
+  await sleep(900);
+  // Beim ersten Betreten erklärt sich der See selbst.
+  const seeTut = await evaluate<string>(cdp, `(function () {
+    var t = document.getElementById('tut-bg');
+    return (t && !t.hidden) ? (document.getElementById('tut-titel') || {}).textContent || 'offen' : 'zu';
+  })()`);
+  check('Beim ersten Besuch erklärt sich der Angelsee', /Angelsee|Köder|Reuse/i.test(seeTut), seeTut);
+  await evaluate(cdp, `(function () {
+    var t = document.getElementById('tut-bg');
+    if (t && !t.hidden) document.getElementById('tut-skip').click();
+  })()`);
+  await sleep(400);
+
+  const imSee = await evaluate<number>(cdp, `document.querySelectorAll('.see-spot').length`);
+  check('Nach der Reparatur liegt der See mit seinen Angelstellen vor einem', imSee === 5, `${imSee} Stellen`);
+
+  // Köder sieden: dauert und belegt einen Werkbank-Platz.
+  await evaluate(cdp, `(function () {
+    var h = [...document.querySelectorAll('.see-obj')].find(function (t) { return /Strandhaus/.test(t.getAttribute('aria-label') || ''); });
+    if (h) h.click();
+  })()`);
+  await sleep(500);
+  const sudPlaetze = await evaluate<number>(
+    cdp,
+    `[...document.querySelectorAll('#pick-list button')].filter(function (b) { return /Köder sieden/i.test(b.textContent); }).length`,
+  );
+  check('Das Strandhaus zeigt begrenzte Sud-Plätze', sudPlaetze === 2, `${sudPlaetze} Plätze`);
+
+  await evaluate(cdp, `(function () {
+    var b = [...document.querySelectorAll('#pick-list button')].find(function (x) { return /Köder sieden/i.test(x.textContent); });
+    if (b) b.click();
+  })()`);
+  await sleep(500);
+  const laueft = await evaluate<string>(
+    cdp,
+    `([...document.querySelectorAll('#pick-list .top')].map(function (e) { return e.textContent; }).join(' | '))`,
+  );
+  check('Der Sud läuft und zeigt seine Restzeit', /Sud 1 · noch/.test(laueft), laueft.slice(0, 80));
+
+  const koederImBlatt = `(function () {
+    var p = [...document.querySelectorAll('#pick-list p')].find(function (e) { return /Im Lager/.test(e.textContent); });
+    var m = p && /(\\d+)/.exec(p.textContent);
+    return m ? Number(m[1]) : -1;
+  })()`;
+  const koederVor = await evaluate<number>(cdp, koederImBlatt);
+  check('Vor dem Abholen liegt noch kein Köder im Lager', koederVor === 0, `${koederVor} Köder`);
+
+  await api('/api/admin/time?seconds=400', 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  const sudFertig = `[...document.querySelectorAll('#pick-list button')].some(function (b) { return /Köder fertig/i.test(b.textContent); })`;
+  let sudReif = false;
+  for (let i = 0; i < 60 && !sudReif; i++) {
+    sudReif = await evaluate<boolean>(cdp, sudFertig);
+    if (!sudReif) {
+      await sleep(500);
+      if (i % 10 === 9) await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+    }
+  }
+  check('Der Sud wird nach seiner Zeit fertig', sudReif, sudReif ? 'fertig' : 'blieb unfertig');
+  await evaluate(cdp, `(function () {
+    var b = [...document.querySelectorAll('#pick-list button')].find(function (x) { return /Köder fertig/i.test(x.textContent); });
+    if (b) b.click();
+  })()`);
+  await sleep(600);
+  const koederNach = await evaluate<number>(cdp, koederImBlatt);
+  check('Abgeholt landet der Sud als Köder im Lager', koederNach >= 5, `${koederNach} Köder`);
+
+  await evaluate(cdp, `document.getElementById('pick-close').click()`);
+  await sleep(300);
+
+  // Reuse legen: kostet einen Köder und belegt die Stelle.
+  await evaluate(cdp, `document.querySelectorAll('.see-spot')[0].click()`);
+  await sleep(600);
+  const nachLegen = await evaluate<{ koeder: number; zieht: boolean }>(cdp, `(function () {
+    var m = /(\\d+)\\s*Köder/.exec(document.getElementById('see-hud-info').textContent || '');
+    var s = document.querySelectorAll('.see-spot')[0];
+    return { koeder: m ? Number(m[1]) : -1, zieht: s.classList.contains('zieht-noch') };
+  })()`);
+  check(
+    'Köder legen kostet einen Köder und die Stelle zieht',
+    nachLegen.koeder === koederNach - 1 && nachLegen.zieht,
+    `${nachLegen.koeder} Köder, zieht ${nachLegen.zieht}`,
+  );
+
+  // Zu früh einholen bringt nichts — die Wartezeit steckt im Regelwerk.
+  await evaluate(cdp, `document.querySelectorAll('.see-spot')[0].click()`);
+  await sleep(400);
+  const zuFrueh = await evaluate<boolean>(
+    cdp,
+    `document.querySelectorAll('.see-spot')[0].classList.contains('zieht-noch')`,
+  );
+  check('Zu früh antippen holt die Reuse nicht ein', zuFrueh, `zieht noch: ${zuFrueh}`);
+
+  const fangVor = await evaluate<number>(cdp, `(function () {
+    var m = /(\\d+)\\s*Fänge/.exec(document.getElementById('see-hud-info').textContent || '');
+    return m ? Number(m[1]) : -1;
+  })()`);
+
+  await api('/api/admin/time?seconds=1200', 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  // Im Feldtest-Regelwerk zieht eine Reuse 90 Sekunden. Die Zeitspende erreicht
+  // den Client hier nicht immer, darum warten wir notfalls in echt ab.
+  let reuseVoll = false;
+  for (let i = 0; i < 230 && !reuseVoll; i++) {
+    reuseVoll = await evaluate<boolean>(cdp, `document.querySelectorAll('.see-spot')[0].classList.contains('ripe')`);
+    if (!reuseVoll) {
+      await sleep(500);
+      if (i % 10 === 9) await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+    }
+  }
+  check('Die Reuse wird nach ihrer Zeit voll', reuseVoll, reuseVoll ? 'voll' : 'blieb leer');
+  await evaluate(cdp, `document.querySelectorAll('.see-spot')[0].click()`);
+  await sleep(700);
+  const nachHolen = await evaluate<{ fang: number; frei: boolean }>(cdp, `(function () {
+    var m = /(\\d+)\\s*Fänge/.exec(document.getElementById('see-hud-info').textContent || '');
+    var s = document.querySelectorAll('.see-spot')[0];
+    return { fang: m ? Number(m[1]) : -1, frei: !s.classList.contains('ripe') && !s.classList.contains('zieht-noch') };
+  })()`);
+  check(
+    'Die volle Reuse bringt mehrere Züge und gibt die Stelle wieder frei',
+    nachHolen.fang >= fangVor + 2 && nachHolen.frei,
+    `Fänge ${fangVor} → ${nachHolen.fang}, frei ${nachHolen.frei}`,
+  );
+
+  // Am See müssen die Menü-Bildschirme trotzdem funktionieren.
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(400);
+  await evaluate(cdp, `document.getElementById('ziele-auf').click()`);
+  await sleep(600);
+  const zieleAmSee = await evaluate<{ zeilen: number; gruppen: number }>(cdp, `({
+    zeilen: document.querySelectorAll('#ziele-liste .ziel').length,
+    gruppen: document.querySelectorAll('#ziele-liste .ziel-gruppe').length
+  })`);
+  check(
+    'Auch am See sind Ziele und Erfolge gefüllt, nach Gruppen sortiert',
+    zieleAmSee.zeilen > 20 && zieleAmSee.gruppen >= 4,
+    `${zieleAmSee.zeilen} Ziele in ${zieleAmSee.gruppen} Gruppen`,
+  );
+  await evaluate(cdp, `document.getElementById('ziele-close').click()`);
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('rest-close').click()`);
+  await sleep(300);
+
+  // Zurück auf den Hof über den Steg.
+  await evaluate(cdp, `(function () {
+    var d = [...document.querySelectorAll('.see-obj')].find(function (t) { return /Hof/.test(t.getAttribute('aria-label') || ''); });
+    if (d) d.click();
+  })()`);
+  await sleep(700);
+  const zurueck = await evaluate<boolean>(cdp, `document.querySelectorAll('.see-spot').length === 0 && !!document.querySelector('#plots .plot')`);
+  check('Über den Steg geht es zurück auf den Hof', zurueck, `zurück: ${zurueck}`);
+
   console.log('\n9y. Tagesbonus');
   await waitFor(
     cdp,

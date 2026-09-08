@@ -23,8 +23,10 @@ export type GameBlob = {
 
 // Ein Gerät, das Benachrichtigungen empfangen möchte.
 export type PushAbo = {
+  // Bei 'web' der Push-Endpunkt des Browsers, bei 'ios' das Geräte-Token.
   endpoint: string;
   konto: string;
+  art: 'web' | 'ios';
   p256dh: string;
   auth: string;
   seitMs: number;
@@ -250,6 +252,7 @@ export class SqliteStorage implements Storage {
     return (rows as Array<Record<string, unknown>>).map((r) => ({
       endpoint: String(r.endpoint),
       konto: String(r.konto),
+      art: r.art === 'ios' ? 'ios' : 'web',
       p256dh: String(r.p256dh),
       auth: String(r.auth),
       seitMs: Number(r.seit_ms),
@@ -260,13 +263,13 @@ export class SqliteStorage implements Storage {
   putPushAbo(abo: PushAbo): void {
     this.db
       .prepare(
-        `insert into push_abos (endpoint, konto, p256dh, auth, seit_ms, zuletzt_ms)
-         values (?, ?, ?, ?, ?, ?)
+        `insert into push_abos (endpoint, konto, art, p256dh, auth, seit_ms, zuletzt_ms)
+         values (?, ?, ?, ?, ?, ?, ?)
          on conflict(endpoint) do update set
-           konto = excluded.konto, p256dh = excluded.p256dh,
+           konto = excluded.konto, art = excluded.art, p256dh = excluded.p256dh,
            auth = excluded.auth, zuletzt_ms = excluded.zuletzt_ms`,
       )
-      .run(abo.endpoint, abo.konto, abo.p256dh, abo.auth, abo.seitMs, abo.zuletztMs);
+      .run(abo.endpoint, abo.konto, abo.art, abo.p256dh, abo.auth, abo.seitMs, abo.zuletztMs);
   }
 
   dropPushAbo(endpoint: string): void {

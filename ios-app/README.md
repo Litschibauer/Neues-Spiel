@@ -130,3 +130,48 @@ noch zwei Dinge:
 Bis dahin ist der `server.url`-Weg der richtige — er funktioniert vollständig,
 inklusive Offline-Weiterspielen über den Service Worker (der Server liefert
 HTTPS, also registriert er sich).
+
+## Benachrichtigungen (Push)
+
+Die App bekommt ihre Meldungen über **Apple (APNs)**, nicht über Web-Push:
+Apple erlaubt Web-Push nur für PWAs auf dem Startbildschirm, nicht in der
+WKWebView einer App. Das Plugin `@capacitor/push-notifications` ist bereits
+eingetragen, `npm run sync` installiert es mit.
+
+### In Xcode (einmalig, geht nur dort)
+
+1. Projekt öffnen: `npm run ios`
+2. Ziel **App** auswählen → Reiter **Signing & Capabilities**
+3. **+ Capability** → **Push Notifications** hinzufügen
+4. **+ Capability** → **Background Modes** → Häkchen bei **Remote notifications**
+
+Dafür brauchst du ein **kostenpflichtiges Apple-Entwicklerkonto**; mit einem
+kostenlosen Konto lässt sich die Push-Berechtigung nicht vergeben.
+
+### Im Apple-Developer-Portal (einmalig)
+
+1. **Certificates, Identifiers & Profiles → Keys → +**
+2. Häkchen bei **Apple Push Notifications service (APNs)**, Schlüssel erzeugen
+3. Die Datei `AuthKey_XXXXXXXXXX.p8` **einmal** herunterladen (geht nur einmal!)
+4. Notiere **Key ID** (im Dateinamen) und **Team ID** (oben rechts im Portal)
+
+### Auf dem Server
+
+Die `.p8`-Datei auf den Server legen, dann diese Variablen setzen:
+
+```
+NEUES_SPIEL_APNS_KEY_FILE=/pfad/zu/AuthKey_XXXXXXXXXX.p8
+NEUES_SPIEL_APNS_KEY_ID=XXXXXXXXXX
+NEUES_SPIEL_APNS_TEAM_ID=YYYYYYYYYY
+NEUES_SPIEL_APNS_BUNDLE_ID=com.litschibauer.neuesspiel
+NEUES_SPIEL_APNS_SANDBOX=1
+```
+
+`SANDBOX=1` gilt für Builds, die direkt aus Xcode aufs Gerät kommen. Für
+TestFlight und den App Store muss es **weg** (oder auf `0`), sonst weist Apple
+die Zustellung ab. Fehlen die Variablen, bleibt APNs einfach aus und der Rest
+des Servers läuft normal weiter.
+
+Ob alles sitzt, steht im Dashboard unter **Benachrichtigung senden**: Dort
+zählt „Erreichbar" die Geräte getrennt nach Browser und App und warnt, wenn
+App-Geräte da sind, aber der Apple-Schlüssel fehlt.

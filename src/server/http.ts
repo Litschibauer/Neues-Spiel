@@ -28,6 +28,7 @@ import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
 import { ladeVapid, sendePush } from './push.ts';
+import { apnsAusUmgebung, sendeApns } from './apns.ts';
 import type { PushAbo } from './storage.ts';
 import { EconStats } from './econstats.ts';
 
@@ -104,13 +105,34 @@ function pushZielErlaubt(endpoint: string): boolean {
   return u.protocol === 'http:' && isLoopback(u.hostname);
 }
 
-// Schickt eine Nachricht an alle Geräte eines Kontos. Tote Abos fliegen raus.
-async function pushAn(kontoIds: readonly string[], nutzlast: unknown): Promise<{ gesendet: number; entfernt: number }> {
+// Die native iOS-App bekommt ihre Meldungen über Apple, nicht über Web-Push.
+// Ohne Schlüssel von Apple bleibt der Weg aus, alles andere läuft weiter.
+const APNS = apnsAusUmgebung();
+if (APNS) console.log(`[apns] aktiv für ${APNS.bundleId}${APNS.sandbox ? ' (Sandbox)' : ''}`);
+
+// Schickt eine Nachricht an alle Geräte eines Kontos, jeweils auf dem Weg, den
+// das Gerät braucht. Tote Abos fliegen raus, bei Netzfehlern bleiben sie.
+async function pushAn(
+  kontoIds: readonly string[],
+  titel: string,
+  text: string,
+  art: string,
+): Promise<{ gesendet: number; entfernt: number; ohneWeg: number }> {
   let gesendet = 0;
   let entfernt = 0;
+  let ohneWeg = 0;
   for (const id of kontoIds) {
     for (const abo of accounts.storage.listPushAbos(id)) {
-      const r = await sendePush(VAPID, abo, nutzlast);
+      let r: { ok: boolean; weg: boolean };
+      if (abo.art === 'ios') {
+        if (!APNS) {
+          ohneWeg++;
+          continue;
+        }
+        r = await sendeApns(APNS, abo.endpoint, titel, text, art);
+      } else {
+        r = await sendePush(VAPID, abo, { titel, text, art });
+      }
       if (r.ok) {
         gesendet++;
         accounts.storage.putPushAbo({ ...abo, zuletztMs: Date.now() });
@@ -120,7 +142,7 @@ async function pushAn(kontoIds: readonly string[], nutzlast: unknown): Promise<{
       }
     }
   }
-  return { gesendet, entfernt };
+  return { gesendet, entfernt, ohneWeg };
 }
 const sozial = new Sozial((accounts.storage as SqliteStorage).database);
 const tagesbonus = new Tagesbonus((accounts.storage as SqliteStorage).database);
@@ -553,7 +575,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
       anWen === 'alle'
         ? [...new Set(accounts.storage.listPushAbos().map((a) => a.konto))]
         : anWen.split(',').map((x) => x.trim()).filter(Boolean);
-    return pushAn(ziele, { titel, text, art: 'admin' }).then((r) => {
+    return pushAn(ziele, titel, text, 'admin').then((r) => {
       console.log(`[admin] Push an ${ziele.length} Höfe: ${r.gesendet} zugestellt, ${r.entfernt} tote Abos`);
       return json(res, 200, { ok: true, hoefe: ziele.length, ...r });
     });
@@ -565,6 +587,9 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     for (const a of abos) proKonto.set(a.konto, (proKonto.get(a.konto) ?? 0) + 1);
     return json(res, 200, {
       abos: abos.length,
+      web: abos.filter((a) => a.art !== 'ios').length,
+      ios: abos.filter((a) => a.art === 'ios').length,
+      apnsBereit: !!APNS,
       hoefe: proKonto.size,
       liste: [...proKonto].map(([konto, geraete]) => ({ konto, geraete })),
     });
@@ -833,12 +858,36 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (url.pathname === '/api/push/abo' && req.method === 'POST') {
-      let abo: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+      let abo: {
+        art?: string;
+        token?: string;
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
       try {
         abo = JSON.parse(await readBody(req, 8 * 1024));
       } catch {
         return json(res, 400, { error: 'BAD_JSON' });
       }
+
+      // Native App: nur das Geräte-Token, verschlüsselt wird bei Apple.
+      if (abo.art === 'ios') {
+        const token = String(abo.token ?? '').trim();
+        if (!/^[0-9a-fA-F]{16,200}$/.test(token)) {
+          return json(res, 400, { error: 'BAD_DEVICE_TOKEN' });
+        }
+        accounts.storage.putPushAbo({
+          endpoint: token.toLowerCase(),
+          konto: account.id,
+          art: 'ios',
+          p256dh: '',
+          auth: '',
+          seitMs: Date.now(),
+          zuletztMs: 0,
+        });
+        return json(res, 200, { ok: true, art: 'ios', bereit: !!APNS });
+      }
+
       const endpoint = String(abo.endpoint ?? '');
       const p256dh = String(abo.keys?.p256dh ?? '');
       const auth = String(abo.keys?.auth ?? '');
@@ -848,12 +897,13 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       accounts.storage.putPushAbo({
         endpoint,
         konto: account.id,
+        art: 'web',
         p256dh,
         auth,
         seitMs: Date.now(),
         zuletztMs: 0,
       });
-      return json(res, 200, { ok: true });
+      return json(res, 200, { ok: true, art: 'web' });
     }
 
     if (url.pathname === '/api/push/abo' && req.method === 'DELETE') {
@@ -1232,7 +1282,7 @@ async function meldeRunde(): Promise<number> {
     if (!text) continue;
 
     accounts.storage.setMeta(`melde-${id}`, String(jetzt));
-    const r = await pushAn([id], { titel: 'Auf deinem Hof wartet was', text, art: 'fertig' });
+    const r = await pushAn([id], 'Auf deinem Hof wartet was', text, 'fertig');
     if (r.gesendet > 0) gemeldet++;
   }
   if (gemeldet > 0) console.log(`[melden] ${gemeldet} Höfe benachrichtigt`);
