@@ -148,7 +148,23 @@ export type PassiveDef = {
 
 // Erfolg: erreichbar über eine einfache, datengetriebene Bedingung; gibt beim
 // Einlösen einmalig Gold + XP.
-export type AchievementKind = 'level' | 'gold' | 'plot' | 'plotPrefix' | 'expand';
+export type AchievementKind =
+  | 'level'
+  | 'gold'
+  | 'plot'
+  | 'plotPrefix'
+  | 'expand'
+  | 'plots' // so viele Bauwerke stehen
+  | 'deko' // so viele Dekorationen stehen
+  | 'obstacles' // so viele Hindernisse geräumt
+  | 'silo' // Lager so oft ausgebaut
+  | 'fish' // so viele Fänge aus dem See
+  | 'boat' // Boot repariert
+  | 'item'; // so viel von einer Ware im Lager
+
+// Erfolge sind in Gruppen einsortiert; die Oberfläche zeigt sie darunter.
+export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat';
+
 export type AchievementDef = {
   id: string;
   label: string;
@@ -156,6 +172,9 @@ export type AchievementDef = {
   arg: number | string;
   gold: number;
   xp: number;
+  group?: AchievementGroup;
+  // Bei kind 'item': wie viel von der Ware (arg = Waren-Kennung).
+  menge?: number;
 };
 
 export type Ruleset = {
@@ -1864,6 +1883,60 @@ const V34: Ruleset = {
     { id: 'seaweed-order', wants: [want(SEAWEED, 4)], reward: gold(180), xp: 36 },
     { id: 'strand-mix', wants: [want(SEAWEED, 2), want(JUNK_CAN, 2)], reward: gold(150), xp: 30 },
   ],
+  // Erfolge: dieselben IDs wie bisher, dazu Gruppen und viele neue Ziele. Die
+  // alten Kennungen bleiben, damit schon eingelöste Erfolge eingelöst bleiben.
+  achievements: [
+    // — Hof: Bauwerke —
+    { id: 'mill', label: 'Erste Mühle bauen', kind: 'plot', arg: 'mill', gold: 150, xp: 20, group: 'hof' },
+    { id: 'coop', label: 'Ersten Hühnerstall bauen', kind: 'plotPrefix', arg: 'coop-', gold: 200, xp: 25, group: 'hof' },
+    { id: 'coop2', label: 'Zweiten Hühnerstall bauen', kind: 'plot', arg: 'coop-2', gold: 400, xp: 45, group: 'hof' },
+    { id: 'pasture', label: 'Kuhweide bauen', kind: 'plotPrefix', arg: 'pasture-', gold: 300, xp: 35, group: 'hof' },
+    { id: 'dairy', label: 'Molkerei bauen', kind: 'plot', arg: 'dairy', gold: 400, xp: 45, group: 'hof' },
+    { id: 'grill', label: 'Grill bauen', kind: 'plot', arg: 'grill', gold: 350, xp: 40, group: 'hof' },
+    { id: 'oven', label: 'Backofen bauen', kind: 'plot', arg: 'oven', gold: 500, xp: 55, group: 'hof' },
+    { id: 'apple', label: 'Apfelbaum pflanzen', kind: 'plotPrefix', arg: 'apple-tree', gold: 300, xp: 40, group: 'hof' },
+    { id: 'mine', label: 'Mine im Berg bauen', kind: 'plot', arg: 'mine', gold: 800, xp: 90, group: 'hof' },
+    { id: 'forge', label: 'Schmiede bauen', kind: 'plot', arg: 'forge', gold: 1000, xp: 110, group: 'hof' },
+    { id: 'plots5', label: 'Fünf Bauwerke stehen', kind: 'plots', arg: 5, gold: 200, xp: 30, group: 'hof' },
+    { id: 'plots12', label: 'Zwölf Bauwerke stehen', kind: 'plots', arg: 12, gold: 800, xp: 90, group: 'hof' },
+    { id: 'deko3', label: 'Drei Dekorationen aufstellen', kind: 'deko', arg: 3, gold: 150, xp: 20, group: 'hof' },
+    { id: 'deko8', label: 'Acht Dekorationen aufstellen', kind: 'deko', arg: 8, gold: 600, xp: 70, group: 'hof' },
+
+    // — Wohlstand: Stufe, Gold, Lager —
+    { id: 'lvl3', label: 'Stufe 3 erreichen', kind: 'level', arg: 3, gold: 250, xp: 30, group: 'wohlstand' },
+    { id: 'lvl5', label: 'Stufe 5 erreichen', kind: 'level', arg: 5, gold: 400, xp: 50, group: 'wohlstand' },
+    { id: 'lvl8', label: 'Stufe 8 erreichen', kind: 'level', arg: 8, gold: 900, xp: 120, group: 'wohlstand' },
+    { id: 'lvl15', label: 'Stufe 15 erreichen', kind: 'level', arg: 15, gold: 3000, xp: 350, group: 'wohlstand' },
+    { id: 'lvl20', label: 'Stufe 20 erreichen', kind: 'level', arg: 20, gold: 6000, xp: 600, group: 'wohlstand' },
+    { id: 'lvl30', label: 'Stufe 30 erreichen', kind: 'level', arg: 30, gold: 15000, xp: 1200, group: 'wohlstand' },
+    { id: 'gold1k', label: '1.000 Gold besitzen', kind: 'gold', arg: 1000, gold: 0, xp: 40, group: 'wohlstand' },
+    { id: 'gold10k', label: '10.000 Gold besitzen', kind: 'gold', arg: 10000, gold: 0, xp: 200, group: 'wohlstand' },
+    { id: 'gold50k', label: '50.000 Gold besitzen', kind: 'gold', arg: 50000, gold: 0, xp: 500, group: 'wohlstand' },
+    { id: 'silo2', label: 'Lager zweimal ausbauen', kind: 'silo', arg: 2, gold: 300, xp: 40, group: 'wohlstand' },
+    { id: 'silo4', label: 'Lager viermal ausbauen', kind: 'silo', arg: 4, gold: 1200, xp: 130, group: 'wohlstand' },
+
+    // — Land: freimachen und räumen —
+    { id: 'expand1', label: 'Erstes Land freimachen', kind: 'expand', arg: 1, gold: 250, xp: 30, group: 'land' },
+    { id: 'expand3', label: 'Drei Länder freimachen', kind: 'expand', arg: 3, gold: 900, xp: 100, group: 'land' },
+    { id: 'expand6', label: 'Sechs Länder freimachen', kind: 'expand', arg: 6, gold: 2000, xp: 220, group: 'land' },
+    { id: 'expand12', label: 'Zwölf Länder freimachen', kind: 'expand', arg: 12, gold: 5000, xp: 500, group: 'land' },
+    { id: 'clear10', label: 'Zehn Hindernisse räumen', kind: 'obstacles', arg: 10, gold: 200, xp: 30, group: 'land' },
+    { id: 'clear50', label: 'Fünfzig Hindernisse räumen', kind: 'obstacles', arg: 50, gold: 1000, xp: 120, group: 'land' },
+
+    // — Angelsee —
+    { id: 'boat', label: 'Das alte Boot reparieren', kind: 'boat', arg: 1, gold: 200, xp: 40, group: 'see' },
+    { id: 'fish10', label: 'Zehn Fänge einholen', kind: 'fish', arg: 10, gold: 300, xp: 40, group: 'see' },
+    { id: 'fish50', label: 'Fünfzig Fänge einholen', kind: 'fish', arg: 50, gold: 1200, xp: 150, group: 'see' },
+    { id: 'fish200', label: 'Zweihundert Fänge einholen', kind: 'fish', arg: 200, gold: 4000, xp: 420, group: 'see' },
+
+    // — Vorrat: was im Lager liegt —
+    { id: 'bread20', label: '20 Brote im Lager', kind: 'item', arg: 'bread', menge: 20, gold: 400, xp: 50, group: 'vorrat' },
+    { id: 'cheese10', label: '10 Käse im Lager', kind: 'item', arg: 'cheese', menge: 10, gold: 500, xp: 60, group: 'vorrat' },
+    { id: 'pie5', label: '5 Apfelkuchen im Lager', kind: 'item', arg: 'apple-pie', menge: 5, gold: 700, xp: 80, group: 'vorrat' },
+    { id: 'ironbar10', label: '10 Eisenbarren im Lager', kind: 'item', arg: 'iron-bar', menge: 10, gold: 700, xp: 80, group: 'vorrat' },
+    { id: 'goldbar5', label: '5 Goldbarren im Lager', kind: 'item', arg: 'gold-bar', menge: 5, gold: 1500, xp: 160, group: 'vorrat' },
+    { id: 'seaweed15', label: '15 Seegras im Lager', kind: 'item', arg: 'seaweed', menge: 15, gold: 350, xp: 45, group: 'vorrat' },
+  ],
 };
 
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
@@ -2109,26 +2182,72 @@ export function nextLevel(rules: Ruleset, plot: number, level: number): LevelDef
   return rules.plots[plot]?.levels[level] ?? null;
 }
 
-// Ist die Erfolgs-Bedingung erfüllt? Nimmt lose Werte statt State, um keinen
-// Ringimport rules<->state zu erzeugen. `builtIds` = IDs aller gebauten Plätze.
-export function achievementDone(
+// Alles, was ein Erfolg wissen muss. Lose Werte statt State, um keinen
+// Ringimport rules<->state zu erzeugen.
+export type AchievementCtx = {
+  level: number;
+  gold: number;
+  builtIds: readonly string[];
+  expandiert: number;
+  plotsGebaut: number;
+  dekoGebaut: number;
+  geraeumt: number;
+  siloLevel: number;
+  fisch: number;
+  boot: boolean;
+  items: readonly number[];
+};
+
+// Stand und Ziel eines Erfolgs — daraus ergeben sich Fortschrittsbalken UND
+// die Ja/Nein-Frage, ob er erfüllt ist. Eine Quelle, kein doppelter Code.
+export function achievementFortschritt(
+  rules: Ruleset,
   ach: AchievementDef,
-  ctx: { level: number; gold: number; builtIds: readonly string[]; expandiert: number },
-): boolean {
+  ctx: AchievementCtx,
+): { ist: number; ziel: number } {
   switch (ach.kind) {
     case 'level':
-      return ctx.level >= (ach.arg as number);
+      return { ist: ctx.level, ziel: ach.arg as number };
     case 'gold':
-      return ctx.gold >= (ach.arg as number);
+      return { ist: ctx.gold, ziel: ach.arg as number };
     case 'plot':
-      return ctx.builtIds.includes(ach.arg as string);
+      return { ist: ctx.builtIds.includes(ach.arg as string) ? 1 : 0, ziel: 1 };
     case 'plotPrefix':
-      return ctx.builtIds.some((id) => id.indexOf(ach.arg as string) === 0);
+      return {
+        ist: ctx.builtIds.some((id) => id.indexOf(ach.arg as string) === 0) ? 1 : 0,
+        ziel: 1,
+      };
     case 'expand':
-      return ctx.expandiert >= (ach.arg as number);
+      return { ist: ctx.expandiert, ziel: ach.arg as number };
+    case 'plots':
+      return { ist: ctx.plotsGebaut, ziel: ach.arg as number };
+    case 'deko':
+      return { ist: ctx.dekoGebaut, ziel: ach.arg as number };
+    case 'obstacles':
+      return { ist: ctx.geraeumt, ziel: ach.arg as number };
+    case 'silo':
+      return { ist: ctx.siloLevel, ziel: ach.arg as number };
+    case 'fish':
+      return { ist: ctx.fisch, ziel: ach.arg as number };
+    case 'boat':
+      return { ist: ctx.boot ? 1 : 0, ziel: 1 };
+    case 'item': {
+      const index = rules.items.findIndex((i) => i.id === (ach.arg as string));
+      const habe = index < 0 ? 0 : (ctx.items[index] ?? 0);
+      return { ist: habe, ziel: ach.menge ?? 1 };
+    }
     default:
-      return false;
+      return { ist: 0, ziel: 1 };
   }
+}
+
+export function achievementDone(
+  rules: Ruleset,
+  ach: AchievementDef,
+  ctx: AchievementCtx,
+): boolean {
+  const f = achievementFortschritt(rules, ach, ctx);
+  return f.ist >= f.ziel;
 }
 
 export type DerivedTables = {

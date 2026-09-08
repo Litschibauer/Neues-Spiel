@@ -1,4 +1,5 @@
 import type { Ruleset } from '../sim/rules.ts';
+import { erfolgsStand } from '../sim/sim.ts';
 import {
   levelOf,
   levelStartedAt,
@@ -13,6 +14,7 @@ import {
   recipeMinLevel,
   recipeUnlocked,
   sizeOf,
+  achievementFortschritt,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import { EMPTY_PLOT, capacityOf, count, stored } from '../sim/state.ts';
@@ -285,6 +287,24 @@ export type FarmView = {
   obstacles: readonly ObstacleView[];
   expansions: readonly ExpansionView[];
   angeln: AngelView;
+  erfolge: readonly ErfolgView[];
+};
+
+// Ein Erfolg mit allem, was die Oberfläche zum Zeichnen braucht: Fortschritt,
+// Gruppe und ob er schon eingelöst ist. Die Bedingung rechnet allein das
+// Regelwerk, hier steht nur das Ergebnis.
+export type ErfolgView = {
+  id: string;
+  label: string;
+  gruppe: string;
+  gold: number;
+  xp: number;
+  ist: number;
+  ziel: number;
+  erfuellt: boolean;
+  eingeloest: boolean;
+  // Fortschritt in Prozent, für den Balken.
+  prozent: number;
 };
 
 // Angelsee (eigene Dimension). null, wenn das Regelwerk keinen See kennt.
@@ -746,7 +766,31 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     })),
     openBoxes: state.pendingBoxes.length,
     angeln: angelView(state, rules),
+    erfolge: erfolgeView(state, rules),
   };
+}
+
+function erfolgeView(state: State, rules: Ruleset): readonly ErfolgView[] {
+  const liste = rules.achievements ?? [];
+  if (liste.length === 0) return [];
+  const ctx = erfolgsStand(state, rules);
+  const eingeloest = state.claimed ?? [];
+  return liste.map((a) => {
+    const f = achievementFortschritt(rules, a, ctx);
+    const ist = Math.min(f.ist, f.ziel);
+    return {
+      id: a.id,
+      label: a.label,
+      gruppe: a.group ?? 'hof',
+      gold: a.gold,
+      xp: a.xp,
+      ist,
+      ziel: f.ziel,
+      erfuellt: f.ist >= f.ziel,
+      eingeloest: eingeloest.includes(a.id),
+      prozent: f.ziel <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / f.ziel)),
+    };
+  });
 }
 
 function angelView(state: State, rules: Ruleset): AngelView {

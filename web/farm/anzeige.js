@@ -6,6 +6,11 @@ function render() {
   var v = NS.farmView(s, rules, marktLive());
 
   renderPurse(v);
+  // Die Menü-Bildschirme gehören zu keiner Zone: Sie müssen auch am See
+  // gezeichnet werden, sonst steht man dort vor leeren Listen.
+  renderBadges(v);
+  renderZiele(v);
+  renderHofinfo(v);
 
   // Angel-Dimension: eigenes Raster, eigene Objekte — die Hof-Renderer bleiben aus.
   if (typeof seeAktiv !== 'undefined' && seeAktiv) {
@@ -33,10 +38,7 @@ function render() {
   if (!typing) renderStand(v);
   renderAusbau(v);
   if (view === 'erweiterung') renderErweiterungSheet(v);
-  renderHofinfo(v);
-  renderBadges(v);
   renderBauliste(v);
-  renderZiele(v);
   renderSheet(v);
   bonusKnopf();
   $('see-hud').hidden = true;
@@ -790,60 +792,99 @@ function numberPick(label, get, lo, hi, set, maxLabel) {
   return row;
 }
 
-// Ziele & Erfolge — echte Erfolge aus dem Regelwerk mit Belohnung + Einlösen.
-function erfolgErfuellt(a, v, builtIds, expandiert) {
-  if (a.kind === 'level') return v.level >= a.arg;
-  if (a.kind === 'gold') return v.currency.amount >= a.arg;
-  if (a.kind === 'plot') return builtIds.indexOf(a.arg) >= 0;
-  if (a.kind === 'plotPrefix') return builtIds.some(function (id) { return id.indexOf(a.arg) === 0; });
-  if (a.kind === 'expand') return expandiert >= a.arg;
-  return false;
+// Ziele & Erfolge. Ob ein Erfolg erfüllt ist und wie weit er ist, rechnet
+// allein das Regelwerk (siehe view.ts) — hier wird nur sortiert und gemalt.
+var ZIEL_GRUPPEN = [
+  { id: 'hof', label: 'Hof', bild: 'wheat' },
+  { id: 'wohlstand', label: 'Wohlstand', bild: 'gold' },
+  { id: 'land', label: 'Land', bild: 'map' },
+  { id: 'see', label: 'Angelsee', bild: 'fish-perch' },
+  { id: 'vorrat', label: 'Vorrat', bild: 'plank' },
+];
+
+// Reihenfolge in einer Gruppe: zuerst was man abholen kann, dann die
+// angefangenen (die dichtesten zuerst), zuletzt das Erledigte.
+function zielRang(e) {
+  if (e.erfuellt && !e.eingeloest) return 0;
+  if (e.eingeloest) return 2;
+  return 1;
 }
 
 function renderZiele(v) {
-  var liste = rules.achievements || [];
+  var liste = v.erfolge || [];
   if (liste.length === 0) return;
-  var s = client.preview();
-  var claimed = s.claimed || [];
-  var builtIds = v.plots.filter(function (p) { return p.level > 0; }).map(function (p) { return p.id; });
-  var expandiert = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
 
-  var offen = 0;
-  liste.forEach(function (a) {
-    if (erfolgErfuellt(a, v, builtIds, expandiert) && claimed.indexOf(a.id) < 0) offen++;
-  });
+  var offen = liste.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var fertig = liste.filter(function (e) { return e.eingeloest; }).length;
   var marke = $('ziele-zahl');
-  if (marke) marke.textContent = offen > 0 ? offen + ' 🎁' : claimed.length + '/' + liste.length;
+  if (marke) marke.textContent = offen > 0 ? offen + ' 🎁' : fertig + '/' + liste.length;
 
   // Die Liste nur zeichnen, wenn der Ziele-Screen offen ist.
   if ($('ziele-bg').hidden) return;
   var box = $('ziele-liste');
   box.textContent = '';
-  liste.forEach(function (a) {
-    var ist = claimed.indexOf(a.id) >= 0;
-    var fertig = erfolgErfuellt(a, v, builtIds, expandiert);
-    var einloesbar = fertig && !ist;
-    var belohnung = (a.gold > 0 ? a.gold + ' Gold' : '') +
-      (a.gold > 0 && a.xp > 0 ? ' · ' : '') + (a.xp > 0 ? a.xp + ' XP' : '');
 
-    var row = document.createElement('div');
-    row.className = 'ziel' + (ist ? ' erreicht' : '') + (einloesbar ? ' offen' : '');
-    var rechts = ist
-      ? '<span class="ziel-hinweis">eingelöst</span>'
-      : einloesbar
-        ? '<button type="button" class="ziel-los" data-id="' + a.id + '">Einlösen</button>'
-        : '<span class="ziel-hinweis">' + belohnung + '</span>';
-    row.innerHTML =
-      '<span class="ziel-haken">' + (ist ? '✓' : fertig ? '★' : '○') + '</span>' +
-      '<span class="ziel-text">' + a.label +
-        '<span class="ziel-belohnung">Belohnung: ' + belohnung + '</span></span>' + rechts;
-    box.appendChild(row);
+  // Kopf: wie weit ist der ganze Hof?
+  var kopf = document.createElement('div');
+  kopf.className = 'ziel-kopf';
+  kopf.innerHTML =
+    '<div class="ziel-kopf-zahl"><b>' + fertig + '</b> von ' + liste.length + ' eingelöst</div>' +
+    '<span class="balken"><i style="width:' +
+      Math.floor((fertig * 100) / liste.length) + '%"></i></span>' +
+    (offen > 0 ? '<div class="ziel-kopf-hinweis">' + offen + ' warten auf dich</div>' : '');
+  box.appendChild(kopf);
+
+  ZIEL_GRUPPEN.forEach(function (gruppe) {
+    var teil = liste.filter(function (e) { return e.gruppe === gruppe.id; });
+    if (teil.length === 0) return;
+    teil.sort(function (a, b) {
+      var d = zielRang(a) - zielRang(b);
+      if (d !== 0) return d;
+      return b.prozent - a.prozent;
+    });
+
+    var titel = document.createElement('div');
+    titel.className = 'ziel-gruppe';
+    titel.innerHTML = iconTag(gruppe.bild) + '<span>' + gruppe.label + '</span>' +
+      '<span class="ziel-gruppe-zahl">' +
+      teil.filter(function (e) { return e.eingeloest; }).length + '/' + teil.length + '</span>';
+    box.appendChild(titel);
+
+    teil.forEach(function (e) { box.appendChild(zielZeile(e)); });
   });
+
   box.querySelectorAll('.ziel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
       act('Erfolg eingelöst', client.claimAchievement(btn.getAttribute('data-id')), 'stufe');
     });
   });
+}
+
+function zielZeile(e) {
+  var einloesbar = e.erfuellt && !e.eingeloest;
+  var belohnung = (e.gold > 0 ? e.gold + ' Gold' : '') +
+    (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
+
+  var row = document.createElement('div');
+  row.className = 'ziel' + (e.eingeloest ? ' erreicht' : '') + (einloesbar ? ' offen' : '');
+
+  // Bei zählbaren Zielen ein Balken mit Stand, sonst nur die Belohnung.
+  var fortschritt = e.ziel > 1 && !e.eingeloest
+    ? '<span class="ziel-fortschritt"><span class="balken"><i style="width:' + e.prozent +
+      '%"></i></span><span class="ziel-stand">' + e.ist + ' / ' + e.ziel + '</span></span>'
+    : '';
+
+  // Rechts steht, was es bringt — oder der Knopf, wenn es so weit ist.
+  var rechts = e.eingeloest
+    ? '<span class="ziel-hinweis erledigt">eingelöst</span>'
+    : einloesbar
+      ? '<button type="button" class="ziel-los" data-id="' + e.id + '">Einlösen</button>'
+      : '<span class="ziel-hinweis">' + belohnung.replace(' · ', '<br>') + '</span>';
+
+  row.innerHTML =
+    '<span class="ziel-haken">' + (e.eingeloest ? '✓' : e.erfuellt ? '★' : '○') + '</span>' +
+    '<span class="ziel-text">' + e.label + fortschritt + '</span>' + rechts;
+  return row;
 }
 
 function renderVorrat(v) {
@@ -1150,16 +1191,9 @@ function zeichnePreiswahl(v, box) {
 function renderBadges(v) {
   var punkt = $('zahnrad-punkt');
   if (!punkt) return;
-  var liste = rules.achievements || [];
-  var offen = 0;
-  if (liste.length) {
-    var claimed = client.preview().claimed || [];
-    var builtIds = v.plots.filter(function (p) { return p.level > 0; }).map(function (p) { return p.id; });
-    var expandiert = (v.expansions || []).filter(function (e) { return e.unlocked; }).length;
-    liste.forEach(function (a) {
-      if (claimed.indexOf(a.id) < 0 && erfolgErfuellt(a, v, builtIds, expandiert)) offen++;
-    });
-  }
+  var offen = (v.erfolge || []).filter(function (e) {
+    return e.erfuellt && !e.eingeloest;
+  }).length;
   punkt.hidden = offen === 0;
 }
 

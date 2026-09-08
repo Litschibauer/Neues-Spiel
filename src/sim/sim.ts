@@ -8,6 +8,7 @@ import {
   blockiert,
   baumStufe,
   achievementDone,
+  type AchievementCtx,
   obstacleLocked,
   landLocked,
   nextLevel,
@@ -156,6 +157,25 @@ function zieheFang(
     r -= t.weight;
   }
   return treffer;
+}
+
+// Alles, was Erfolge auswerten müssen — an einer Stelle, damit Sim und Ansicht
+// garantiert dasselbe rechnen.
+export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
+  const gebaut = rules.plots.filter((_, i) => (s.plots[i]?.level ?? 0) > 0);
+  return {
+    level: levelOf(rules, s.xp),
+    gold: count(s, rules.currency),
+    builtIds: gebaut.map((p) => p.id),
+    expandiert: (s.expandiert ?? []).length,
+    plotsGebaut: gebaut.filter((p) => !p.deco).length,
+    dekoGebaut: gebaut.filter((p) => p.deco).length,
+    geraeumt: (s.clearedObstacles ?? []).length,
+    siloLevel: s.siloLevel ?? 0,
+    fisch: s.angelFang ?? 0,
+    boot: !!s.bootRepariert,
+    items: s.items,
+  };
 }
 
 export function simulate(state: State, cmd: Command, rules: Ruleset): State {
@@ -337,13 +357,7 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!ach) throw new SimError('NO_SUCH_ACHIEVEMENT');
       if ((s.claimed ?? []).includes(cmd.id)) throw new SimError('ALREADY_CLAIMED');
 
-      const builtIds = rules.plots.filter((_, i) => (s.plots[i]?.level ?? 0) > 0).map((p) => p.id);
-      const erfuellt = achievementDone(ach, {
-        level: levelOf(rules, s.xp),
-        gold: count(s, rules.currency),
-        builtIds,
-        expandiert: (s.expandiert ?? []).length,
-      });
+      const erfuellt = achievementDone(rules, ach, erfolgsStand(s, rules));
       if (!erfuellt) throw new SimError('NOT_YET_EARNED');
 
       const next = cloneState(s);
