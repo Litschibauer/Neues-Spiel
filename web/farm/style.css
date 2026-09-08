@@ -211,7 +211,7 @@
   .plot.zieht.geht-nicht { filter: drop-shadow(0 0 0 var(--bad)) saturate(.4); opacity: .7; }
   .plot .art { display: block; width: 100%; height: 100%; }
   /* Pixelkacheln scharf hochziehen statt weichzeichnen. */
-  .art image, .scene image { image-rendering: pixelated; }
+  .art image, .scene image, .badge image, .ic { image-rendering: pixelated; }
   /* Die Welt ist schriftfrei: Name und Zustand eines Platzes stehen zwar im
      DOM (Vorleser, Tests), sind aber unsichtbar. Was ein Platz gerade tut,
      zeigt sein Bild plus eine mitzoomende Blase — die Schrift gehört ins

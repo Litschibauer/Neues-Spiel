@@ -1,8 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <path d="M8 30l26-14 4 7-24 13z" fill="#c3ccd2"/>
-  <path d="M8 30l6 6-6 2z" fill="#9aa4ac"/>
-  <path d="M34 16l4 7 4-2-3-7z" fill="#a9714f"/>
-  <path d="M38 14l6-3 3 6-6 3z" fill="#87573b"/>
-  <path d="M12 28l3 2 3-4 3 3 3-4 3 3 3-4 3 3" stroke="#7d8890" stroke-width="1.6"
-        fill="none" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<rect x="1" y="0" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="0" width="2" height="1" fill="#c98a52"/>
+<rect x="4" y="0" width="1" height="1" fill="#3b2b3c"/>
+<rect x="1" y="1" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="1" width="3" height="1" fill="#c98a52"/>
+<rect x="5" y="1" width="9" height="1" fill="#3b2b3c"/>
+<rect x="1" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="2" width="3" height="1" fill="#c98a52"/>
+<rect x="5" y="2" width="9" height="1" fill="#c9c9d2"/>
+<rect x="14" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="3" width="2" height="1" fill="#c98a52"/>
+<rect x="5" y="3" width="2" height="1" fill="#c9c9d2"/>
+<rect x="7" y="3" width="1" height="1" fill="#9a9aa3"/>
+<rect x="8" y="3" width="6" height="1" fill="#c9c9d2"/>
+<rect x="14" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="4" y="4" width="6" height="1" fill="#c9c9d2"/>
+<rect x="10" y="4" width="1" height="1" fill="#9a9aa3"/>
+<rect x="11" y="4" width="3" height="1" fill="#c9c9d2"/>
+<rect x="14" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="4" y="5" width="10" height="1" fill="#c9c9d2"/>
+<rect x="14" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="4" y="6" width="1" height="1" fill="#c9c9d2"/>
+<rect x="5" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="6" width="1" height="1" fill="#c9c9d2"/>
+<rect x="7" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="8" y="6" width="1" height="1" fill="#c9c9d2"/>
+<rect x="9" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="10" y="6" width="1" height="1" fill="#c9c9d2"/>
+<rect x="11" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="12" y="6" width="1" height="1" fill="#c9c9d2"/>
+<rect x="13" y="6" width="1" height="1" fill="#3b2b3c"/>
 </svg>

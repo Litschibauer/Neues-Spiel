@@ -1,5 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <path d="M16 14c7-4 15-1 16 6 7-1 12 4 10 11-2 6-9 8-15 6-5 4-13 3-16-3-3-5-1-11 4-13-2-6 0-11 1-13z" fill="#fbf6ec"/>
-  <circle cx="24" cy="24" r="7" fill="#f4b826"/>
-  <circle cx="22" cy="22" r="2.4" fill="#f8d26a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<rect x="3" y="0" width="2" height="1" fill="#3b2b3c"/>
+<rect x="5" y="0" width="5" height="1" fill="#f4ecd8"/>
+<rect x="10" y="0" width="2" height="1" fill="#3b2b3c"/>
+<rect x="2" y="1" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="1" width="9" height="1" fill="#f4ecd8"/>
+<rect x="12" y="1" width="1" height="1" fill="#3b2b3c"/>
+<rect x="1" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="2" width="4" height="1" fill="#f4ecd8"/>
+<rect x="6" y="2" width="3" height="1" fill="#f2c14e"/>
+<rect x="9" y="2" width="4" height="1" fill="#f4ecd8"/>
+<rect x="13" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="1" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="3" width="3" height="1" fill="#f4ecd8"/>
+<rect x="5" y="3" width="1" height="1" fill="#f2c14e"/>
+<rect x="6" y="3" width="1" height="1" fill="#f8e08a"/>
+<rect x="7" y="3" width="3" height="1" fill="#f2c14e"/>
+<rect x="10" y="3" width="3" height="1" fill="#f4ecd8"/>
+<rect x="13" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="1" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="4" width="3" height="1" fill="#f4ecd8"/>
+<rect x="5" y="4" width="5" height="1" fill="#f2c14e"/>
+<rect x="10" y="4" width="3" height="1" fill="#f4ecd8"/>
+<rect x="13" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="1" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="5" width="4" height="1" fill="#f4ecd8"/>
+<rect x="6" y="5" width="3" height="1" fill="#f2c14e"/>
+<rect x="9" y="5" width="4" height="1" fill="#f4ecd8"/>
+<rect x="13" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="2" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="6" width="9" height="1" fill="#f4ecd8"/>
+<rect x="12" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="3" y="7" width="2" height="1" fill="#3b2b3c"/>
+<rect x="5" y="7" width="5" height="1" fill="#f4ecd8"/>
+<rect x="10" y="7" width="2" height="1" fill="#3b2b3c"/>
 </svg>

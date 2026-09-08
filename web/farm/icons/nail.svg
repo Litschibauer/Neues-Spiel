@@ -1,5 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <path d="M14 10h20v5l-6 3-4 24-4-24-6-3z" fill="#9aa4ac"/>
-  <path d="M24 10h10v5l-6 3-4 24z" fill="#7d8890"/>
-  <rect x="12" y="8" width="24" height="5" rx="2" fill="#b6bfc6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<rect x="4" y="0" width="1" height="1" fill="#3b2b3c"/>
+<rect x="5" y="0" width="5" height="1" fill="#c9c9d2"/>
+<rect x="10" y="0" width="1" height="1" fill="#3b2b3c"/>
+<rect x="5" y="1" width="2" height="1" fill="#3b2b3c"/>
+<rect x="7" y="1" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="1" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="2" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="2" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="3" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="3" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="4" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="4" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="5" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="5" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="6" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="6" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="7" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="7" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="7" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="8" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="8" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="8" width="1" height="1" fill="#3b2b3c"/>
+<rect x="6" y="9" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="9" width="2" height="1" fill="#9a9aa3"/>
+<rect x="9" y="9" width="1" height="1" fill="#3b2b3c"/>
+<rect x="7" y="10" width="1" height="1" fill="#3b2b3c"/>
+<rect x="8" y="10" width="1" height="1" fill="#9a9aa3"/>
+<rect x="9" y="10" width="1" height="1" fill="#3b2b3c"/>
 </svg>

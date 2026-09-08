@@ -321,7 +321,7 @@ function artMoebelRaum(id, k, z) {
   if (id === 'nachbarn') return schatten(k, 24, u, 34) + bild(k, 'bauer', 8, u - 17) + bild(k, 'baeuerin', 24, u - 17);
   if (id === 'wagen') {
     return '<g opacity="' + (z.unterwegs ? 0.45 : 1) + '">' + schatten(k, 32, u, 40) +
-      bild(k, 'wagen', 16, u - 32, 32, 32) + '</g>';
+      bild(k, 'lkw', 16, u - 32, 32, 32) + '</g>';
   }
   if (id === 'kiste') return schatten(k, 16, u, 30) + bild(k, 'truhe', 0, u - 32, 32, 32);
   if (id === 'schatz') return bild(k, 'truhe-blau', 0, u - 15);

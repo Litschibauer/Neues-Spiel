@@ -2,7 +2,10 @@ Pixelkacheln aus den „Tiny“-Paketen von Kenney, www.kenney.nl:
   Tiny Farm (1.0)     https://kenney.nl/assets/tiny-farm
   Tiny Town (1.x)     https://kenney.nl/assets/tiny-town
   Tiny Factory (1.x)  https://kenney.nl/assets/tiny-factory
+  Tiny Dungeon (1.x)  https://kenney.nl/assets/tiny-dungeon
+  Tiny Battle (1.x)   https://kenney.nl/assets/tiny-battle
 Lizenz: Creative Commons CC0 1.0 — frei fuer private und kommerzielle Nutzung,
-keine Namensnennung noetig. Die Dateien hier sind einzelne, umbenannte Kacheln
-(16 x 16 px) aus diesen Paketen. Einige Motive (Boot, Muehlenfluegel, Teich,
+keine Namensnennung noetig. Die Dateien hier und die Warensymbole unter
+web/farm/icons/*.png sind einzelne, umbenannte Kacheln (16 x 16 px) aus
+diesen Paketen. Einige Motive (Boot, Muehlenfluegel, Teich,
 Wasser) sind im selben Stil selbst gezeichnet, siehe bilder.js.
