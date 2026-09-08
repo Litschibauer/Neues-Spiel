@@ -305,10 +305,23 @@ function renderMoebel(v) {
   if (ohneOrt.length > 0) { moebel(kiste, artKiste(), 'Kiste', ohneOrt.length); setzeMoebel('kiste'); }
 }
 
+// Hindernisse und Sperrflaechen sind fast immer unveraendert — es waere
+// Verschwendung, sie jede Sekunde neu zu bauen. Bei einem grossen Hof sind das
+// ueber 500 Knoepfe mit eigenem SVG; genau daran hat die Oberflaeche geruckelt.
+// Darum: nur neu zeichnen, wenn sich der Inhalt tatsaechlich unterscheidet.
+var hindernisStand = null;
+var sperrStand = null;
+
 function renderHindernisse(v) {
   var box = $('hindernisse');
+  if (!hatRaster()) { box.textContent = ''; hindernisStand = null; return; }
+
+  var stand = raster().w + 'x' + raster().h + '|' + v.obstacles.map(function (h) {
+    return h.index + (h.removable ? 'r' : '') + (h.locked ? 'l' : '');
+  }).join(',');
+  if (stand === hindernisStand) return;
+  hindernisStand = stand;
   box.textContent = '';
-  if (!hatRaster()) return;
 
   v.obstacles.forEach(function (h) {
     var kasten = hindernisKasten(h);
@@ -359,8 +372,14 @@ function sperrGebuesch(e) {
 function renderErweiterungen(v) {
   var box = $('erweiterungen');
   if (!box) return;
+  if (!hatRaster()) { box.textContent = ''; sperrStand = null; return; }
+
+  var stand = raster().w + 'x' + raster().h + '|' + (v.expansions || []).map(function (e) {
+    return e.id + (e.unlocked ? 'u' : '') + (e.reachedLevel ? 'r' : '') + (e.affordable ? 'a' : '');
+  }).join(',');
+  if (stand === sperrStand) return;
+  sperrStand = stand;
   box.textContent = '';
-  if (!hatRaster()) return;
 
   (v.expansions || []).forEach(function (e) {
     if (e.unlocked) return;

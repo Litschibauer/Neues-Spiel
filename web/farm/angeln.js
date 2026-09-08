@@ -68,6 +68,10 @@ function renderSeeWelt(v) {
   ['hindernisse', 'erweiterungen', 'kisten'].forEach(function (id) {
     var e = $(id); if (e) e.textContent = '';
   });
+  // Der Hof merkt sich, was er zuletzt gezeichnet hat. Hier wird es geleert,
+  // also muss die Erinnerung mit — sonst bleibt der Hof nach der Rueckkehr leer.
+  hindernisStand = null;
+  sperrStand = null;
 
   $('hof').classList.remove('kein-raster');
   var scene = $('scene');

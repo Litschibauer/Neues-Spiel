@@ -190,11 +190,29 @@ function weltFormat() {
   w.style.aspectRatio = raster().w + ' / ' + gesamtReihen();
 }
 
+// Kacheln sollen IMMER gleich gross aussehen — egal wie gross das Raster ist.
+// Darum wird der Zoom aus einer Ziel-Kachelgroesse abgeleitet (kurze
+// Bildschirmseite geteilt durch ZIEL_ZELLE) statt aus „ganzer Hof ins Bild".
+// Sonst schrumpft alles, sobald der Hof waechst.
+var ZIEL_ZELLE = 8;
+var WEITEST_ZELLE = 22;
+var MAX_ZOOM = 6;
+
+function zoomFuerZellen(teiler) {
+  var k = $('hof').getBoundingClientRect();
+  if (k.height <= 0) return 1;
+  var zelle = Math.min(k.width, k.height) / teiler;
+  return (zelle * gesamtReihen()) / k.height;
+}
+
 function zoomMin() {
   var k = $('hof').getBoundingClientRect();
   if (k.height <= 0) return 1;
   var baseW = k.height * (raster().w / gesamtReihen());
-  return Math.min(1, k.width / baseW);
+  var passt = Math.min(1, k.width / baseW);
+  if (seeAktiv) return passt;
+  // Nicht beliebig weit heraus: sonst wird der Hof zu Pixelbrei.
+  return Math.max(passt, zoomFuerZellen(WEITEST_ZELLE));
 }
 
 function kameraKlemmen() {
@@ -209,7 +227,7 @@ function kameraAnwenden() {
   var w = $('welt');
   if (!w) return;
   if (!kamera.gesetzt) return;
-  kamera.z = Math.max(zoomMin(), Math.min(4.5, kamera.z));
+  kamera.z = Math.max(zoomMin(), Math.min(MAX_ZOOM, kamera.z));
   kameraKlemmen();
   w.style.transform = 'translate(' + kamera.x + 'px,' + kamera.y + 'px) scale(' + effZoom() + ')';
 }
@@ -228,30 +246,83 @@ function istQuer() {
   return k.width > k.height * 1.4;
 }
 
+// Mitte des eigenen Hofs: Dort soll die Kamera starten, nicht in der Ecke des
+// riesigen Rasters, von dem das meiste gesperrt ist.
+function hofGebiet() {
+  var plots = (typeof client !== 'undefined' && client && client.preview)
+    ? client.preview().plots
+    : [];
+  var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, n = 0;
+  for (var i = 0; i < plots.length; i++) {
+    var p = plots[i];
+    // Nur GEBAUTES zaehlt. Die feste Mine steht schon platziert im fernen
+    // Sperrland — sie wuerde das Gebiet sonst ueber den halben Hof aufziehen.
+    if (!p || p.gx < 0 || p.level <= 0) continue;
+    var g = (rules.plots[i] && rules.plots[i].size) || { w: 1, h: 1 };
+    if (p.gx < minX) minX = p.gx;
+    if (p.gy < minY) minY = p.gy;
+    if (p.gx + g.w > maxX) maxX = p.gx + g.w;
+    if (p.gy + g.h > maxY) maxY = p.gy + g.h;
+    n++;
+  }
+  if (n === 0) {
+    return { gx: raster().w / 2, gy: raster().h / 2, w: raster().w, h: raster().h };
+  }
+  return {
+    gx: (minX + maxX) / 2,
+    gy: (minY + maxY) / 2,
+    w: maxX - minX,
+    h: maxY - minY,
+  };
+}
+
+function hofMitte() {
+  var g = hofGebiet();
+  return { gx: g.gx, gy: g.gy };
+}
+
+// Zoom, bei dem ein Gebiet von w x h Zellen (plus etwas Luft) gerade ins Bild passt.
+function zoomFuerGebiet(w, h) {
+  var k = $('hof').getBoundingClientRect();
+  if (k.height <= 0) return 1;
+  var zelle = Math.min(k.width / (w + 2), k.height / (h + 2));
+  return (zelle * gesamtReihen()) / k.height;
+}
+
+function zentriere(gx, gy) {
+  var k = $('hof').getBoundingClientRect();
+  var m = weltMasse();
+  kamera.x = k.width / 2 - (gx / raster().w) * m.w;
+  kamera.y = k.height / 2 - ((gy + BAND) / gesamtReihen()) * m.h;
+}
+
 function kameraStart() {
   weltFormat();
   var k = $('hof').getBoundingClientRect();
   if (k.width <= 0) return;
-  var z;
-  if (istQuer()) {
-    // Querformat: der breite Hof passt in der Höhe komplett hinein, man schwenkt
-    // waagerecht. z = 1 füllt genau die Höhe (welt ist 100 % hoch).
-    z = 1;
-  } else {
-    // Hochformat: rund 15 Spalten breit zeigen, senkrecht schwenken.
-    var ziel = Math.min(raster().w, 15);
-    z = (k.width * gesamtReihen()) / (k.height * ziel);
-  }
-  kamera.z = Math.max(zoomMin(), Math.min(4.5, z));
-  kamera.x = 0;
-  kamera.y = 0;
+
   kamera.gesetzt = true;
+  if (seeAktiv) {
+    // Der See ist eine kleine, gebaute Szene — die zeigt man ganz.
+    kamera.z = Math.max(zoomMin(), Math.min(MAX_ZOOM, 1));
+    kamera.x = 0;
+    kamera.y = 0;
+    kameraAnwenden();
+    return;
+  }
+
+  // Feste Kachelgroesse — aber nie so nah, dass der eigene Hof nicht mehr ins
+  // Bild passt. Der kleinere der beiden Werte gewinnt.
+  var gebiet = hofGebiet();
+  var z = Math.min(zoomFuerZellen(ZIEL_ZELLE), zoomFuerGebiet(gebiet.w, gebiet.h));
+  kamera.z = Math.max(zoomMin(), Math.min(MAX_ZOOM, z));
+  zentriere(gebiet.gx, gebiet.gy);
   kameraAnwenden();
 }
 
 function kameraZoomen(faktor, mx, my) {
   var alt = effZoom();
-  kamera.z = Math.max(zoomMin(), Math.min(4.5, kamera.z * faktor));
+  kamera.z = Math.max(zoomMin(), Math.min(MAX_ZOOM, kamera.z * faktor));
   var neu = effZoom();
   var k = $('hof').getBoundingClientRect();
   var px = mx - k.left, py = my - k.top;
