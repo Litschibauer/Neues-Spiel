@@ -1364,9 +1364,10 @@ function wuchern(
   kind: Obstacle['kind'],
   prozent: number,
   belegt: Set<number>,
+  saat = 1,
 ): Obstacle[] {
   const out: Obstacle[] = [];
-  let seed = (e.gx * 73856 + e.gy * 19349 + 1) & 0x7fffffff;
+  let seed = (e.gx * 73856 + e.gy * 19349 + saat) & 0x7fffffff;
   const n = Math.floor((e.w * e.h * prozent) / 100);
   for (let k = 0; k < n * 5 && out.length < n; k++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -1691,6 +1692,70 @@ const UNTEN_LAND: Expansion[] = (() => {
   return out;
 })();
 
+// Alle freizuschaltenden Felder von v33. Die Berg-Felder werden wieder 13 breit:
+// v24 hatte sie auf 11 geschnitten, damit rechts (Spalte 50/51) Platz für die
+// feste Mine bleibt — die steht jetzt aber mitten im Sperrland, also schloss die
+// alte Lücke sonst ein Streifen offenes Land mitten im Gesperrten.
+const V33_ERWEITERUNGEN: Expansion[] = [
+  ...(V32.expansions ?? []).map((e) => (e.id === 'm1' || e.id === 'm2' ? { ...e, w: 13 } : e)),
+  // Neues Land rechts (gx 52–103), in zwei Bändern, ansteigende Stufe/Kosten.
+  { id: 'n1', gx: 52, gy: 0, w: 13, h: 7, minLevel: 14, cost: [want(MAP, 7), want(MALLET, 8), want(STAKE, 13)] },
+  { id: 'n2', gx: 65, gy: 0, w: 13, h: 7, minLevel: 16, cost: [want(MAP, 8), want(MALLET, 10), want(STAKE, 15)] },
+  { id: 'n3', gx: 78, gy: 0, w: 13, h: 7, minLevel: 18, cost: [want(MAP, 10), want(MALLET, 12), want(STAKE, 18)] },
+  { id: 'n4', gx: 91, gy: 0, w: 13, h: 7, minLevel: 20, cost: [want(MAP, 12), want(MALLET, 14), want(STAKE, 22)] },
+  { id: 'n5', gx: 52, gy: 7, w: 13, h: 6, minLevel: 15, cost: [want(MAP, 8), want(MALLET, 9), want(STAKE, 14)] },
+  { id: 'n6', gx: 65, gy: 7, w: 13, h: 6, minLevel: 17, cost: [want(MAP, 9), want(MALLET, 11), want(STAKE, 16)] },
+  { id: 'n7', gx: 78, gy: 7, w: 13, h: 6, minLevel: 19, cost: [want(MAP, 11), want(MALLET, 13), want(STAKE, 20)] },
+  { id: 'n8', gx: 91, gy: 7, w: 13, h: 6, minLevel: 22, cost: [want(MAP, 13), want(MALLET, 16), want(STAKE, 24)] },
+  // Neues Land unten (gy 13–25, volle Breite).
+  ...UNTEN_LAND,
+];
+
+// Jede freizuschaltende Region soll gemischtes Unkraut tragen: Bäume, Teiche UND
+// Steine. Bisher hatten die Berg-Felder nur Steine und das ganze neue Land gar
+// nichts. Fehlende Arten werden deterministisch nachgestreut, bis die Region
+// etwa so bewachsen ist wie die ersten Felder (~21 %).
+const V33_ZIEL_UNKRAUT = 21;
+const V33_ARTEN: readonly Obstacle['kind'][] = ['tree', 'pond', 'rock'];
+
+const V33_BELEGT = belegteZellen(V32.obstacles ?? []);
+// Die Startplätze der Bauwerke bleiben frei — vor allem die feste Mine, die
+// mitten im Berg-Feld steht und sonst zugewuchert würde.
+for (const p of V32.plots) {
+  const ort = p.id === 'mine' ? at(91, 26, 3, 3) : p.place;
+  if (!ort) continue;
+  const gx = Math.floor((ort.x * 52) / 100);
+  const gy = Math.floor((ort.y * 13) / 100);
+  const g = p.size ?? { w: 1, h: 1 };
+  for (let dx = 0; dx < g.w; dx++) {
+    for (let dy = 0; dy < g.h; dy++) V33_BELEGT.add(zelleSchluessel(gx + dx, gy + dy));
+  }
+}
+
+const V33_HINDERNISSE: Obstacle[] = [...(V32.obstacles ?? [])];
+for (const e of V33_ERWEITERUNGEN) {
+  const da = new Set<string>();
+  let drin = 0;
+  for (const h of V33_HINDERNISSE) {
+    if (h.gx >= e.gx && h.gx < e.gx + e.w && h.gy >= e.gy && h.gy < e.gy + e.h) {
+      da.add(h.kind);
+      drin += 1;
+    }
+  }
+  const fehlt = V33_ARTEN.filter((k) => !da.has(k));
+  if (fehlt.length === 0) continue;
+  // Was schon da ist, wird angerechnet: dichte Berg-Felder bekommen nur einen
+  // Schuss Grün dazu, leeres Neuland die volle Mischung.
+  const jetzt = Math.floor((drin * 100) / (e.w * e.h));
+  const budget = Math.max(fehlt.length * 3, V33_ZIEL_UNKRAUT - jetzt);
+  const proArt = Math.max(3, Math.floor(budget / fehlt.length));
+  let saat = 1;
+  for (const kind of fehlt) {
+    saat += 1;
+    V33_HINDERNISSE.push(...wuchern(e, kind, proArt, V33_BELEGT, saat));
+  }
+}
+
 const V33: Ruleset = {
   ...V32,
   version: 33,
@@ -1710,20 +1775,8 @@ const V33: Ruleset = {
     const gy = Math.floor((q.place.y * 13) / 100);
     return { ...q, startCell: { gx, gy } };
   }),
-  expansions: [
-    ...(V32.expansions ?? []),
-    // Neues Land (gx 52–103), in zwei Bändern gekachelt, ansteigende Stufe/Kosten.
-    { id: 'n1', gx: 52, gy: 0, w: 13, h: 7, minLevel: 14, cost: [want(MAP, 7), want(MALLET, 8), want(STAKE, 13)] },
-    { id: 'n2', gx: 65, gy: 0, w: 13, h: 7, minLevel: 16, cost: [want(MAP, 8), want(MALLET, 10), want(STAKE, 15)] },
-    { id: 'n3', gx: 78, gy: 0, w: 13, h: 7, minLevel: 18, cost: [want(MAP, 10), want(MALLET, 12), want(STAKE, 18)] },
-    { id: 'n4', gx: 91, gy: 0, w: 13, h: 7, minLevel: 20, cost: [want(MAP, 12), want(MALLET, 14), want(STAKE, 22)] },
-    { id: 'n5', gx: 52, gy: 7, w: 13, h: 6, minLevel: 15, cost: [want(MAP, 8), want(MALLET, 9), want(STAKE, 14)] },
-    { id: 'n6', gx: 65, gy: 7, w: 13, h: 6, minLevel: 17, cost: [want(MAP, 9), want(MALLET, 11), want(STAKE, 16)] },
-    { id: 'n7', gx: 78, gy: 7, w: 13, h: 6, minLevel: 19, cost: [want(MAP, 11), want(MALLET, 13), want(STAKE, 20)] },
-    { id: 'n8', gx: 91, gy: 7, w: 13, h: 6, minLevel: 22, cost: [want(MAP, 13), want(MALLET, 16), want(STAKE, 24)] },
-    // Neuland nach unten (gy 13–25, volle Breite).
-    ...UNTEN_LAND,
-  ],
+  expansions: V33_ERWEITERUNGEN,
+  obstacles: V33_HINDERNISSE,
   items: [
     ...V32.items,
     // Köder wird nicht mehr gekauft (npcBuyPrice 0), sondern im Strandhaus aus

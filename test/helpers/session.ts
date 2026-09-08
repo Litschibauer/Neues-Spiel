@@ -6,6 +6,7 @@ import {
   levelOf,
   levelRecipes,
   nextLevel,
+  obstacleLocked,
   offerLimits,
   priceBand,
   sizeOf,
@@ -364,6 +365,10 @@ export function playRandomSession(
 
     (rules.obstacles ?? []).forEach((h, i) => {
       if (s.clearedObstacles.includes(i)) return;
+      // Im gesperrten Land lässt sich nichts wegräumen — solche Züge lehnt der
+      // Sim immer ab. Sie gehören in den Chaos-Zweig, nicht in die Zugliste,
+      // sonst ertränken sie bei viel Unkraut alle echten Züge.
+      if (obstacleLocked(rules, i, s.expandiert)) return;
       const art = rules.obstacleKinds?.[h.kind];
       if (art && count(s, art.tool) >= 1) moves.push(() => client.clearObstacle(i));
     });

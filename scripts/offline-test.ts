@@ -2955,7 +2955,14 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   check('Das Land um die Mine lässt sich freimachen', landFrei);
 
   // Die Mine ist fest — man baut sie an ihrem (nun freien) Platz am Berg.
-  const mineGebaut = await evaluate<{ gefunden: boolean; nachStufe: number; idx: number }>(
+  // Ein Tipp auf ein noch nicht gebautes Bauwerk zeigt erst die Bau-Info
+  // (Stufe, Kosten, freies Land); gebaut wird über den Knopf darin.
+  const mineGebaut = await evaluate<{
+    gefunden: boolean;
+    info: string;
+    knopf: string;
+    idx: number;
+  }>(
     cdp,
     `(function () {
        function tile() {
@@ -2964,11 +2971,20 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
          });
        }
        var t = tile();
-       if (!t) return { gefunden: false, nachStufe: 0, idx: -1 };
+       if (!t) return { gefunden: false, info: 'keine Kachel', knopf: '', idx: -1 };
        var idx = parseInt(t.dataset.platz, 10);
        t.click();
-       return { gefunden: true, nachStufe: 0, idx: idx };
+       var info = document.getElementById('pick-list').textContent || '';
+       var bauen = document.querySelector('#pick-list .abfahrt');
+       var knopf = bauen ? bauen.textContent : '';
+       if (bauen && !bauen.disabled) bauen.click();
+       return { gefunden: true, info: info, knopf: knopf, idx: idx };
      })()`,
+  );
+  check(
+    'Ein Tipp auf die ungebaute Mine zeigt, was sie braucht',
+    /Stufe/.test(mineGebaut.info) && /Bretter|Nägel|Gold/.test(mineGebaut.info),
+    mineGebaut.info.slice(0, 120),
   );
   await sleep(600);
   const truthMine = (await api(`/api/admin/status?account=${status.accountId}`)) as {

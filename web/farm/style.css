@@ -220,6 +220,12 @@
   .plot.locked .art { filter: saturate(.2) brightness(.97) opacity(.55); }
   .plot.gated { opacity: .5; }
   .plot[disabled] { cursor: default; }
+  /* Noch nicht gebautes festes Bauwerk (Mine): steht als Ziel im Sperrland und
+     muss sich gegen die dunkle „Neues Land"-Kachel behaupten. */
+  .plot.wahrzeichen { opacity: 1; }
+  .plot.wahrzeichen .art { filter: saturate(.55) brightness(1.15) drop-shadow(0 2px 5px rgba(0, 0, 0, .55)); }
+  .plot.wahrzeichen .meta { background: color-mix(in srgb, var(--surface) 94%, transparent); }
+  .plot.wahrzeichen .name { color: var(--text); }
 
   .plot .badge {
     position: absolute; top: -.55rem; left: 50%; transform: translateX(-50%);

@@ -165,7 +165,12 @@ function renderPlots(v) {
     tile.style.top = ort.top + '%';
     tile.style.width = ort.width + '%';
     tile.style.height = ort.height + '%';
-    tile.style.zIndex = String(1 + Math.round(ort.tiefe * 2));
+    // Ein festes, noch nicht gebautes Bauwerk (die Mine) steht mitten im
+    // Sperrland. Es liegt bewusst ÜBER der Sperrkachel, damit man es als Ziel
+    // sieht und antippen kann — sonst verschwindet es unter „Neues Land".
+    var wahrzeichen = p.level <= 0 && rules.plots[p.index] && rules.plots[p.index].fixed;
+    tile.classList.toggle('wahrzeichen', !!wahrzeichen);
+    tile.style.zIndex = wahrzeichen ? '58' : String(1 + Math.round(ort.tiefe * 2));
     tile.dataset.platz = String(p.index);
     tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 

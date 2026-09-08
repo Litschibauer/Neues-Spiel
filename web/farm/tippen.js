@@ -52,6 +52,9 @@ function tapPlot(i) {
     }
     return;
   }
+  // Noch nicht gebaut? Erst zeigen, was es braucht (Stufe, Kosten, freies Land)
+  // — statt still Gold abzubuchen oder gar nicht zu reagieren.
+  if (p.level <= 0 && p.upgrade) { oeffneBauInfo(p.index); return; }
   if (p.tap === 'buy') { tapBuy(i); return; }
 
   // Läuft das Gebäude gerade (Slot belegt)? Menü mit Status zeigen, statt beim
@@ -225,6 +228,81 @@ function verschiebeKnopf(p, box) {
   box.appendChild(reihe);
 }
 
+// Welches gesperrte Feld liegt unter einem Platz? null, wenn das Land frei ist.
+function gesperrtesLandFuer(v, p) {
+  var g = (rules.plots[p.index] && rules.plots[p.index].size) || { w: 1, h: 1 };
+  if (p.gx < 0) return null;
+  var treffer = null;
+  (v.expansions || []).forEach(function (e) {
+    if (e.unlocked || treffer) return;
+    var raus =
+      p.gx + g.w <= e.gx || e.gx + e.w <= p.gx || p.gy + g.h <= e.gy || e.gy + e.h <= p.gy;
+    if (!raus) treffer = e;
+  });
+  return treffer;
+}
+
+// Bau-Info für ein noch nicht gebautes Bauwerk: Was kostet es, ab welcher Stufe,
+// und liegt das Land drumherum überhaupt frei?
+function oeffneBauInfo(plot) {
+  sheet = { plot: plot, mode: 'bauinfo', slot: 0 };
+  pickerPlot = plot;
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  zeichneBauInfo(v, v.plots[plot]);
+  $('pick-bg').hidden = false;
+}
+
+function zeilenKarte(box, titel, text, ok) {
+  var karte = document.createElement('div');
+  karte.className = 'card opt' + (ok ? '' : ' laufend');
+  karte.innerHTML =
+    '<div class="body"><div class="top">' + titel + '</div>' +
+    '<div class="sub">' + text + '</div></div>' +
+    '<span class="yield">' + (ok ? '✓' : '✗') + '</span>';
+  box.appendChild(karte);
+}
+
+function zeichneBauInfo(v, p) {
+  if (!p || !p.upgrade) { closePicker(); return; }
+  var u = p.upgrade;
+  var land = gesperrtesLandFuer(v, p);
+  $('pick-title').textContent = plotName(p.index) + ' — noch nicht gebaut';
+
+  var box = $('pick-list');
+  box.textContent = '';
+
+  zeilenKarte(box, 'Stufe ' + u.minPlayerLevel, u.unlocked
+    ? 'Stufe reicht'
+    : 'Du bist noch nicht so weit', u.unlocked);
+
+  zeilenKarte(box, 'Baukosten', stacksMitBild(u.cost) +
+    (u.affordable ? '' : ' · fehlt noch etwas'), u.affordable);
+
+  if (land) {
+    zeilenKarte(box, 'Land freimachen',
+      'Steht im gesperrten Land — erst „' + (land.reachedLevel
+        ? 'Neues Land' : 'ab Stufe ' + land.minLevel) + '" freimachen', false);
+  }
+
+  var geht = u.unlocked && u.affordable && !land;
+  var knopf = document.createElement('button');
+  knopf.type = 'button';
+  knopf.className = 'abfahrt';
+  knopf.disabled = !geht;
+  knopf.textContent = geht
+    ? 'Bauen · ' + costText(u.cost)
+    : land
+      ? 'Erst das Land freimachen'
+      : !u.unlocked
+        ? 'Erst ab Stufe ' + u.minPlayerLevel
+        : 'Es fehlt noch Material';
+  knopf.addEventListener('click', function () {
+    closePicker();
+    tapBuy(p.index);
+  });
+  box.appendChild(knopf);
+}
+
 // Ausbauen-Karte im Menü statt einer schwebenden „+ Kosten"-Blase am Platz.
 function ausbauKnopf(p, box) {
   if (!p.upgrade || p.idle) return;
@@ -320,6 +398,7 @@ function renderSheet(v) {
   }
   if (sheet.mode === 'boot') { zeichneBootSheet(v); return; }
   if (sheet.mode === 'koeder') { zeichneKoederSheet(v); return; }
+  if (sheet.mode === 'bauinfo') { zeichneBauInfo(v, v.plots[sheet.plot]); return; }
   if (sheet.mode === null || sheet.plot === null) return;
   var p = v.plots[sheet.plot];
   if (!p) return;
