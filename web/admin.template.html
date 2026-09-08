@@ -171,6 +171,27 @@
     </div>
 
     <div class="card">
+      <h2>Benachrichtigung senden</h2>
+      <div class="zeile">
+        <label>Titel</label>
+        <input id="pushtitel" class="wide" maxlength="80" placeholder="Neues auf dem Hof">
+      </div>
+      <div class="zeile">
+        <label>Text</label>
+        <input id="pushtext" class="wide" maxlength="240" placeholder="Ab heute gibt es den Angelsee!">
+      </div>
+      <div class="zeile" style="margin-bottom:0">
+        <label>An</label>
+        <select id="pushziel">
+          <option value="alle">Alle Höfe mit Benachrichtigungen</option>
+          <option value="gewaehlt">Nur den ausgewählten Hof</option>
+        </select>
+        <button class="primary" id="pushsenden">Senden</button>
+      </div>
+      <p class="hint" id="pushstand">Erreichbar: —</p>
+    </div>
+
+    <div class="card">
       <h2>Protokoll</h2>
       <div class="log" id="log"></div>
     </div>
@@ -226,6 +247,36 @@
       return r.json();
     });
   }
+
+  // Wie viele Geräte hören gerade zu?
+  function pushStand() {
+    api('/api/admin/push/stand')
+      .then(function (d) {
+        $('pushstand').textContent =
+          'Erreichbar: ' + d.hoefe + ' Höfe · ' + d.abos + ' Geräte';
+      })
+      .catch(function (e) { $('pushstand').textContent = 'Erreichbar: ' + e.message; });
+  }
+
+  $('pushsenden').addEventListener('click', function () {
+    var titel = $('pushtitel').value.trim();
+    var text = $('pushtext').value.trim();
+    if (!titel) { log('Titel fehlt', 'bad'); return; }
+    var ziel = $('pushziel').value;
+    if (ziel === 'gewaehlt' && !gewaehlt) { log('Erst einen Hof auswählen', 'bad'); return; }
+    var an = ziel === 'alle' ? 'alle' : gewaehlt.id;
+    api('/api/admin/push?an=' + encodeURIComponent(an) +
+        '&titel=' + encodeURIComponent(titel) +
+        '&text=' + encodeURIComponent(text), 'POST')
+      .then(function (d) {
+        log('Push an ' + d.hoefe + ' Höfe: ' + d.gesendet + ' zugestellt' +
+          (d.entfernt ? ', ' + d.entfernt + ' tote Abos entfernt' : ''), 'good');
+        $('pushtitel').value = '';
+        $('pushtext').value = '';
+        pushStand();
+      })
+      .catch(function (e) { log('Push: ' + e.message, 'bad'); });
+  });
 
   function vorZeit(ms) {
     if (!ms) return 'nie';
@@ -342,6 +393,7 @@
       $('setup').hidden = true;
       $('panel').hidden = false;
       ladeStats();
+      pushStand();
       if (statTimer) clearInterval(statTimer);
       statTimer = setInterval(ladeStats, 3000);
     }).catch(function (e) {

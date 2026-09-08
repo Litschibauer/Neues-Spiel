@@ -16,8 +16,9 @@ import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
 import { initialState, normalizeState } from '../sim/state.ts';
+import type { State } from '../sim/state.ts';
 import { LATEST_RULESET_VERSION, RULESETS, getRuleset, levelOf } from '../sim/rules.ts';
-import { ConfigError, describeConfig, isSecureTransport, resolveConfig } from './config.ts';
+import { ConfigError, describeConfig, isLoopback, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 import { SqliteStorage } from './storage.ts';
@@ -26,6 +27,8 @@ import type { HofKarte } from './sozial.ts';
 import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
+import { ladeVapid, sendePush } from './push.ts';
+import type { PushAbo } from './storage.ts';
 import { EconStats } from './econstats.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -83,6 +86,42 @@ const limiter = new CreateLimiter(
 );
 
 const market = new Market(accounts.storage);
+
+// Push: Schlüsselpaar liegt neben den Serverdaten und wird beim ersten Start
+// erzeugt. Es darf sich nie ändern, sonst verfallen alle Abos der Spieler.
+const VAPID = ladeVapid(join(dirname(SAVE_PATH), 'vapid.json'), 'mailto:hof@neues-spiel');
+
+// Echte Push-Dienste sprechen immer HTTPS. Nur auf dem eigenen Rechner lassen
+// wir HTTP zu, sonst ließe sich der Weg lokal nicht ausprobieren.
+function pushZielErlaubt(endpoint: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (u.protocol === 'https:') return true;
+  return u.protocol === 'http:' && isLoopback(u.hostname);
+}
+
+// Schickt eine Nachricht an alle Geräte eines Kontos. Tote Abos fliegen raus.
+async function pushAn(kontoIds: readonly string[], nutzlast: unknown): Promise<{ gesendet: number; entfernt: number }> {
+  let gesendet = 0;
+  let entfernt = 0;
+  for (const id of kontoIds) {
+    for (const abo of accounts.storage.listPushAbos(id)) {
+      const r = await sendePush(VAPID, abo, nutzlast);
+      if (r.ok) {
+        gesendet++;
+        accounts.storage.putPushAbo({ ...abo, zuletztMs: Date.now() });
+      } else if (r.weg) {
+        accounts.storage.dropPushAbo(abo.endpoint);
+        entfernt++;
+      }
+    }
+  }
+  return { gesendet, entfernt };
+}
 const sozial = new Sozial((accounts.storage as SqliteStorage).database);
 const tagesbonus = new Tagesbonus((accounts.storage as SqliteStorage).database);
 market.hofInfo = (id) => {
@@ -503,6 +542,34 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     });
   }
 
+  if (url.pathname === '/api/admin/push') {
+    const titel = (url.searchParams.get('titel') ?? '').trim();
+    const text = (url.searchParams.get('text') ?? '').trim();
+    const anWen = url.searchParams.get('an') ?? 'alle';
+    if (!titel || titel.length > 80 || text.length > 240) {
+      return json(res, 400, { error: 'BAD_MESSAGE' });
+    }
+    const ziele =
+      anWen === 'alle'
+        ? [...new Set(accounts.storage.listPushAbos().map((a) => a.konto))]
+        : anWen.split(',').map((x) => x.trim()).filter(Boolean);
+    return pushAn(ziele, { titel, text, art: 'admin' }).then((r) => {
+      console.log(`[admin] Push an ${ziele.length} Höfe: ${r.gesendet} zugestellt, ${r.entfernt} tote Abos`);
+      return json(res, 200, { ok: true, hoefe: ziele.length, ...r });
+    });
+  }
+
+  if (url.pathname === '/api/admin/push/stand') {
+    const abos = accounts.storage.listPushAbos();
+    const proKonto = new Map<string, number>();
+    for (const a of abos) proKonto.set(a.konto, (proKonto.get(a.konto) ?? 0) + 1);
+    return json(res, 200, {
+      abos: abos.length,
+      hoefe: proKonto.size,
+      liste: [...proKonto].map(([konto, geraete]) => ({ konto, geraete })),
+    });
+  }
+
   const wanted = url.searchParams.get('account');
   const target = wanted
     ? accounts.get(wanted)
@@ -687,6 +754,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return res.end(ICON_SVG);
   }
 
+  if (url.pathname === '/api/push/schluessel' && req.method === 'GET') {
+    return json(res, 200, { key: VAPID.publicKey });
+  }
+
   if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') {
     res.writeHead(200, {
       'content-type': 'application/manifest+json; charset=utf-8',
@@ -759,6 +830,38 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         isActiveDevice: game.isActiveDevice(deviceId),
         activeSince: game.activeDevice?.lastSyncMs ?? null,
       });
+    }
+
+    if (url.pathname === '/api/push/abo' && req.method === 'POST') {
+      let abo: { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+      try {
+        abo = JSON.parse(await readBody(req, 8 * 1024));
+      } catch {
+        return json(res, 400, { error: 'BAD_JSON' });
+      }
+      const endpoint = String(abo.endpoint ?? '');
+      const p256dh = String(abo.keys?.p256dh ?? '');
+      const auth = String(abo.keys?.auth ?? '');
+      if (!p256dh || !auth || !pushZielErlaubt(endpoint)) {
+        return json(res, 400, { error: 'BAD_SUBSCRIPTION' });
+      }
+      accounts.storage.putPushAbo({
+        endpoint,
+        konto: account.id,
+        p256dh,
+        auth,
+        seitMs: Date.now(),
+        zuletztMs: 0,
+      });
+      return json(res, 200, { ok: true });
+    }
+
+    if (url.pathname === '/api/push/abo' && req.method === 'DELETE') {
+      const endpoint = url.searchParams.get('endpoint') ?? '';
+      // Nur eigene Abos dürfen weg.
+      const meins = accounts.storage.listPushAbos(account.id).some((a) => a.endpoint === endpoint);
+      if (meins) accounts.storage.dropPushAbo(endpoint);
+      return json(res, 200, { ok: true });
     }
 
     if (url.pathname === '/api/bestenliste' && req.method === 'GET') {
@@ -1062,6 +1165,85 @@ const heartbeatTimer = setInterval(() => events.heartbeat(), 25_000);
 heartbeatTimer.unref();
 
 const IDLE_MS = Number(process.env.NEUES_SPIEL_IDLE_MS ?? 15 * 60_000);
+// — Meldungen bei fertiger Arbeit ————————————————————————————————————————
+// Alle paar Minuten nachschauen, ob bei jemandem etwas wartet. Gemeldet wird
+// nur, wer gerade NICHT spielt und länger nichts gehört hat — eine Farm-App,
+// die im Minutentakt piept, wird deinstalliert.
+const MELDE_TAKT_MS = Number(process.env.NEUES_SPIEL_MELDE_TAKT_MS ?? 5 * 60_000);
+const MELDE_RUHE_MS = Number(process.env.NEUES_SPIEL_MELDE_RUHE_MS ?? 6 * 60 * 60_000);
+const MELDE_ABWESEND_MS = Number(process.env.NEUES_SPIEL_MELDE_ABWESEND_MS ?? 20 * 60_000);
+
+// Was wartet gerade auf den Spieler? Rein aus Zustand und Regelwerk gerechnet,
+// ohne den Client-Blick zu bemühen.
+function wasWartet(snap: { state: State; rulesetVersion: number; serverTs: number }, jetztMs: number) {
+  const rules = getRuleset(snap.rulesetVersion);
+  const st = snap.state;
+  const tick = st.tick + Math.floor((jetztMs - snap.serverTs) / 1000);
+
+  let reif = 0;
+  for (const platz of st.plots) {
+    for (const stelle of platz.slots) {
+      if (stelle.recipe < 0) continue;
+      const dauer = rules.recipes[stelle.recipe]?.durationTicks ?? 0;
+      if (tick - stelle.startedAt >= dauer) reif++;
+    }
+  }
+
+  const f = rules.fishing;
+  let reusen = 0;
+  let koeder = 0;
+  if (f) {
+    for (const gelegt of st.angelSpots ?? []) {
+      if (gelegt >= 0 && tick - gelegt >= (f.soakTicks ?? 0)) reusen++;
+    }
+    for (const seit of st.angelKoeder ?? []) {
+      if (seit >= 0 && tick - seit >= (f.craft?.durationTicks ?? 0)) koeder++;
+    }
+  }
+  return { reif, reusen, koeder };
+}
+
+function meldeText(w: { reif: number; reusen: number; koeder: number }): string | null {
+  const teile: string[] = [];
+  if (w.reif > 0) teile.push(w.reif === 1 ? '1 Platz ist fertig' : `${w.reif} Plätze sind fertig`);
+  if (w.reusen > 0) teile.push(w.reusen === 1 ? '1 Reuse ist voll' : `${w.reusen} Reusen sind voll`);
+  if (w.koeder > 0) teile.push(w.koeder === 1 ? '1 Sud Köder wartet' : `${w.koeder} Sude Köder warten`);
+  if (teile.length === 0) return null;
+  return `${teile.join(', ')}. Schau mal vorbei.`;
+}
+
+async function meldeRunde(): Promise<number> {
+  const abos = accounts.storage.listPushAbos();
+  if (abos.length === 0) return 0;
+
+  const jetzt = Date.now();
+  let gemeldet = 0;
+  for (const id of new Set(abos.map((a) => a.konto))) {
+    const konto = accounts.get(id);
+    if (!konto) continue;
+    // Wer gerade spielt, sieht es ohnehin selbst.
+    if (jetzt - konto.lastSeenMs < MELDE_ABWESEND_MS) continue;
+    const zuletzt = Number(accounts.storage.getMeta(`melde-${id}`) ?? '0');
+    if (jetzt - zuletzt < MELDE_RUHE_MS) continue;
+
+    const snap = live.get(id)?.snapshot ?? accounts.load(id)?.snapshot;
+    if (!snap) continue;
+    const text = meldeText(wasWartet(snap, jetzt));
+    if (!text) continue;
+
+    accounts.storage.setMeta(`melde-${id}`, String(jetzt));
+    const r = await pushAn([id], { titel: 'Auf deinem Hof wartet was', text, art: 'fertig' });
+    if (r.gesendet > 0) gemeldet++;
+  }
+  if (gemeldet > 0) console.log(`[melden] ${gemeldet} Höfe benachrichtigt`);
+  return gemeldet;
+}
+
+const meldeTimer = setInterval(() => {
+  meldeRunde().catch((e) => console.error('[melden] Runde fehlgeschlagen:', e));
+}, MELDE_TAKT_MS);
+meldeTimer.unref();
+
 const evictTimer = setInterval(() => {
   const cutoff = Date.now() - IDLE_MS;
   let evicted = 0;

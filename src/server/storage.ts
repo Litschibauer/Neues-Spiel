@@ -21,6 +21,16 @@ export type GameBlob = {
   nextRequestId: number;
 };
 
+// Ein Gerät, das Benachrichtigungen empfangen möchte.
+export type PushAbo = {
+  endpoint: string;
+  konto: string;
+  p256dh: string;
+  auth: string;
+  seitMs: number;
+  zuletztMs: number;
+};
+
 export type BookEntry = {
   id: number;
   sellerId: string;
@@ -59,6 +69,11 @@ export interface Storage {
   takeSettlements(sellerId: string): Settlement[];
 
   forgetSeller(sellerId: string): void;
+
+  // Push-Abos: je Gerät eines, der Endpunkt ist der Schlüssel.
+  listPushAbos(konto?: string): PushAbo[];
+  putPushAbo(abo: PushAbo): void;
+  dropPushAbo(endpoint: string): void;
 
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
@@ -228,6 +243,36 @@ export class SqliteStorage implements Storage {
     });
   }
 
+  listPushAbos(konto?: string): PushAbo[] {
+    const rows = konto
+      ? this.db.prepare('select * from push_abos where konto = ?').all(konto)
+      : this.db.prepare('select * from push_abos').all();
+    return (rows as Array<Record<string, unknown>>).map((r) => ({
+      endpoint: String(r.endpoint),
+      konto: String(r.konto),
+      p256dh: String(r.p256dh),
+      auth: String(r.auth),
+      seitMs: Number(r.seit_ms),
+      zuletztMs: Number(r.zuletzt_ms),
+    }));
+  }
+
+  putPushAbo(abo: PushAbo): void {
+    this.db
+      .prepare(
+        `insert into push_abos (endpoint, konto, p256dh, auth, seit_ms, zuletzt_ms)
+         values (?, ?, ?, ?, ?, ?)
+         on conflict(endpoint) do update set
+           konto = excluded.konto, p256dh = excluded.p256dh,
+           auth = excluded.auth, zuletzt_ms = excluded.zuletzt_ms`,
+      )
+      .run(abo.endpoint, abo.konto, abo.p256dh, abo.auth, abo.seitMs, abo.zuletztMs);
+  }
+
+  dropPushAbo(endpoint: string): void {
+    this.db.prepare('delete from push_abos where endpoint = ?').run(endpoint);
+  }
+
   getMeta(key: string): string | null {
     return readMeta(this.db, key);
   }
@@ -245,6 +290,7 @@ export class MemoryStorage implements Storage {
   private readonly accounts = new Map<string, { account: AccountRecord; game: GameBlob }>();
   private readonly owners = new Map<string, { owner: string; until: number }>();
   private readonly book = new Map<number, BookEntry>();
+  private readonly pushAbos = new Map<string, PushAbo>();
   private settlements: Settlement[] = [];
   private readonly meta = new Map<string, string>();
 
@@ -313,6 +359,19 @@ export class MemoryStorage implements Storage {
   forgetSeller(sellerId: string): void {
     for (const [id, e] of [...this.book]) if (e.sellerId === sellerId) this.book.delete(id);
     this.settlements = this.settlements.filter((s) => s.sellerId !== sellerId);
+  }
+
+  listPushAbos(konto?: string): PushAbo[] {
+    const alle = [...this.pushAbos.values()];
+    return konto ? alle.filter((a) => a.konto === konto) : alle;
+  }
+
+  putPushAbo(abo: PushAbo): void {
+    this.pushAbos.set(abo.endpoint, abo);
+  }
+
+  dropPushAbo(endpoint: string): void {
+    this.pushAbos.delete(endpoint);
   }
 
   getMeta(key: string): string | null {

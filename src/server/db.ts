@@ -96,6 +96,20 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       alter table accounts add column bonus_streak integer not null default 0;
     `);
   },
+
+  (db) => {
+    db.exec(`
+      create table push_abos (
+        endpoint   text primary key,
+        konto      text not null,
+        p256dh     text not null,
+        auth       text not null,
+        seit_ms    integer not null,
+        zuletzt_ms integer not null default 0
+      );
+      create index push_abos_konto on push_abos (konto);
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

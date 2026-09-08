@@ -58,3 +58,38 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+// — Benachrichtigungen ————————————————————————————————————————————————————
+// Der Server verschlüsselt jede Nachricht für genau dieses Gerät; hier kommt
+// sie entschlüsselt an. Fällt das Auspacken aus, zeigen wir wenigstens etwas.
+self.addEventListener('push', (event) => {
+  let daten = { titel: 'Dein Hof', text: 'Es gibt Neues auf dem Hof.' };
+  try {
+    if (event.data) daten = Object.assign(daten, event.data.json());
+  } catch (e) {
+    if (event.data) daten.text = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(daten.titel, {
+      body: daten.text,
+      icon: '/icon.png',
+      badge: '/icon.png',
+      tag: daten.art === 'admin' ? 'hof-nachricht' : 'hof-' + (daten.art || 'info'),
+      renotify: false,
+      data: { url: '/' },
+    }),
+  );
+});
+
+// Tippen bringt den schon offenen Hof nach vorn, statt einen zweiten zu öffnen.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((liste) => {
+      for (const client of liste) {
+        if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) return client.focus();
+      }
+      return self.clients.openWindow('/');
+    }),
+  );
+});

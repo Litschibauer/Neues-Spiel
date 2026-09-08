@@ -107,6 +107,33 @@ function show(next) {
 // Zum See geht es nur noch über das Boot am Hof. Der Rückweg ist der Steg im
 // See selbst („Zum Hof"), Köder stellt man im Strandhaus her — keine HUD-Knöpfe.
 $('boot').addEventListener('click', function () { bootTap(); });
+// Benachrichtigungen an- und abschalten. Um Erlaubnis wird erst hier gefragt,
+// nie beim Start — ein Dialog aus dem Nichts schreckt nur ab.
+function meldenAnzeigen() {
+  var stand = meldenStand();
+  var text = { an: 'An', aus: 'Aus', blockiert: 'Blockiert', 'geht-nicht': 'Geht hier nicht' }[stand];
+  $('melden-stand').textContent = text;
+  $('melden-sub').textContent =
+    stand === 'an' ? 'Du hörst von reifen Feldern, vollen Reusen und Neuigkeiten'
+      : stand === 'blockiert' ? 'In den Einstellungen des Geräts wieder erlauben'
+        : stand === 'geht-nicht' ? 'Dieses Gerät kann keine Benachrichtigungen'
+          : 'Sag Bescheid, wenn etwas fertig ist';
+  $('melden-schalter').disabled = stand === 'geht-nicht' || stand === 'blockiert';
+}
+
+$('melden-schalter').addEventListener('click', function () {
+  var stand = meldenStand();
+  $('melden-stand').textContent = '…';
+  var fertig = function (neu) {
+    meldenAnzeigen();
+    if (neu === 'an') toast('Benachrichtigungen an');
+    else if (neu === 'blockiert') toast('Das Gerät erlaubt keine Benachrichtigungen', true);
+    else if (neu === 'aus') toast('Benachrichtigungen aus');
+  };
+  if (stand === 'an') meldenAbmelden().then(fertig);
+  else meldenAnmelden().then(fertig);
+});
+
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('brett').addEventListener('click', function () { show('brett'); });
@@ -446,6 +473,9 @@ function featureTutorial(id) {
 $('tut-next').addEventListener('click', function () { tutStep++; tutorialZeigen(); });
 $('tut-skip').addEventListener('click', tutorialAbschliessen);
 $('anleitung').addEventListener('click', function () { show('farm'); tutorialStarten(true); });
+
+meldenAnzeigen();
+meldenAuffrischen();
 
 var saved = token ? loadSaved() : null;
 if (saved) { startOffline(saved); tutorialStarten(false); }
