@@ -27,6 +27,29 @@ function gesamtReihen() {
   return raster().h + BAND;
 }
 
+// Kameraneigung. Der Hof wird nicht mehr senkrecht von oben gezeigt, sondern
+// leicht schraeg von vorne. Eine Zelle ist auf dem Schirm darum breiter als
+// hoch. Alle Kaesten rechnen in Prozent des Weltkastens, also folgt der Rest
+// von allein — auch Treffer und Ziehen.
+var ZELL_HOEHE = 0.62;
+
+function weltVerhaeltnis() {
+  return raster().w / (gesamtReihen() * ZELL_HOEHE);
+}
+
+// Ein Objekt steht auf seinem Standplatz und ragt darueber hinaus. Sein Kasten
+// waechst also nach oben, um `hoch` Zellen. Die viewBox bekommt genau das
+// Seitenverhaeltnis dieses Kastens, damit Kreise Kreise bleiben. `boden` sagt
+// der Kunst, ab welcher Hoehe der Standplatz anfaengt: darunter liegt Erde,
+// darueber ist Luft.
+function koerperMasse(zellenB, zellenH, hoch) {
+  return {
+    vh: (100 * (zellenH + hoch) * ZELL_HOEHE) / zellenB,
+    boden: (100 * hoch * ZELL_HOEHE) / zellenB,
+    hoch: hoch,
+  };
+}
+
 function altePlatzierung(i) {
   var ort = rules.plots[i] && rules.plots[i].place;
   if (!ort) return { left: 2 + ((i % 3) * 32), width: 30, top: 4 + Math.floor(i / 3) * 24,
@@ -178,7 +201,7 @@ function weltMasse() {
   var k = $('hof').getBoundingClientRect();
   var z = effZoom();
   var hoehe = k.height * z;
-  var breite = k.height * (raster().w / gesamtReihen()) * z;
+  var breite = k.height * weltVerhaeltnis() * z;
   return { hofW: k.width, hofH: k.height, w: breite, h: hoehe };
 }
 
@@ -187,28 +210,35 @@ function weltFormat() {
   if (!w) return;
   w.style.height = '100%';
   w.style.width = 'auto';
-  w.style.aspectRatio = raster().w + ' / ' + gesamtReihen();
+  w.style.aspectRatio = String(weltVerhaeltnis());
 }
 
 // Kacheln sollen IMMER gleich gross aussehen — egal wie gross das Raster ist.
 // Darum wird der Zoom aus einer Ziel-Kachelgroesse abgeleitet (kurze
 // Bildschirmseite geteilt durch ZIEL_ZELLE) statt aus „ganzer Hof ins Bild".
 // Sonst schrumpft alles, sobald der Hof waechst.
-var ZIEL_ZELLE = 10;
-var WEITEST_ZELLE = 22;
+var ZIEL_ZELLE = 8;
+var WEITEST_ZELLE = 18;
 var MAX_ZOOM = 6;
+
+// Zoom, bei dem eine Zelle genau `px` BREIT ist. Die Breite ist seit der
+// Neigung das ehrliche Mass — die Hoehe ist ja bewusst gestaucht.
+function zoomFuerZellbreite(px) {
+  var k = $('hof').getBoundingClientRect();
+  if (k.height <= 0) return 1;
+  return (px * gesamtReihen() * ZELL_HOEHE) / k.height;
+}
 
 function zoomFuerZellen(teiler) {
   var k = $('hof').getBoundingClientRect();
   if (k.height <= 0) return 1;
-  var zelle = Math.min(k.width, k.height) / teiler;
-  return (zelle * gesamtReihen()) / k.height;
+  return zoomFuerZellbreite(Math.min(k.width, k.height) / teiler);
 }
 
 function zoomMin() {
   var k = $('hof').getBoundingClientRect();
   if (k.height <= 0) return 1;
-  var baseW = k.height * (raster().w / gesamtReihen());
+  var baseW = k.height * weltVerhaeltnis();
   var passt = Math.min(1, k.width / baseW);
   if (seeAktiv) return passt;
   // Nicht beliebig weit heraus: sonst wird der Hof zu Pixelbrei.
@@ -285,8 +315,9 @@ function hofMitte() {
 function zoomFuerGebiet(w, h) {
   var k = $('hof').getBoundingClientRect();
   if (k.height <= 0) return 1;
-  var zelle = Math.min(k.width / (w + 2), k.height / (h + 2));
-  return (zelle * gesamtReihen()) / k.height;
+  var nachBreite = zoomFuerZellbreite(k.width / (w + 2));
+  var nachHoehe = gesamtReihen() / (h + 2);
+  return Math.min(nachBreite, nachHoehe);
 }
 
 function zentriere(gx, gy) {

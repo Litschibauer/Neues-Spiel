@@ -153,6 +153,16 @@ function renderPlots(v) {
 
   reihenfolge.forEach(function (p) {
     var ort = plotKasten(p.index, p);
+    // Objekte mit Koerper ragen ueber ihren Standplatz hinaus: Der Kasten
+    // waechst nach oben, gemalt wird in einer viewBox mit genau diesem
+    // Seitenverhaeltnis. Alles andere bleibt vorerst flach.
+    var hoch = koerperHoehe(p.id);
+    var koerper = null;
+    if (hoch !== null) {
+      koerper = koerperMasse(p.size.w, p.size.h, hoch);
+      ort.top -= hoch * zellH();
+      ort.height += hoch * zellH();
+    }
     var tile = document.createElement('button');
     var baumReif = p.baum && p.baum.stufe === 'reif';
     var baumWelk = p.baum && p.baum.stufe === 'verwelkt';
@@ -176,8 +186,9 @@ function renderPlots(v) {
 
     var art = document.createElement('div');
     art.innerHTML =
-      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-      artFor(p) + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + (koerper ? koerper.vh : 80) +
+      '" preserveAspectRatio="none" aria-hidden="true">' +
+      (koerper ? artRaumFor(p, koerper) : artFor(p)) + '</svg>';
     tile.appendChild(art.firstChild);
 
     // Zustand zeigt die Welt selbst — wie in Hay Day: keine Schrift auf den
@@ -328,6 +339,12 @@ function renderHindernisse(v) {
 
   v.obstacles.forEach(function (h) {
     var kasten = hindernisKasten(h);
+    var hoch = KOERPER_HINDERNIS[h.kind];
+    var koerper = hoch === undefined ? null : koerperMasse(h.w, h.h, hoch);
+    if (koerper) {
+      kasten.top -= hoch * zellH();
+      kasten.height += hoch * zellH();
+    }
     var knopf = document.createElement('button');
     knopf.className = 'moebel hindernis' +
       (h.removable ? ' raeumbar' : '') + (h.locked ? ' verborgen' : '');
@@ -337,8 +354,10 @@ function renderHindernisse(v) {
     knopf.style.height = kasten.height + '%';
     knopf.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
     knopf.innerHTML =
-      '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
-      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + (koerper ? koerper.vh : 100) +
+      '" preserveAspectRatio="none" aria-hidden="true">' +
+      (koerper ? artHindernisRaum(h.kind, koerper)
+        : h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
     knopf.setAttribute('aria-label', hindernisName(h.kind) + (h.locked ? ' (gesperrtes Land)' : ''));
     // Im gesperrten Land nur Vorschau: nicht anklickbar (Klick geht an die
     // Land-Sperre darüber), grau über CSS.

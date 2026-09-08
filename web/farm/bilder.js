@@ -333,6 +333,149 @@ function artCoop(animals, ready) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Schraegsicht: Objekte mit Koerper
+//
+// Wer hier eingetragen ist, wird raeumlich gezeichnet. Der Wert sagt, um wie
+// viele Zellen das Objekt ueber seinen Standplatz hinaus in die Luft ragt.
+// Die Kunst bekommt dazu k.boden (Oberkante des Standplatzes) und k.vh
+// (Unterkante) und baut von der Bodenlinie aus nach oben auf. Objekte ohne
+// Eintrag bleiben vorerst flach — das hier ist das Muster, nicht der ganze Hof.
+var KOERPER = { 'field-': 0.3, 'coop-': 1.4 };
+var KOERPER_HINDERNIS = { tree: 1.6, rock: 0.6, pond: 0 };
+
+function koerperHoehe(id) {
+  if (KOERPER[id] !== undefined) return KOERPER[id];
+  for (var prefix in KOERPER) {
+    if (id.indexOf(prefix) === 0) return KOERPER[prefix];
+  }
+  return null;
+}
+
+// Dort beruehrt das Objekt die Erde: die Mitte seines Standplatzes.
+function bodenLinie(k) { return (k.boden + k.vh) / 2; }
+
+function artRaumFor(p, k) {
+  if (p.id.indexOf('field-') === 0) {
+    if (!p.busy && !p.done) return artFeldRaum(k, 0, null);
+    return artFeldRaum(k, p.done ? 3 : p.progress < 0.4 ? 1 : 2, p.producing);
+  }
+  if (p.id.indexOf('coop-') === 0) {
+    return artStallRaum(k, p.stall ? p.stall.animals : p.capacity, p.done);
+  }
+  return artFor(p);
+}
+
+function artHindernisRaum(kind, k) {
+  if (kind === 'tree') return artBaumRaum(k);
+  if (kind === 'rock') return artSteinRaum(k);
+  return artTeichRaum(k);
+}
+
+// Beet mit sichtbarer Erddicke: dunkle Platte, hellere Oberflaeche knapp
+// darueber. Die Pflanzen stehen in drei Reihen, hintere zuerst gemalt.
+function artFeldRaum(k, stage, crop) {
+  var o = k.boden, u = k.vh;
+  var lippe = (u - o) * 0.13;
+  var flaeche = u - o - lippe;
+  var reihen = 6;
+  var band = flaeche / reihen;
+  // Aussen die dunkle Erdkante, innen etwas eingerueckt die offene Krume. So
+  // hat das Beet an allen vier Seiten einen Rand und sitzt im Gras statt darauf.
+  var out =
+    '<rect x="2" y="' + (o + lippe) + '" width="96" height="' + flaeche + '" rx="6" fill="var(--soil-dark)"/>' +
+    '<rect x="2" y="' + (o + lippe * 0.45) + '" width="96" height="' + flaeche + '" rx="6" fill="#4b6b3c"/>' +
+    '<rect x="6" y="' + o + '" width="88" height="' + flaeche + '" rx="4" fill="var(--soil)"/>';
+
+  // Die Furchen laufen VOM Betrachter WEG, also senkrecht ueber das Beet.
+  // Quer laufende Baender lassen den Acker wie ein Holzbrett aussehen.
+  var spalten = 5;
+  var r, x;
+  for (r = 0; r < spalten; r++) {
+    x = 6 + (88 * (r + 0.5)) / spalten;
+    out += '<rect x="' + (x - 1.7) + '" y="' + (o + 2) + '" width="3.4" height="' + (flaeche - 4) +
+      '" rx="1.7" fill="var(--soil-dark)" opacity=".5"/>';
+  }
+  out += '<rect x="6" y="' + o + '" width="88" height="' + (band * 0.4) +
+    '" rx="4" fill="#fff" opacity=".1"/>';
+  if (stage <= 0) return out;
+
+  var reif = stage === 3;
+  var hoch = stage === 1 ? 4 : stage === 2 ? 9 : 14;
+  var frucht = crop === 'corn' ? 'var(--corn)' : 'var(--ripe)';
+  for (r = 0; r < 3; r++) {
+    var basis = o + band * (1.5 + r * 1.8);
+    for (var i = 0; i < spalten; i++) {
+      x = 6 + (88 * (i + 0.5)) / spalten;
+      out += '<path d="M' + x + ' ' + basis + 'v-' + hoch +
+        '" stroke="var(--leaf-dark)" stroke-width="2.2" stroke-linecap="round"/>';
+      if (stage >= 2) {
+        out += '<circle cx="' + x + '" cy="' + (basis - hoch) + '" r="' + (reif ? 3.6 : 2.3) +
+          '" fill="' + (reif ? frucht : 'var(--leaf)') + '"/>';
+      }
+    }
+  }
+  return out;
+}
+
+function artBaumRaum(k) {
+  var g = bodenLinie(k);
+  return '<ellipse cx="50" cy="' + (g + 5) + '" rx="29" ry="10" fill="var(--ink)" opacity=".2"/>' +
+    '<path d="M45 ' + (g + 4) + 'c-1-17 0-33 2-45h6c2 12 3 28 2 45z" fill="var(--wood-dark)"/>' +
+    '<circle cx="50" cy="' + (g - 72) + '" r="35" fill="var(--leaf-dark)"/>' +
+    '<circle cx="34" cy="' + (g - 62) + '" r="23" fill="var(--leaf)"/>' +
+    '<circle cx="67" cy="' + (g - 66) + '" r="20" fill="var(--leaf)"/>' +
+    '<circle cx="52" cy="' + (g - 93) + '" r="21" fill="var(--leaf)"/>' +
+    '<circle cx="38" cy="' + (g - 86) + '" r="14" fill="var(--leaf)" opacity=".85"/>';
+}
+
+function artSteinRaum(k) {
+  var g = bodenLinie(k);
+  return '<ellipse cx="50" cy="' + (g + 4) + '" rx="27" ry="9" fill="var(--ink)" opacity=".2"/>' +
+    '<path d="M23 ' + (g + 4) + 'c-3-14 2-25 12-30 10-5 21-3 27 6 6 8 7 17 4 24z" fill="#9aa1a6"/>' +
+    '<path d="M50 ' + (g - 26) + 'c7-3 14-1 19 5 5 6 6 14 4 25H50z" fill="#7e858a"/>' +
+    '<path d="M33 ' + (g - 14) + 'c3-6 8-8 12-6" stroke="#b7bec3" stroke-width="3.4" stroke-linecap="round" fill="none"/>';
+}
+
+// Wasser liegt flach in der Ebene: Ein Kreis auf dem Boden erscheint in der
+// geneigten Sicht als Ellipse, darum wird jeder Radius mit ZELL_HOEHE gestaucht.
+function artTeichRaum(k) {
+  var g = bodenLinie(k);
+  function ring(r, farbe, dy) {
+    return '<ellipse cx="50" cy="' + (g + dy) + '" rx="' + r + '" ry="' + (r * ZELL_HOEHE) +
+      '" fill="' + farbe + '"/>';
+  }
+  return ring(45, '#6f9a5e', 0) + ring(38, '#4d86a8', 1) + ring(30, '#63a3c4', 1) +
+    '<path d="M32 ' + (g - 2) + 'c8-4 16-4 24 0" stroke="#a7d3e6" stroke-width="2.6" ' +
+    'stroke-linecap="round" fill="none" opacity=".8"/>';
+}
+
+// Kleiner Stall in Dreiviertelsicht: Front, dunklere Seitenwand nach rechts,
+// Satteldach mit sichtbarer zweiter Dachflaeche.
+function artStallRaum(k, animals, ready) {
+  var g = bodenLinie(k);
+  var out =
+    '<ellipse cx="50" cy="' + (g + 18) + '" rx="44" ry="11" fill="var(--ink)" opacity=".18"/>' +
+    '<path d="M70 ' + (g + 19) + 'L90 ' + (g + 9) + 'V' + (g - 21) + 'L70 ' + (g - 11) + 'z" fill="var(--wood-dark)"/>' +
+    '<rect x="12" y="' + (g - 12) + '" width="58" height="31" fill="var(--wood)"/>' +
+    '<path d="M12 ' + (g + 19) + 'h58v3H12z" fill="var(--wood-dark)" opacity=".5"/>' +
+    '<path d="M41 ' + (g - 37) + 'L60 ' + (g - 47) + 'L94 ' + (g - 20) + 'L74 ' + (g - 10) + 'z" fill="var(--roof)" opacity=".72"/>' +
+    '<path d="M6 ' + (g - 10) + 'L41 ' + (g - 37) + 'L76 ' + (g - 10) + 'z" fill="var(--roof)"/>' +
+    '<rect x="31" y="' + (g - 1) + '" width="18" height="20" rx="2" fill="var(--soil-dark)" opacity=".62"/>' +
+    '<rect x="54" y="' + (g - 6) + '" width="11" height="10" rx="1.5" fill="var(--corn)" opacity=".75"/>';
+
+  if (animals >= 1) out += chicken(18, g + 13, false, '--feather');
+  if (animals >= 2) out += chicken(84, g + 8, true, '--feather-2');
+  if (animals >= 3) out += chicken(64, g + 17, true, '--feather');
+  if (ready) {
+    out += '<g transform="translate(50 ' + (g + 15) + ')">' +
+      '<ellipse cx="-7" cy="0" rx="3.6" ry="4.6" fill="var(--egg)"/>' +
+      '<ellipse cx="0" cy="1" rx="3.6" ry="4.6" fill="var(--egg)"/>' +
+      '<ellipse cx="7" cy="0" rx="3.6" ry="4.6" fill="var(--egg)"/></g>';
+  }
+  return out;
+}
+
 var ART = {
   'field-': function (p) {
     if (!p.busy && !p.done) return artField(0, null);
