@@ -4,10 +4,8 @@
   "private": true,
   "description": "Native iOS-Hülle (Capacitor) für Neues Spiel. Bewusst vom abhängigkeitsfreien Kern getrennt.",
   "scripts": {
-    "ios": "cap sync ios && cap open ios",
-    "sync": "cap sync ios",
-    "icon": "mkdir -p assets && cp ../web/icon.png assets/icon.png && capacitor-assets generate --ios && cap sync ios",
-    "querformat": "bash scripts/querformat.sh && cap sync ios"
+    "ios": "npm run sync && cap open ios",
+    "sync": "cap sync ios && bash scripts/nativ-einrichten.sh"
   },
   "dependencies": {
     "@capacitor/core": "^7.0.0",

@@ -39,9 +39,11 @@ npx cap add ios          # erzeugt ios/ mit dem Xcode-Projekt — nur einmal nö
 
 ```bash
 cd ios-app
-npx cap sync ios
-npx cap open ios          # öffnet Xcode
+npm run ios
 ```
+
+Das synchronisiert die Oberfläche, setzt den nativen Rahmen (Symbol,
+Querformat) und öffnet Xcode.
 
 In Xcode:
 
@@ -57,28 +59,33 @@ Mit einer kostenlosen Apple-ID läuft die Signatur nach **7 Tagen** ab; dann
 einfach in Xcode neu starten. Das Developer Program (99 €/Jahr) hebt das auf
 und schaltet TestFlight und den App Store frei.
 
-## App-Symbol
+## Der native Rahmen
 
-Ein Befehl im Ordner `ios-app`:
+Zwei Dinge muessen anders sein als in Capacitors Vorgabe: das **App-Symbol**
+und die **Querformat-Sperre**. Beides setzt `scripts/nativ-einrichten.sh`, und
+das laeuft bei jedem `npm run sync` automatisch mit — man kann es also weder
+vergessen noch doppelt kaputtmachen.
 
-```bash
-npm run icon
-```
+- **Querformat**: schreibt `UISupportedInterfaceOrientations` in die
+  `Info.plist` (iPhone und iPad). Nur dort sperrt iOS die Ausrichtung
+  verbindlich; das Manifest allein reicht der nativen App nicht.
+- **Symbol**: erzeugt alle iOS-Groessen aus `web/icon.png` — aber nur, wenn die
+  Quelle neuer ist als das bereits Erzeugte.
 
-Der holt `web/icon.png`, erzeugt daraus alle iOS-Größen und synchronisiert.
-Danach in Xcode neu starten (▶︎).
+Weitere native Einstellungen gehoeren **in dieses Skript**, nicht in ein neues
+npm-Skript.
 
-Das vorhandene Symbol passt bereits: 1254x1254, quadratisch und **ohne
-Alphakanal** — Apple lehnt Transparenz in App-Symbolen ab.
+Die Quelldatei passt bereits ohne Nacharbeit: 1254x1254, quadratisch und ohne
+Alphakanal — Transparenz lehnt Apple bei App-Symbolen ab.
 
-**Wenn das alte Symbol kleben bleibt:** iOS merkt sich Symbole hartnäckig.
-Dann die App am iPhone löschen und aus Xcode neu installieren.
+**Wenn das alte Symbol kleben bleibt:** iOS merkt sich Symbole hartnaeckig.
+Dann die App am iPhone loeschen und aus Xcode neu installieren.
 
-## Querformat
+## Querformat im Spiel
 
-Die Oberfläche erkennt Querformat selbst (`istQuer()` in `web/farm/raster.js`).
-Capacitor erlaubt standardmäßig alle Ausrichtungen — in Xcode unter
-*General → Deployment Info* bei Bedarf einschränken.
+Die Oberflaeche erkennt Querformat selbst (`istQuer()` in `web/farm/raster.js`)
+und das Manifest fordert es an. Die Browser-Tests messen das Layout bei
+844 x 390 mit (Abschnitt „9y. Querformat").
 
 ## Optional: gegen den lokalen Server testen
 
@@ -101,7 +108,7 @@ dafür einmalig in `ios/App/App/Info.plist`:
 </dict>
 ```
 
-Dann `npx cap sync ios` und neu starten. Für den Release wieder auf die
+Dann `npm run sync` und neu starten. Für den Release wieder auf die
 HTTPS-Adresse zurückstellen.
 
 ## Danach: echte App-Store-Fassung
