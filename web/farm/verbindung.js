@@ -15,7 +15,23 @@ var client = null, engine = null, rules = null, accountId = null;
 var clockOffsetMs = 0;
 var view = 'farm';
 var bauModus = false;
-var SAVE_KEY = NS.storageKeyFor(location.origin);
+// Normalerweise liegt die Oberfläche auf demselben Server wie die API, dann
+// bleibt die Basis leer. In einer gebündelten App (App Store) liegt sie lokal
+// auf dem Gerät und der Server steht woanders; dann setzt die Hülle vor dem
+// Laden window.NEUES_SPIEL_SERVER.
+var NS_BASIS = (function () {
+  var s = window.NEUES_SPIEL_SERVER;
+  return s ? String(s).replace(/\/+$/, '') : '';
+})();
+
+// Adresse einer Server-Ressource.
+function serverPfad(pfad) {
+  return NS_BASIS + pfad;
+}
+
+// Der Spielstand hängt am Server, nicht am Ort der Oberfläche — sonst hätte
+// dieselbe Farm in App und Browser zwei getrennte Sicherungen.
+var SAVE_KEY = NS.storageKeyFor(NS_BASIS || location.origin);
 
 function save() {
   if (!client) return;
@@ -48,7 +64,7 @@ function toast(message, bad) {
 function api(path, options) {
   options = options || {};
   options.headers = Object.assign({ authorization: 'Bearer ' + token }, options.headers || {});
-  return fetch(path, options).then(function (res) {
+  return fetch(serverPfad(path), options).then(function (res) {
     if (res.status === 401) throw new Error('UNAUTHORIZED');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
@@ -77,7 +93,7 @@ function startLive() {
   var ctl = new AbortController();
   liveAbort = ctl;
 
-  fetch('/api/events', {
+  fetch(serverPfad('/api/events'), {
     headers: { authorization: 'Bearer ' + token, accept: 'text/event-stream' },
     signal: ctl.signal,
     cache: 'no-store',

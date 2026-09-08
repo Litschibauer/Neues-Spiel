@@ -39,7 +39,7 @@ function schluesselBytes(text) {
 function meldenAbo(reg) {
   return reg.pushManager.getSubscription().then(function (vorhanden) {
     if (vorhanden) return vorhanden;
-    return fetch('/api/push/schluessel')
+    return fetch(serverPfad('/api/push/schluessel'))
       .then(function (r) { return r.json(); })
       .then(function (d) {
         return reg.pushManager.subscribe({
@@ -61,7 +61,7 @@ function meldenAnmeldenNativ() {
       Push.addListener('registration', function (t) {
         if (erledigt) return;
         erledigt = true;
-        fetch('/api/push/abo', {
+        fetch(serverPfad('/api/push/abo'), {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
           body: JSON.stringify({ art: 'ios', token: String(t && t.value ? t.value : '') }),
@@ -91,7 +91,7 @@ function meldenAnmelden() {
       return navigator.serviceWorker.ready
         .then(meldenAbo)
         .then(function (abo) {
-          return fetch('/api/push/abo', {
+          return fetch(serverPfad('/api/push/abo'), {
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
             body: JSON.stringify(abo),
@@ -115,7 +115,7 @@ function meldenAbmelden() {
     .then(function (reg) { return reg.pushManager.getSubscription(); })
     .then(function (abo) {
       if (!abo) return null;
-      return fetch('/api/push/abo?endpoint=' + encodeURIComponent(abo.endpoint), {
+      return fetch(serverPfad('/api/push/abo?endpoint=' + encodeURIComponent(abo.endpoint)), {
         method: 'DELETE',
         headers: { authorization: 'Bearer ' + token },
       }).then(function () { return abo.unsubscribe(); });
@@ -138,7 +138,7 @@ function meldenAuffrischen() {
   navigator.serviceWorker.ready
     .then(meldenAbo)
     .then(function (abo) {
-      return fetch('/api/push/abo', {
+      return fetch(serverPfad('/api/push/abo'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
         body: JSON.stringify(abo),

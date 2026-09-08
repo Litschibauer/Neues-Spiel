@@ -1939,24 +1939,42 @@ const V34: Ruleset = {
   ],
 };
 
+// V35: Angel-Balance. V34 war zu freigiebig — 607 Gold je Viertelstunde
+// nebenher, und Köder waren mit 30 Stück Nachschub je Runde bei 5 Stück Bedarf
+// faktisch gratis. Jetzt taktet die Ziehzeit den Kreislauf (20 statt 15 min),
+// und der Köder ist ein echter Weizen-Verbrauch: 3 Weizen ergeben 2 Köder in
+// 10 Minuten, macht 8 Köder je Runde bei 5 Stück Bedarf. Wer plant, hat immer
+// genug; wer nicht plant, lässt Stellen leer stehen.
+const V35: Ruleset = {
+  ...V34,
+  version: 35,
+  fishing: {
+    ...V34.fishing!,
+    xp: 10,
+    soakTicks: 1200,
+    craft: { input: [want(WHEAT, 3)], output: 2, slots: 2, durationTicks: 600 },
+  },
+};
+
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V34,
+  ...V35,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
   recipes: V32.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  // Angeln und Köder-Sud laufen im Feldtest ebenfalls im Zehntel-Tempo.
+  // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
+  // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V34.fishing!,
-    soakTicks: zehntel(V34.fishing!.soakTicks!),
-    craft: { ...V34.fishing!.craft!, durationTicks: zehntel(V34.fishing!.craft!.durationTicks!) },
+    ...V35.fishing!,
+    soakTicks: 20,
+    craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
-  // Auf V34.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
-  plots: V34.plots.map((p) => {
+  // Auf V35.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
+  plots: V35.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2008,17 +2026,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [32, V32],
   [33, V33],
   [34, V34],
+  [35, V35],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34,
+  28, 29, 30, 31, 32, 33, 34, 35,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 34;
+export const LATEST_RULESET_VERSION = 35;
 
 export const DEV_RULESET_VERSION = 1001;
 

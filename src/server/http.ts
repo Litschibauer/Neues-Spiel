@@ -351,6 +351,32 @@ function originOf(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? 'unbekannt';
 }
 
+// Eine gebündelte App lädt ihre Oberfläche vom Gerät, nicht vom Server. Für
+// deren Herkunft muss der Server ausdrücklich Zugriff erlauben — aber nur für
+// die paar bekannten App-Herkünfte, nicht für jede Webseite der Welt.
+const APP_HERKUENFTE = new Set(
+  (process.env.NEUES_SPIEL_APP_ORIGINS ?? 'capacitor://localhost,ionic://localhost')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean),
+);
+
+function herkunftErlaubt(req: IncomingMessage): string | null {
+  const herkunft = req.headers.origin;
+  if (typeof herkunft !== 'string') return null;
+  return APP_HERKUENFTE.has(herkunft) ? herkunft : null;
+}
+
+function setzeCors(req: IncomingMessage, res: ServerResponse): void {
+  const herkunft = herkunftErlaubt(req);
+  if (!herkunft) return;
+  res.setHeader('access-control-allow-origin', herkunft);
+  res.setHeader('access-control-allow-headers', 'authorization, content-type');
+  res.setHeader('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('access-control-max-age', '86400');
+  res.setHeader('vary', 'origin');
+}
+
 function json(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -687,6 +713,14 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
 
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+  // Für die gebündelte App: erlaubte Herkunft freigeben, Vorabfragen direkt
+  // beantworten. Unbekannte Herkünfte bekommen gar keinen CORS-Kopf.
+  setzeCors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(herkunftErlaubt(req) ? 204 : 405);
+    return res.end();
+  }
 
   if (CONFIG.tls) {
     res.setHeader('strict-transport-security', 'max-age=31536000');

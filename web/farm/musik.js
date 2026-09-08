@@ -96,7 +96,7 @@ function musikStart() {
   if (!musikAktiv() || ostGestartet || ostKaputt) return;
   ostGestartet = true;
   if (listeGeladen) { if (liste.length) spiele(0); return; }
-  fetch('/musik/').then(function (r) { return r.ok ? r.json() : { tracks: [] }; })
+  fetch(serverPfad('/musik/')).then(function (r) { return r.ok ? r.json() : { tracks: [] }; })
     .then(function (d) {
       listeGeladen = true;
       liste = mische((d && d.tracks) || []);

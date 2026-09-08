@@ -3157,7 +3157,11 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   })()`);
   await sleep(600);
   const koederNach = await evaluate<number>(cdp, koederImBlatt);
-  check('Abgeholt landet der Sud als Köder im Lager', koederNach >= 5, `${koederNach} Köder`);
+  check(
+    'Abgeholt landet der Sud als Köder im Lager',
+    koederNach > koederVor,
+    `${koederVor} → ${koederNach} Köder`,
+  );
 
   await evaluate(cdp, `document.getElementById('pick-close').click()`);
   await sleep(300);
@@ -3192,10 +3196,10 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
 
   await api('/api/admin/time?seconds=1200', 'POST');
   await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
-  // Im Feldtest-Regelwerk zieht eine Reuse 90 Sekunden. Die Zeitspende erreicht
+  // Im Feldtest-Regelwerk zieht eine Reuse 20 Sekunden. Die Zeitspende erreicht
   // den Client hier nicht immer, darum warten wir notfalls in echt ab.
   let reuseVoll = false;
-  for (let i = 0; i < 230 && !reuseVoll; i++) {
+  for (let i = 0; i < 80 && !reuseVoll; i++) {
     reuseVoll = await evaluate<boolean>(cdp, `document.querySelectorAll('.see-spot')[0].classList.contains('ripe')`);
     if (!reuseVoll) {
       await sleep(500);

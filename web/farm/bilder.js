@@ -180,8 +180,12 @@ function artFeld(k, stufe, crop) {
   if (stufe <= 0) return out;
   var art = crop === 'corn' ? 'mais' : crop === 'wheat' ? 'weizen' : 'moehre';
   var name = art + '-' + Math.min(3, Math.max(1, stufe));
+  // Die Halme wiegen sich im Wind. Eine Gruppe je Reihe, nicht je Pflanze —
+  // Felder gibt es nur eine Handvoll, das kostet nichts.
   for (r = 0; r < 2; r++) {
+    out += '<g class="halme" style="animation-delay:' + (r * 700) + 'ms">';
     for (i = 0; i < 3; i++) out += bild(k, name, 1 + i * 10.5, oben[r] - 3, 10, 10);
+    out += '</g>';
   }
   return out;
 }
@@ -194,7 +198,10 @@ function artStall(k, tiere, fertig) {
     bild(k, 'wand-1', 0, u - 32) + bild(k, 'wand-3', 16, u - 32) +
     bild(k, 'tor-2', 0, u - 16) + bild(k, 'tor-3', 16, u - 16);
   var plaetze = [[-2, u - 11], [22, u - 10], [9, u - 7]];
-  for (var t = 0; t < Math.min(3, tiere); t++) out += bild(k, 'huhn', plaetze[t][0], plaetze[t][1], 11, 11);
+  for (var t = 0; t < Math.min(3, tiere); t++) {
+    out += '<g class="tier" style="animation-delay:' + (t * 900) + 'ms">' +
+      bild(k, 'huhn', plaetze[t][0], plaetze[t][1], 11, 11) + '</g>';
+  }
   if (fertig) out += bild(k, 'ei-korb', 23, u - 8, 9, 9);
   return out;
 }
@@ -205,7 +212,10 @@ function artWeide(k, tiere, fertig) {
   var out =
     bild(k, 'zaun-ecke-lo', 0, u - 32) + bild(k, 'zaun-m', 16, u - 32) + bild(k, 'zaun-ecke-ro', 32, u - 32);
   var plaetze = [[6, u - 25, 'kuh-1'], [27, u - 22, 'kuh-2'], [16, u - 18, 'kuh-1']];
-  for (var t = 0; t < Math.min(3, tiere); t++) out += bild(k, plaetze[t][2], plaetze[t][0], plaetze[t][1], 14, 14);
+  for (var t = 0; t < Math.min(3, tiere); t++) {
+    out += '<g class="tier langsam" style="animation-delay:' + (t * 1300) + 'ms">' +
+      bild(k, plaetze[t][2], plaetze[t][0], plaetze[t][1], 14, 14) + '</g>';
+  }
   out += bild(k, 'zaun-ecke-lu', 0, u - 16) + bild(k, 'zaun-m', 16, u - 16) + bild(k, 'zaun-ecke-ru', 32, u - 16);
   if (fertig) out += bild(k, 'milch', 35, u - 12, 10, 10);
   return out;
@@ -356,7 +366,9 @@ function artSeeRaum(art, k) {
   // Angelstelle: kleine Insel mit Tanne und Pose.
   // Insel mit Tanne, davor die Pose im Wasser.
   return pix(k, INSEL, FARBEN, 16, u - 8) + bild(k, 'baum-tanne', 30, u - 22) +
-    pix(k, ['.rr.', 'rssr', 'rssr', '.rr.'], { r: FARBEN.r, s: FARBEN.s }, 6, u - 6, 1.4);
+    '<g class="pose">' +
+    pix(k, ['.rr.', 'rssr', 'rssr', '.rr.'], { r: FARBEN.r, s: FARBEN.s }, 6, u - 6, 1.4) +
+    '</g>';
 }
 
 // ---- Boden -------------------------------------------------------------------------
@@ -418,8 +430,12 @@ function artSeeScene() {
     '.....BB.........', '................', '............BB..', '................',
   ];
   var welle = pix(k, wasser, { B: FARBEN.B }, 0, 0);
+  // Das Wellenmuster wandert langsam quer — ein einziges Element für den
+  // ganzen See, darum kostet die Bewegung praktisch nichts.
+  var drift = '<animateTransform attributeName="patternTransform" type="translate" ' +
+    'values="0 0;' + zb + ' ' + (zh * 0.35) + ';0 0" dur="14s" repeatCount="indefinite"/>';
   return '<defs><pattern id="m-wasser" patternUnits="userSpaceOnUse" x="0" y="' + ufer + '" width="' + zb + '" height="' + zh + '">' +
-    '<rect width="' + zb + '" height="' + zh + '" fill="' + FARBEN.b + '"/>' + welle + '</pattern></defs>' +
+    '<rect width="' + zb + '" height="' + zh + '" fill="' + FARBEN.b + '"/>' + welle + drift + '</pattern></defs>' +
     '<rect x="0" y="0" width="100" height="100" fill="' + FARBEN.b + '"/>' +
     '<rect x="0" y="' + ufer + '" width="100" height="' + (100 - ufer) + '" fill="url(#m-wasser)"/>' +
     '<rect x="0" y="0" width="100" height="' + ufer + '" fill="' + FARBEN.g + '"/>' +

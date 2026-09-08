@@ -95,6 +95,11 @@ function show(next) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
+  // Beim ersten Öffnen erklärt sich der Bildschirm selbst. Die Tabelle steht
+  // weiter unten in der Datei, darum die Prüfung auf Vorhandensein.
+  if (typeof BILDSCHIRM_TUT === 'object' && BILDSCHIRM_TUT[next]) {
+    featureTutorial(BILDSCHIRM_TUT[next]);
+  }
 }
 
 ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste'].forEach(function (name) {
@@ -295,7 +300,7 @@ function connect() {
 var pendingStart = null;
 $('create').addEventListener('click', function () {
   $('create').disabled = true;
-  fetch('/api/account', { method: 'POST' })
+  fetch(serverPfad('/api/account'), { method: 'POST' })
     .then(function (r) {
       return r.json().then(function (body) {
         if (!r.ok) throw new Error(body.error || 'HTTP ' + r.status);
@@ -450,6 +455,74 @@ var FEATURE_TUT = {
     { emoji: '🧨', titel: 'Werkzeug nutzt sich ab',
       text: 'Zum Graben brauchst du Spitzhacke, Schaufel oder Sprengsatz. Die stellst du selbst her — schau in die Werkstatt.' },
   ],
+  wagen: [
+    { emoji: '🚚', titel: 'Der Frachtbrief',
+      text: 'Am Wagen hängen Aufträge. Jeder will bestimmte Waren und zahlt dafür Gold und XP.' },
+    { emoji: '📦', titel: 'Laden und losschicken',
+      text: 'Hast du alles im Lager, erfüllst du den Auftrag mit einem Tipp. Der Wagen fährt los und kommt mit neuen Aufträgen zurück.' },
+    { emoji: '⏭️', titel: 'Nichts dabei?',
+      text: 'Aufträge, die du nicht magst, kannst du überspringen. Danach dauert es eine Weile, bis der nächste kommt.' },
+  ],
+  stand: [
+    { emoji: '🛒', titel: 'Dein Verkaufsstand',
+      text: 'Hier bietest du Waren anderen Höfen an. Du bestimmst Menge und Preis selbst.' },
+    { emoji: '💰', titel: 'Preise mit Augenmaß',
+      text: 'Zu teuer kauft niemand, zu billig verschenkst du. Die Spanne zeigt dir, was üblich ist. Verkauftes Gold holst du hier ab.' },
+  ],
+  nachbarn: [
+    { emoji: '🤝', titel: 'Nachbarn',
+      text: 'Tausch deinen Hof-Code mit Freunden. Danach könnt ihr euch gegenseitig besuchen.' },
+    { emoji: '⚡', titel: 'Helfen bringt beiden was',
+      text: 'Auf einem fremden Hof kannst du laufende Arbeit beschleunigen. Das kostet dich nichts und bringt dir XP.' },
+  ],
+  land: [
+    { emoji: '🗺️', titel: 'Neues Land',
+      text: 'Rund um deinen Hof liegt Wildnis. Jedes Stück lässt sich freimachen und erweitert deinen Platz dauerhaft.' },
+    { emoji: '🔨', titel: 'Werkzeug statt Gold',
+      text: 'Freimachen kostet Karte, Schlegel und Pflock. Die bekommst du aus Aufträgen und Truhen — sammle sie, bevor du planst.' },
+  ],
+  lager: [
+    { emoji: '📦', titel: 'Dein Lager',
+      text: 'Alles, was du erntest und herstellst, landet hier. Ist es voll, geht nichts mehr rein.' },
+    { emoji: '🏗️', titel: 'Größer bauen',
+      text: 'Mit Brettern und Nägeln baust du das Lager aus. Jede Stufe schafft deutlich mehr Platz.' },
+  ],
+  bauen: [
+    { emoji: '🔨', titel: 'Bauen',
+      text: 'Hier stehen alle Gebäude, die du bauen darfst. Was noch fehlt, zeigt dir die nötige Stufe.' },
+    { emoji: '📍', titel: 'Frei hinstellen',
+      text: 'Nach dem Kauf suchst du dir den Platz selbst aus. Später lässt sich alles wieder verschieben oder einpacken.' },
+  ],
+  bonus: [
+    { emoji: '🎁', titel: 'Tagesbonus',
+      text: 'Einmal am Tag wartet ein Geschenk. Die Belohnung landet in deinem Postfach.' },
+    { emoji: '🔥', titel: 'Dranbleiben lohnt',
+      text: 'Kommst du an mehreren Tagen hintereinander, wächst der Bonus. Ein ausgelassener Tag setzt die Reihe zurück.' },
+  ],
+  liste: [
+    { emoji: '🏆', titel: 'Bestenliste',
+      text: 'Alle Höfe nach XP sortiert. Dein eigener Rang ist hervorgehoben.' },
+  ],
+  ziele: [
+    { emoji: '🎯', titel: 'Ziele & Erfolge',
+      text: 'Erfolge sind in Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
+    { emoji: '⭐', titel: 'Einlösen nicht vergessen',
+      text: 'Ein erfüllter Erfolg zahlt erst aus, wenn du ihn einlöst. Der Punkt am Zahnrad erinnert dich daran.' },
+  ],
+};
+
+// Welcher Bildschirm welche Einführung zeigt. Neue Funktionen tragen sich hier
+// mit einer Zeile ein.
+var BILDSCHIRM_TUT = {
+  brett: 'wagen',
+  stand: 'stand',
+  freunde: 'nachbarn',
+  erweiterung: 'land',
+  lager: 'lager',
+  bau: 'bauen',
+  bonus: 'bonus',
+  bestenliste: 'liste',
+  ziele: 'ziele',
 };
 var featureSeiten = null;
 var featureSchritt = 0;

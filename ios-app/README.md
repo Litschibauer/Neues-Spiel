@@ -175,3 +175,34 @@ des Servers läuft normal weiter.
 Ob alles sitzt, steht im Dashboard unter **Benachrichtigung senden**: Dort
 zählt „Erreichbar" die Geräte getrennt nach Browser und App und warnt, wenn
 App-Geräte da sind, aber der Apple-Schlüssel fehlt.
+
+## Für den App Store bündeln
+
+Im Alltag lädt die App die Oberfläche vom Server (`server.url`) — jede Änderung
+ist sofort auf dem Gerät, ohne neue Einreichung. Für den App Store ist das
+riskant: Apple prüft eine App, die ohne Netz nur eine leere Seite zeigt, gern
+negativ. Darum lässt sich die Oberfläche ins Paket legen:
+
+```bash
+npm run buendeln -- https://5-252-103-214.sslip.io
+```
+
+Das baut die Seite, schreibt die Serveradresse als `window.NEUES_SPIEL_SERVER`
+davor und legt beides in `www/`. Danach in `capacitor.config.json` den Block
+`server` entfernen und `npm run sync` laufen lassen.
+
+Die Spieldaten kommen weiter vom Server. Weil die Oberfläche dann von
+`capacitor://localhost` stammt, muss der Server diese Herkunft erlauben — das
+tut er von sich aus, einstellbar über `NEUES_SPIEL_APP_ORIGINS`.
+
+### Was Apple sonst noch will
+
+Das kann dir niemand abnehmen, es gehört aber zur Liste:
+
+* Entwicklerkonto (99 USD im Jahr) und eine App-ID im Portal
+* Datenschutzerklärung unter einer öffentlich erreichbaren Adresse
+* App-Symbol in allen Größen (macht `npm run sync` bereits) und Screenshots
+  für jede geforderte Gerätegröße
+* Altersfreigabe ausfüllen; das Spiel hat keine Käufe und keine Werbung,
+  das vereinfacht die Angaben zum Datenschutz erheblich
+* Ein Testkonto ist nicht nötig, weil das Spiel ohne Anmeldung startet
