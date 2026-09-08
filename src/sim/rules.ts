@@ -87,6 +87,9 @@ export type PlotDef = {
   startLevel: number;
   levels: readonly LevelDef[];
   place?: PlotPlace;
+  // Direkter Startplatz in Gitterzellen. Hat Vorrang vor `place` (Prozent), das
+  // bei Rasterbreiten über 100 Spalten nicht mehr jede Zelle treffen kann.
+  startCell?: { gx: number; gy: number };
   size?: PlotSize;
   fixed?: boolean;
   flat?: boolean;
@@ -1662,10 +1665,34 @@ const FISH_PIKE = 33; // Hecht
 const V33: Ruleset = {
   ...V32,
   version: 33,
-  // Die Mine steht jetzt mitten im gesperrten Land (Erweiterung m1, gx39–49).
-  // Vorher saß sie ganz rechts auf offenem Boden — jetzt muss man erst das Land
-  // freimachen, um sie zu bauen. Sie bleibt fest (fixed), also nicht verschiebbar.
-  plots: V32.plots.map((p) => (p.id === 'mine' ? { ...p, place: at(91, 26, 3, 3) } : p)),
+  // Der Hof wird doppelt so breit (52 → 104). Das neue Land rechts (gx 52–103)
+  // ist komplett gesperrt und lässt sich erst nach und nach freimachen (siehe
+  // die n-Erweiterungen unten).
+  grid: { w: 104, h: 13 },
+  // Die Prozent-Angabe `place` kann bei 104 Spalten nicht mehr jede Zelle
+  // treffen. Darum bekommt jeder Platz ein festes `startCell` — genau die Zelle,
+  // auf der er beim alten 52er-Raster stand. So bleibt links alles unverändert,
+  // die verdoppelte Breite ist reines Neuland rechts. Die Mine sitzt weiter im
+  // Sperrland (Erw. m1, Zelle 47,3).
+  plots: V32.plots.map((p) => {
+    const q = p.id === 'mine' ? { ...p, place: at(91, 26, 3, 3) } : p;
+    if (!q.place) return q;
+    const gx = Math.floor((q.place.x * 52) / 100);
+    const gy = Math.floor((q.place.y * 13) / 100);
+    return { ...q, startCell: { gx, gy } };
+  }),
+  expansions: [
+    ...(V32.expansions ?? []),
+    // Neues Land (gx 52–103), in zwei Bändern gekachelt, ansteigende Stufe/Kosten.
+    { id: 'n1', gx: 52, gy: 0, w: 13, h: 7, minLevel: 14, cost: [want(MAP, 7), want(MALLET, 8), want(STAKE, 13)] },
+    { id: 'n2', gx: 65, gy: 0, w: 13, h: 7, minLevel: 16, cost: [want(MAP, 8), want(MALLET, 10), want(STAKE, 15)] },
+    { id: 'n3', gx: 78, gy: 0, w: 13, h: 7, minLevel: 18, cost: [want(MAP, 10), want(MALLET, 12), want(STAKE, 18)] },
+    { id: 'n4', gx: 91, gy: 0, w: 13, h: 7, minLevel: 20, cost: [want(MAP, 12), want(MALLET, 14), want(STAKE, 22)] },
+    { id: 'n5', gx: 52, gy: 7, w: 13, h: 6, minLevel: 15, cost: [want(MAP, 8), want(MALLET, 9), want(STAKE, 14)] },
+    { id: 'n6', gx: 65, gy: 7, w: 13, h: 6, minLevel: 17, cost: [want(MAP, 9), want(MALLET, 11), want(STAKE, 16)] },
+    { id: 'n7', gx: 78, gy: 7, w: 13, h: 6, minLevel: 19, cost: [want(MAP, 11), want(MALLET, 13), want(STAKE, 20)] },
+    { id: 'n8', gx: 91, gy: 7, w: 13, h: 6, minLevel: 22, cost: [want(MAP, 13), want(MALLET, 16), want(STAKE, 24)] },
+  ],
   items: [
     ...V32.items,
     // Köder wird nicht mehr gekauft (npcBuyPrice 0), sondern im Strandhaus aus
@@ -2292,13 +2319,22 @@ export function validateRuleset(rules: Ruleset): string[] {
       }
     }
 
-    for (const [i, p] of rules.plots.entries()) {
-      if (p.startLevel <= 0 || !p.place) continue;
+    for (const p of rules.plots) {
+      if (p.startLevel <= 0) continue;
       const groesse = p.size ?? { w: 1, h: 1 };
-      const gx = Math.max(0, Math.min(rules.grid.w - groesse.w,
-        Math.floor((p.place.x * rules.grid.w) / 100)));
-      const gy = Math.max(0, Math.min(rules.grid.h - groesse.h,
-        Math.floor((p.place.y * rules.grid.h) / 100)));
+      let gx: number;
+      let gy: number;
+      if (p.startCell) {
+        gx = Math.max(0, Math.min(rules.grid.w - groesse.w, p.startCell.gx));
+        gy = Math.max(0, Math.min(rules.grid.h - groesse.h, p.startCell.gy));
+      } else if (p.place) {
+        gx = Math.max(0, Math.min(rules.grid.w - groesse.w,
+          Math.floor((p.place.x * rules.grid.w) / 100)));
+        gy = Math.max(0, Math.min(rules.grid.h - groesse.h,
+          Math.floor((p.place.y * rules.grid.h) / 100)));
+      } else {
+        continue;
+      }
       if (blockiert(rules, gx, gy, groesse.w, groesse.h)) {
         problems.push(`Startplatz ${p.id} landet auf einem Hindernis`);
       }

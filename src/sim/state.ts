@@ -199,10 +199,20 @@ export function initialState(rules: Ruleset): State {
 
 export function startPlatz(rules: Ruleset, plot: number): { gx: number; gy: number } {
   const raster = rules.grid;
-  const ort = rules.plots[plot]?.place;
-  if (!raster || !ort) return { gx: -1, gy: -1 };
+  if (!raster) return { gx: -1, gy: -1 };
 
   const groesse = rules.plots[plot]?.size ?? { w: 1, h: 1 };
+  // Direkter Zell-Startplatz hat Vorrang (nötig, sobald das Raster breiter als
+  // 100 Spalten ist — dann trifft die Prozent-Angabe nicht mehr jede Zelle).
+  const zelle = rules.plots[plot]?.startCell;
+  if (zelle) {
+    const gx = Math.min(raster.w - groesse.w, zelle.gx);
+    const gy = Math.min(raster.h - groesse.h, zelle.gy);
+    return { gx: Math.max(0, gx), gy: Math.max(0, gy) };
+  }
+
+  const ort = rules.plots[plot]?.place;
+  if (!ort) return { gx: -1, gy: -1 };
   const gx = Math.min(raster.w - groesse.w, Math.floor((ort.x * raster.w) / 100));
   const gy = Math.min(raster.h - groesse.h, Math.floor((ort.y * raster.h) / 100));
   return { gx: Math.max(0, gx), gy: Math.max(0, gy) };

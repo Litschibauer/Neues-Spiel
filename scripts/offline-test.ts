@@ -1281,7 +1281,8 @@ try {
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
   await sleep(200);
 
-  // Das rechte Zweidrittel: überwuchert, gesperrt, in sechs Feldern
+  // Der Großteil des (nun doppelt breiten) Hofs ist gesperrt: 8 alte Felder
+  // (w1–w6, m1, m2) plus 8 neue im verdoppelten Land (n1–n8) = 16.
   const sperren = await evaluate<{ anzahl: number; text: string }>(
     cdp,
     `(function () {
@@ -1290,8 +1291,8 @@ try {
      })()`,
   );
   check(
-    'Das rechte Zweidrittel liegt in gesperrten Feldern, samt Bergen',
-    sperren.anzahl === 8,
+    'Der weitaus größte Teil des Hofs liegt in gesperrten Feldern, samt Bergen',
+    sperren.anzahl === 16,
     `${sperren.anzahl} Felder`,
   );
   check(
