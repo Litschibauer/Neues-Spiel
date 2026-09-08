@@ -117,16 +117,22 @@ async function pushAn(
   titel: string,
   text: string,
   art: string,
-): Promise<{ gesendet: number; entfernt: number; ohneWeg: number }> {
+): Promise<{ gesendet: number; entfernt: number; ohneWeg: number; fehler: string[] }> {
   let gesendet = 0;
   let entfernt = 0;
   let ohneWeg = 0;
+  // Gründe sammeln, aber nur einmal je Sorte — bei tausend Geräten will
+  // niemand tausend gleiche Zeilen lesen.
+  const gruende = new Map<string, number>();
+  const merke = (grund: string) => gruende.set(grund, (gruende.get(grund) ?? 0) + 1);
+
   for (const id of kontoIds) {
     for (const abo of accounts.storage.listPushAbos(id)) {
-      let r: { ok: boolean; weg: boolean };
+      let r: { ok: boolean; status: number; weg: boolean; grund?: string };
       if (abo.art === 'ios') {
         if (!APNS) {
           ohneWeg++;
+          merke('Apple-Schlüssel fehlt auf dem Server');
           continue;
         }
         r = await sendeApns(APNS, abo.endpoint, titel, text, art);
@@ -136,13 +142,40 @@ async function pushAn(
       if (r.ok) {
         gesendet++;
         accounts.storage.putPushAbo({ ...abo, zuletztMs: Date.now() });
-      } else if (r.weg) {
+        continue;
+      }
+      merke(apnsKlartext(abo.art, r.status, r.grund));
+      if (r.weg) {
         accounts.storage.dropPushAbo(abo.endpoint);
         entfernt++;
       }
     }
   }
-  return { gesendet, entfernt, ohneWeg };
+
+  const fehler = [...gruende].map(([grund, n]) => (n > 1 ? `${grund} (${n}x)` : grund));
+  for (const zeile of fehler) console.warn(`[push] ${zeile}`);
+  return { gesendet, entfernt, ohneWeg, fehler };
+}
+
+// Apples Fehlergründe sind knapp und englisch. Die häufigen übersetzen wir,
+// weil genau sie beim Einrichten auftreten.
+function apnsKlartext(art: string, status: number, grund?: string): string {
+  if (art !== 'ios') return status === 0 ? 'Push-Dienst nicht erreichbar' : `Push-Dienst antwortet ${status}`;
+  switch (grund) {
+    case 'BadDeviceToken':
+      return 'Token passt nicht zur Umgebung — steht NEUES_SPIEL_APNS_SANDBOX richtig? ' +
+        '(1 für Xcode-Builds aufs Gerät, weg für TestFlight und App Store)';
+    case 'TopicDisallowed':
+    case 'DeviceTokenNotForTopic':
+      return 'Bundle-ID passt nicht: NEUES_SPIEL_APNS_BUNDLE_ID muss der App-ID entsprechen';
+    case 'InvalidProviderToken':
+    case 'ExpiredProviderToken':
+      return 'Apple lehnt den Schlüssel ab — Key-ID, Team-ID oder .p8-Datei stimmen nicht';
+    case 'Unregistered':
+      return 'App wurde vom Gerät entfernt, Abo gelöscht';
+    default:
+      return grund ? `Apple lehnt ab: ${grund}` : `Apple antwortet ${status}`;
+  }
 }
 const sozial = new Sozial((accounts.storage as SqliteStorage).database);
 const tagesbonus = new Tagesbonus((accounts.storage as SqliteStorage).database);

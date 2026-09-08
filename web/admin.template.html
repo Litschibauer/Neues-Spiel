@@ -272,7 +272,9 @@
         '&text=' + encodeURIComponent(text), 'POST')
       .then(function (d) {
         log('Push an ' + d.hoefe + ' Höfe: ' + d.gesendet + ' zugestellt' +
-          (d.entfernt ? ', ' + d.entfernt + ' tote Abos entfernt' : ''), 'good');
+          (d.entfernt ? ', ' + d.entfernt + ' tote Abos entfernt' : ''),
+          d.gesendet > 0 ? 'good' : 'bad');
+        (d.fehler || []).forEach(function (f) { log('Push: ' + f, 'bad'); });
         $('pushtitel').value = '';
         $('pushtext').value = '';
         pushStand();
