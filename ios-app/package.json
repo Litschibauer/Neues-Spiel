@@ -5,13 +5,15 @@
   "description": "Native iOS-Hülle (Capacitor) für Neues Spiel. Bewusst vom abhängigkeitsfreien Kern getrennt.",
   "scripts": {
     "ios": "cap sync ios && cap open ios",
-    "sync": "cap sync ios"
+    "sync": "cap sync ios",
+    "icon": "mkdir -p assets && cp ../web/icon.png assets/icon.png && capacitor-assets generate --ios && cap sync ios"
   },
   "dependencies": {
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.0",
     "@capacitor/cli": "^7.0.0"
   }
 }

@@ -59,12 +59,20 @@ und schaltet TestFlight und den App Store frei.
 
 ## App-Symbol
 
+Ein Befehl im Ordner `ios-app`:
+
 ```bash
-cd ios-app
-npm i -D @capacitor/assets
-mkdir -p assets && cp ../web/icon.png assets/icon.png
-npx @capacitor/assets generate --ios
+npm run icon
 ```
+
+Der holt `web/icon.png`, erzeugt daraus alle iOS-Größen und synchronisiert.
+Danach in Xcode neu starten (▶︎).
+
+Das vorhandene Symbol passt bereits: 1254x1254, quadratisch und **ohne
+Alphakanal** — Apple lehnt Transparenz in App-Symbolen ab.
+
+**Wenn das alte Symbol kleben bleibt:** iOS merkt sich Symbole hartnäckig.
+Dann die App am iPhone löschen und aus Xcode neu installieren.
 
 ## Querformat
 
