@@ -95,12 +95,15 @@ function renderSeeWelt(v) {
 
   objekte.forEach(function (o) {
     var k = feldKasten(o.gx, o.gy, o.w, o.h);
+    // Auch im See wird aufgestellt statt gequetscht: Der Kasten waechst nach
+    // oben, bis das Objekt wieder so hoch aussieht wie vor der Neigung.
+    var hoch = stehHoehe(o.h);
     var tile = document.createElement('button');
     tile.className = 'plot see-obj' + (o.tap === 'angeln' ? ' see-spot' : '');
     tile.style.left = k.left + '%';
-    tile.style.top = k.top + '%';
+    tile.style.top = (k.top - hoch * zellH()) + '%';
     tile.style.width = k.breite + '%';
-    tile.style.height = k.hoehe + '%';
+    tile.style.height = (k.hoehe + hoch * zellH()) + '%';
     tile.style.zIndex = String(1 + Math.round((o.gy + o.h) * 2));
     tile.innerHTML =
       '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +

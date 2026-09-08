@@ -156,13 +156,9 @@ function renderPlots(v) {
     // Objekte mit Koerper ragen ueber ihren Standplatz hinaus: Der Kasten
     // waechst nach oben, gemalt wird in einer viewBox mit genau diesem
     // Seitenverhaeltnis. Alles andere bleibt vorerst flach.
-    var hoch = koerperHoehe(p.id);
-    var koerper = null;
-    if (hoch !== null) {
-      koerper = koerperMasse(p.size.w, p.size.h, hoch);
-      ort.top -= hoch * zellH();
-      ort.height += hoch * zellH();
-    }
+    var koerper = koerperFuer(p.id, p.size.w, p.size.h, 80);
+    ort.top -= koerper.hoch * zellH();
+    ort.height += koerper.hoch * zellH();
     var tile = document.createElement('button');
     var baumReif = p.baum && p.baum.stufe === 'reif';
     var baumWelk = p.baum && p.baum.stufe === 'verwelkt';
@@ -186,9 +182,9 @@ function renderPlots(v) {
 
     var art = document.createElement('div');
     art.innerHTML =
-      '<svg class="art" viewBox="0 0 100 ' + (koerper ? koerper.vh : 80) +
+      '<svg class="art" viewBox="0 0 100 ' + koerper.vh +
       '" preserveAspectRatio="none" aria-hidden="true">' +
-      (koerper ? artRaumFor(p, koerper) : artFor(p)) + '</svg>';
+      (koerper.eigen ? artRaumFor(p, koerper) : artFor(p)) + '</svg>';
     tile.appendChild(art.firstChild);
 
     // Zustand zeigt die Welt selbst — wie in Hay Day: keine Schrift auf den
@@ -248,10 +244,21 @@ function renderTruck(v) {
   knopf.hidden = false;
   knopf.className = 'moebel wagen' + (t.here ? '' : ' unterwegs');
   setzeMoebel('wagen');
-  knopf.innerHTML =
-    '<svg class="art" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">' +
-    artTruck(!t.here, false) + '</svg>';
+  knopf.innerHTML = moebelSvg('wagen', artTruck(!t.here, false), 40);
   knopf.setAttribute('aria-label', t.here ? 'Lieferwagen wartet' : 'Lieferwagen unterwegs');
+}
+
+// Hof-Moebel werden genauso aufgestellt wie Plaetze: Der Kasten waechst nach
+// oben, die Zeichnung bleibt unveraendert.
+function moebelKoerper(id) {
+  var o = MOEBEL_ORTE[id];
+  if (!o || !hatRaster()) return null;
+  return { hoch: stehHoehe(o[3]) };
+}
+
+function moebelSvg(id, bild, flach) {
+  return '<svg class="art" viewBox="0 0 100 ' + flach +
+    '" preserveAspectRatio="none" aria-hidden="true">' + bild + '</svg>';
 }
 
 var MOEBEL_ORTE = {
@@ -273,6 +280,11 @@ function setzeMoebel(id) {
     return;
   }
   var k = moebelKasten(o[0], o[1], o[2], o[3]);
+  var kp = moebelKoerper(id);
+  if (kp) {
+    k.top -= kp.hoch * zellH();
+    k.height += kp.hoch * zellH();
+  }
   el.style.left = k.left + '%';
   el.style.top = k.top + '%';
   el.style.width = k.width + '%';
@@ -293,9 +305,7 @@ function renderMoebel(v) {
     if (zeigBoot) {
       var heil = !!(v.angeln.boot && v.angeln.boot.repariert);
       boot.classList.toggle('kaputt', !heil);
-      boot.innerHTML =
-        '<svg class="art" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">' +
-        artHofBoot(heil) + '</svg>' +
+      boot.innerHTML = moebelSvg('boot', artHofBoot(heil), 60) +
         (heil ? '' : blase('mallet').outerHTML);
       var bootBlase = boot.querySelector('.badge');
       if (bootBlase) bootBlase.style.width = blasenBreite(MOEBEL_ORTE.boot[2]);
@@ -539,9 +549,7 @@ function renderAusbau(v) {
 }
 
 function moebel(knopf, bild, name, zahl) {
-  knopf.innerHTML =
-    '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-    bild + '</svg>' +
+  knopf.innerHTML = moebelSvg(knopf.id, bild, 80) +
     '<span class="meta">' + name + '</span>' +
     (zahl > 0 ? blase(null, String(zahl)).outerHTML : '');
   var b = knopf.querySelector('.badge');

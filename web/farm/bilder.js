@@ -341,15 +341,34 @@ function artCoop(animals, ready) {
 // Die Kunst bekommt dazu k.boden (Oberkante des Standplatzes) und k.vh
 // (Unterkante) und baut von der Bodenlinie aus nach oben auf. Objekte ohne
 // Eintrag bleiben vorerst flach — das hier ist das Muster, nicht der ganze Hof.
+// Von Hand raeumlich neu gezeichnet, mit eigener Zeichenflaeche. Der Wert ist
+// die Hoehe in Zellen, um die das Objekt ueber seinen Standplatz hinausragt.
 var KOERPER = { 'field-': 0.3, 'coop-': 1.4 };
 var KOERPER_HINDERNIS = { tree: 1.6, rock: 0.6, pond: 0 };
 
-function koerperHoehe(id) {
+function handHoehe(id) {
   if (KOERPER[id] !== undefined) return KOERPER[id];
-  for (var prefix in KOERPER) {
-    if (id.indexOf(prefix) === 0) return KOERPER[prefix];
+  for (var p1 in KOERPER) {
+    if (id.indexOf(p1) === 0) return KOERPER[p1];
   }
   return null;
+}
+
+// Alles andere behaelt vorerst seine alte, flache Zeichnung. Sie wird aber
+// nicht in die gestauchte Zelle gequetscht, sondern AUFGESTELLT: Der Kasten
+// waechst so weit nach oben, dass das Objekt wieder genau so hoch aussieht wie
+// vor der Neigung. Es steht dann wieder, statt zu liegen.
+function stehHoehe(zellenH) {
+  return (zellenH * (1 - ZELL_HOEHE)) / ZELL_HOEHE;
+}
+
+// Wie ein Objekt gezeichnet wird. `flach` ist die Hoehe seiner bisherigen
+// Zeichenflaeche, die bei aufgestellten Objekten unveraendert weiterlebt.
+function koerperFuer(id, zellenB, zellenH, flach) {
+  var hand = handHoehe(id);
+  if (hand === null) return { hoch: stehHoehe(zellenH), vh: flach, boden: 0, eigen: false };
+  var m = koerperMasse(zellenB, zellenH, hand);
+  return { hoch: hand, vh: m.vh, boden: m.boden, eigen: true };
 }
 
 // Dort beruehrt das Objekt die Erde: die Mitte seines Standplatzes.
