@@ -166,8 +166,18 @@ const ICON_MIME: Record<string, string> = {
 };
 
 export function buildIcons(): string {
-  const dir = join(ROOT, 'web', 'farm', 'icons');
-  if (!existsSync(dir)) return 'var ICONS = {};';
+  return buildBilder('icons', 'ICONS');
+}
+
+// Sprites (Pixelkacheln) landen genauso als Data-URIs in der Seite wie die
+// Icons — eine Datei, kein Nachladen, offline sofort da.
+export function buildSprites(): string {
+  return buildBilder('sprites', 'SPRITES');
+}
+
+function buildBilder(ordner: string, variable: string): string {
+  const dir = join(ROOT, 'web', 'farm', ordner);
+  if (!existsSync(dir)) return `var ${variable} = {};`;
 
   const eintraege: string[] = [];
   for (const datei of readdirSync(dir).sort()) {
@@ -182,7 +192,7 @@ export function buildIcons(): string {
     eintraege.push(`  ${JSON.stringify(name)}: 'data:${mime};base64,${daten}'`);
   }
 
-  return `var ICONS = {\n${eintraege.join(',\n')}\n};`;
+  return `var ${variable} = {\n${eintraege.join(',\n')}\n};`;
 }
 
 function resolveIncludes(template: string, depth = 0): string {
@@ -208,7 +218,8 @@ function buildPageWithBundle(name: string): string {
   }
   return template
     .replace('<!--BUNDLE-->', () => buildClientBundle())
-    .replace('<!--ICONS-->', () => buildIcons());
+    .replace('<!--ICONS-->', () => buildIcons())
+    .replace('<!--SPRITES-->', () => buildSprites());
 }
 
 export function buildAdminPage(): string {

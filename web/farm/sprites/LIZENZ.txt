@@ -1,0 +1,4 @@
+Pixelgrafiken aus „Tiny Farm" (1.0) von Kenney, www.kenney.nl
+Lizenz: Creative Commons CC0 1.0 — frei fuer private und kommerzielle Nutzung,
+keine Namensnennung noetig. Original: https://kenney.nl/assets/tiny-farm
+Die Dateien hier sind einzelne, umbenannte Kacheln aus dem Paket (16 x 16 px).

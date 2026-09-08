@@ -341,15 +341,94 @@ function artCoop(animals, ready) {
 // Die Kunst bekommt dazu k.boden (Oberkante des Standplatzes) und k.vh
 // (Unterkante) und baut von der Bodenlinie aus nach oben auf. Objekte ohne
 // Eintrag bleiben vorerst flach — das hier ist das Muster, nicht der ganze Hof.
+// ---------------------------------------------------------------------------
+// Probe: Pixelgrafik
+//
+// Umschaltbar in den Einstellungen. Statt der im Code gezeichneten Formen
+// werden fertige Pixelkacheln gemalt (Kenney „Tiny Farm", CC0, siehe
+// web/farm/sprites/LIZENZ.txt). Nur Acker, Huehnerstall, Baum und Stein sind
+// umgestellt — genug, um den Stil zu vergleichen.
+var pixelAn = (function () {
+  try { return localStorage.getItem('ns-pixel') === 'an'; } catch (e) { return false; }
+})();
+
+function pixelSetzen(an) {
+  pixelAn = !!an;
+  try { localStorage.setItem('ns-pixel', pixelAn ? 'an' : 'aus'); } catch (e) {}
+  hindernisStand = null; // Hindernisse neu malen, die sind sonst gemerkt
+  if (typeof render === 'function') render();
+}
+
+// Pixelobjekte brauchen andere Hoehen als die Vektorzeichnungen.
+var KOERPER_PIXEL = { 'field-': 0.35, 'coop-': 2.0 };
+
+function sprite(name, x, y, w, h) {
+  var q = typeof SPRITES === 'object' && SPRITES[name];
+  if (!q) return '';
+  return '<image href="' + q + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h +
+    '" preserveAspectRatio="none"/>';
+}
+
+// Zwei lange Beete uebereinander, je eine Zellreihe, aus Endstueck, zwei
+// Mittelstuecken und Endstueck. Darauf die Pflanzen in zwei Reihen zu je vier.
+function artFeldPixel(k, stage, crop) {
+  var o = k.boden;
+  var out = '';
+  var reihen = [o + 1, o + 32];
+  var teile = ['acker-l', 'acker-m1', 'acker-m2', 'acker-r'];
+  var i, r;
+  for (r = 0; r < 2; r++) {
+    for (i = 0; i < 4; i++) out += sprite(teile[i], i * 25, reihen[r], 25.4, 29);
+  }
+  if (stage <= 0) return out;
+  var art = crop === 'corn' ? 'mais' : crop === 'wheat' ? 'weizen' : 'moehre';
+  var bild = art + '-' + Math.min(3, Math.max(1, stage));
+  for (r = 0; r < 2; r++) {
+    for (i = 0; i < 4; i++) {
+      out += sprite(bild, 3 + i * 24.5, reihen[r] - 1, 22, 22);
+    }
+  }
+  return out;
+}
+
+// Scheune aus dem Bausatz: zwei Dachreihen, Wand mit Fenstern, Torreihe.
+// Drei Kacheln breit, auf die Kastenbreite gestreckt.
+function artStallPixel(k, animals) {
+  var zeilen = [['dach-1', 'dach-2', 'dach-3'], ['dach-4', 'dach-5', 'dach-6'],
+    ['wand-1', 'wand-2', 'wand-3'], ['tor-1', 'tor-2', 'tor-3']];
+  var b = 100 / 3, h = 28;
+  var oben = k.vh - 3 - zeilen.length * h;
+  var out = '<ellipse cx="50" cy="' + (k.vh - 4) + '" rx="46" ry="6" fill="var(--ink)" opacity=".18"/>';
+  for (var z = 0; z < zeilen.length; z++) {
+    for (var x = 0; x < 3; x++) out += sprite(zeilen[z][x], x * b, oben + z * h, b + 0.4, h + 0.4);
+  }
+  var plaetze = [[4, -14], [72, -10], [40, -6]];
+  for (var t = 0; t < Math.min(3, animals); t++) {
+    out += sprite('huhn', plaetze[t][0], k.vh + plaetze[t][1] - 22, 24, 24);
+  }
+  return out;
+}
+
+function artBaumPixel(k) {
+  return '<ellipse cx="50" cy="' + (k.vh - 8) + '" rx="30" ry="9" fill="var(--ink)" opacity=".2"/>' +
+    sprite('baum', 0, k.vh - 108, 100, 100);
+}
+
+function artSteinPixel(k) {
+  return '<ellipse cx="50" cy="' + (k.vh - 10) + '" rx="28" ry="8" fill="var(--ink)" opacity=".2"/>' +
+    sprite('stein', 14, k.vh - 80, 72, 72);
+}
+
 // Von Hand raeumlich neu gezeichnet, mit eigener Zeichenflaeche. Der Wert ist
 // die Hoehe in Zellen, um die das Objekt ueber seinen Standplatz hinausragt.
 var KOERPER = { 'field-': 0.3, 'coop-': 1.4 };
 var KOERPER_HINDERNIS = { tree: 1.6, rock: 0.6, pond: 0 };
 
 function handHoehe(id) {
-  if (KOERPER[id] !== undefined) return KOERPER[id];
-  for (var p1 in KOERPER) {
-    if (id.indexOf(p1) === 0) return KOERPER[p1];
+  var tabelle = pixelAn ? KOERPER_PIXEL : KOERPER;
+  if (tabelle[id] !== undefined) return tabelle[id];
+  for (var p1 in tabelle) {
+    if (id.indexOf(p1) === 0) return tabelle[p1];
   }
   return null;
 }
@@ -375,19 +454,19 @@ function koerperFuer(id, zellenB, zellenH, flach) {
 function bodenLinie(k) { return (k.boden + k.vh) / 2; }
 
 function artRaumFor(p, k) {
-  if (p.id.indexOf('field-') === 0) {
-    if (!p.busy && !p.done) return artFeldRaum(k, 0, null);
-    return artFeldRaum(k, p.done ? 3 : p.progress < 0.4 ? 1 : 2, p.producing);
-  }
+  var feld = p.id.indexOf('field-') === 0;
+  var stufe = feld ? (!p.busy && !p.done ? 0 : p.done ? 3 : p.progress < 0.4 ? 1 : 2) : 0;
+  if (feld) return pixelAn ? artFeldPixel(k, stufe, p.producing) : artFeldRaum(k, stufe, p.producing);
   if (p.id.indexOf('coop-') === 0) {
-    return artStallRaum(k, p.stall ? p.stall.animals : p.capacity, p.done);
+    var tiere = p.stall ? p.stall.animals : p.capacity;
+    return pixelAn ? artStallPixel(k, tiere) : artStallRaum(k, tiere, p.done);
   }
   return artFor(p);
 }
 
 function artHindernisRaum(kind, k) {
-  if (kind === 'tree') return artBaumRaum(k);
-  if (kind === 'rock') return artSteinRaum(k);
+  if (kind === 'tree') return pixelAn ? artBaumPixel(k) : artBaumRaum(k);
+  if (kind === 'rock') return pixelAn ? artSteinPixel(k) : artSteinRaum(k);
   return artTeichRaum(k);
 }
 
