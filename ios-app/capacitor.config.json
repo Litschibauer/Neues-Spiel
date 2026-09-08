@@ -3,8 +3,7 @@
   "appName": "Hof",
   "webDir": "www",
   "server": {
-    "url": "http://192.168.1.42:8788",
-    "cleartext": true
+    "url": "https://5-252-103-214.sslip.io"
   },
   "ios": {
     "contentInset": "always"
