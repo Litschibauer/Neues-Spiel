@@ -2,17 +2,19 @@
 // Geräts. Kein Spielzustand, nichts Serverrelevantes; färbt nur das Feld.
 
 // Farbstützpunkte über den Tag (Stunde → Tönung r,g,b + Deckkraft a).
+// Bewusst zart: Die Nacht soll eine Stimmung sein, kein Grauschleier, unter
+// dem man den Hof nicht mehr erkennt.
 var HIMMEL_STOPS = [
-  { h: 0, r: 18, g: 28, b: 66, a: 0.50 },
-  { h: 5, r: 20, g: 30, b: 68, a: 0.44 },
-  { h: 6.5, r: 255, g: 150, b: 95, a: 0.30 },
-  { h: 8, r: 255, g: 240, b: 210, a: 0.06 },
+  { h: 0, r: 18, g: 28, b: 66, a: 0.22 },
+  { h: 5, r: 20, g: 30, b: 68, a: 0.20 },
+  { h: 6.5, r: 255, g: 150, b: 95, a: 0.14 },
+  { h: 8, r: 255, g: 240, b: 210, a: 0.04 },
   { h: 12, r: 255, g: 255, b: 255, a: 0.00 },
-  { h: 17, r: 255, g: 242, b: 205, a: 0.08 },
-  { h: 19, r: 255, g: 125, b: 70, a: 0.30 },
-  { h: 20.5, r: 92, g: 66, b: 120, a: 0.40 },
-  { h: 22, r: 18, g: 28, b: 66, a: 0.48 },
-  { h: 24, r: 18, g: 28, b: 66, a: 0.50 },
+  { h: 17, r: 255, g: 242, b: 205, a: 0.05 },
+  { h: 19, r: 255, g: 125, b: 70, a: 0.14 },
+  { h: 20.5, r: 92, g: 66, b: 120, a: 0.18 },
+  { h: 22, r: 18, g: 28, b: 66, a: 0.21 },
+  { h: 24, r: 18, g: 28, b: 66, a: 0.22 },
 ];
 
 function himmelBei(stunde) {

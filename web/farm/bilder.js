@@ -106,9 +106,8 @@ function artHofBoot(repariert) {
       '<path d="M30 42h46l-8 15H38z" fill="#8f7a62"/>' +
       '<path d="M52 44l7 12h-11z" fill="' + wasser + '"/>' + // Loch im Rumpf
       '<path d="M34 46h16" stroke="#5f4d38" stroke-width="1.6" stroke-linecap="round"/>' +
-      '<rect x="60" y="34" width="20" height="3.4" rx="1" fill="#8f7a62" transform="rotate(-18 70 36)"/>' +
-      '<circle cx="24" cy="16" r="9" fill="#e8a33d"/>' +
-      '<path d="M24 11v6M24 20v1.6" stroke="#5b3d12" stroke-width="2.4" stroke-linecap="round"/>';
+      '<rect x="60" y="34" width="20" height="3.4" rx="1" fill="#8f7a62" transform="rotate(-18 70 36)"/>';
+    // Den Hinweis „reparieren" gibt die Werkzeug-Blase über dem Boot (anzeige.js).
   }
   return out;
 }

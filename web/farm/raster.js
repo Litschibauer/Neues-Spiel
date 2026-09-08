@@ -194,7 +194,7 @@ function weltFormat() {
 // Darum wird der Zoom aus einer Ziel-Kachelgroesse abgeleitet (kurze
 // Bildschirmseite geteilt durch ZIEL_ZELLE) statt aus „ganzer Hof ins Bild".
 // Sonst schrumpft alles, sobald der Hof waechst.
-var ZIEL_ZELLE = 8;
+var ZIEL_ZELLE = 10;
 var WEITEST_ZELLE = 22;
 var MAX_ZOOM = 6;
 

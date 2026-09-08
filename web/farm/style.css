@@ -210,20 +210,16 @@
   .plot.zieht .meta { opacity: 0; }
   .plot.zieht.geht-nicht { filter: drop-shadow(0 0 0 var(--bad)) saturate(.4); opacity: .7; }
   .plot .art { display: block; width: 100%; height: 100%; }
-  .plot .meta {
-    position: absolute; left: 50%; bottom: -.1rem; transform: translateX(-50%);
-    max-width: 100%; padding: .1rem .35rem; border-radius: 7px;
-    background: color-mix(in srgb, var(--surface) 82%, transparent);
-    display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  /* Die Welt ist schriftfrei: Name und Zustand eines Platzes stehen zwar im
+     DOM (Vorleser, Tests), sind aber unsichtbar. Was ein Platz gerade tut,
+     zeigt sein Bild plus eine mitzoomende Blase — die Schrift gehört ins
+     Tipp-Menü. So sieht der Hof aufgeräumt aus statt vollgestopft. */
+  .plot .meta, .moebel .meta {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+    pointer-events: none;
   }
-  .plot .name { font-size: .36rem; font-weight: 650; color: var(--muted); line-height: 1.2; }
-  .plot .status {
-    font-size: .4rem; font-weight: 600; line-height: 1.25;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-  }
-  .plot.ripe .status { color: var(--ripe); font-weight: 750; }
-  .plot.locked .art { filter: saturate(.2) brightness(.97) opacity(.55); }
+  .plot.locked .art { filter: saturate(.85); }
   .plot.gated { opacity: .5; }
   .plot[disabled] { cursor: default; }
   /* Noch nicht gebautes festes Bauwerk (Mine): steht als Ziel im Sperrland und
@@ -233,17 +229,20 @@
   .plot.wahrzeichen .meta { background: color-mix(in srgb, var(--surface) 94%, transparent); }
   .plot.wahrzeichen .name { color: var(--text); }
 
-  .plot .badge {
-    position: absolute; top: -.55rem; left: 50%; transform: translateX(-50%);
-    width: 1.35rem; height: 1.35rem; border-radius: 50%;
-    background: var(--ripe); color: var(--on-ripe);
-    display: grid; place-items: center; font-size: .8rem; font-weight: 800;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+  /* Blasen sitzen in der Welt und zoomen mit: Größe in Prozent der Kachel
+     (renderPlots rechnet sie auf ~3/4 Zelle um), Inhalt als Bild oder SVG. */
+  .plot .badge, .moebel .badge {
+    position: absolute; top: 0; left: 50%; transform: translate(-50%, -55%);
+    width: 30%; aspect-ratio: 1; display: block; pointer-events: none;
     animation: hüpf 1.4s ease-in-out infinite;
   }
+  .plot .badge > svg, .moebel .badge > svg {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible;
+    filter: drop-shadow(0 .6px 1px rgba(0, 0, 0, .35));
+  }
   @keyframes hüpf {
-    0%, 100% { transform: translate(-50%, 0); }
-    50% { transform: translate(-50%, -.2rem); }
+    0%, 100% { transform: translate(-50%, -55%); }
+    50% { transform: translate(-50%, -80%); }
   }
   @media (prefers-reduced-motion: reduce) { .plot .badge { animation: none; } }
 
@@ -253,19 +252,7 @@
   }
   .moebel:active { transform: scale(.94); }
   .moebel .art { display: block; width: 100%; height: 100%; }
-  .moebel .meta {
-    position: absolute; left: 50%; top: -.65rem; transform: translateX(-50%);
-    padding: .05rem .3rem; border-radius: 6px; white-space: nowrap;
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
-    font-size: .55rem; font-weight: 650; color: var(--muted); pointer-events: none;
-  }
-  .moebel .badge {
-    position: absolute; top: -.4rem; right: -.4rem;
-    min-width: 1.05rem; height: 1.05rem; padding: 0 .2rem; border-radius: 999px;
-    background: var(--ripe); color: var(--on-ripe);
-    display: grid; place-items: center; font-size: .62rem; font-weight: 800;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
-  }
+  .moebel .badge { left: auto; right: 0; transform: translate(35%, -35%); animation: none; }
 
   .zahnrad {
     position: absolute; top: .45rem; right: .45rem; z-index: 70;
@@ -346,10 +333,6 @@
   /* Vorschau im gesperrten Land: klar grau, nicht anklickbar. */
   .hindernis.verborgen { pointer-events: none; }
   .hindernis.verborgen .art { filter: grayscale(1) brightness(0.78); opacity: 0.85; }
-  .hindernis .badge {
-    background: var(--accent); color: var(--on-accent);
-    animation: hüpf 1.6s ease-in-out infinite;
-  }
   .schatz .art { animation: wackeln 2.2s ease-in-out infinite; }
   #kiste .art { animation: wackeln 2.2s ease-in-out infinite; }
   @keyframes wackeln {
@@ -377,13 +360,15 @@
   .feld-sperre.grenze {
     box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .2);
   }
+  /* Kleines Schild, eine Zeile — ein Hinweis am Wegrand, kein Plakat. */
   .feld-sperre .plakette {
-    position: relative; z-index: 1; text-align: center; line-height: 1.15;
-    background: rgba(20, 16, 10, .8); color: #fff; border-radius: 6px;
-    padding: .14rem .3rem; font-size: .32rem; max-width: 60%;
+    position: relative; z-index: 1; text-align: center; line-height: 1.2;
+    background: rgba(20, 16, 10, .78); color: #fff; border-radius: 999px;
+    padding: .08rem .3rem; font-size: .26rem; max-width: 70%; white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0, 0, 0, .45);
   }
-  .feld-sperre .plakette b { display: block; font-weight: 800; font-size: .36rem; }
+  .feld-sperre .plakette b { font-weight: 800; font-size: .28rem; }
+  .feld-sperre .plakette em::before { content: ' · '; color: #fff; }
   .feld-sperre .plakette em { font-style: normal; color: #ffd27a; font-weight: 700; }
   /* Kaufbar UND an der Grenze: das eine Feld, das jetzt dran ist, leuchtet. */
   .feld-sperre.grenze.bereit {
@@ -457,9 +442,10 @@
   .abfahrt.abreissen.sicher { background: var(--bad); color: #fff; border-color: var(--bad); }
 
   .plot .bar {
-    position: absolute; left: 12%; right: 12%; bottom: .85rem;
-    height: .22rem; border-radius: 2px; overflow: hidden;
-    background: color-mix(in srgb, var(--ink) 22%, transparent);
+    position: absolute; left: 14%; right: 14%; bottom: 5%;
+    height: 4%; min-height: 2px; border-radius: 999px; overflow: hidden;
+    background: rgba(255, 255, 255, .55);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
   }
 
   .bar i { display: block; height: 100%; background: var(--leaf); transition: width 1s linear; }

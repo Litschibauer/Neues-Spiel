@@ -180,14 +180,13 @@ function renderPlots(v) {
       artFor(p) + '</svg>';
     tile.appendChild(art.firstChild);
 
+    // Zustand zeigt die Welt selbst — wie in Hay Day: keine Schrift auf den
+    // Kacheln, sondern eine Bildblase mit dem fertigen Produkt (bzw. Axt beim
+    // welken Baum). Die Blase ist in Zellen bemessen und zoomt mit.
     if (p.done || baumReif || baumWelk) {
-      var badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = baumWelk
-        ? '🪓'
-        : p.capacity > 1
-          ? String(p.slots.filter(function (s) { return s.done; }).length)
-          : '!';
+      var bild = baumWelk ? null : blasenBild(p);
+      var badge = blase(baumWelk ? 'saw' : bild ? rules.items[bild.item].id : null, '!');
+      badge.style.width = blasenBreite(p.size.w);
       tile.appendChild(badge);
     }
 
@@ -201,6 +200,8 @@ function renderPlots(v) {
       tile.appendChild(bar);
     }
 
+    // Name und Zustand nur für Vorleser und Tests — sichtbar ist davon nichts
+    // (siehe .plot .meta im Stylesheet), die Welt bleibt schriftfrei.
     var meta = document.createElement('div');
     meta.className = 'meta';
     var name = document.createElement('div');
@@ -284,7 +285,9 @@ function renderMoebel(v) {
       boot.innerHTML =
         '<svg class="art" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">' +
         artHofBoot(heil) + '</svg>' +
-        (heil ? '' : '<span class="badge">🔧</span>');
+        (heil ? '' : blase('mallet').outerHTML);
+      var bootBlase = boot.querySelector('.badge');
+      if (bootBlase) bootBlase.style.width = blasenBreite(MOEBEL_ORTE.boot[2]);
       boot.setAttribute('aria-label', heil ? 'Zum Angelsee' : 'Kaputtes Boot — reparieren');
       setzeMoebel('boot');
     }
@@ -335,8 +338,7 @@ function renderHindernisse(v) {
     knopf.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
     knopf.innerHTML =
       '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
-      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>' +
-      (h.removable ? '<span class="badge">✓</span>' : '');
+      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
     knopf.setAttribute('aria-label', hindernisName(h.kind) + (h.locked ? ' (gesperrtes Land)' : ''));
     // Im gesperrten Land nur Vorschau: nicht anklickbar (Klick geht an die
     // Land-Sperre darüber), grau über CSS.
@@ -522,8 +524,45 @@ function moebel(knopf, bild, name, zahl) {
     '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
     bild + '</svg>' +
     '<span class="meta">' + name + '</span>' +
-    (zahl > 0 ? '<span class="badge">' + zahl + '</span>' : '');
+    (zahl > 0 ? blase(null, String(zahl)).outerHTML : '');
+  var b = knopf.querySelector('.badge');
+  if (b) b.style.width = blasenBreite(MOEBEL_ORTE[knopf.id] ? MOEBEL_ORTE[knopf.id][2] : 3);
   knopf.setAttribute('aria-label', name + (zahl > 0 ? ' — ' + zahl + ' offen' : ''));
+}
+
+// Blasen sind rund 0,9 Zellen breit — gleich groß über Feld, Stall und Boot,
+// egal wie viele Zellen das Objekt selbst einnimmt.
+function blasenBreite(zellen) {
+  return (90 / Math.max(1, zellen)) + '%';
+}
+
+// Welches Bild gehört in die „fertig"-Blase eines Platzes? Beim Baum die
+// Ernte, sonst das Produkt des ersten fertigen Slots (Feld, Stall, Werkstatt).
+function blasenBild(p) {
+  if (p.baum && p.baum.ertrag) return p.baum.ertrag;
+  for (var i = 0; i < p.slots.length; i++) {
+    if (p.slots[i].done && p.slots[i].output) return p.slots[i].output;
+  }
+  return p.output;
+}
+
+// Eine runde Blase über einem Weltobjekt: ein einziges SVG mit Ring und
+// Inhalt (Bild-Icon per Kennung oder kurzer Text). Alles in viewBox-Einheiten,
+// damit Ring, Bild und Schrift beim Zoomen exakt mitwachsen — rem/px würden
+// je nach Zoom mal winzig, mal riesig wirken.
+function blase(bildId, text) {
+  var el = document.createElement('span');
+  el.className = 'badge';
+  var quelle = bildId ? iconFor(bildId) : null;
+  var inhalt = quelle
+    ? '<image href="' + quelle + '" x="4.2" y="4.2" width="11.6" height="11.6"/>'
+    : '<text x="10" y="14.6" text-anchor="middle" font-size="' + ((text || '').length > 1 ? 10 : 13) +
+      '" font-weight="800" font-family="system-ui, sans-serif" fill="var(--ink)">' + (text || '!') + '</text>';
+  el.innerHTML =
+    '<svg viewBox="0 0 20 20" aria-hidden="true">' +
+    '<circle cx="10" cy="10" r="9.2" fill="var(--surface)" stroke="var(--ripe)" stroke-width="1.3"/>' +
+    inhalt + '</svg>';
+  return el;
 }
 
 function renderRequests(v) {
