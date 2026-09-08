@@ -109,8 +109,10 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function tippeBisGesetzt(cdp: Cdp): Promise<boolean> {
+  // Über den ganzen sichtbaren Hof tasten — das freie Startland kann je nach
+  // Rasterhöhe/Kamera oben ODER unten im Bild liegen.
   for (const x of [0.5, 0.25, 0.75, 0.35, 0.65, 0.15]) {
-    for (const y of [0.5, 0.6, 0.7, 0.45, 0.8, 0.9]) {
+    for (const y of [0.4, 0.5, 0.3, 0.6, 0.2, 0.7, 0.45, 0.8, 0.25, 0.9, 0.35, 0.55]) {
       await evaluate(
         cdp,
         `(function () {
@@ -1281,8 +1283,8 @@ try {
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
   await sleep(200);
 
-  // Der Großteil des (nun doppelt breiten) Hofs ist gesperrt: 8 alte Felder
-  // (w1–w6, m1, m2) plus 8 neue im verdoppelten Land (n1–n8) = 16.
+  // Der Großteil des (nun doppelt breiten UND doppelt hohen) Hofs ist gesperrt:
+  // 8 alte Felder (w1–w6, m1, m2) + 8 rechts (n1–n8) + 16 unten (u1–u16) = 32.
   const sperren = await evaluate<{ anzahl: number; text: string }>(
     cdp,
     `(function () {
@@ -1292,7 +1294,7 @@ try {
   );
   check(
     'Der weitaus größte Teil des Hofs liegt in gesperrten Feldern, samt Bergen',
-    sperren.anzahl === 16,
+    sperren.anzahl === 32,
     `${sperren.anzahl} Felder`,
   );
   check(

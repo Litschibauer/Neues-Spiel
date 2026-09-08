@@ -1662,13 +1662,42 @@ const FISH_TROUT = 31; // Forelle
 const FISH_CARP = 32; // Karpfen
 const FISH_PIKE = 33; // Hecht
 
+// Neuland nach unten: Der Hof wird auch in die Höhe verdoppelt (13 → 26). Die
+// neuen unteren Reihen (gy 13–25) sind komplett gesperrt, über die volle Breite
+// in zwei Bändern zu je acht Feldern gekachelt, mit weiter steigender Stufe und
+// steigenden Kosten. Erzeugt in einer Schleife (nur ganzzahlige Arithmetik).
+const UNTEN_LAND: Expansion[] = (() => {
+  const out: Expansion[] = [];
+  const spalten = [0, 13, 26, 39, 52, 65, 78, 91];
+  const baender = [
+    { gy: 13, h: 6 },
+    { gy: 19, h: 7 },
+  ];
+  let n = 0;
+  for (const b of baender) {
+    for (const gx of spalten) {
+      n += 1;
+      out.push({
+        id: 'u' + n,
+        gx,
+        gy: b.gy,
+        w: 13,
+        h: b.h,
+        minLevel: 22 + n,
+        cost: [want(MAP, 8 + n), want(MALLET, 9 + n), want(STAKE, 13 + n)],
+      });
+    }
+  }
+  return out;
+})();
+
 const V33: Ruleset = {
   ...V32,
   version: 33,
-  // Der Hof wird doppelt so breit (52 → 104). Das neue Land rechts (gx 52–103)
-  // ist komplett gesperrt und lässt sich erst nach und nach freimachen (siehe
-  // die n-Erweiterungen unten).
-  grid: { w: 104, h: 13 },
+  // Der Hof wird doppelt so breit (52 → 104) UND doppelt so hoch (13 → 26). Das
+  // neue Land rechts (gx 52–103) und unten (gy 13–25) ist komplett gesperrt und
+  // lässt sich erst nach und nach freimachen (n- und u-Erweiterungen unten).
+  grid: { w: 104, h: 26 },
   // Die Prozent-Angabe `place` kann bei 104 Spalten nicht mehr jede Zelle
   // treffen. Darum bekommt jeder Platz ein festes `startCell` — genau die Zelle,
   // auf der er beim alten 52er-Raster stand. So bleibt links alles unverändert,
@@ -1692,6 +1721,8 @@ const V33: Ruleset = {
     { id: 'n6', gx: 65, gy: 7, w: 13, h: 6, minLevel: 17, cost: [want(MAP, 9), want(MALLET, 11), want(STAKE, 16)] },
     { id: 'n7', gx: 78, gy: 7, w: 13, h: 6, minLevel: 19, cost: [want(MAP, 11), want(MALLET, 13), want(STAKE, 20)] },
     { id: 'n8', gx: 91, gy: 7, w: 13, h: 6, minLevel: 22, cost: [want(MAP, 13), want(MALLET, 16), want(STAKE, 24)] },
+    // Neuland nach unten (gy 13–25, volle Breite).
+    ...UNTEN_LAND,
   ],
   items: [
     ...V32.items,
