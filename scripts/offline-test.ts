@@ -3163,6 +3163,155 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `${freigeschaltet.vorher} → ${freigeschaltet.nachher} gesperrte Felder`,
   );
 
+  console.log('\n9y. Querformat: Layout auf dem Telefon (844 x 390)');
+
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: 844,
+    height: 390,
+    deviceScaleFactor: 3,
+    mobile: true,
+  });
+  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+  await waitFor(
+    cdp,
+    'document.getElementById("shell") && !document.getElementById("shell").hidden',
+    'Spiel im Querformat geladen',
+    20_000,
+  );
+  await sleep(600);
+  await evaluate(cdp, `(function () {
+    var t = document.getElementById('tut-bg');
+    if (t && !t.hidden) document.getElementById('tut-skip').click();
+  })()`);
+  await sleep(300);
+
+  // Wichtig: Alles innerhalb von #hof liegt in der zoombaren Welt (CSS-transform
+  // scale). Dessen Groessen aendern sich mit dem Zoom und sagen nichts ueber das
+  // Layout aus. Geprueft wird deshalb nur die FESTE Bedienoberflaeche.
+  const quer = await evaluate<{
+    breite: number;
+    ueberlauf: number;
+    hofAnteil: number;
+    kleinsteSchrift: number;
+    kleinstesEl: string;
+    zuKleineZiele: string;
+    zuBreit: string;
+  }>(
+    cdp,
+    `(function () {
+       var vw = window.innerWidth, vh = window.innerHeight;
+       var name = function (el) {
+         if (el.id) return el.id;
+         var c = el.getAttribute && el.getAttribute('class');
+         return c || el.tagName.toLowerCase();
+       };
+       var fest = function (el) { return !el.closest('#hof'); };
+       var sichtbar = function (el) {
+         var r = el.getBoundingClientRect();
+         if (r.width < 1 || r.height < 1) return false;
+         var st = getComputedStyle(el);
+         return st.visibility !== 'hidden' && st.display !== 'none' && Number(st.opacity) > 0.05;
+       };
+
+       var klein = 999, kleinEl = '';
+       [].forEach.call(document.querySelectorAll('#shell *'), function (el) {
+         if (!fest(el) || !sichtbar(el)) return;
+         var eigener = [].some.call(el.childNodes, function (n) {
+           return n.nodeType === 3 && n.textContent.trim().length > 0;
+         });
+         if (!eigener) return;
+         var px = parseFloat(getComputedStyle(el).fontSize);
+         if (px > 0 && px < klein) { klein = px; kleinEl = name(el); }
+       });
+
+       var zuKlein = [];
+       [].forEach.call(
+         document.querySelectorAll('.zahnrad, .see-hud button, .musikbar button, .topbar button'),
+         function (el) {
+           if (!fest(el) && !el.closest('.zahnrad')) return;
+           if (!sichtbar(el)) return;
+           var r = el.getBoundingClientRect();
+           var kante = Math.min(r.width, r.height);
+           if (kante < 44) zuKlein.push(name(el) + ' ' + Math.round(kante) + 'px');
+         },
+       );
+
+       var breit = [];
+       [].forEach.call(document.querySelectorAll('#shell *'), function (el) {
+         if (!fest(el) || !sichtbar(el)) return;
+         var r = el.getBoundingClientRect();
+         if (r.width > vw + 1 && r.left < vw) breit.push(name(el));
+       });
+
+       var hof = document.getElementById('hof').getBoundingClientRect();
+       return {
+         breite: vw,
+         ueberlauf: document.documentElement.scrollWidth - vw,
+         hofAnteil: Math.round((hof.height / vh) * 100),
+         kleinsteSchrift: Math.round(klein * 10) / 10,
+         kleinstesEl: kleinEl,
+         zuKleineZiele: zuKlein.join(', '),
+         zuBreit: breit.slice(0, 5).join(', '),
+       };
+     })()`,
+  );
+
+  check(
+    'Querformat: nichts laeuft seitlich aus dem Bild',
+    quer.ueberlauf <= 1 && quer.zuBreit === '',
+    `Überlauf ${quer.ueberlauf}px${quer.zuBreit ? ', zu breit: ' + quer.zuBreit : ''}`,
+  );
+  check(
+    'Querformat: der Hof fuellt den Bildschirm aus',
+    quer.hofAnteil >= 60,
+    `Hof nimmt ${quer.hofAnteil}% der Hoehe ein`,
+  );
+  check(
+    'Querformat: keine feste Schrift ist zu klein zum Lesen',
+    quer.kleinsteSchrift >= 10,
+    `kleinste feste Schrift ${quer.kleinsteSchrift}px (${quer.kleinstesEl})`,
+  );
+  check(
+    'Querformat: feste Bedienknoepfe erreichen Apples 44px',
+    quer.zuKleineZiele === '',
+    quer.zuKleineZiele || 'alle >= 44px',
+  );
+
+  const zoomSchutz = await evaluate<{ viewport: string; touch: string }>(
+    cdp,
+    `(function () {
+       var m = document.querySelector('meta[name=viewport]');
+       return {
+         viewport: m ? m.getAttribute('content') : '',
+         touch: getComputedStyle(document.body).touchAction,
+       };
+     })()`,
+  );
+  check(
+    'Kein Doppeltipp-Zoom wie auf einer Webseite',
+    /user-scalable=no/.test(zoomSchutz.viewport) &&
+      /maximum-scale=1/.test(zoomSchutz.viewport) &&
+      zoomSchutz.touch === 'manipulation',
+    `touch-action: ${zoomSchutz.touch}`,
+  );
+
+  const manifest = (await (await fetch(`http://127.0.0.1:${PORT}/manifest.webmanifest`)).json()) as {
+    orientation?: string;
+  };
+  check(
+    'Das Manifest fordert Querformat an',
+    manifest.orientation === 'landscape',
+    `orientation: ${manifest.orientation}`,
+  );
+
+  // Zurueck aufs Hochformat, damit der Rest der Pruefungen unveraendert laeuft.
+  await cdp.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);

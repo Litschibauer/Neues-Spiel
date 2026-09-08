@@ -76,7 +76,11 @@
     margin: 0; background: var(--ground); color: var(--ink);
     font-family: var(--sans); line-height: 1.45;
     -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: contain;
+    overscroll-behavior: none;
+    /* Kein Doppeltipp-Zoom wie auf einer Webseite: In der App soll ein zweiter
+       Tipp eine zweite Aktion sein, kein Vergrößern. Der Hof setzt darunter
+       `touch-action: none`, weil er Schwenken und Ziehen selbst steuert. */
+    touch-action: manipulation;
   }
   [hidden] { display: none !important; }
   button { font: inherit; color: inherit; cursor: pointer; }
@@ -94,6 +98,8 @@
     display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 0;
     background: none; border: 0; padding: .1rem; margin: -.1rem; border-radius: 12px;
     text-align: left; color: inherit; cursor: pointer;
+    /* Apples Mindestmass fuer Antippbares: 44 px Kante. */
+    min-height: 2.75rem;
   }
   .pfad-auf:active { background: var(--sunk); }
 
@@ -263,7 +269,7 @@
 
   .zahnrad {
     position: absolute; top: .45rem; right: .45rem; z-index: 70;
-    width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 999px;
+    width: 2.75rem; height: 2.75rem; padding: 0; border: 0; border-radius: 999px;
     display: grid; place-items: center;
     background: color-mix(in srgb, var(--surface) 82%, transparent);
     color: var(--muted); box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
@@ -273,9 +279,8 @@
     position: absolute; top: -1px; right: -1px; width: .7rem; height: .7rem;
     border-radius: 999px; background: var(--gold, #e0a800); border: 2px solid var(--surface);
   }
-  .hammer { right: 3rem; }
-  .see-knopf { right: 5.55rem; color: #fff; background: #3b8fb3; }
-  .geschenk { right: 8.1rem; color: var(--on-accent); background: var(--accent); }
+  .hammer { right: 3.7rem; }
+  .geschenk { right: 6.95rem; color: var(--on-accent); background: var(--accent); }
   .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
   @keyframes winken {
     0%, 70%, 100% { transform: rotate(0); }

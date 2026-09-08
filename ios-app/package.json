@@ -6,7 +6,8 @@
   "scripts": {
     "ios": "cap sync ios && cap open ios",
     "sync": "cap sync ios",
-    "icon": "mkdir -p assets && cp ../web/icon.png assets/icon.png && capacitor-assets generate --ios && cap sync ios"
+    "icon": "mkdir -p assets && cp ../web/icon.png assets/icon.png && capacitor-assets generate --ios && cap sync ios",
+    "querformat": "bash scripts/querformat.sh && cap sync ios"
   },
   "dependencies": {
     "@capacitor/core": "^7.0.0",

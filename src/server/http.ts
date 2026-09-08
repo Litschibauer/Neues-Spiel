@@ -443,6 +443,8 @@ const MANIFEST = JSON.stringify({
   short_name: 'Hof',
   start_url: '/',
   display: 'standalone',
+  // Das Spiel ist fürs Querformat gebaut (breiter Hof, waagerechtes Schwenken).
+  orientation: 'landscape',
   background_color: '#f2f5f6',
   theme_color: '#0f7f81',
   // PNG bevorzugt (falls hinterlegt), SVG als Fallback. Ein fehlendes Icon in
