@@ -350,23 +350,30 @@ function renderHindernisse(v) {
   });
 }
 
-function sperrGebuesch(e) {
-  // Graue, durchscheinende Halme — der Boden darunter wird per backdrop-filter
-  // entsättigt, hier bleibt alles neutral grau (kein Grün), damit der Bereich
-  // klar als „gesperrt" lesbar ist.
-  var out = '';
-  var seed = (e.gx * 31 + e.gy * 17) % 97;
-  function rnd(m) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % m; }
 
-  var halme = Math.max(6, Math.round(e.w * e.h / 6));
-  for (var j = 0; j < halme; j++) {
-    var hx = 3 + rnd(94);
-    var hy = 14 + rnd(84);
-    var lean = rnd(7) - 3;
-    out += '<path d="M' + hx + ' ' + hy + 'q' + lean + ' -6 ' + (lean * 1.5) + ' -12" ' +
-      'stroke="rgba(180,182,186,0.45)" stroke-width="1.2" fill="none" stroke-linecap="round"/>';
+// Gesperrtes Land ist Wildnis: dieselbe Landschaft — Boden, Baeume, Steine,
+// Teiche — nur abgedunkelt. Kein Kasten, kein Banner. Ein Schild tragen nur die
+// Felder, die ans FREIE Land grenzen; alles dahinter bleibt stumm, bis man
+// naeher kommt. Sonst schreit jedes der 32 Felder „ab Stufe" und der eigene Hof
+// geht darin unter.
+function freieZelle(gx, gy, gesperrt) {
+  var g = raster();
+  if (gx < 0 || gy < 0 || gx >= g.w || gy >= g.h) return false;
+  for (var i = 0; i < gesperrt.length; i++) {
+    var e = gesperrt[i];
+    if (gx >= e.gx && gx < e.gx + e.w && gy >= e.gy && gy < e.gy + e.h) return false;
   }
-  return out;
+  return true;
+}
+
+function grenztAnFrei(e, gesperrt) {
+  for (var x = e.gx; x < e.gx + e.w; x++) {
+    if (freieZelle(x, e.gy - 1, gesperrt) || freieZelle(x, e.gy + e.h, gesperrt)) return true;
+  }
+  for (var y = e.gy; y < e.gy + e.h; y++) {
+    if (freieZelle(e.gx - 1, y, gesperrt) || freieZelle(e.gx + e.w, y, gesperrt)) return true;
+  }
+  return false;
 }
 
 function renderErweiterungen(v) {
@@ -381,23 +388,30 @@ function renderErweiterungen(v) {
   sperrStand = stand;
   box.textContent = '';
 
-  (v.expansions || []).forEach(function (e) {
-    if (e.unlocked) return;
+  var gesperrt = (v.expansions || []).filter(function (e) { return !e.unlocked; });
+
+  gesperrt.forEach(function (e) {
+    var grenze = grenztAnFrei(e, gesperrt);
     var kasten = moebelKasten(e.gx, e.gy, e.w, e.h);
     var knopf = document.createElement('button');
-    knopf.className = 'feld-sperre' + (e.reachedLevel ? ' bereit' : ' fern');
+    knopf.className = 'feld-sperre' +
+      (grenze ? ' grenze' : ' wildnis') +
+      (e.reachedLevel ? ' bereit' : ' fern');
     knopf.style.left = kasten.left + '%';
     knopf.style.top = kasten.top + '%';
-    knopf.style.width = kasten.width + '%';
-    knopf.style.height = kasten.height + '%';
+    // Nachbarn ueberlappen sich um einen Bruchteil einer Zelle. Ohne das
+    // scheint an jeder Kante ein Streifen ungefilterte Wiese durch — ein
+    // Artefakt von backdrop-filter, das kein Saum am Rand schliesst. Liegt die
+    // Kante INNERHALB des gefilterten Nachbarn, gibt es nichts, was durchblendet.
+    knopf.style.width = (kasten.width + zellB() * 0.12) + '%';
+    knopf.style.height = (kasten.height + zellH() * 0.12) + '%';
     knopf.style.zIndex = String(2 + Math.round(kasten.tiefe * 2));
     knopf.dataset.feld = e.id;
-    knopf.innerHTML =
-      '<svg class="wuchs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
-      sperrGebuesch(e) + '</svg>' +
-      '<span class="plakette">' + (e.reachedLevel
+    if (grenze) {
+      knopf.innerHTML = '<span class="plakette">' + (e.reachedLevel
         ? '<b>Neues Land</b>' + (e.affordable ? '<em>frei machen</em>' : '<em>Werkzeug fehlt</em>')
         : '<b>ab Stufe ' + e.minLevel + '</b>') + '</span>';
+    }
     knopf.setAttribute('aria-label', 'Neues Land, ab Stufe ' + e.minLevel);
     knopf.addEventListener('click', function () { oeffneErweiterung(e.id); });
     box.appendChild(knopf);
