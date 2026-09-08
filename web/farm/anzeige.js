@@ -156,7 +156,7 @@ function renderPlots(v) {
     // Objekte mit Koerper ragen ueber ihren Standplatz hinaus: Der Kasten
     // waechst nach oben, gemalt wird in einer viewBox mit genau diesem
     // Seitenverhaeltnis. Alles andere bleibt vorerst flach.
-    var koerper = koerperFuer(p.id, p.size.w, p.size.h, 80);
+    var koerper = koerperFuer(p.id, p.size.w, p.size.h);
     ort.top -= koerper.hoch * zellH();
     ort.height += koerper.hoch * zellH();
     var tile = document.createElement('button');
@@ -184,7 +184,7 @@ function renderPlots(v) {
     art.innerHTML =
       '<svg class="art" viewBox="0 0 100 ' + koerper.vh +
       '" preserveAspectRatio="none" aria-hidden="true">' +
-      (koerper.eigen ? artRaumFor(p, koerper) : artFor(p)) + '</svg>';
+      artRaumFor(p, koerper) + '</svg>';
     tile.appendChild(art.firstChild);
 
     // Zustand zeigt die Welt selbst — wie in Hay Day: keine Schrift auf den
@@ -244,21 +244,22 @@ function renderTruck(v) {
   knopf.hidden = false;
   knopf.className = 'moebel wagen' + (t.here ? '' : ' unterwegs');
   setzeMoebel('wagen');
-  knopf.innerHTML = moebelSvg('wagen', artTruck(!t.here, false), 40);
+  knopf.innerHTML = moebelSvg('wagen', { unterwegs: !t.here });
   knopf.setAttribute('aria-label', t.here ? 'Lieferwagen wartet' : 'Lieferwagen unterwegs');
 }
 
-// Hof-Moebel werden genauso aufgestellt wie Plaetze: Der Kasten waechst nach
-// oben, die Zeichnung bleibt unveraendert.
-function moebelKoerper(id) {
-  var o = MOEBEL_ORTE[id];
-  if (!o || !hatRaster()) return null;
-  return { hoch: stehHoehe(o[3]) };
+// Hof-Moebel bekommen wie Plaetze einen Kasten, der nach oben waechst.
+// Unbekannte Knoepfe (etwa der Stand beim Nachbarn) zaehlen als 3 x 2 Zellen.
+function moebelKoerper(id, artId) {
+  var o = MOEBEL_ORTE[id] || [0, 0, 3, 2];
+  if (!hatRaster()) return null;
+  return koerperMoebel(artId || id, o[2], o[3]);
 }
 
-function moebelSvg(id, bild, flach) {
-  return '<svg class="art" viewBox="0 0 100 ' + flach +
-    '" preserveAspectRatio="none" aria-hidden="true">' + bild + '</svg>';
+function moebelSvg(id, zustand, artId) {
+  var m = moebelKoerper(id, artId) || koerperMoebel(artId || id, 3, 2);
+  return '<svg class="art" viewBox="0 0 100 ' + m.vh +
+    '" preserveAspectRatio="none" aria-hidden="true">' + artMoebelRaum(artId || id, m, zustand) + '</svg>';
 }
 
 var MOEBEL_ORTE = {
@@ -305,7 +306,7 @@ function renderMoebel(v) {
     if (zeigBoot) {
       var heil = !!(v.angeln.boot && v.angeln.boot.repariert);
       boot.classList.toggle('kaputt', !heil);
-      boot.innerHTML = moebelSvg('boot', artHofBoot(heil), 60) +
+      boot.innerHTML = moebelSvg('boot', { heil: heil }) +
         (heil ? '' : blase('mallet').outerHTML);
       var bootBlase = boot.querySelector('.badge');
       if (bootBlase) bootBlase.style.width = blasenBreite(MOEBEL_ORTE.boot[2]);
@@ -315,18 +316,18 @@ function renderMoebel(v) {
   }
 
   var bereit = v.truck.board.filter(function (z) { return z.deliverable; }).length;
-  moebel($('brett'), artBrett(v.truck.board.length), 'Brett', bereit);
-  moebel($('lagerhaus'), artLager(v.silo.full), 'Lager',
+  moebel($('brett'), {}, 'Brett', bereit);
+  moebel($('lagerhaus'), { voll: v.silo.full }, 'Lager',
     v.mail.entries.length + (v.silo.upgrade && v.silo.upgrade.affordable ? 1 : 0));
-  moebel($('stand'), artStand(), 'Stand', v.orders.filter(function (o) { return o.sold > 0; }).length);
-  moebel($('nachbarn'), artNachbarn(), 'Nachbarn', 0);
+  moebel($('stand'), {}, 'Stand', v.orders.filter(function (o) { return o.sold > 0; }).length);
+  moebel($('nachbarn'), {}, 'Nachbarn', 0);
   ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(setzeMoebel);
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');
   var ohneOrt = offen.filter(function (k) { return k.gx < 0 || !hatRaster(); });
   kiste.hidden = ohneOrt.length === 0;
-  if (ohneOrt.length > 0) { moebel(kiste, artKiste(), 'Kiste', ohneOrt.length); setzeMoebel('kiste'); }
+  if (ohneOrt.length > 0) { moebel(kiste, {}, 'Kiste', ohneOrt.length); setzeMoebel('kiste'); }
 }
 
 // Hindernisse und Sperrflaechen sind fast immer unveraendert — es waere
@@ -349,12 +350,9 @@ function renderHindernisse(v) {
 
   v.obstacles.forEach(function (h) {
     var kasten = hindernisKasten(h);
-    var hoch = KOERPER_HINDERNIS[h.kind];
-    var koerper = hoch === undefined ? null : koerperMasse(h.w, h.h, hoch);
-    if (koerper) {
-      kasten.top -= hoch * zellH();
-      kasten.height += hoch * zellH();
-    }
+    var koerper = koerperHindernis(h.kind, h.w, h.h);
+    kasten.top -= koerper.hoch * zellH();
+    kasten.height += koerper.hoch * zellH();
     var knopf = document.createElement('button');
     knopf.className = 'moebel hindernis' +
       (h.removable ? ' raeumbar' : '') + (h.locked ? ' verborgen' : '');
@@ -364,10 +362,9 @@ function renderHindernisse(v) {
     knopf.style.height = kasten.height + '%';
     knopf.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
     knopf.innerHTML =
-      '<svg class="art" viewBox="0 0 100 ' + (koerper ? koerper.vh : 100) +
+      '<svg class="art" viewBox="0 0 100 ' + koerper.vh +
       '" preserveAspectRatio="none" aria-hidden="true">' +
-      (koerper ? artHindernisRaum(h.kind, koerper)
-        : h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
+      artHindernisRaum(h.kind, koerper, h.index) + '</svg>';
     knopf.setAttribute('aria-label', hindernisName(h.kind) + (h.locked ? ' (gesperrtes Land)' : ''));
     // Im gesperrten Land nur Vorschau: nicht anklickbar (Klick geht an die
     // Land-Sperre darüber), grau über CSS.
@@ -500,16 +497,17 @@ function renderKisten(v) {
   v.chests.forEach(function (k) {
     if (!k.ready || k.gx < 0) return;
     var kasten = plotKasten(-1, { gx: k.gx, gy: k.gy });
+    var m = koerperMoebel('schatz', 1, 1);
     var knopf = document.createElement('button');
     knopf.className = 'moebel schatz';
     knopf.style.left = kasten.left + '%';
-    knopf.style.top = kasten.top + '%';
+    knopf.style.top = (kasten.top - m.hoch * zellH()) + '%';
     knopf.style.width = kasten.width + '%';
-    knopf.style.height = kasten.height + '%';
+    knopf.style.height = (kasten.height + m.hoch * zellH()) + '%';
     knopf.style.zIndex = String(40 + Math.round(kasten.tiefe * 2));
     knopf.innerHTML =
-      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-      artKiste() + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + m.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
+      artMoebelRaum('schatz', m) + '</svg>';
     knopf.setAttribute('aria-label', k.kind + ' öffnen');
     knopf.addEventListener('click', function () { oeffneKiste(k.id); });
     box.appendChild(knopf);
@@ -548,8 +546,8 @@ function renderAusbau(v) {
   box.appendChild(karte);
 }
 
-function moebel(knopf, bild, name, zahl) {
-  knopf.innerHTML = moebelSvg(knopf.id, bild, 80) +
+function moebel(knopf, zustand, name, zahl, artId) {
+  knopf.innerHTML = moebelSvg(knopf.id, zustand, artId) +
     '<span class="meta">' + name + '</span>' +
     (zahl > 0 ? blase(null, String(zahl)).outerHTML : '');
   var b = knopf.querySelector('.badge');

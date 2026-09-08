@@ -2206,7 +2206,7 @@ try {
     `(function () {
        return {
          plots: document.querySelectorAll('#plots .plot').length,
-         raster: !!document.getElementById('scene').innerHTML.match(/acker/),
+         raster: !!document.getElementById('scene').innerHTML.match(/m-gras/),
        };
      })()`,
   );

@@ -1,4 +1,8 @@
-Pixelgrafiken aus „Tiny Farm" (1.0) von Kenney, www.kenney.nl
+Pixelkacheln aus den „Tiny“-Paketen von Kenney, www.kenney.nl:
+  Tiny Farm (1.0)     https://kenney.nl/assets/tiny-farm
+  Tiny Town (1.x)     https://kenney.nl/assets/tiny-town
+  Tiny Factory (1.x)  https://kenney.nl/assets/tiny-factory
 Lizenz: Creative Commons CC0 1.0 — frei fuer private und kommerzielle Nutzung,
-keine Namensnennung noetig. Original: https://kenney.nl/assets/tiny-farm
-Die Dateien hier sind einzelne, umbenannte Kacheln aus dem Paket (16 x 16 px).
+keine Namensnennung noetig. Die Dateien hier sind einzelne, umbenannte Kacheln
+(16 x 16 px) aus diesen Paketen. Einige Motive (Boot, Muehlenfluegel, Teich,
+Wasser) sind im selben Stil selbst gezeichnet, siehe bilder.js.

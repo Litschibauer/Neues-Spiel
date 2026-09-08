@@ -59,7 +59,7 @@ function zeichneBootSheet(v) {
 }
 
 // Das See-Raster mit seinen Objekten. Wird bei jedem render() im See gemalt.
-// Die Angelstellen sind kleine Inseln (siehe artSeeObj 'spot'), am Strand oben
+// Die Angelstellen sind kleine Inseln (siehe artSeeRaum 'spot'), am Strand oben
 // links das Strandhaus (Köder herstellen), rechts der Steg zurück zum Hof.
 function renderSeeWelt(v) {
   ['brett', 'lagerhaus', 'stand', 'nachbarn', 'wagen', 'kiste', 'boot'].forEach(function (id) {
@@ -97,7 +97,8 @@ function renderSeeWelt(v) {
     var k = feldKasten(o.gx, o.gy, o.w, o.h);
     // Auch im See wird aufgestellt statt gequetscht: Der Kasten waechst nach
     // oben, bis das Objekt wieder so hoch aussieht wie vor der Neigung.
-    var hoch = stehHoehe(o.h);
+    var m = koerperSee(o.art, o.w, o.h);
+    var hoch = m.hoch;
     var tile = document.createElement('button');
     tile.className = 'plot see-obj' + (o.tap === 'angeln' ? ' see-spot' : '');
     tile.style.left = k.left + '%';
@@ -106,8 +107,8 @@ function renderSeeWelt(v) {
     tile.style.height = (k.hoehe + hoch * zellH()) + '%';
     tile.style.zIndex = String(1 + Math.round((o.gy + o.h) * 2));
     tile.innerHTML =
-      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-      artSeeObj(o.art) + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + m.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
+      artSeeRaum(o.art, m) + '</svg>';
     if (o.label) {
       var meta = document.createElement('div');
       meta.className = 'meta';

@@ -263,7 +263,7 @@ function zeichneFremdeFarm(d) {
 
   var szene = $('besuch-scene');
   if (szene.dataset.stand !== 'gemalt') {
-    szene.innerHTML = artBoden(false);
+    szene.innerHTML = artBodenPixel(false);
     szene.dataset.stand = 'gemalt';
   }
 
@@ -283,6 +283,10 @@ function zeichneFremdeFarm(d) {
     var i = eintrag.index;
     var p = eintrag.p;
     var ort = eintrag.ort;
+    var groesse = regeln.plots[i].size || { w: 1, h: 1 };
+    var koerper = koerperFuer(regeln.plots[i].id, groesse.w, groesse.h);
+    ort.top -= koerper.hoch * zellH();
+    ort.height += koerper.hoch * zellH();
 
     var laeuft = null;
     var fertig = 0;
@@ -308,8 +312,8 @@ function zeichneFremdeFarm(d) {
 
     var art = document.createElement('div');
     art.innerHTML =
-      '<svg class="art" viewBox="0 0 100 80" preserveAspectRatio="none" aria-hidden="true">' +
-      fremdeKunst(regeln, i, p, laeuft, fertig) + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + koerper.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
+      fremdeKunst(regeln, i, p, laeuft, fertig, koerper) + '</svg>';
     kachel.appendChild(art.firstChild);
 
     if (laeuft) {
@@ -348,16 +352,18 @@ function zeichneFremdeFarm(d) {
   zeichneFremdenStandKnopf(d);
 }
 
-function fremdeKunst(regeln, i, p, laeuft, fertig) {
-  return artFor({
+function fremdeKunst(regeln, i, p, laeuft, fertig, koerper) {
+  return artRaumFor({
     id: regeln.plots[i].id,
+    size: regeln.plots[i].size || { w: 1, h: 1 },
     busy: !!laeuft,
     done: fertig > 0,
     progress: laeuft ? 1 - laeuft.rest / laeuft.dauer : 0,
     producing: null,
     capacity: p.slots.length,
     stall: regeln.plots[i].animal ? { animals: p.tiere } : null,
-  });
+    baum: p.baum || null,
+  }, koerper);
 }
 
 function fremdName(regeln, i) {
@@ -392,16 +398,17 @@ function zeichneFremdeHindernisse(d, regeln) {
     if (geraeumt.indexOf(index) >= 0) return;
     if (fremdVerborgen(regeln, h, expandiert)) return;
     var kasten = hindernisKasten({ gx: h.gx, gy: h.gy, w: h.w, h: h.h, kind: h.kind });
+    var m = koerperHindernis(h.kind, h.w, h.h);
     var ding = document.createElement('div');
     ding.className = 'moebel hindernis';
     ding.style.left = kasten.left + '%';
-    ding.style.top = kasten.top + '%';
+    ding.style.top = (kasten.top - m.hoch * zellH()) + '%';
     ding.style.width = kasten.width + '%';
-    ding.style.height = kasten.height + '%';
+    ding.style.height = (kasten.height + m.hoch * zellH()) + '%';
     ding.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
     ding.innerHTML =
-      '<svg class="art" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
-      (h.kind === 'tree' ? artBaum() : h.kind === 'rock' ? artStein() : artTuempel()) + '</svg>';
+      '<svg class="art" viewBox="0 0 100 ' + m.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
+      artHindernisRaum(h.kind, m, index) + '</svg>';
     box.appendChild(ding);
   });
 }
@@ -409,7 +416,7 @@ function zeichneFremdeHindernisse(d, regeln) {
 function zeichneFremdenStandKnopf(d) {
   var knopf = $('besuch-stand-knopf');
   var offen = d.stand.filter(function (o) { return o.verkauft <= 0; });
-  moebel(knopf, artStand(), 'Sein Stand', offen.length);
+  moebel(knopf, {}, 'Sein Stand', offen.length, 'stand');
   knopf.disabled = offen.length === 0;
   knopf.onclick = function () {
     zeichneFremdenStand(besuchDaten);

@@ -123,17 +123,6 @@ $('stand').addEventListener('click', function () {
   attempt(true);
 });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
-
-// Probe-Schalter fuer die Pixelgrafik (siehe bilder.js).
-function pixelSchalterMalen() {
-  var stand = $('pixel-stand');
-  if (stand) stand.textContent = pixelAn ? 'An' : 'Aus';
-}
-pixelSchalterMalen();
-$('pixel-schalter').addEventListener('click', function () {
-  pixelSetzen(!pixelAn);
-  pixelSchalterMalen();
-});
 $('pfad-auf').addEventListener('click', function () { show('pfad'); });
 $('bonus-auf').addEventListener('click', function () { oeffneBonus(); });
 $('stufe-weiter').addEventListener('click', feierZu);

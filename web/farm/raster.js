@@ -102,41 +102,6 @@ function hindernisKasten(h) {
   return { left: k.left, width: k.breite, top: k.top, height: k.hoehe, tiefe: h.gy + h.h };
 }
 
-function artBoden(zeigeRaster) {
-  if (!hatRaster()) return '';
-  var g = raster();
-  var out = '';
-
-  var bandOben = projiziere(0, -BAND).y;
-  var ackerOben = projiziere(0, 0).y;
-  out += '<rect x="0" y="' + bandOben + '" width="100" height="' + (ackerOben - bandOben) +
-    '" fill="var(--path)"/>';
-  out += '<rect x="0" y="' + ackerOben + '" width="100" height="' + (100 - ackerOben) +
-    '" fill="var(--acker)"/>';
-
-  for (var y = 0; y < g.h; y++) {
-    for (var x = 0; x < g.w; x++) {
-      if ((x + y) % 2 === 1) continue;
-      var a = projiziere(x, y);
-      var b = projiziere(x + 1, y + 1);
-      out += '<rect x="' + a.x + '" y="' + a.y + '" width="' + (b.x - a.x) +
-        '" height="' + (b.y - a.y) + '" fill="var(--acker-hell)"/>';
-    }
-  }
-
-  if (zeigeRaster) {
-    for (var gy = 0; gy <= g.h; gy++) {
-      var ly = projiziere(0, gy).y;
-      out += '<path d="M0 ' + ly + 'H100" stroke="var(--raster)" stroke-width=".3"/>';
-    }
-    for (var gx = 0; gx <= g.w; gx++) {
-      var lx = projiziere(gx, 0).x;
-      out += '<path d="M' + lx + ' ' + ackerOben + 'V100" stroke="var(--raster)" stroke-width=".3"/>';
-    }
-  }
-
-  return out;
-}
 
 function passtHin(plot, gx, gy) {
   var g = rules.grid;
