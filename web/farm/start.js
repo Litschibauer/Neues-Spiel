@@ -116,14 +116,19 @@ $('boot').addEventListener('click', function () { bootTap(); });
 // nie beim Start — ein Dialog aus dem Nichts schreckt nur ab.
 function meldenAnzeigen() {
   var stand = meldenStand();
-  var text = { an: 'An', aus: 'Aus', blockiert: 'Blockiert', 'geht-nicht': 'Geht hier nicht' }[stand];
+  var text = {
+    an: 'An', aus: 'Aus', blockiert: 'Blockiert',
+    'geht-nicht': 'Geht hier nicht', 'zum-home': 'Fast',
+  }[stand];
   $('melden-stand').textContent = text;
   $('melden-sub').textContent =
     stand === 'an' ? 'Du hörst von reifen Feldern, vollen Reusen und Neuigkeiten'
       : stand === 'blockiert' ? 'In den Einstellungen des Geräts wieder erlauben'
-        : stand === 'geht-nicht' ? 'Dieses Gerät kann keine Benachrichtigungen'
-          : 'Sag Bescheid, wenn etwas fertig ist';
-  $('melden-schalter').disabled = stand === 'geht-nicht' || stand === 'blockiert';
+        : stand === 'zum-home' ? 'Auf dem iPhone: Teilen-Knopf, „Zum Home-Bildschirm", von dort starten'
+          : stand === 'geht-nicht' ? 'Dieses Gerät kann keine Benachrichtigungen'
+            : 'Sag Bescheid, wenn etwas fertig ist';
+  $('melden-schalter').disabled =
+    stand === 'geht-nicht' || stand === 'blockiert' || stand === 'zum-home';
 }
 
 $('melden-schalter').addEventListener('click', function () {

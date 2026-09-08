@@ -18,7 +18,21 @@ function meldenNativ() {
 var meldenBereit = meldenNativ() ||
   ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
 
+// Auf dem iPhone gibt es Benachrichtigungen im Browser nur, wenn die Seite auf
+// dem Home-Bildschirm liegt und von dort startet. In Safari selbst existiert
+// die Schnittstelle gar nicht — das sähe sonst aus wie ein kaputtes Gerät.
+function meldenBrauchtHome() {
+  if (meldenNativ()) return false;
+  var apfel = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!apfel) return false;
+  var allein = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+  return !allein;
+}
+
 function meldenStand() {
+  if (meldenBrauchtHome()) return 'zum-home';
   if (!meldenBereit) return 'geht-nicht';
   if (!meldenNativ() && Notification.permission === 'denied') return 'blockiert';
   try { return localStorage.getItem('ns-melden') === 'an' ? 'an' : 'aus'; } catch (e) { return 'aus'; }

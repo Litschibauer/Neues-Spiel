@@ -138,6 +138,28 @@ Apple erlaubt Web-Push nur für PWAs auf dem Startbildschirm, nicht in der
 WKWebView einer App. Das Plugin `@capacitor/push-notifications` ist bereits
 eingetragen, `npm run sync` installiert es mit.
 
+### Warum „Push Notifications" in der Liste fehlt
+
+Taucht bei **+ Capability** nur **Background Modes** auf und kein **Push
+Notifications**, liegt das nicht am Projekt: Xcode blendet diese Berechtigung
+aus, solange als Team ein **kostenloses** Konto eingestellt ist. Steht bei
+*Team* etwas mit *(Personal Team)*, ist genau das der Fall.
+
+Push gehört zu den Funktionen, die Apple nur zahlenden Mitgliedern gibt,
+zusammen mit iCloud, Apple Pay und Sign in with Apple. Ohne Mitgliedschaft
+lässt sich das auch nicht von Hand nachrüsten: Die App bekäme keine gültige
+`aps-environment`-Berechtigung, und die Registrierung schlägt auf dem Gerät mit
+„no valid aps-environment entitlement string found" fehl.
+
+**Ohne Bezahlung testen geht trotzdem**, nur nicht über die App: Seit iOS 16.4
+kann Safari Benachrichtigungen schicken, wenn die Seite auf dem
+Home-Bildschirm liegt. Also im Safari die Server-Adresse öffnen, Teilen-Knopf,
+*Zum Home-Bildschirm*, von dort starten, dann Zahnrad und
+*Benachrichtigungen*. Damit lässt sich der ganze Weg samt Dashboard-Versand
+ausprobieren, bevor du dich für die Mitgliedschaft entscheidest. Der Schalter
+im Spiel weist auch selbst darauf hin, solange er im Safari statt vom
+Home-Bildschirm läuft.
+
 ### In Xcode (einmalig, geht nur dort)
 
 1. Projekt öffnen: `npm run ios`
