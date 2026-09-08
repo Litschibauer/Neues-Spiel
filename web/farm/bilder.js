@@ -22,7 +22,7 @@ var KOERPER_MOEBEL = {
   brett: 1.3, lagerhaus: 1.3, stand: 1.3, nachbarn: 1.3, wagen: 1.3, kiste: 1.3,
   boot: 0.6, schatz: 0.8,
 };
-var KOERPER_SEE = { haus: 3.5, dock: 0.4, spot: 0.9 };
+var KOERPER_SEE = { haus: 1.85, dock: 0.4, spot: 0.9 };
 
 function hoeheAus(tabelle, id, standard) {
   if (tabelle[id] !== undefined) return tabelle[id];
@@ -336,9 +336,12 @@ function artMoebelRaum(id, k, z) {
 function artSeeRaum(art, k) {
   var u = k.ph - 1;
   if (art === 'haus') {
+    // Drei Kachelreihen hoch — höher passt nicht mehr über den Sandstreifen.
     var out = '';
-    var reihen = [['dach-1', 'dach-2', 'dach-3'], ['dach-4', 'dach-5', 'dach-6'], ['wand-1', 'wand-2', 'wand-3'], ['tor-1', 'tor-2', 'tor-3']];
-    for (var r = 0; r < 4; r++) for (var x = 0; x < 3; x++) out += bild(k, reihen[r][x], 16 + x * 16, u - 64 + r * 16);
+    var reihen = [['dach-4', 'dach-5', 'dach-6'], ['wand-1', 'wand-2', 'wand-3'], ['tor-1', 'tor-2', 'tor-3']];
+    for (var r = 0; r < 3; r++) {
+      for (var x = 0; x < 3; x++) out += bild(k, reihen[r][x], 16 + x * 16, u - 48 + r * 16);
+    }
     return out;
   }
   if (art === 'dock') {
@@ -351,8 +354,9 @@ function artSeeRaum(art, k) {
       planken + bild(k, 'zaun-pfosten', 4, u - 24, 10, 16) + bild(k, 'zaun-pfosten', 66, u - 24, 10, 16);
   }
   // Angelstelle: kleine Insel mit Tanne und Pose.
+  // Insel mit Tanne, davor die Pose im Wasser.
   return pix(k, INSEL, FARBEN, 16, u - 8) + bild(k, 'baum-tanne', 30, u - 22) +
-    pix(k, ['ro', 'sr'], { r: FARBEN.r, o: FARBEN.o, s: FARBEN.s }, 8, u - 3);
+    pix(k, ['.rr.', 'rssr', 'rssr', '.rr.'], { r: FARBEN.r, s: FARBEN.s }, 6, u - 6, 1.4);
 }
 
 // ---- Boden -------------------------------------------------------------------------

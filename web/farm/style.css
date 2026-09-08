@@ -153,6 +153,8 @@
     background: var(--meadow); touch-action: none; cursor: grab;
   }
   #hof { flex: 1 1 auto; width: 100%; min-height: 60dvh; }
+  /* Der Angelsee ist kleiner als der Bildschirm — ringsum Wasser statt Wiese. */
+  #hof.see-zone { background: #4fa4d8; }
   #hof.kein-raster { aspect-ratio: 100 / 130; flex: none; max-width: calc((100dvh - 10rem) * 100 / 130); }
   .hof.schwenkt { cursor: grabbing; }
   .hof.schwenkt .plot, .hof.schwenkt .moebel { pointer-events: none; }
@@ -233,6 +235,15 @@
 
   /* Blasen sitzen in der Welt und zoomen mit: Größe in Prozent der Kachel
      (renderPlots rechnet sie auf ~3/4 Zelle um), Inhalt als Bild oder SVG. */
+  /* Angelsee: leere Reuse zurückhaltend, ziehende normal, volle hebt sich ab. */
+  .see-spot.leer .art { opacity: .72; }
+  .see-spot.zieht-noch .art { opacity: .9; }
+  .card.opt.bereit { border-color: var(--ripe); }
+  .card .sub .bar {
+    display: block; height: .3rem; margin-top: .3rem; border-radius: 999px;
+    overflow: hidden; background: color-mix(in srgb, var(--ink) 18%, transparent);
+  }
+
   .plot .badge, .moebel .badge {
     position: absolute; top: 0; left: 50%; transform: translate(-50%, -55%);
     width: 30%; aspect-ratio: 1; display: block; pointer-events: none;

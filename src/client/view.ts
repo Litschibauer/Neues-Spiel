@@ -304,12 +304,31 @@ export type AngelView = {
     kosten: readonly Stack[];
     bezahlbar: boolean;
   };
-  // Köder im Strandhaus herstellen.
+  // Köder im Strandhaus sieden: Zutaten, Ausbeute und die Werkbank-Plätze.
   koeder: {
     input: readonly Stack[];
     output: number;
     bezahlbar: boolean;
+    dauer: number; // Ticks je Sud, 0 = sofort (alte Regelwerke)
+    freiePlaetze: number;
+    plaetze: readonly {
+      index: number;
+      laeuft: boolean;
+      fertig: boolean;
+      rest: number; // Ticks bis fertig
+      fortschritt: number; // 0..100
+    }[];
   } | null;
+  // Angelstellen: leer, ziehend oder voll.
+  stellen: readonly {
+    index: number;
+    belegt: boolean;
+    fertig: boolean;
+    rest: number;
+    fortschritt: number;
+  }[];
+  ziehdauer: number; // Ticks, die ein Köder ziehen muss
+  proStelle: number; // Züge, die eine volle Reuse bringt
 } | null;
 
 export type BuildView = {
@@ -737,6 +756,18 @@ function angelView(state: State, rules: Ruleset): AngelView {
   const stufeReicht = levelOf(rules, state.xp) >= f.minLevel;
   const repariert = f.repair ? !!state.bootRepariert : stufeReicht;
   const reparaturKosten = (f.repair ?? []).map((c) => ({ item: c.item, amount: c.amount }));
+  const koederPlaetze = [];
+  for (let i = 0; i < (f.craft?.slots ?? 0); i++) {
+    const seit = state.angelKoeder?.[i] ?? -1;
+    const z = laufZeit(state, seit, f.craft?.durationTicks ?? 0);
+    koederPlaetze.push({
+      index: i,
+      laeuft: z.laeuft,
+      fertig: z.fertig,
+      rest: z.rest,
+      fortschritt: z.fortschritt,
+    });
+  }
   return {
     // Der See ist offen, sobald das Boot fährt (bzw. ohne Reparatur ab Stufe).
     available: repariert,
@@ -758,9 +789,40 @@ function angelView(state: State, rules: Ruleset): AngelView {
           input: f.craft.input.map((c) => ({ item: c.item, amount: c.amount })),
           output: f.craft.output,
           bezahlbar: f.craft.input.every((c) => count(state, c.item) >= c.amount),
+          dauer: f.craft.durationTicks ?? 0,
+          freiePlaetze: koederPlaetze.filter((p) => !p.laeuft).length,
+          plaetze: koederPlaetze,
         }
       : null,
+    stellen: stellenView(state, f),
+    ziehdauer: f.soakTicks ?? 0,
+    proStelle: f.catchPerSpot ?? 1,
   };
+}
+
+// Ein Zeitfenster als Rest und Fortschritt in Prozent — für Balken und Text.
+function laufZeit(state: State, seit: number, dauer: number) {
+  if (seit < 0) return { laeuft: false, fertig: false, rest: 0, fortschritt: 0 };
+  const vergangen = state.tick - seit;
+  if (dauer <= 0) return { laeuft: true, fertig: true, rest: 0, fortschritt: 100 };
+  const rest = dauer - vergangen;
+  return {
+    laeuft: true,
+    fertig: rest <= 0,
+    rest: rest > 0 ? rest : 0,
+    fortschritt: Math.min(100, Math.floor((vergangen * 100) / dauer)),
+  };
+}
+
+function stellenView(state: State, f: NonNullable<Ruleset['fishing']>) {
+  const anzahl = f.spots ?? 0;
+  const liste = [];
+  for (let i = 0; i < anzahl; i++) {
+    const seit = state.angelSpots?.[i] ?? -1;
+    const z = laufZeit(state, seit, f.soakTicks ?? 0);
+    liste.push({ index: i, belegt: z.laeuft, fertig: z.fertig, rest: z.rest, fortschritt: z.fortschritt });
+  }
+  return liste;
 }
 
 function siloUpgrade(state: State, rules: Ruleset): SiloUpgradeView {

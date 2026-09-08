@@ -1,8 +1,11 @@
 // Der Angelsee — eine eigene Dimension mit EIGENEM Raster. Über das Boot auf dem
 // Hof reist man hinüber (wechselZone). Das Boot steht immer da, anfangs kaputt:
-// Erst reparieren (Gold + Material), dann fährt es. Im See gibt es Wasser,
-// Insel-Angelstellen und ein Strandhaus, in dem man Köder herstellt. Das Fangen
-// selbst ist der deterministische Sim-Befehl CAST_LINE — hier nur Darstellung.
+// Erst reparieren (Gold + Material), dann fährt es.
+//
+// Gefischt wird mit Reusen, nicht auf Klick: Im Strandhaus siedet man Köder
+// (dauert, begrenzte Plätze), legt ihn an eine Insel (BAIT_SPOT) und holt den
+// Fang später ein (COLLECT_SPOT). Beides sind Sim-Befehle, die Wartezeit steckt
+// also im Regelwerk und nicht in der Anzeige — hier ist nur Darstellung.
 
 // Tippen aufs Hof-Boot: heil → rüber zum See, kaputt → Reparatur-Menü.
 function bootTap() {
@@ -74,6 +77,8 @@ function renderSeeWelt(v) {
   sperrStand = null;
 
   $('hof').classList.remove('kein-raster');
+  // Der See ist kleiner als der Bildschirm; ohne das hier laege ringsum Wiese.
+  $('hof').classList.add('see-zone');
   var scene = $('scene');
   if (scene && scene.dataset.stand !== 'see') {
     scene.innerHTML = artScene();
@@ -84,14 +89,16 @@ function renderSeeWelt(v) {
   box.textContent = '';
 
   var objekte = [
-    { art: 'haus', gx: 1, gy: 0, w: 5, h: 3, tap: 'haus', label: 'Strandhaus' },
-    { art: 'dock', gx: 18, gy: 0, w: 5, h: 3, tap: 'zurueck', label: 'Zum Hof' },
-    { art: 'spot', gx: 3, gy: 5, w: 4, h: 3, tap: 'angeln' },
-    { art: 'spot', gx: 15, gy: 4, w: 4, h: 3, tap: 'angeln' },
-    { art: 'spot', gx: 9, gy: 8, w: 4, h: 3, tap: 'angeln' },
-    { art: 'spot', gx: 19, gy: 9, w: 4, h: 3, tap: 'angeln' },
-    { art: 'spot', gx: 4, gy: 10, w: 4, h: 3, tap: 'angeln' },
+    // Haus steht auf dem Sand, der Steg ragt von dort ins Wasser.
+    { art: 'haus', gx: 1, gy: -1, w: 5, h: 3, tap: 'haus', label: 'Strandhaus' },
+    { art: 'dock', gx: 18, gy: -1, w: 5, h: 3, tap: 'zurueck', label: 'Zum Hof' },
+    { art: 'spot', gx: 3, gy: 5, w: 4, h: 3, tap: 'angeln', stelle: 0 },
+    { art: 'spot', gx: 15, gy: 4, w: 4, h: 3, tap: 'angeln', stelle: 1 },
+    { art: 'spot', gx: 9, gy: 8, w: 4, h: 3, tap: 'angeln', stelle: 2 },
+    { art: 'spot', gx: 19, gy: 9, w: 4, h: 3, tap: 'angeln', stelle: 3 },
+    { art: 'spot', gx: 4, gy: 10, w: 4, h: 3, tap: 'angeln', stelle: 4 },
   ];
+  var stellen = (v.angeln && v.angeln.stellen) || [];
 
   objekte.forEach(function (o) {
     var k = feldKasten(o.gx, o.gy, o.w, o.h);
@@ -115,7 +122,27 @@ function renderSeeWelt(v) {
       meta.innerHTML = '<div class="name">' + o.label + '</div>';
       tile.appendChild(meta);
     }
-    tile.setAttribute('aria-label', o.label || 'Angelstelle');
+
+    // Reuse: leer, zieht noch, oder voll. Voll bekommt eine Fisch-Blase,
+    // ziehend einen Balken — dieselbe Sprache wie auf dem Hof.
+    var st = o.stelle !== undefined ? stellen[o.stelle] : null;
+    if (st) {
+      tile.classList.add(st.fertig ? 'ripe' : st.belegt ? 'zieht-noch' : 'leer');
+      if (st.fertig) {
+        var blase1 = blase('fish-perch');
+        blase1.style.width = blasenBreite(o.w);
+        tile.appendChild(blase1);
+      } else if (st.belegt) {
+        var bar = document.createElement('div');
+        bar.className = 'bar';
+        var fill = document.createElement('i');
+        fill.style.width = st.fortschritt + '%';
+        bar.appendChild(fill);
+        tile.appendChild(bar);
+      }
+    }
+    tile.setAttribute('aria-label', o.label ||
+      (st ? (st.fertig ? 'Volle Reuse einholen' : st.belegt ? 'Reuse zieht noch' : 'Köder legen') : 'Angelstelle'));
     tile.addEventListener('click', function () { seeObjTap(o, tile); });
     box.appendChild(tile);
   });
@@ -126,7 +153,7 @@ function renderSeeWelt(v) {
 
 function seeObjTap(o, tile) {
   if (o.tap === 'zurueck') { wechselZone(false); return; }
-  if (o.tap === 'angeln') { angelWurf(tile); return; }
+  if (o.tap === 'angeln') { stelleTap(o.stelle, tile); return; }
   if (o.tap === 'haus') { oeffneKoeder(); return; }
 }
 
@@ -164,31 +191,50 @@ function zeichneKoederSheet(v) {
   box.appendChild(stand);
 
   if (a.koeder) {
-    var karte = document.createElement('button');
-    karte.type = 'button';
-    karte.className = 'card opt';
-    karte.disabled = !a.koeder.bezahlbar;
-    karte.innerHTML =
-      '<div class="body"><div class="top">' + iconTag('bait') + a.koeder.output + ' Köder herstellen</div>' +
-      '<div class="sub">' + stacksMitBild(a.koeder.input) +
-      (a.koeder.bezahlbar ? '' : ' · fehlt') + '</div></div>' +
-      '<span class="yield">＋</span>';
-    karte.addEventListener('click', function () {
-      var res = client.craftBait();
-      if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
-      toast(a.koeder.output + ' Köder hergestellt');
-      klang('kauf');
-      save();
-      scheduleSync();
-      render();
+    // Erst die Werkbank-Plätze: was siedet, was ist fertig, was ist frei.
+    a.koeder.plaetze.forEach(function (platz) {
+      var zeile = document.createElement('button');
+      zeile.type = 'button';
+      zeile.className = 'card opt' + (platz.fertig ? ' bereit' : '');
+      if (platz.fertig) {
+        zeile.innerHTML =
+          '<div class="body"><div class="top">' + iconTag('bait') + a.koeder.output + ' Köder fertig</div>' +
+          '<div class="sub">abholen und Platz frei machen</div></div><span class="yield">✓</span>';
+        zeile.addEventListener('click', function () {
+          var res = client.collectBait(platz.index);
+          if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+          toast(a.koeder.output + ' Köder ins Lager');
+          klang('ernte');
+          save(); scheduleSync(); render();
+        });
+      } else if (platz.laeuft) {
+        zeile.disabled = true;
+        zeile.innerHTML =
+          '<div class="body"><div class="top">Sud ' + (platz.index + 1) + ' · noch ' + timeText(platz.rest) + '</div>' +
+          '<div class="sub"><span class="bar"><i style="width:' + platz.fortschritt + '%"></i></span></div></div>';
+      } else {
+        zeile.disabled = !a.koeder.bezahlbar;
+        zeile.innerHTML =
+          '<div class="body"><div class="top">' + iconTag('bait') + a.koeder.output + ' Köder sieden</div>' +
+          '<div class="sub">' + stacksMitBild(a.koeder.input) +
+          (a.koeder.bezahlbar ? ' · dauert ' + timeText(a.koeder.dauer) : ' · fehlt') + '</div></div>' +
+          '<span class="yield">＋</span>';
+        zeile.addEventListener('click', function () {
+          var res = client.craftBait(platz.index);
+          if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+          toast('Sud angesetzt · fertig in ' + timeText(a.koeder.dauer));
+          klang('kauf');
+          save(); scheduleSync(); render();
+        });
+      }
+      box.appendChild(zeile);
     });
-    box.appendChild(karte);
   }
 
   var titel = document.createElement('p');
   titel.className = 'empty';
   titel.style.marginBottom = '0';
-  titel.textContent = 'Das beißt hier:';
+  titel.textContent = 'Das geht hier ins Netz:';
   box.appendChild(titel);
 
   a.table.forEach(function (f) {
@@ -201,30 +247,50 @@ function zeichneKoederSheet(v) {
   });
 }
 
-function angelWurf(tile) {
+// Eine Angelstelle antippen: leer → Köder legen, voll → einholen, sonst sagen
+// wie lange es noch dauert.
+function stelleTap(nummer, tile) {
   if (!isActive) return;
-  var vorher = client.preview().items.slice();
-  var res = client.castLine();
-  if (!res.ok) {
-    toast(CODES[res.code] || res.code, true);
-    klang('fehler');
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  var st = v.angeln && v.angeln.stellen[nummer];
+  if (!st) return;
+
+  if (st.fertig) { reuseEinholen(nummer, tile); return; }
+  if (st.belegt) {
+    toast('Die Reuse zieht noch · ' + timeText(st.rest));
     return;
   }
+  if (v.angeln.bait < 1) {
+    toast('Kein Köder da — im Strandhaus welchen sieden', true);
+    klang('fehler');
+    oeffneKoeder();
+    return;
+  }
+  var res = client.baitSpot(nummer);
+  if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+  toast('Köder gelegt · fertig in ' + timeText(v.angeln.ziehdauer));
+  klang('kauf');
+  save();
+  scheduleSync();
+  render();
+}
+
+function reuseEinholen(nummer, tile) {
+  var vorher = client.preview().items.slice();
+  var res = client.collectSpot(nummer);
+  if (!res.ok) { toast(CODES[res.code] || res.code, true); klang('fehler'); return; }
+
   var nachher = client.preview().items;
-  var fisch = -1;
+  var beute = [];
   for (var i = 0; i < nachher.length; i++) {
-    if ((nachher[i] || 0) > (vorher[i] || 0) && rules.items[i].id.indexOf('fish-') === 0) {
-      fisch = i;
-      break;
-    }
+    var mehr = (nachher[i] || 0) - (vorher[i] || 0);
+    if (mehr > 0) beute.push(mehr + ' ' + itemName(i));
   }
   klang('ernte');
   save();
   scheduleSync();
   render();
-  if (fisch >= 0) {
-    toast('Gefangen: ' + itemName(fisch) + '! 🐟', false);
-    var box = tile && tile.getBoundingClientRect ? tile.getBoundingClientRect() : null;
-    if (box && box.width) zahlAuf(box, '+1 ' + itemName(fisch), 'ware');
-  }
+  toast(beute.length ? 'Eingeholt: ' + beute.join(', ') : 'Reuse eingeholt');
+  var box = tile && tile.getBoundingClientRect ? tile.getBoundingClientRect() : null;
+  if (box && box.width && beute.length) zahlAuf(box, '+' + beute[0], 'ware');
 }

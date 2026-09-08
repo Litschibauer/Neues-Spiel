@@ -50,6 +50,8 @@ export function canonicalize(state: State): string {
     `eingepackt=[${(state.eingepackt ?? []).join(',')}]`,
     `angelFang=${state.angelFang ?? 0}`,
     `boot=${state.bootRepariert ? 1 : 0}`,
+    `spots=[${(state.angelSpots ?? []).join(',')}]`,
+    `sud=[${(state.angelKoeder ?? []).join(',')}]`,
   ].join('|');
 }
 
@@ -100,7 +102,13 @@ export function canonicalizeCommand(c: Command): string {
     case 'REPAIR_BOAT':
       return `${c.seq}|${c.tick}|REPAIR_BOAT`;
     case 'CRAFT_BAIT':
-      return `${c.seq}|${c.tick}|CRAFT_BAIT`;
+      return `${c.seq}|${c.tick}|CRAFT_BAIT|${c.slot ?? -1}`;
+    case 'COLLECT_BAIT':
+      return `${c.seq}|${c.tick}|COLLECT_BAIT|${c.slot}`;
+    case 'BAIT_SPOT':
+      return `${c.seq}|${c.tick}|BAIT_SPOT|${c.spot}`;
+    case 'COLLECT_SPOT':
+      return `${c.seq}|${c.tick}|COLLECT_SPOT|${c.spot}`;
     case 'CANCEL_ORDER':
       return `${c.seq}|${c.tick}|CANCEL_ORDER|${c.orderId}`;
     case 'BUY_OFFER':

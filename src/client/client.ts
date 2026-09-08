@@ -149,8 +149,20 @@ export class Client {
     return this.apply({ type: 'REPAIR_BOAT' } as Omit<Command, 'seq' | 'tick'>);
   }
 
-  craftBait(): ActionResult {
-    return this.apply({ type: 'CRAFT_BAIT' } as Omit<Command, 'seq' | 'tick'>);
+  craftBait(slot?: number): ActionResult {
+    return this.apply({ type: 'CRAFT_BAIT', slot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  collectBait(slot: number): ActionResult {
+    return this.apply({ type: 'COLLECT_BAIT', slot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  baitSpot(spot: number): ActionResult {
+    return this.apply({ type: 'BAIT_SPOT', spot } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  collectSpot(spot: number): ActionResult {
+    return this.apply({ type: 'COLLECT_SPOT', spot } as Omit<Command, 'seq' | 'tick'>);
   }
 
   buyNpc(item: number, amount: number): ActionResult {

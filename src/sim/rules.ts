@@ -223,8 +223,20 @@ export type Ruleset = {
     // Regel (nur ab minLevel, ohne Reparatur).
     repair?: readonly ItemStack[];
     // Köder herstellen: Eingabe → so viele Köder. Fehlt das Feld, bleibt der
-    // alte Kauf-Weg (npcBuyPrice).
-    craft?: { input: readonly ItemStack[]; output: number };
+    // alte Kauf-Weg (npcBuyPrice). Mit `slots` und `durationTicks` dauert das
+    // Herstellen und läuft nur auf so vielen Werkbank-Plätzen gleichzeitig.
+    craft?: {
+      input: readonly ItemStack[];
+      output: number;
+      slots?: number;
+      durationTicks?: number;
+    };
+    // Reusen statt Angel: So viele Angelstellen gibt es, so lange muss ein
+    // Köder ziehen, so viele Fänge bringt eine volle Reuse. Fehlen die Felder,
+    // gilt der alte Sofort-Fang (CAST_LINE).
+    spots?: number;
+    soakTicks?: number;
+    catchPerSpot?: number;
   };
 };
 
@@ -1662,6 +1674,8 @@ const FISH_PERCH = 30; // Barsch
 const FISH_TROUT = 31; // Forelle
 const FISH_CARP = 32; // Karpfen
 const FISH_PIKE = 33; // Hecht
+const JUNK_CAN = 34; // Alte Dose — Beifang, bringt ein paar Münzen
+const SEAWEED = 35; // Seegras — Beifang, gefragt bei Aufträgen
 
 // Neuland nach unten: Der Hof wird auch in die Höhe verdoppelt (13 → 26). Die
 // neuen unteren Reihen (gy 13–25) sind komplett gesperrt, über die volle Breite
@@ -1812,18 +1826,64 @@ const V33: Ruleset = {
 };
 
 // Für DEV alle Zeiten zehnteln — auch die Apfelbaum-Zeiten, damit man den
+// V34: Der Angelsee wird zum Reusen-Spiel. Man legt Köder an eine Angelstelle,
+// wartet, und holt den Fang später ab — kein Sofort-Klick mehr. Köder herstellen
+// dauert ebenfalls und hat begrenzte Werkbank-Plätze. Dazu Beifang (Dose,
+// Seegras), damit nicht jeder Zug ein Fisch ist.
+const V34: Ruleset = {
+  ...V33,
+  version: 34,
+  items: [
+    ...V33.items,
+    { id: 'junk-can', storable: true, npcPrice: 14, npcBuyPrice: 0 },
+    { id: 'seaweed', storable: true, npcPrice: 26, npcBuyPrice: 0 },
+  ],
+  fishing: {
+    minLevel: 4,
+    bait: BAIT,
+    xp: 12,
+    // Beifang macht rund ein Drittel aus. Ein voller Korb bringt zwei Züge,
+    // es ist also selten alles Müll.
+    table: [
+      { item: FISH_PERCH, weight: 32 },
+      { item: FISH_TROUT, weight: 19 },
+      { item: FISH_CARP, weight: 11 },
+      { item: FISH_PIKE, weight: 4 },
+      { item: SEAWEED, weight: 20 },
+      { item: JUNK_CAN, weight: 14 },
+    ],
+    repair: [want(GOLD, 250), want(PLANK, 5), want(NAIL, 5)],
+    // 2 Weizen → 5 Köder, aber erst nach 4 Minuten und nur zwei Sude parallel.
+    craft: { input: [want(WHEAT, 2)], output: 5, slots: 2, durationTicks: 240 },
+    spots: 5,
+    soakTicks: 900,
+    catchPerSpot: 2,
+  },
+  requestTemplates: [
+    ...V33.requestTemplates,
+    { id: 'seaweed-order', wants: [want(SEAWEED, 4)], reward: gold(180), xp: 36 },
+    { id: 'strand-mix', wants: [want(SEAWEED, 2), want(JUNK_CAN, 2)], reward: gold(150), xp: 30 },
+  ],
+};
+
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V33,
+  ...V34,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
   recipes: V32.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
-  // Auf V33.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
-  plots: V33.plots.map((p) => {
+  // Angeln und Köder-Sud laufen im Feldtest ebenfalls im Zehntel-Tempo.
+  fishing: {
+    ...V34.fishing!,
+    soakTicks: zehntel(V34.fishing!.soakTicks!),
+    craft: { ...V34.fishing!.craft!, durationTicks: zehntel(V34.fishing!.craft!.durationTicks!) },
+  },
+  // Auf V34.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
+  plots: V34.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -1874,17 +1934,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [31, V31],
   [32, V32],
   [33, V33],
+  [34, V34],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33,
+  28, 29, 30, 31, 32, 33, 34,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 33;
+export const LATEST_RULESET_VERSION = 34;
 
 export const DEV_RULESET_VERSION = 1001;
 

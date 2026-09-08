@@ -365,22 +365,35 @@ function tutorialFertig() {
   try { return localStorage.getItem(tutSchluessel()) === 'done'; } catch (e) { return false; }
 }
 function tutorialAbschliessen() {
-  try { localStorage.setItem(tutSchluessel(), 'done'); } catch (e) {}
+  // Nur die große Einführung markiert den Hof als eingeführt; Feature-Seiten
+  // haben ihren eigenen Schlüssel und sind beim Öffnen schon gesetzt.
+  if (!featureSeiten) {
+    try { localStorage.setItem(tutSchluessel(), 'done'); } catch (e) {}
+  }
+  featureSeiten = null;
   $('tut-bg').hidden = true;
 }
 function tutorialZeigen() {
-  var s = TUTORIAL[tutStep];
+  var seiten = featureSeiten || TUTORIAL;
+  var s = seiten[tutStep];
   if (!s) { tutorialAbschliessen(); return; }
   $('tut-emoji').textContent = s.emoji;
   $('tut-titel').textContent = s.titel;
   $('tut-text').textContent = s.text;
   var punkte = '';
-  for (var i = 0; i < TUTORIAL.length; i++) punkte += '<span class="' + (i === tutStep ? 'an' : '') + '"></span>';
+  for (var i = 0; i < seiten.length; i++) punkte += '<span class="' + (i === tutStep ? 'an' : '') + '"></span>';
   $('tut-dots').innerHTML = punkte;
-  $('tut-next').textContent = tutStep === TUTORIAL.length - 1 ? 'Los geht’s' : 'Weiter';
+  $('tut-next').textContent = tutStep === seiten.length - 1 ? 'Los geht’s' : 'Weiter';
   $('tut-bg').hidden = false;
 }
 function tutorialStarten(erzwingen) {
+  featureSeiten = null;
+  if (erzwingen) {
+    // „Anleitung" zeigt alles noch einmal, auch die Feature-Seiten.
+    for (var id in FEATURE_TUT) {
+      try { localStorage.removeItem(featureSchluessel(id)); } catch (e) {}
+    }
+  }
   if (!erzwingen) {
     if (tutorialFertig()) return;
     // Nur für ganz frische Höfe automatisch — Veteranen (mit XP) verschonen.
@@ -389,6 +402,47 @@ function tutorialStarten(erzwingen) {
   tutStep = 0;
   tutorialZeigen();
 }
+// — Kurze Einführung je Funktion ————————————————————————————————————————
+// Jedes größere Feature erklärt sich beim ersten Öffnen selbst. Pro Hof und
+// Feature einmal gemerkt, danach nie wieder. Über „Anleitung" in den
+// Einstellungen kann man sie zurücksetzen.
+var FEATURE_TUT = {
+  see: [
+    { emoji: '🎣', titel: 'Der Angelsee',
+      text: 'Hier fängst du Fisch für Aufträge und Gold. Gefischt wird mit Reusen — du legst Köder aus und holst den Fang später ab.' },
+    { emoji: '🪱', titel: 'Köder sieden',
+      text: 'Im Strandhaus machst du aus Weizen Köder. Das dauert, und es laufen nur zwei Sude gleichzeitig. Setz früh genug an.' },
+    { emoji: '⏳', titel: 'Reuse legen',
+      text: 'Tippe eine Insel an, um einen Köder zu legen. Nach einer Weile ist die Reuse voll und trägt ein Zeichen — dann einholen und neu bestücken.' },
+    { emoji: '🥫', titel: 'Nicht alles ist Fisch',
+      text: 'Manchmal hängt Seegras oder eine alte Dose drin. Beides lässt sich verkaufen, und manche Aufträge fragen sogar danach.' },
+  ],
+  mine: [
+    { emoji: '⛏️', titel: 'Die Mine',
+      text: 'Im Berg holst du Eisen- und Golderz. Erz ist die Grundlage für Barren, Nägel und die teuren Aufträge.' },
+    { emoji: '🧨', titel: 'Werkzeug nutzt sich ab',
+      text: 'Zum Graben brauchst du Spitzhacke, Schaufel oder Sprengsatz. Die stellst du selbst her — schau in die Werkstatt.' },
+  ],
+};
+var featureSeiten = null;
+var featureSchritt = 0;
+
+function featureSchluessel(id) {
+  return (accountId ? 'ns-tut-' + accountId : 'ns-tutorial') + '-' + id;
+}
+
+// Zeigt die Einführung, falls dieser Hof sie noch nicht gesehen hat.
+function featureTutorial(id) {
+  var seiten = FEATURE_TUT[id];
+  if (!seiten) return;
+  try { if (localStorage.getItem(featureSchluessel(id)) === 'done') return; } catch (e) {}
+  try { localStorage.setItem(featureSchluessel(id), 'done'); } catch (e) {}
+  featureSeiten = seiten;
+  featureSchritt = 0;
+  tutStep = 0;
+  tutorialZeigen();
+}
+
 $('tut-next').addEventListener('click', function () { tutStep++; tutorialZeigen(); });
 $('tut-skip').addEventListener('click', tutorialAbschliessen);
 $('anleitung').addEventListener('click', function () { show('farm'); tutorialStarten(true); });

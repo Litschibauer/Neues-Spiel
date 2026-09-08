@@ -109,6 +109,55 @@ function expireOrders(s: State, rules: Ruleset): void {
   }
 }
 
+// Stand eines Reusen-Platzes: Tick der Beköderung, sonst -1. Zu kurze Listen
+// gelten als leer, damit alte Spielstände ohne Wanderung weiterlaufen.
+function korbStand(s: State, spot: number): number {
+  const wert = (s.angelSpots ?? [])[spot];
+  return wert === undefined ? -1 : wert;
+}
+
+function sudStand(s: State, slot: number): number {
+  const wert = (s.angelKoeder ?? [])[slot];
+  return wert === undefined ? -1 : wert;
+}
+
+function setzeStand(
+  liste: readonly number[],
+  index: number,
+  wert: number,
+  laenge: number,
+): number[] {
+  const next: number[] = [];
+  for (let i = 0; i < laenge; i++) {
+    const alt = liste[i];
+    next.push(alt === undefined ? -1 : alt);
+  }
+  next[index] = wert;
+  return next;
+}
+
+// Gewichtete Auswahl aus der Fangtabelle. Der Hash ist reine Integer-Arithmetik
+// (Lehmer-Generator), damit Server und Gerät garantiert dasselbe ziehen.
+function zieheFang(
+  table: readonly { item: number; weight: number }[],
+  saat: number,
+): number {
+  let h = (1 + (saat % 1000003)) % 1000003;
+  h = (h * 48271) % 2147483647;
+  let gesamt = 0;
+  for (const t of table) gesamt += t.weight;
+  let r = h % gesamt;
+  let treffer = table[table.length - 1]!.item;
+  for (const t of table) {
+    if (r < t.weight) {
+      treffer = t.item;
+      break;
+    }
+    r -= t.weight;
+  }
+  return treffer;
+}
+
 export function simulate(state: State, cmd: Command, rules: Ruleset): State {
   const s = advanceTo(state, cmd.tick, rules);
 
@@ -367,20 +416,110 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       for (const price of f.craft.input) {
         if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
       }
+
+      const plaetze = f.craft.slots ?? 0;
+      // Alte Regelwerke ohne Werkbank-Plätze: Köder entstehen sofort.
+      if (plaetze <= 0) {
+        if (rules.items[f.bait]?.storable && spaceLeft(s, rules) < f.craft.output) {
+          throw new SimError('SILO_FULL');
+        }
+        const sofort = cloneState(s);
+        sofort.items = addItems(s.items, [
+          ...f.craft.input.map((c): [number, number] => [c.item, -c.amount]),
+          [f.bait, f.craft.output],
+        ]);
+        return sofort;
+      }
+
+      // Sud starten: der gewünschte Platz, sonst der erste freie.
+      let platz = -1;
+      if (cmd.slot === undefined) {
+        for (let i = 0; i < plaetze; i++) {
+          if (sudStand(s, i) < 0) {
+            platz = i;
+            break;
+          }
+        }
+      } else if (cmd.slot >= 0 && cmd.slot < plaetze && sudStand(s, cmd.slot) < 0) {
+        platz = cmd.slot;
+      }
+      if (platz < 0) throw new SimError('NO_BAIT_SLOT');
+
+      const next = cloneState(s);
+      next.items = addItems(
+        s.items,
+        f.craft.input.map((c): [number, number] => [c.item, -c.amount]),
+      );
+      next.angelKoeder = setzeStand(s.angelKoeder ?? [], platz, s.tick, plaetze);
+      return next;
+    }
+
+    case 'COLLECT_BAIT': {
+      const f = rules.fishing;
+      if (!f || !f.craft || !f.craft.slots) throw new SimError('NO_CRAFT');
+      if (cmd.slot < 0 || cmd.slot >= f.craft.slots) throw new SimError('NO_BAIT_SLOT');
+      const seit = sudStand(s, cmd.slot);
+      if (seit < 0) throw new SimError('NOTHING_TO_COLLECT');
+      if (s.tick - seit < (f.craft.durationTicks ?? 0)) throw new SimError('BAIT_NOT_READY');
       if (rules.items[f.bait]?.storable && spaceLeft(s, rules) < f.craft.output) {
         throw new SimError('SILO_FULL');
       }
       const next = cloneState(s);
-      next.items = addItems(s.items, [
-        ...f.craft.input.map((c): [number, number] => [c.item, -c.amount]),
-        [f.bait, f.craft.output],
-      ]);
+      next.items = addItems(s.items, [[f.bait, f.craft.output]]);
+      next.angelKoeder = setzeStand(s.angelKoeder ?? [], cmd.slot, -1, f.craft.slots);
+      return next;
+    }
+
+    case 'BAIT_SPOT': {
+      const f = rules.fishing;
+      if (!f || !f.spots) throw new SimError('NO_FISHING');
+      if (f.repair ? !s.bootRepariert : levelOf(rules, s.xp) < f.minLevel) {
+        throw new SimError('NO_FISHING');
+      }
+      if (cmd.spot < 0 || cmd.spot >= f.spots) throw new SimError('NO_SUCH_SPOT');
+      if (korbStand(s, cmd.spot) >= 0) throw new SimError('SPOT_BUSY');
+      if (count(s, f.bait) < 1) throw new SimError('NO_BAIT');
+
+      const next = cloneState(s);
+      next.items = addItems(s.items, [[f.bait, -1]]);
+      next.angelSpots = setzeStand(s.angelSpots ?? [], cmd.spot, s.tick, f.spots);
+      return next;
+    }
+
+    case 'COLLECT_SPOT': {
+      const f = rules.fishing;
+      if (!f || !f.spots) throw new SimError('NO_FISHING');
+      if (cmd.spot < 0 || cmd.spot >= f.spots) throw new SimError('NO_SUCH_SPOT');
+      const gelegt = korbStand(s, cmd.spot);
+      if (gelegt < 0) throw new SimError('SPOT_EMPTY');
+      if (s.tick - gelegt < (f.soakTicks ?? 0)) throw new SimError('SPOT_NOT_READY');
+
+      const zuege = f.catchPerSpot ?? 1;
+      if (spaceLeft(s, rules) < zuege) throw new SimError('SILO_FULL');
+
+      // Deterministisch: die Saat steckt in Legezeit, Stelle, Zugnummer und
+      // Fangzähler. Reine Integer-Arithmetik, also überall exakt dasselbe.
+      const fang: Array<[number, number]> = [];
+      const zaehler = s.angelFang ?? 0;
+      for (let z = 0; z < zuege; z++) {
+        const saat = gelegt + cmd.spot * 7919 + z * 104729 + zaehler * 101;
+        fang.push([zieheFang(f.table, saat), 1]);
+      }
+
+      const next = cloneState(s);
+      next.items = addItems(s.items, fang);
+      next.angelSpots = setzeStand(s.angelSpots ?? [], cmd.spot, -1, f.spots);
+      next.xp = s.xp + f.xp * zuege;
+      next.angelFang = zaehler + zuege;
       return next;
     }
 
     case 'CAST_LINE': {
       const f = rules.fishing;
       if (!f) throw new SimError('NO_FISHING');
+      // Seit V34 wird mit Reusen gefischt. Der Sofort-Wurf ist dann zu, sonst
+      // wäre die Wartezeit mit einem veränderten Client zu umgehen.
+      if (f.spots) throw new SimError('NO_FISHING');
       // Neue Regel: Der See ist offen, sobald das Boot repariert ist. Ohne
       // repair-Konfiguration gilt die alte Stufen-Schranke (Abwärtskompatibilität).
       if (f.repair ? !s.bootRepariert : levelOf(rules, s.xp) < f.minLevel) {
@@ -388,21 +527,9 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       }
       if (count(s, f.bait) < 1) throw new SimError('NO_BAIT');
 
-      // Deterministischer Fang: reiner Integer-Hash aus Tick + Fang-Zähler,
-      // dann gewichtete Auswahl aus der Fisch-Tabelle. Kein Zufall aus der
-      // Umgebung, also exakt reproduzierbar und cheat-sicher.
-      let h = (1 + (s.tick % 1000003) + ((s.angelFang ?? 0) % 1000003) * 101) % 1000003;
-      h = (h * 48271) % 2147483647;
-      const gesamt = f.table.reduce((n, t) => n + t.weight, 0);
-      let r = h % gesamt;
-      let fisch = f.table[f.table.length - 1]!.item;
-      for (const t of f.table) {
-        if (r < t.weight) {
-          fisch = t.item;
-          break;
-        }
-        r -= t.weight;
-      }
+      // Deterministischer Fang aus Tick und Fang-Zähler. Seit V34 ist der
+      // Reusen-Weg der übliche; CAST_LINE bleibt für ältere Regelwerke.
+      const fisch = zieheFang(f.table, s.tick + (s.angelFang ?? 0) * 101);
 
       // Köder verbraucht, Fisch dazu — beide lagerfähig, also kein Nettozuwachs.
       const next = cloneState(s);

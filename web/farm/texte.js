@@ -15,6 +15,7 @@ var NAMES = {
   'deco-fence': 'Zaun', 'deco-flowers': 'Blumenbeet', 'deco-bench': 'Gartenbank',
   bait: 'Köder', 'fish-perch': 'Barsch', 'fish-trout': 'Forelle',
   'fish-carp': 'Karpfen', 'fish-pike': 'Hecht',
+  'seaweed': 'Seegras', 'junk-can': 'Alte Dose',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

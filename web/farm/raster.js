@@ -17,6 +17,8 @@ function raster() {
 function wechselZone(zuSee) {
   if (seeAktiv === !!zuSee) return;
   seeAktiv = !!zuSee;
+  // Beim ersten Besuch erklärt sich der See selbst.
+  if (seeAktiv && typeof featureTutorial === 'function') featureTutorial('see');
   kamera.gesetzt = false; // Kamera neu aufs andere Raster einpassen
   var sc = $('scene');
   if (sc) sc.dataset.stand = ''; // Szene wird beim nächsten render() neu gemalt

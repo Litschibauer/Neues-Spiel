@@ -87,8 +87,18 @@ export type CastLineCommand = CommandBase & { type: 'CAST_LINE' };
 // der See offen.
 export type RepairBoatCommand = CommandBase & { type: 'REPAIR_BOAT' };
 
-// Angelsee: Köder im Strandhaus herstellen (aus Weizen).
-export type CraftBaitCommand = CommandBase & { type: 'CRAFT_BAIT' };
+// Angelsee: Köder im Strandhaus herstellen (aus Weizen). Mit fishing.craft.slots
+// startet das nur einen Sud — abgeholt wird er mit COLLECT_BAIT.
+export type CraftBaitCommand = CommandBase & { type: 'CRAFT_BAIT'; slot?: number };
+
+// Angelsee: fertigen Köder-Sud vom Werkbank-Platz nehmen.
+export type CollectBaitCommand = CommandBase & { type: 'COLLECT_BAIT'; slot: number };
+
+// Angelsee: Köder an eine Angelstelle legen. Der Fang reift dort.
+export type BaitSpotCommand = CommandBase & { type: 'BAIT_SPOT'; spot: number };
+
+// Angelsee: volle Reuse einholen — gibt fishing.catchPerSpot Züge aus der Tabelle.
+export type CollectSpotCommand = CommandBase & { type: 'COLLECT_SPOT'; spot: number };
 
 export type Command =
   | StartCommand
@@ -118,6 +128,9 @@ export type Command =
   | RemovePlotCommand
   | PackPlotCommand
   | CastLineCommand
+  | CollectBaitCommand
+  | BaitSpotCommand
+  | CollectSpotCommand
   | RepairBoatCommand
   | CraftBaitCommand
   | ClearObstacleCommand;
@@ -197,6 +210,12 @@ export type SimErrorCode =
   | 'BOAT_DONE'
   | 'NO_REPAIR'
   | 'NO_CRAFT'
+  | 'NO_SUCH_SPOT'
+  | 'SPOT_BUSY'
+  | 'SPOT_EMPTY'
+  | 'SPOT_NOT_READY'
+  | 'NO_BAIT_SLOT'
+  | 'BAIT_NOT_READY'
   | 'LAND_LOCKED';
 
 export class SimError extends Error {

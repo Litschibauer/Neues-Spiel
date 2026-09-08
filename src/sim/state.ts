@@ -109,6 +109,11 @@ export type State = {
   angelFang: number;
   // Angelsee: Ist das Boot am Hof repariert? Erst dann ist der See offen.
   bootRepariert: boolean;
+  // Angelsee: je Angelstelle der Tick, an dem Köder gelegt wurde; -1 heißt leer.
+  // Kürzere Listen gelten als leer, darum braucht ein alter Stand keine Wanderung.
+  angelSpots: readonly number[];
+  // Angelsee: je Werkbank-Platz im Strandhaus der Startzeit-Tick; -1 heißt frei.
+  angelKoeder: readonly number[];
 };
 
 export function count(s: State, item: number): number {
@@ -194,6 +199,8 @@ export function initialState(rules: Ruleset): State {
     eingepackt: [],
     angelFang: 0,
     bootRepariert: false,
+    angelSpots: [],
+    angelKoeder: [],
   };
 }
 
@@ -264,6 +271,8 @@ export function normalizeState(s: State): State {
     eingepackt: s.eingepackt ?? [],
     angelFang: s.angelFang ?? 0,
     bootRepariert: s.bootRepariert ?? false,
+    angelSpots: s.angelSpots ?? [],
+    angelKoeder: s.angelKoeder ?? [],
   };
 }
 
@@ -292,6 +301,8 @@ export function cloneState(s: State): State {
     eingepackt: s.eingepackt ?? [],
     angelFang: s.angelFang ?? 0,
     bootRepariert: s.bootRepariert ?? false,
+    angelSpots: s.angelSpots ?? [],
+    angelKoeder: s.angelKoeder ?? [],
   };
 }
 

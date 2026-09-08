@@ -32,7 +32,12 @@ function act(name, result, ton) {
   render();
 }
 
+// Beim ersten Antippen eines Bauwerks mit eigener Einführung: kurz erklären.
+var FEATURE_PLATZ = { mine: 'mine' };
+
 function tapPlot(i) {
+  var featureId = FEATURE_PLATZ[rules.plots[i] && rules.plots[i].id];
+  if (featureId && typeof featureTutorial === 'function') featureTutorial(featureId);
   if (!isActive) return;
   client.localTick = tickNow();
   var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];

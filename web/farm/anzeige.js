@@ -135,6 +135,7 @@ function renderPlots(v) {
   if (ziehen && ziehen.aktiv) return;
   if (typeof seeAktiv !== 'undefined' && seeAktiv) { renderSeeWelt(v); return; }
   $('hof').classList.toggle('kein-raster', !hatRaster());
+  $('hof').classList.remove('see-zone');
 
   var scene = $('scene');
   var wunsch = 'boden' + (bauModus ? '-bau' : '');
@@ -1252,6 +1253,12 @@ var CODES = {
   BOAT_DONE: 'Das Boot ist schon repariert',
   NO_REPAIR: 'Hier gibt es nichts zu reparieren',
   NO_CRAFT: 'Das lässt sich hier nicht herstellen',
+  NO_SUCH_SPOT: 'Diese Angelstelle gibt es nicht',
+  SPOT_BUSY: 'Da liegt schon ein Köder',
+  SPOT_EMPTY: 'Hier liegt kein Köder',
+  SPOT_NOT_READY: 'Die Reuse zieht noch',
+  NO_BAIT_SLOT: 'Alle Sud-Plätze sind belegt',
+  BAIT_NOT_READY: 'Der Sud ist noch nicht fertig',
   LAND_LOCKED: 'Erst das Land drumherum freimachen',
   CELL_TAKEN: 'Da steht schon etwas',
   OFF_GRID: 'Da ist kein Platz',
