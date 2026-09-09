@@ -970,8 +970,24 @@ export function simulate(state: State, cmd: Command, rules: Ruleset): State {
       if (!art) throw new SimError('NEEDS_TOOL');
       if (count(s, art.tool) < 1) throw new SimError('NEEDS_TOOL');
 
+      // Seit V36 fällt beim Räumen etwas ab — Bäume geben Holz. Das macht aus
+      // dem reinen Kostenakt den Einstieg in die Werkzeugkette. Ältere
+      // Regelwerke haben kein `ertrag` und verhalten sich unverändert.
+      const ertrag = art.ertrag;
+      if (ertrag && rules.items[ertrag.item]?.storable && spaceLeft(s, rules) < ertrag.amount) {
+        throw new SimError('SILO_FULL');
+      }
+
       const next = cloneState(s);
-      next.items = addItem(s.items, art.tool, -1);
+      next.items = addItems(
+        s.items,
+        ertrag
+          ? [
+              [art.tool, -1],
+              [ertrag.item, ertrag.amount],
+            ]
+          : [[art.tool, -1]],
+      );
       next.clearedObstacles = s.clearedObstacles.concat(cmd.index);
       next.xp = s.xp + art.xp;
       return next;

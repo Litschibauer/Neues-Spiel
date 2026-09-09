@@ -210,7 +210,9 @@ export type Ruleset = {
   chestQueueMax?: number;
   grid?: GridDef;
   obstacles?: readonly Obstacle[];
-  obstacleKinds?: Record<string, { tool: number; xp: number }>;
+  // Hindernis räumen: welches Werkzeug es kostet, wie viel XP es gibt und was
+  // dabei abfällt. `ertrag` fehlt in alten Regelwerken, dann bleibt es beim XP.
+  obstacleKinds?: Record<string, { tool: number; xp: number; ertrag?: ItemStack }>;
   expansions?: readonly Expansion[];
   maxOfferAmount?: number;
   maxOfferPrice?: number;
@@ -1956,25 +1958,207 @@ const V35: Ruleset = {
   },
 };
 
+// V36: Produktionsketten. Drei Befunde aus V35 werden hier behoben.
+//
+// 1. Werkzeug war eine Sackgasse. Säge, Schaufel, Spitzhacke, Karte, Schlegel,
+//    Pflock, Bretter und Nägel kamen AUSSCHLIESSLICH aus Truhen — herstellen
+//    ließ sich nichts davon. Wer alles Land freimachen und alle 521 Hindernisse
+//    räumen wollte, brauchte 1947 Stück davon, bei einer Truhe alle 7 Minuten
+//    mit einem Zug aus neun Sorten. Allein die 365 Karten hätten rund tausend
+//    Stunden gedauert. Die 32 Erweiterungen bis Stufe 38 waren damit
+//    unerreichbar.
+// 2. Barren führten ins Nichts. Mine und Schmiede sind die letzten Gebäude,
+//    und ihr Ertrag wurde von keinem Rezept gebraucht.
+// 3. Ab Stufe 12 kam nichts Neues mehr, obwohl das Land bis Stufe 38 reicht.
+//
+// Die Antwort ist eine geschlossene Kette: Bäume geben Holz, das Waldstück
+// macht Holz erneuerbar, die Werkstatt verarbeitet Holz und Eisenbarren zu
+// genau dem Werkzeug, das Räumen und Erweitern kostet. Truhen bleiben ein
+// Bonus statt der einzigen Quelle. Die Räucherei gibt den Fischen aus V34
+// endlich einen Zweck, und die Schmiede nimmt die Dosen aus dem See an.
+const WOOD = 36;
+const SMOKED_FISH = 37;
+
+const R_PLANK = 18;
+const R_NAIL = 19;
+const R_SAW = 20;
+const R_SHOVEL = 21;
+const R_PICKAXE = 22;
+const R_STAKE = 23;
+const R_MALLET = 24;
+const R_MAP = 25;
+const R_WOOD = 26;
+const R_SMOKE_PERCH = 27;
+const R_SMOKE_TROUT = 28;
+const R_SMOKE_CARP = 29;
+const R_SCRAP = 30;
+
+const V36: Ruleset = {
+  ...V35,
+  version: 36,
+  // Die Verdienstkurve lief rückwärts: Der Grill auf Stufe 5 warf mit 44 Gold
+  // je Minute mehr ab als alles Spätere. Brot und Apfelkuchen dagegen lohnten
+  // sich kaum — der Kuchen brachte über zehn Minuten ganze 24 Gold mehr, als
+  // seine Zutaten wert waren. Beides wird hier geradegezogen.
+  items: V35.items
+    .map((it) =>
+      it.id === 'bread'
+        ? { ...it, npcPrice: 70 }
+        : it.id === 'apple-pie'
+          ? { ...it, npcPrice: 210 }
+          : it,
+    )
+    .concat([
+      // Holz zählt wie Bretter und Nägel als Material: es belegt keinen
+      // Lagerplatz, sonst würde das Räumen der Karte das Lager sprengen.
+      { id: 'wood', storable: false, npcPrice: 8, npcBuyPrice: 0 },
+      { id: 'smoked-fish', storable: true, npcPrice: 300, npcBuyPrice: 0 },
+    ]),
+
+  // Einen Baum zu fällen bringt jetzt Holz. Das macht aus dem reinen Kostenakt
+  // den Einstieg in die Werkzeugkette — 176 Bäume geben 528 Holz zum Anfangen.
+  obstacleKinds: {
+    ...(V35.obstacleKinds ?? {}),
+    tree: { ...(V35.obstacleKinds?.tree ?? { tool: SAW, xp: 15 }), ertrag: want(WOOD, 3) },
+  },
+
+  recipes: [
+    // Das Spiegelei war mit zwei Minuten die stärkste Einnahme im ganzen Spiel,
+    // erreichbar auf Stufe 5. Vier Minuten bringen es auf ein Maß, das zu
+    // seiner Stelle in der Reihenfolge passt.
+    ...V35.recipes.map((r) => (r.id === 'fried-egg' ? { ...r, durationTicks: 240 } : r)),
+    { id: 'plank', inputs: [want(WOOD, 2)], output: want(PLANK, 2), durationTicks: 180, xp: 8 },
+    { id: 'nail', inputs: [want(IRON_BAR, 1)], output: want(NAIL, 4), durationTicks: 240, xp: 12 },
+    { id: 'saw', inputs: [want(PLANK, 1), want(IRON_BAR, 1)], output: want(SAW, 1), durationTicks: 300, xp: 18 },
+    { id: 'shovel', inputs: [want(PLANK, 1), want(IRON_BAR, 1)], output: want(SHOVEL, 1), durationTicks: 300, xp: 18 },
+    { id: 'pickaxe', inputs: [want(PLANK, 2), want(IRON_BAR, 1)], output: want(PICKAXE, 1), durationTicks: 360, xp: 22 },
+    { id: 'stake', inputs: [want(WOOD, 1)], output: want(STAKE, 2), durationTicks: 120, xp: 6 },
+    { id: 'mallet', inputs: [want(WOOD, 1), want(IRON_BAR, 1)], output: want(MALLET, 1), durationTicks: 240, xp: 14 },
+    { id: 'map', inputs: [want(PLANK, 2), want(IRON_BAR, 1)], output: want(MAP, 1), durationTicks: 480, xp: 26 },
+    // Wie beim Weizen bleibt ein Stück als Saat zurück: 1 Holz rein, 3 raus.
+    { id: 'wood', inputs: [want(WOOD, 1)], output: want(WOOD, 3), durationTicks: 300, xp: 10 },
+    { id: 'smoke-perch', inputs: [want(FISH_PERCH, 2), want(WOOD, 1)], output: want(SMOKED_FISH, 1), durationTicks: 480, xp: 30 },
+    { id: 'smoke-trout', inputs: [want(FISH_TROUT, 1), want(WOOD, 1)], output: want(SMOKED_FISH, 1), durationTicks: 480, xp: 30 },
+    // Der Karpfen lohnt sich geräuchert doppelt und verbraucht das Seegras,
+    // das bisher nur im Lager lag.
+    { id: 'smoke-carp', inputs: [want(FISH_CARP, 1), want(SEAWEED, 2)], output: want(SMOKED_FISH, 2), durationTicks: 720, xp: 55 },
+    { id: 'scrap', inputs: [want(JUNK_CAN, 4)], output: want(IRON_BAR, 1), durationTicks: 360, xp: 20 },
+  ],
+
+  plots: [
+    // Die Schmiede lernt, Dosen aus dem See einzuschmelzen.
+    ...V35.plots.map((p) =>
+      p.id === 'forge'
+        ? { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_SCRAP] })) }
+        : p,
+    ),
+    {
+      id: 'woodlot',
+      startLevel: 0,
+      place: at(84, 44, 12, 15),
+      startCell: { gx: 4, gy: 1 },
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Waldstück',
+          cost: [want(PLANK, 8), want(NAIL, 6), want(GOLD, 1200)],
+          recipes: [R_WOOD],
+          minPlayerLevel: 12,
+          slots: 1,
+        },
+        {
+          label: 'Zweite Schneise',
+          cost: gold(2400),
+          recipes: [R_WOOD],
+          minPlayerLevel: 13,
+          slots: 2,
+        },
+      ],
+    },
+    {
+      id: 'workshop',
+      startLevel: 0,
+      place: at(58, 57, 12, 15),
+      startCell: { gx: 9, gy: 1 },
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Werkstatt',
+          cost: [want(PLANK, 14), want(NAIL, 10), want(GOLD, 3000)],
+          recipes: [R_PLANK, R_NAIL, R_STAKE, R_MALLET],
+          minPlayerLevel: 13,
+          slots: 1,
+        },
+        {
+          label: 'Werkzeugbank',
+          cost: [want(PLANK, 10), want(IRON_BAR, 4), want(GOLD, 5500)],
+          recipes: [R_PLANK, R_NAIL, R_STAKE, R_MALLET, R_SAW, R_SHOVEL, R_PICKAXE, R_MAP],
+          minPlayerLevel: 14,
+          slots: 2,
+        },
+      ],
+    },
+    {
+      id: 'smokehouse',
+      startLevel: 0,
+      place: at(78, 59, 12, 15),
+      startCell: { gx: 10, gy: 4 },
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Räucherei',
+          cost: [want(PLANK, 18), want(NAIL, 12), want(GOLD, 4500)],
+          recipes: [R_SMOKE_PERCH, R_SMOKE_TROUT, R_SMOKE_CARP],
+          minPlayerLevel: 15,
+          slots: 1,
+        },
+        {
+          label: 'Zweite Kammer',
+          cost: gold(7000),
+          recipes: [R_SMOKE_PERCH, R_SMOKE_TROUT, R_SMOKE_CARP],
+          minPlayerLevel: 16,
+          slots: 2,
+        },
+      ],
+    },
+  ],
+
+  requestTemplates: [
+    ...V35.requestTemplates,
+    { id: 'smoked-order', wants: [want(SMOKED_FISH, 2)], reward: gold(620), xp: 110 },
+    { id: 'smoked-mix', wants: [want(SMOKED_FISH, 1), want(BROT, 2)], reward: gold(480), xp: 90 },
+    { id: 'holz-order', wants: [want(PLANK, 6)], reward: gold(260), xp: 55 },
+  ],
+
+  achievements: [
+    ...V35.achievements!,
+    { id: 'woodlot', label: 'Waldstück anlegen', kind: 'plot', arg: 'woodlot', gold: 600, xp: 70, group: 'hof' },
+    { id: 'workshop', label: 'Werkstatt bauen', kind: 'plot', arg: 'workshop', gold: 1200, xp: 130, group: 'hof' },
+    { id: 'smokehouse', label: 'Räucherei bauen', kind: 'plot', arg: 'smokehouse', gold: 1600, xp: 170, group: 'hof' },
+    { id: 'smoked20', label: '20 Räucherfisch im Lager', kind: 'item', arg: 'smoked-fish', menge: 20, gold: 1400, xp: 150, group: 'vorrat' },
+    { id: 'karten5', label: '5 Karten im Vorrat', kind: 'item', arg: 'map', menge: 5, gold: 900, xp: 100, group: 'vorrat' },
+  ],
+};
+
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V35,
+  ...V36,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V32.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V36.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V35.fishing!,
+    ...V36.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf V35.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
-  plots: V35.plots.map((p) => {
+  plots: V36.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2027,17 +2211,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [33, V33],
   [34, V34],
   [35, V35],
+  [36, V36],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35,
+  28, 29, 30, 31, 32, 33, 34, 35, 36,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 35;
+export const LATEST_RULESET_VERSION = 36;
 
 export const DEV_RULESET_VERSION = 1001;
 

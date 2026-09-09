@@ -33,7 +33,12 @@ function act(name, result, ton) {
 }
 
 // Beim ersten Antippen eines Bauwerks mit eigener Einführung: kurz erklären.
-var FEATURE_PLATZ = { mine: 'mine' };
+var FEATURE_PLATZ = {
+  mine: 'mine',
+  workshop: 'werkstatt',
+  woodlot: 'waldstueck',
+  smokehouse: 'raeucherei',
+};
 
 function tapPlot(i) {
   var featureId = FEATURE_PLATZ[rules.plots[i] && rules.plots[i].id];

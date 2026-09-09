@@ -16,6 +16,8 @@ var NAMES = {
   bait: 'Köder', 'fish-perch': 'Barsch', 'fish-trout': 'Forelle',
   'fish-carp': 'Karpfen', 'fish-pike': 'Hecht',
   'seaweed': 'Seegras', 'junk-can': 'Alte Dose',
+  'wood': 'Holz', 'smoked-fish': 'Räucherfisch',
+  'woodlot': 'Waldstück', 'workshop': 'Werkstatt', 'smokehouse': 'Räucherei',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

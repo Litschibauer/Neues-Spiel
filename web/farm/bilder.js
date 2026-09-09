@@ -15,6 +15,7 @@ var KACHEL = 16;
 var KOERPER = {
   'field-': 0.6, 'coop-': 3.1, mill: 3.1, dairy: 3.1, 'pasture-': 1.3, mine: 1.5,
   forge: 1.6, oven: 1.6, grill: 1.0, 'apple-tree': 1.3,
+  woodlot: 1.4, workshop: 3.1, smokehouse: 4.4,
   'deco-fence': 0.7, 'deco-flowers': 0.7, 'deco-bench': 0.7,
 };
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
@@ -163,6 +164,9 @@ function artRaumFor(p, k) {
   if (id === 'oven') return artOfen(k, p.busy);
   if (id === 'grill') return artGrill(k, p.busy);
   if (id === 'apple-tree') return artApfelbaum(k, p.baum ? p.baum.stufe : 'wachsen');
+  if (id === 'woodlot') return artWaldstueck(k, p.busy);
+  if (id === 'workshop') return artWerkstatt(k, p.busy);
+  if (id === 'smokehouse') return artRaeucherei(k, p.busy);
   if (id === 'deco-fence') return bild(k, 'zaun-m', 0, k.ph - 16);
   if (id === 'deco-flowers') return bild(k, 'gras-blumen', 0, k.ph - 16);
   if (id === 'deco-bench') return bild(k, 'tisch', 0, k.ph - 16);
@@ -295,6 +299,52 @@ function artGrill(k, laeuft) {
     : '';
   return schatten(k, 16, u, 22) +
     bild(k, 'fass-rot', 8, u - 16) + feuer + bild(k, 'foerderband', 8, u - 21, 16, 6);
+}
+
+// Zwei Tannen auf einem Stück Wald, dazwischen ein frischer Stumpf; solange
+// geschlagen wird, liegt ein Stamm daneben.
+function artWaldstueck(k, laeuft) {
+  var u = k.ph - 1;
+  return schatten(k, 16, u, 30) +
+    bild(k, 'baum-tanne', -1, u - 30) + bild(k, 'baum-tanne', 16, u - 27) +
+    bild(k, 'stumpf', 8, u - 14, 12, 12) +
+    (laeuft ? bild(k, 'brett-wand', 20, u - 9, 12, 8) : '');
+}
+
+// Offener Schuppen: Holzwand mit Tor, davor die Werkbank. Beim Arbeiten
+// blitzt der Amboss.
+function artWerkstatt(k, laeuft) {
+  var u = k.ph - 1;
+  var funke = laeuft
+    ? '<g>' + pix(k, ['.y.', 'yyy', '.y.'], FARBEN, 4, u - 26, 1.2) +
+      '<animate attributeName="opacity" values="1;.2;1" dur=".5s" repeatCount="indefinite"/></g>'
+    : '';
+  return schatten(k, 16, u, 34) +
+    bild(k, 'dach-rot-l', 0, u - 48) + bild(k, 'dach-rot-r', 16, u - 48) +
+    bild(k, 'holz-wand', 0, u - 32) + bild(k, 'holz-fenster', 16, u - 32) +
+    bild(k, 'tor-holz', 0, u - 16) + bild(k, 'holz-tuer', 16, u - 16) +
+    bild(k, 'amboss', 1, u - 27, 12, 12) + funke +
+    bild(k, 'kiste-holz', 20, u - 11, 11, 11);
+}
+
+// Steinkate mit Schlot; beim Räuchern steigt Rauch auf.
+function artRaeucherei(k, laeuft) {
+  var u = k.ph - 1;
+  var rauch = laeuft
+    ? '<g>' + pix(k, RAUCH, FARBEN, 24, u - 60) +
+      '<animateTransform attributeName="transform" type="translate" values="0 0;0 ' + (-4 * k.e) + ';0 0" dur="2.8s" repeatCount="indefinite"/>' +
+      '<animate attributeName="opacity" values=".9;.15;.9" dur="2.8s" repeatCount="indefinite"/></g>'
+    : '';
+  var glut = laeuft
+    ? '<g>' + pix(k, FEUER, FARBEN, 4, u - 12) +
+      '<animate attributeName="opacity" values="1;.5;1" dur=".8s" repeatCount="indefinite"/></g>'
+    : '';
+  // Schlot zuerst, Dach darüber — so schaut er oben heraus statt davor zu kleben.
+  return schatten(k, 16, u, 34) +
+    rauch + bild(k, 'schlot', 18, u - 56) +
+    bild(k, 'dach-blau-l', 0, u - 48) + bild(k, 'dach-blau-r', 16, u - 48) +
+    bild(k, 'stein-wand', 0, u - 32) + bild(k, 'stein-fenster', 16, u - 32) +
+    bild(k, 'ofen-mund', 0, u - 16) + glut + bild(k, 'stein-tuer', 16, u - 16);
 }
 
 function artApfelbaum(k, stufe) {

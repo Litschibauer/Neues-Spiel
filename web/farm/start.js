@@ -460,6 +460,24 @@ var FEATURE_TUT = {
     { emoji: '🧨', titel: 'Werkzeug nutzt sich ab',
       text: 'Zum Graben brauchst du Spitzhacke, Schaufel oder Sprengsatz. Die stellst du selbst her — schau in die Werkstatt.' },
   ],
+  werkstatt: [
+    { emoji: '🪚', titel: 'Die Werkstatt',
+      text: 'Endlich Werkzeug selbst machen: Bretter, Nägel, Säge, Schaufel, Spitzhacke, Pflöcke, Schlegel und Karten.' },
+    { emoji: '🪵', titel: 'Holz und Eisen',
+      text: 'Holz kommt vom Waldstück oder vom Bäumefällen, Eisenbarren aus der Schmiede. Beides zusammen ergibt das Werkzeug.' },
+    { emoji: '🗺️', titel: 'Damit wächst der Hof',
+      text: 'Karten, Schlegel und Pflöcke brauchst du fürs Freimachen von Land. Vorher kamen die nur aus Truhen — jetzt planst du selbst.' },
+  ],
+  waldstueck: [
+    { emoji: '🌲', titel: 'Das Waldstück',
+      text: 'Hier wächst Holz nach. Wie beim Weizen bleibt ein Stück als Saat zurück, aus einem werden drei.' },
+  ],
+  raeucherei: [
+    { emoji: '🐟', titel: 'Die Räucherei',
+      text: 'Aus deinen Fängen wird Räucherfisch — deutlich wertvoller als roh, und gefragt bei den besten Aufträgen.' },
+    { emoji: '🌿', titel: 'Auch für den Beifang',
+      text: 'Karpfen mit Seegras geräuchert bringt gleich zwei. So wird aus dem Zeug, das nur im Lager lag, endlich etwas.' },
+  ],
   wagen: [
     { emoji: '🚚', titel: 'Der Frachtbrief',
       text: 'Am Wagen hängen Aufträge. Jeder will bestimmte Waren und zahlt dafür Gold und XP.' },
