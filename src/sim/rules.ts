@@ -2255,6 +2255,11 @@ const DEV: Ruleset = {
   }),
 };
 
+// V38: Tagesaufgaben. Das Regelwerk selbst aendert sich inhaltlich nicht — die
+// Fassung existiert, damit der Spielstand um die Lebenszeit-Zaehler und den
+// Server-Kalendertag wachsen kann (siehe migrate.ts, 37->38).
+const V38: Ruleset = { ...V37, version: 38 };
+
 export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
   [2, V2],
@@ -2293,17 +2298,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [35, V35],
   [36, V36],
   [37, V37],
+  [38, V38],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 37;
+export const LATEST_RULESET_VERSION = 38;
 
 export const DEV_RULESET_VERSION = 1001;
 

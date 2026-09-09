@@ -31,6 +31,8 @@ import {
   replaceAt,
   spaceLeft,
   storedIn,
+  zaehle,
+  ZAEHLER,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
 
@@ -178,9 +180,68 @@ export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
   };
 }
 
+// Lebenszeit-Zähler laufen an EINER Stelle mit, nicht in zehn Befehlszweigen.
+// Was hier gezählt wird, ist die Grundlage für Erfolge, Hofstatistik und
+// Tagesaufgaben; der Fortschritt entsteht also auch im Funkloch.
+function zaehleBefehl(vorher: State, nachher: State, cmd: Command, rules: Ruleset): State {
+  const stapel: [number, number][] = [];
+
+  switch (cmd.type) {
+    case 'COLLECT':
+    case 'HARVEST_TREE':
+      stapel.push([ZAEHLER.ERNTEN, 1]);
+      break;
+    case 'START':
+      stapel.push([ZAEHLER.STARTEN, 1]);
+      break;
+    case 'SEND_SLIP':
+      stapel.push([ZAEHLER.ZETTEL, 1]);
+      break;
+    case 'FILL_REQUEST':
+      stapel.push([ZAEHLER.ANFRAGEN, 1]);
+      break;
+    case 'SELL_NPC':
+      stapel.push([ZAEHLER.VERKAUFT, cmd.amount]);
+      break;
+    case 'COLLECT_SALE':
+      stapel.push([ZAEHLER.VERKAUFT, 1]);
+      break;
+    case 'COLLECT_SPOT':
+      stapel.push([ZAEHLER.FISCHE, (nachher.angelFang ?? 0) - (vorher.angelFang ?? 0)]);
+      break;
+    case 'CLEAR_OBSTACLE':
+      stapel.push([ZAEHLER.GERAEUMT, 1]);
+      break;
+    case 'BUY':
+      stapel.push([ZAEHLER.GEBAUT, 1]);
+      break;
+    default:
+      break;
+  }
+
+  // Verdientes Gold zählt unabhängig davon, welcher Befehl es gebracht hat.
+  const dazu = count(nachher, rules.currency) - count(vorher, rules.currency);
+  if (dazu > 0) stapel.push([ZAEHLER.GOLD, dazu]);
+
+  if (stapel.length === 0) return nachher;
+
+  let zahlen = nachher.zaehler;
+  for (const [art, n] of stapel) {
+    if (n > 0) zahlen = zaehle(zahlen, art, n);
+  }
+  if (zahlen === nachher.zaehler) return nachher;
+
+  const raus = cloneState(nachher);
+  raus.zaehler = zahlen;
+  return raus;
+}
+
 export function simulate(state: State, cmd: Command, rules: Ruleset): State {
   const s = advanceTo(state, cmd.tick, rules);
+  return zaehleBefehl(s, simulateRoh(s, cmd, rules), cmd, rules);
+}
 
+function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
   switch (cmd.type) {
     case 'START': {
       const def = rules.plots[cmd.plot];

@@ -1,7 +1,15 @@
 import type { Ruleset } from './rules.ts';
 import { blockiert, getRuleset, levelRecipes, sizeOf, slotsAt } from './rules.ts';
 import type { Slot, State } from './state.ts';
-import { EMPTY_PLOT, capacityOf, cloneState, emptySlots, startPlatz, stored } from './state.ts';
+import {
+  EMPTY_PLOT,
+  ZAEHLER_ANZAHL,
+  capacityOf,
+  cloneState,
+  emptySlots,
+  startPlatz,
+  stored,
+} from './state.ts';
 
 export class MigrationError extends Error {
   constructor(message: string) {
@@ -116,6 +124,20 @@ export const GROW: MigrationStep = (state, from, to) => {
 
 export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
   RETIME(GROW(state, from, to), from, to);
+
+export const ZAEHLER_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  const vollstaendig =
+    gewachsen.zaehler !== undefined && gewachsen.zaehler.length === ZAEHLER_ANZAHL;
+  if (vollstaendig && gewachsen.serverTag !== undefined) return gewachsen;
+
+  const next = cloneState(gewachsen);
+  const zahlen: number[] = [];
+  for (let i = 0; i < ZAEHLER_ANZAHL; i++) zahlen.push(gewachsen.zaehler?.[i] ?? 0);
+  next.zaehler = zahlen;
+  next.serverTag = gewachsen.serverTag ?? 0;
+  return next;
+};
 
 export const AUFS_RASTER: MigrationStep = (state, from, to) => {
   const gewachsen = GROW_AND_RETIME(state, from, to);
@@ -259,6 +281,10 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['34->35', AUFS_RASTER],
   ['35->36', AUFS_RASTER],
   ['36->37', AUFS_RASTER],
+  // Ein alter Stand kennt weder Zaehler noch Server-Tag. Beides faengt bei
+  // null an — rueckwirkend zaehlen laesst sich nichts, und der Tag kommt beim
+  // ersten Kontakt vom Server.
+  ['37->38', ZAEHLER_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

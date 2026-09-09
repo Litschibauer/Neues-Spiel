@@ -52,6 +52,8 @@ export function canonicalize(state: State): string {
     `boot=${state.bootRepariert ? 1 : 0}`,
     `spots=[${(state.angelSpots ?? []).join(',')}]`,
     `sud=[${(state.angelKoeder ?? []).join(',')}]`,
+    `zaehler=[${(state.zaehler ?? []).join(',')}]`,
+    `serverTag=${state.serverTag ?? 0}`,
   ].join('|');
 }
 

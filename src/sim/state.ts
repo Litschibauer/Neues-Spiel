@@ -114,7 +114,43 @@ export type State = {
   angelSpots: readonly number[];
   // Angelsee: je Werkbank-Platz im Strandhaus der Startzeit-Tick; -1 heißt frei.
   angelKoeder: readonly number[];
+  // Lebenszeit-Zähler, Index siehe ZAEHLER. Anhängend erweitern, nie umsortieren
+  // — die Indizes stecken in jedem gespeicherten Stand.
+  zaehler: readonly number[];
+  // Kalendertag des Servers (Tage seit Epoche). Nur der Server schreibt ihn,
+  // und zwar außerhalb des Befehls-Nachspielens; die Sim liest ihn bloß. Ein
+  // Stand ohne Kontakt behält den zuletzt bekannten Tag — deshalb rollen
+  // Tagesaufgaben offline nicht weiter, während der Fortschritt trotzdem zählt.
+  serverTag: number;
 };
+
+// Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
+export const ZAEHLER = {
+  ERNTEN: 0,
+  STARTEN: 1,
+  ZETTEL: 2,
+  ANFRAGEN: 3,
+  VERKAUFT: 4,
+  GOLD: 5,
+  FISCHE: 6,
+  GERAEUMT: 7,
+  GEBAUT: 8,
+} as const;
+
+export const ZAEHLER_ANZAHL = 9;
+
+export function zaehlerStand(s: State, art: number): number {
+  return s.zaehler?.[art] ?? 0;
+}
+
+// Zähler hochsetzen, ohne den alten Zustand anzufassen. Fehlende Plätze werden
+// aufgefüllt, damit ein Stand aus einer älteren Fassung nicht stolpert.
+export function zaehle(zaehler: readonly number[], art: number, n: number): readonly number[] {
+  const raus = [];
+  for (let i = 0; i < ZAEHLER_ANZAHL; i++) raus.push(zaehler?.[i] ?? 0);
+  raus[art] = (raus[art] ?? 0) + n;
+  return raus;
+}
 
 export function count(s: State, item: number): number {
   return s.items[item] ?? 0;
@@ -175,6 +211,9 @@ export function initialState(rules: Ruleset): State {
   const passives: number[] = [];
   for (let i = 0; i < rules.passives.length; i++) passives.push(0);
 
+  const zaehler: number[] = [];
+  for (let i = 0; i < ZAEHLER_ANZAHL; i++) zaehler.push(0);
+
   return {
     tick: 0,
     xp: 0,
@@ -201,6 +240,8 @@ export function initialState(rules: Ruleset): State {
     bootRepariert: false,
     angelSpots: [],
     angelKoeder: [],
+    zaehler: zaehler,
+    serverTag: 0,
   };
 }
 
@@ -273,6 +314,8 @@ export function normalizeState(s: State): State {
     bootRepariert: s.bootRepariert ?? false,
     angelSpots: s.angelSpots ?? [],
     angelKoeder: s.angelKoeder ?? [],
+    zaehler: s.zaehler ?? [],
+    serverTag: s.serverTag ?? 0,
   };
 }
 
@@ -303,6 +346,8 @@ export function cloneState(s: State): State {
     bootRepariert: s.bootRepariert ?? false,
     angelSpots: s.angelSpots ?? [],
     angelKoeder: s.angelKoeder ?? [],
+    zaehler: s.zaehler ?? [],
+    serverTag: s.serverTag ?? 0,
   };
 }
 

@@ -7,6 +7,7 @@ import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
+import { tagVon } from './sozial.ts';
 import { topUpRequests } from './requests.ts';
 import { rollChest, topUpChests } from './chests.ts';
 
@@ -186,14 +187,26 @@ export class Server {
     this.targetRulesetVersion = targetVersion ?? rulesetVersion;
   }
 
-  receiveExternal(): void {
+  receiveExternal(nowMs: number = Date.now()): void {
     const rules = getRuleset(this.snapshot.rulesetVersion);
-    const state = this.applyExternal(this.snapshot.state, rules);
+    const state = this.applyExternal(this.snapshot.state, rules, nowMs);
     if (state !== this.snapshot.state) this.snapshot = { ...this.snapshot, state };
   }
 
-  private applyExternal(input: State, rules: Ruleset): State {
+  private applyExternal(input: State, rules: Ruleset, nowMs: number): State {
     let state = input;
+
+    // Der Kalendertag kommt vom Server, nicht vom Geraet — sonst waere er mit
+    // der Systemuhr zu verschieben. Er wird hier gesetzt, also AUSSERHALB des
+    // Befehls-Nachspielens: Der Divergenz-Vergleich lauft davor, und die Sim
+    // liest den Tag nur. Ein Client ohne Verbindung behaelt den zuletzt
+    // bekannten Tag, sammelt aber weiter Fortschritt.
+    const heute = tagVon(nowMs);
+    if (state.serverTag !== heute) {
+      const datiert = cloneState(state);
+      datiert.serverTag = heute;
+      state = datiert;
+    }
 
     if (this.pendingXp > 0) {
       const belohnt = cloneState(state);
@@ -296,7 +309,7 @@ export class Server {
 
     const tail = req.commands.filter((c) => c.seq > snap.seq);
     if (tail.length === 0) {
-      const delivered = this.applyExternal(snap.state, rules);
+      const delivered = this.applyExternal(snap.state, rules, nowMs);
       if (delivered !== snap.state) this.snapshot = { ...snap, state: delivered };
       return { ok: true, kind: 'duplicate', snapshot: this.snapshot, divergence: null };
     }
@@ -379,7 +392,7 @@ export class Server {
       }
     }
 
-    state = this.applyExternal(state, rules);
+    state = this.applyExternal(state, rules, nowMs);
 
     const consumedTicks = state.tick - snap.state.tick;
     const alignedServerTs = snap.serverTs + consumedTicks * TICK_MS;
