@@ -161,6 +161,51 @@ test('die neuen Gebäude füllen die Stufen nach der Schmiede', () => {
   );
 });
 
+test('jeder Fisch lässt sich räuchern, auch der wertvollste', () => {
+  for (const fisch of ['fish-perch', 'fish-trout', 'fish-carp', 'fish-pike']) {
+    const i = idx(fisch);
+    assert.ok(
+      V.recipes.some((r) => r.inputs.some((c) => c.item === i)),
+      `${fisch} wird von keinem Rezept angenommen`,
+    );
+  }
+});
+
+// Waren, die nirgends weiterverarbeitet werden, sind nur dann in Ordnung, wenn
+// sie das ENDE einer Kette sind. Alles andere ist eine Sackgasse.
+test('nur noch Endprodukte enden im Verkauf', () => {
+  const eingang = new Set<number>();
+  for (const r of V.recipes) for (const c of r.inputs) eingang.add(c.item);
+  const kosten = new Set<number>();
+  for (const p of V.plots) for (const l of p.levels) for (const c of l.cost ?? []) kosten.add(c.item);
+  for (const e of V.expansions ?? []) for (const c of e.cost ?? []) kosten.add(c.item);
+  const werkzeug = new Set(Object.values(V.obstacleKinds ?? {}).map((x) => x.tool));
+
+  // Das sind die gewollten Endpunkte: Spitzenwaren und der Wohlstandsbarren.
+  const erlaubt = new Set(['gold-bar', 'smoked-fish', 'farm-platter', 'cream-cake']);
+  const offen: string[] = [];
+  V.items.forEach((it, i) => {
+    if (i === V.currency || i === V.fishing?.bait) return;
+    if (eingang.has(i) || kosten.has(i) || werkzeug.has(i)) return;
+    if (!erlaubt.has(it.id)) offen.push(it.id);
+  });
+  assert.deepEqual(offen, [], `Sackgassen: ${offen.join(', ')}`);
+});
+
+test('die Hofküche verarbeitet, was vorher nur verkauft wurde', () => {
+  const kueche = V.plots.find((p) => p.id === 'kitchen');
+  assert.ok(kueche, 'Hofküche vorhanden');
+  const zutaten = new Set<string>();
+  for (const l of kueche!.levels) {
+    for (const r of l.recipes) {
+      for (const c of V.recipes[r]!.inputs) zutaten.add(V.items[c.item]!.id);
+    }
+  }
+  for (const noetig of ['bread', 'cheese', 'apple-pie', 'cream']) {
+    assert.ok(zutaten.has(noetig), `${noetig} wird in der Küche nicht gebraucht`);
+  }
+});
+
 test('die neuen Waren tragen Namen und sind auftragsfähig', () => {
   for (const id of ['wood', 'smoked-fish']) {
     const i = idx(id);

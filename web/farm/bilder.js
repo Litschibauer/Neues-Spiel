@@ -15,7 +15,7 @@ var KACHEL = 16;
 var KOERPER = {
   'field-': 0.6, 'coop-': 3.1, mill: 3.1, dairy: 3.1, 'pasture-': 1.3, mine: 1.5,
   forge: 1.6, oven: 1.6, grill: 1.0, 'apple-tree': 1.3,
-  woodlot: 1.4, workshop: 3.1, smokehouse: 4.4,
+  woodlot: 1.4, workshop: 3.1, smokehouse: 4.4, kitchen: 3.1,
   'deco-fence': 0.7, 'deco-flowers': 0.7, 'deco-bench': 0.7,
 };
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
@@ -167,6 +167,7 @@ function artRaumFor(p, k) {
   if (id === 'woodlot') return artWaldstueck(k, p.busy);
   if (id === 'workshop') return artWerkstatt(k, p.busy);
   if (id === 'smokehouse') return artRaeucherei(k, p.busy);
+  if (id === 'kitchen') return artHofkueche(k, p.busy);
   if (id === 'deco-fence') return bild(k, 'zaun-m', 0, k.ph - 16);
   if (id === 'deco-flowers') return bild(k, 'gras-blumen', 0, k.ph - 16);
   if (id === 'deco-bench') return bild(k, 'tisch', 0, k.ph - 16);
@@ -345,6 +346,25 @@ function artRaeucherei(k, laeuft) {
     bild(k, 'dach-blau-l', 0, u - 48) + bild(k, 'dach-blau-r', 16, u - 48) +
     bild(k, 'stein-wand', 0, u - 32) + bild(k, 'stein-fenster', 16, u - 32) +
     bild(k, 'ofen-mund', 0, u - 16) + glut + bild(k, 'stein-tuer', 16, u - 16);
+}
+
+// Helles Haus mit Markise und Herdfeuer; beim Kochen steigt Dampf auf.
+function artHofkueche(k, laeuft) {
+  var u = k.ph - 1;
+  var dampf = laeuft
+    ? '<g>' + pix(k, RAUCH, FARBEN, 5, u - 42) +
+      '<animateTransform attributeName="transform" type="translate" values="0 0;0 ' + (-5 * k.e) + ';0 0" dur="2.2s" repeatCount="indefinite"/>' +
+      '<animate attributeName="opacity" values=".85;.15;.85" dur="2.2s" repeatCount="indefinite"/></g>'
+    : '';
+  var herd = laeuft
+    ? '<g>' + pix(k, FEUER, FARBEN, 21, u - 12) +
+      '<animate attributeName="opacity" values="1;.5;1" dur=".7s" repeatCount="indefinite"/></g>'
+    : '';
+  return schatten(k, 16, u, 34) + dampf +
+    bild(k, 'dach-blau-l', 0, u - 48) + bild(k, 'dach-blau-r', 16, u - 48) +
+    bild(k, 'markise', 0, u - 32) + bild(k, 'holz-fenster', 16, u - 32) +
+    bild(k, 'holz-tuer', 0, u - 16) + bild(k, 'ofen-mund-2', 16, u - 16) + herd +
+    bild(k, 'kiste-tomate', 21, u - 11, 11, 11);
 }
 
 function artApfelbaum(k, stufe) {

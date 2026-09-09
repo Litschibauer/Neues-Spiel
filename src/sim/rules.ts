@@ -2140,25 +2140,105 @@ const V36: Ruleset = {
   ],
 };
 
+// V37: Die zweite Verarbeitungsstufe. Nach V36 endeten immer noch alle
+// Lebensmittel im Verkauf — Sahne, Butter, Käse, Brot, Apfelkuchen und
+// Spiegelei wurden von keinem Rezept gebraucht. Und ausgerechnet der Hecht,
+// der wertvollste Fang, ließ sich als einziger Fisch nicht räuchern.
+//
+// Die Hofküche nimmt beide Enden auf: Sie macht aus fertigen Waren Gerichte,
+// die deutlich mehr wert sind. Damit hat jede Kette im Spiel ein Ziel jenseits
+// des Verkaufsstands.
+const FARM_PLATTER = 38;
+const CREAM_CAKE = 39;
+
+const R_SMOKE_PIKE = 31;
+const R_PLATTER_EGG = 32;
+const R_PLATTER_CHEESE = 33;
+const R_CREAM_CAKE = 34;
+
+const V37: Ruleset = {
+  ...V36,
+  version: 37,
+  items: [
+    ...V36.items,
+    { id: 'farm-platter', storable: true, npcPrice: 780, npcBuyPrice: 0 },
+    { id: 'cream-cake', storable: true, npcPrice: 620, npcBuyPrice: 0 },
+  ],
+
+  recipes: [
+    ...V36.recipes,
+    // Der Hecht fehlte in der Räucherei — der beste Fang war der einzige, für
+    // den es dort nichts zu tun gab.
+    { id: 'smoke-pike', inputs: [want(FISH_PIKE, 1), want(WOOD, 1)], output: want(SMOKED_FISH, 2), durationTicks: 600, xp: 60 },
+    { id: 'platter-egg', inputs: [want(BROT, 1), want(SPIEGELEI, 2), want(BUTTER, 1)], output: want(FARM_PLATTER, 1), durationTicks: 600, xp: 70 },
+    { id: 'platter-cheese', inputs: [want(BROT, 2), want(CHEESE, 1)], output: want(FARM_PLATTER, 1), durationTicks: 600, xp: 70 },
+    { id: 'cream-cake', inputs: [want(APFELKUCHEN, 1), want(CREAM, 2)], output: want(CREAM_CAKE, 1), durationTicks: 540, xp: 62 },
+  ],
+
+  plots: [
+    // Die Räucherei lernt den Hecht.
+    ...V36.plots.map((p) =>
+      p.id === 'smokehouse'
+        ? { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_SMOKE_PIKE] })) }
+        : p,
+    ),
+    {
+      id: 'kitchen',
+      startLevel: 0,
+      place: at(38, 60, 12, 15),
+      startCell: { gx: 4, gy: 5 },
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Hofküche',
+          cost: [want(PLANK, 22), want(NAIL, 16), want(GOLD, 6000)],
+          recipes: [R_PLATTER_CHEESE, R_CREAM_CAKE],
+          minPlayerLevel: 17,
+          slots: 1,
+        },
+        {
+          label: 'Zweiter Herd',
+          cost: [want(PLANK, 14), want(IRON_BAR, 6), want(GOLD, 9000)],
+          recipes: [R_PLATTER_CHEESE, R_CREAM_CAKE, R_PLATTER_EGG],
+          minPlayerLevel: 18,
+          slots: 2,
+        },
+      ],
+    },
+  ],
+
+  requestTemplates: [
+    ...V36.requestTemplates,
+    { id: 'platter-order', wants: [want(FARM_PLATTER, 1)], reward: gold(1100), xp: 170 },
+    { id: 'cake-order', wants: [want(CREAM_CAKE, 2)], reward: gold(1500), xp: 220 },
+  ],
+
+  achievements: [
+    ...V36.achievements!,
+    { id: 'kitchen', label: 'Hofküche bauen', kind: 'plot', arg: 'kitchen', gold: 2200, xp: 230, group: 'hof' },
+    { id: 'platter10', label: '10 Bauernbrettl im Lager', kind: 'item', arg: 'farm-platter', menge: 10, gold: 2600, xp: 260, group: 'vorrat' },
+  ],
+};
+
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
 const DEV: Ruleset = {
-  ...V36,
+  ...V37,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V36.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V37.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V36.fishing!,
+    ...V37.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf V35.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
-  plots: V36.plots.map((p) => {
+  plots: V37.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2212,17 +2292,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [34, V34],
   [35, V35],
   [36, V36],
+  [37, V37],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 36;
+export const LATEST_RULESET_VERSION = 37;
 
 export const DEV_RULESET_VERSION = 1001;
 

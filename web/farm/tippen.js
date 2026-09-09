@@ -38,6 +38,7 @@ var FEATURE_PLATZ = {
   workshop: 'werkstatt',
   woodlot: 'waldstueck',
   smokehouse: 'raeucherei',
+  kitchen: 'hofkueche',
 };
 
 function tapPlot(i) {

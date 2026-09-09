@@ -18,6 +18,7 @@ var NAMES = {
   'seaweed': 'Seegras', 'junk-can': 'Alte Dose',
   'wood': 'Holz', 'smoked-fish': 'Räucherfisch',
   'woodlot': 'Waldstück', 'workshop': 'Werkstatt', 'smokehouse': 'Räucherei',
+  'kitchen': 'Hofküche', 'farm-platter': 'Bauernbrettl', 'cream-cake': 'Sahnetorte',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });

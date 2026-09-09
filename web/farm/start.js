@@ -472,6 +472,12 @@ var FEATURE_TUT = {
     { emoji: '🌲', titel: 'Das Waldstück',
       text: 'Hier wächst Holz nach. Wie beim Weizen bleibt ein Stück als Saat zurück, aus einem werden drei.' },
   ],
+  hofkueche: [
+    { emoji: '🍳', titel: 'Die Hofküche',
+      text: 'Hier wird aus fertigen Waren ein Gericht: Bauernbrettl aus Brot, Käse, Butter und Spiegelei, Sahnetorte aus Apfelkuchen und Sahne.' },
+    { emoji: '💰', titel: 'Das lohnt sich',
+      text: 'Gerichte bringen deutlich mehr als ihre Zutaten einzeln — und die besten Aufträge fragen genau danach.' },
+  ],
   raeucherei: [
     { emoji: '🐟', titel: 'Die Räucherei',
       text: 'Aus deinen Fängen wird Räucherfisch — deutlich wertvoller als roh, und gefragt bei den besten Aufträgen.' },
