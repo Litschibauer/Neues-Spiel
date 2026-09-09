@@ -237,8 +237,10 @@ function feiereStufe(level) {
       '</span><span class="was">' + pn.art + '</span></div>');
   });
   (karte.recipes || []).forEach(function (i) {
-    var id = rules.recipes[i].output.item;
+    var r = rules.recipes[i];
+    var id = r.output.item;
     zeilen.push('<div class="zeile">' + itemIcon(id) + '<span>' + itemName(id) +
+      zutatenHtml(r.inputs, null, { klasse: 'klein' }) +
       '</span><span class="was">jetzt herstellbar</span></div>');
   });
 

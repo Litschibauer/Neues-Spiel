@@ -138,18 +138,18 @@ function feedSlot(p, j) {
       client.start(p.index, o.recipe, j));
 }
 
-function slotStatus(p, s) {
+function slotStatus(p, s, lager) {
   if (s.done) return 'fertig · +' + s.output.amount + ' ' + itemName(s.output.item);
   if (s.busy) return 'noch ' + timeText(s.remaining) + ' · ' + nameOf(s.producing);
   var open = p.options.filter(function (o) { return o.unlocked; });
   if (open.length === 0) return 'kein Rezept frei';
   if (open.length > 1) return 'auswählen';
   var o = open[0];
-  return (o.inputs.length > 0 ? costText(o.inputs) + ' · ' : '') + timeText(o.durationTicks) +
-    (o.affordable ? '' : ' · fehlt');
+  return timeText(o.durationTicks) + (o.affordable ? '' : ' · fehlt') +
+    zutatenHtml(o.inputs, lager || lagerJetzt(), { klasse: 'klein' });
 }
 
-function stallRow(p, s) {
+function stallRow(p, s, lager) {
   var tier = animalOf(p.index);
   var card = document.createElement('button');
   card.type = 'button';
@@ -188,7 +188,7 @@ function stallRow(p, s) {
   card.innerHTML =
     '<div class="body">' +
     '<div class="top">' + tier.one + ' ' + (s.index + 1) + '</div>' +
-    '<div class="sub">' + slotStatus(p, s) + '</div>' +
+    '<div class="sub">' + slotStatus(p, s, lager) + '</div>' +
     '</div>' +
     '<span class="yield">' + (s.done ? 'Ernten' : s.busy ? timeText(s.remaining) : 'Füttern') + '</span>';
   card.addEventListener('click', function () {
@@ -286,8 +286,9 @@ function zeichneBauInfo(v, p) {
     ? 'Stufe reicht'
     : 'Du bist noch nicht so weit', u.unlocked);
 
-  zeilenKarte(box, 'Baukosten', stacksMitBild(u.cost) +
-    (u.affordable ? '' : ' · fehlt noch etwas'), u.affordable);
+  zeilenKarte(box, 'Baukosten',
+    (u.affordable ? 'alles da' : 'es fehlt noch etwas') +
+    zutatenHtml(u.cost, lagerJetzt(), { titel: 'kostet' }), u.affordable);
 
   if (land) {
     zeilenKarte(box, 'Land freimachen',
@@ -323,11 +324,12 @@ function ausbauKnopf(p, box) {
   karte.className = 'card opt ausbau';
   karte.disabled = !u.unlocked || !u.affordable;
   var sub = u.unlocked
-    ? costText(u.cost) + (u.affordable ? '' : ' · Gold fehlt')
+    ? (u.affordable ? 'bereit' : 'es fehlt noch etwas')
     : 'ab Stufe ' + u.minPlayerLevel;
   karte.innerHTML =
     '<div class="body"><div class="top">Ausbauen · ' + u.label + '</div>' +
-    '<div class="sub">' + sub + '</div></div>' +
+    '<div class="sub">' + sub + '</div>' +
+    zutatenHtml(u.cost, u.unlocked ? lagerJetzt() : null, { titel: 'kostet' }) + '</div>' +
     '<span class="yield">' + (u.unlocked ? '＋' : '🔒') + '</span>';
   karte.addEventListener('click', function () { closePicker(); tapBuy(p.index); });
   box.appendChild(karte);
@@ -386,15 +388,17 @@ function renderStall(p) {
     });
     feedAll.disabled = !enough;
     feedAll.innerHTML = '<div class="body"><div class="top">Alle füttern</div>' +
-      '<div class="sub">' + hungry.length + '× ' + costText(one.inputs) +
-      (enough ? '' : ' · reicht nicht') + '</div></div>';
+      '<div class="sub">' + hungry.length + ' Tiere' +
+      (enough ? '' : ' · reicht nicht') + '</div>' +
+      zutatenHtml(one.inputs, have, { faktor: hungry.length }) + '</div>';
     feedAll.addEventListener('click', function () {
       hungry.forEach(function (s) { feedSlot(p, s.index); });
     });
     box.appendChild(feedAll);
   }
 
-  p.slots.forEach(function (s) { box.appendChild(stallRow(p, s)); });
+  var lager = lagerJetzt();
+  p.slots.forEach(function (s) { box.appendChild(stallRow(p, s, lager)); });
   ausbauKnopf(p, box);
   verschiebeKnopf(p, box);
 }
@@ -733,6 +737,7 @@ function zeichnePicker(p) {
   // Rezepte nur zum Starten zeigen, wenn der Slot frei ist.
   if (s0 && (s0.busy || s0.done)) { ausbauKnopf(p, box); verschiebeKnopf(p, box); return; }
 
+  var lager = lagerAusSicht(v);
   p.options.forEach(function (o) {
     var card = document.createElement('button');
     card.type = 'button';
@@ -744,10 +749,10 @@ function zeichnePicker(p) {
       '<div class="sub">' +
       (!o.unlocked
         ? 'ab Stufe ' + o.minPlayerLevel
-        : (o.inputs.length > 0 ? costText(o.inputs) + ' · ' : '') +
-          timeText(o.durationTicks) +
-          (o.affordable ? '' : ' · Zutaten fehlen')) +
-      '</div></div>' +
+        : timeText(o.durationTicks) + (o.affordable ? '' : ' · Zutaten fehlen')) +
+      '</div>' +
+      zutatenHtml(o.inputs, o.unlocked ? lager : null) +
+      '</div>' +
       '<span class="yield">' + ausbeuteHtml(o.recipe) + '</span>';
     card.addEventListener('click', function () {
       var slot = sheet.slot;

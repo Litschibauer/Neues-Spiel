@@ -85,6 +85,41 @@ function stacksMitBild(list) {
 }
 function costText(cost) { return stacks(cost); }
 
+// Zutaten werden ueberall gleich gezeigt: Bild, Bedarf, Name — und wenn etwas
+// fehlt, wie viel davon wirklich im Lager liegt. `have` ist eine Liste
+// item -> Menge; ohne `have` steht nur der Bedarf da (Vorschau auf Rezepte,
+// die noch gar nicht offen sind).
+function zutatenHtml(list, have, opt) {
+  if (!list || list.length === 0) return '';
+  var o = opt || {};
+  var faktor = o.faktor || 1;
+  var chips = list.map(function (x) {
+    var braucht = x.amount * faktor;
+    var da = have ? (have[x.item] || 0) : null;
+    var fehlt = da !== null && da < braucht;
+    return '<span class="zutat' + (fehlt ? ' fehlt' : '') + '">' +
+      // Gold ist keine Stueckzahl: „1200 Gold" statt „1200× Gold".
+      itemIcon(x.item) + braucht + (x.item === rules.currency ? ' ' : '\u00d7 ') +
+      itemName(x.item) +
+      (fehlt ? ' <b>(' + da + ' da)</b>' : '') + '</span>';
+  });
+  return '<span class="zutaten' + (o.klasse ? ' ' + o.klasse : '') + '">' +
+    '<span class="zlabel">' + (o.titel || 'braucht') + '</span>' +
+    chips.join('') + '</span>';
+}
+
+// Bestaende aus einer fertigen Farm-Sicht — v.stock laeuft parallel zu
+// rules.items, das spart eine zweite Vorschau-Rechnung.
+function lagerAusSicht(v) {
+  var have = [];
+  (v && v.stock ? v.stock : []).forEach(function (e) { have[e.item] = e.amount; });
+  return have;
+}
+// Fuer Stellen ohne fertige Sicht.
+function lagerJetzt() {
+  return typeof client !== 'undefined' && client ? client.preview().items : null;
+}
+
 function ausbeute(recipeIndex) {
   var r = rules.recipes[recipeIndex];
   if (!r) return [];

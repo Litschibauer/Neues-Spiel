@@ -41,12 +41,20 @@ function zeichneBootSheet(v) {
       ' kannst du es reparieren und zum Angelsee fahren.';
   box.appendChild(text);
 
+  // Was die Reparatur kostet, steht ueber dem Knopf — auf dem gruenen Knopf
+  // selbst waeren die Zutaten-Chips nicht zu lesen.
+  if (a.boot.reparierbar) {
+    var kosten = document.createElement('div');
+    kosten.innerHTML = zutatenHtml(a.boot.kosten, lagerJetzt(), { titel: 'kostet' });
+    box.appendChild(kosten);
+  }
+
   var knopf = document.createElement('button');
   knopf.type = 'button';
   knopf.className = 'abfahrt';
   knopf.disabled = !a.boot.reparierbar || !a.boot.bezahlbar;
   knopf.innerHTML = a.boot.reparierbar
-    ? 'Reparieren · ' + stacksMitBild(a.boot.kosten) + (a.boot.bezahlbar ? '' : ' · fehlt')
+    ? 'Reparieren' + (a.boot.bezahlbar ? '' : ' · es fehlt noch etwas')
     : 'ab Stufe ' + a.minLevel;
   knopf.addEventListener('click', function () {
     var res = client.repairBoat();
@@ -216,8 +224,8 @@ function zeichneKoederSheet(v) {
         zeile.disabled = !a.koeder.bezahlbar;
         zeile.innerHTML =
           '<div class="body"><div class="top">' + iconTag('bait') + a.koeder.output + ' Köder sieden</div>' +
-          '<div class="sub">' + stacksMitBild(a.koeder.input) +
-          (a.koeder.bezahlbar ? ' · dauert ' + timeText(a.koeder.dauer) : ' · fehlt') + '</div></div>' +
+          '<div class="sub">dauert ' + timeText(a.koeder.dauer) + '</div>' +
+          zutatenHtml(a.koeder.input, lagerJetzt(), { klasse: 'klein' }) + '</div>' +
           '<span class="yield">＋</span>';
         zeile.addEventListener('click', function () {
           var res = client.craftBait(platz.index);

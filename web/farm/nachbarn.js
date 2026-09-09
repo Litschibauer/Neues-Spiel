@@ -593,8 +593,10 @@ function renderPfad(v) {
       gaben.push(gabeZeile(pn.name, pn.art, '<span class="ic">🔨</span>'));
     });
     (s.frei.recipes || []).forEach(function (i) {
-      var item = rules.recipes[i].output.item;
-      gaben.push(gabeZeile(itemName(item), '', itemIcon(item)));
+      var r = rules.recipes[i];
+      gaben.push(gabeZeile(
+        itemName(r.output.item) + zutatenHtml(r.inputs, null, { klasse: 'klein' }),
+        '', itemIcon(r.output.item)));
     });
 
     var zustand = s.level < jetzt ? 'fertig' : s.level === jetzt ? 'jetzt' : '';

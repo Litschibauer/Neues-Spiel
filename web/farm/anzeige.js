@@ -541,7 +541,8 @@ function renderAusbau(v) {
   karte.innerHTML =
     '<div class="body"><div class="top">' + v.silo.upgrade.label + ' · auf ' +
     v.silo.upgrade.capacity + ' Platz</div>' +
-    '<div class="sub">' + stacksMitBild(v.silo.upgrade.cost) + '</div></div>' +
+    '<div class="sub">' + (v.silo.upgrade.affordable ? 'alles da' : 'es fehlt noch etwas') +
+    '</div>' + zutatenHtml(v.silo.upgrade.cost, lagerAusSicht(v), { titel: 'kostet' }) + '</div>' +
     '<span class="go">Bauen</span>';
   karte.addEventListener('click', function () {
     act('Lager ausgebaut · ' + v.silo.upgrade.capacity + ' Platz', client.upgradeSilo(), 'stufe');
@@ -1245,6 +1246,7 @@ function bauSektion(box, titel, liste, leerText) {
     gruppen[index[name]].anzahl++;
   });
 
+  var lager = lagerJetzt();
   gruppen.forEach(function (g) {
     var b = g.b;
     var karte = document.createElement('button');
@@ -1261,7 +1263,10 @@ function bauSektion(box, titel, liste, leerText) {
         ? 'ab Stufe ' + b.minPlayerLevel
         : b.packed
           ? 'eingepackt · kostenlos · ' + b.size.w + '×' + b.size.h + ' Felder'
-          : stacksMitBild(b.cost) + ' · ' + b.size.w + '×' + b.size.h + ' Felder') + '</div></div>' +
+          : b.size.w + '×' + b.size.h + ' Felder') + '</div>' +
+      (b.unlocked && !b.packed
+        ? zutatenHtml(b.cost, lager, { titel: 'kostet', klasse: 'klein' })
+        : '') + '</div>' +
       '<span class="go">' + (!b.unlocked ? '🔒' : b.packed ? 'Aufstellen' : 'Bauen') + '</span>';
     karte.addEventListener('click', function () { baueUndSetze(b.plot); });
     box.appendChild(karte);

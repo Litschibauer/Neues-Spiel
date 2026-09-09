@@ -1620,6 +1620,34 @@ try {
   await sleep(150);
 
   await baueUndStelle(cdp, 'Mühle');
+  // Zutaten muessen ueberall sichtbar sein, wo es ein Rezept gibt — mit Bild,
+  // Bedarf und, wenn etwas fehlt, dem tatsaechlichen Lagerstand.
+  const zutatenImPicker = await evaluate<string>(
+    cdp,
+    `(function () {
+       var muehle = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+         return /^Mühle/.test(t.getAttribute('aria-label') || '');
+       });
+       if (!muehle) return 'keine Mühle';
+       muehle.click();
+       if (document.getElementById('pick-bg').hidden) return 'Blatt blieb zu';
+       var karte = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+         return o.querySelector('.zutaten');
+       });
+       if (!karte) return 'keine Karte mit Zutaten';
+       var chips = [...karte.querySelectorAll('.zutat')].map(function (z) {
+         return { text: z.textContent.trim(), bild: !!z.querySelector('img.ic'), fehlt: z.classList.contains('fehlt') };
+       });
+       document.getElementById('pick-close').click();
+       return JSON.stringify(chips);
+     })()`,
+  );
+  check(
+    'Im Rezept-Menü steht jede Zutat mit Bild und Menge',
+    /"bild":true/.test(zutatenImPicker) && /\u00d7 /.test(zutatenImPicker),
+    zutatenImPicker,
+  );
+
   await sleep(300);
   await baueUndStelle(cdp, 'Hühnerstall');
   await sleep(300);
@@ -3410,20 +3438,22 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     var raus = {};
     [...document.querySelectorAll('#bauliste .card')].forEach(function (c) {
       var name = c.querySelector('.top').textContent.split(' · ')[0].trim();
-      raus[name] = (c.disabled ? 'gesperrt: ' : '') + c.querySelector('.sub').textContent.trim();
+      var zut = c.querySelector('.zutaten');
+      raus[name] = (c.disabled ? 'gesperrt: ' : '') + c.querySelector('.sub').textContent.trim() +
+        (zut ? ' | ' + zut.textContent.trim() : '');
     });
     document.getElementById('bau-close').click();
     return raus;
   })()`);
   for (const [name, was] of [
-    ['Waldstück', '8 Bretter'],
-    ['Werkstatt', '14 Bretter'],
-    ['Räucherei', '18 Bretter'],
+    ['Waldstück', '8\u00d7 Bretter'],
+    ['Werkstatt', '14\u00d7 Bretter'],
+    ['Räucherei', '18\u00d7 Bretter'],
   ] as const) {
     const zeile = neuImKatalog[name];
     check(
-      `${name} steht baubar im Katalog`,
-      typeof zeile === 'string' && zeile.indexOf('gesperrt') < 0 && zeile.indexOf(was) === 0,
+      `${name} steht baubar im Katalog — mit sichtbaren Zutaten`,
+      typeof zeile === 'string' && zeile.indexOf('gesperrt') < 0 && zeile.indexOf(was) >= 0,
       zeile ?? 'fehlt',
     );
   }
