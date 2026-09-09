@@ -428,6 +428,13 @@ var setzePlot = -1;
 var ziehen = null;
 var klickSchlucken = 0;
 var schwenk = null;
+// — Ernten im Zug ————————————————————————————————————————————————————————
+// Wie die Sichel in Hay Day: ueber reife Plaetze wischen erntet sie der Reihe
+// nach. Es braucht dafuer keinen Modus und kein Werkzeug, weil der Zustand
+// unter dem Finger entscheidet — nur ein erntereifer Platz startet einen Zug,
+// auf allem anderen bleibt es beim Schwenken.
+var ernteStart = null;
+var ernteZug = null;
 
 function schwenkStart(e) {
   if (!isActive || setzePlot >= 0 || bauModus) return;
@@ -459,9 +466,14 @@ function schwenkEnde() {
 }
 
 function ziehStart(e, plot, tile) {
-  if (!isActive || !hatRaster() || setzePlot >= 0) return;
-  if (rules.plots[plot] && rules.plots[plot].fixed) return;
+  if (!isActive || setzePlot >= 0) return;
   if (e.button !== undefined && e.button !== 0) return;
+  // Merken, wo der Finger aufgesetzt hat. Bewegt er sich gleich weiter und lag
+  // er auf etwas Erntereifem, wird daraus ein Erntezug. Das steht vor den
+  // Wachen unten, damit es auch fuer feste Plaetze und ohne Raster gilt.
+  ernteStart = { plot: plot, x: e.clientX, y: e.clientY };
+  if (!hatRaster()) return;
+  if (rules.plots[plot] && rules.plots[plot].fixed) return;
 
   ziehen = {
     plot: plot,
@@ -477,6 +489,7 @@ function ziehStart(e, plot, tile) {
 function ziehLos(e) {
   if (!ziehen) return;
   ziehen.aktiv = true;
+  ernteStart = null;
   // Der Schwenk, der beim selben Fingerdruck mit angestoßen wurde, tritt zurück:
   // Jetzt wird verschoben, nicht geschwenkt.
   if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
@@ -530,8 +543,117 @@ function ziehEnde() {
   render();
 }
 
+// Welcher Platz liegt gerade unter dem Finger? Die Kacheln tragen ihren Index
+// schon als data-platz, deshalb reicht der Treffer unter dem Zeiger — das ist
+// robuster als die Rastermathematik, weil Gebaeude ueber ihren Standplatz
+// hinausragen.
+function platzUnterZeiger(e) {
+  var el = document.elementFromPoint(e.clientX, e.clientY);
+  var kachel = el && el.closest ? el.closest('.plot[data-platz]') : null;
+  return kachel ? Number(kachel.dataset.platz) : -1;
+}
+
+// Nur einfache Ein-Platz-Ernten werden gewischt. Baeume und Staelle haben eigene
+// Abläufe (faellen, fuettern) — die gehoeren nicht in einen Wisch.
+function erntbar(i) {
+  var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
+  return !!p && !p.baum && !p.stall && p.capacity <= 1 && p.tap === 'collect';
+}
+
+function ernteZugLos(i, e) {
+  // Ein Tick fuer den ganzen Zug: Der Server weist Befehle ab, deren Tick
+  // zurueckspringt, und pro Platz neu zu stellen bringt nichts.
+  client.localTick = tickNow();
+  ernteZug = { hatte: {}, zahl: 0, menge: {}, xp: client.preview().xp, voll: false, letzter: -1 };
+  if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
+  if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
+  $('hof').classList.add('erntet');
+  ernteSchritt(i);
+  ernteZugZu(e);
+}
+
+function ernteZugZu(e) {
+  if (!ernteZug || ernteZug.voll) return;
+  var i = platzUnterZeiger(e);
+  if (i < 0 || i === ernteZug.letzter) return;
+  ernteZug.letzter = i;
+  ernteSchritt(i);
+}
+
+function ernteSchritt(i) {
+  if (!ernteZug || ernteZug.voll || ernteZug.hatte[i]) return;
+  var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
+  if (!p || p.baum || p.stall || p.capacity > 1 || p.tap !== 'collect') return;
+  if (!p.output) return;
+
+  var wo = platzKasten(i);
+  var res = client.collect(i);
+  if (!res.ok) {
+    // Lager voll mitten im Zug: hier abbrechen und am Ende EINMAL sagen, wie
+    // weit man gekommen ist — nicht bei jedem weiteren Platz erneut meckern.
+    if (res.code === 'SILO_FULL') ernteZug.voll = true;
+    return;
+  }
+
+  ernteZug.hatte[i] = true;
+  ernteZug.zahl++;
+  ernteZug.menge[p.output.item] = (ernteZug.menge[p.output.item] || 0) + p.output.amount;
+  zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
+  ernteKlang(ernteZug.zahl - 1);
+  if (navigator.vibrate) navigator.vibrate(8);
+  // Der volle Neuaufbau kommt erst am Zugende — bis dahin darf die Kachel nicht
+  // weiter reif aussehen, sonst laeuft die Anzeige dem Finger hinterher.
+  var kachel = document.querySelector('#plots .plot[data-platz="' + i + '"]');
+  if (kachel) {
+    kachel.classList.remove('ripe');
+    var badge = kachel.querySelector('.badge');
+    if (badge) badge.remove();
+  }
+  // Gold, XP und vor allem der Lagerbalken laufen waehrend des Zugs mit — man
+  // muss sehen, dass das Lager gleich voll ist. Das ist nur der Kopf, nicht der
+  // teure Neuaufbau der Kacheln.
+  renderPurse(NS.farmView(client.preview(), rules, navigator.onLine));
+}
+
+function ernteZugEnde() {
+  if (!ernteZug) return;
+  var zug = ernteZug;
+  ernteZug = null;
+  $('hof').classList.remove('erntet');
+  if (zug.zahl === 0) return;
+
+  // Der Fingerabdruck darf hinterher nicht noch als Tipp durchgehen.
+  klickSchlucken = Date.now();
+
+  var teile = Object.keys(zug.menge).map(function (k) {
+    return '+' + zug.menge[k] + ' ' + itemName(Number(k));
+  });
+  var dazu = client.preview().xp - zug.xp;
+  // Ein Zug, eine Meldung — nicht acht Toasts hintereinander.
+  toast(zug.zahl + (zug.zahl === 1 ? ' Platz' : ' Plätze') + ' geerntet · ' +
+    teile.join(' · ') + (dazu > 0 ? ' · +' + dazu + ' XP' : '') +
+    (zug.voll ? ' · Lager voll' : ''), zug.voll);
+  save();
+  scheduleSync();
+  render();
+}
+
 document.addEventListener('pointermove', function (e) {
+  if (ernteZug) { e.preventDefault(); ernteZugZu(e); return; }
   if (ziehen && ziehen.aktiv) { e.preventDefault(); ziehZu(e); return; }
+
+  // Wischt der Finger von einem erntereifen Platz weg, wird geerntet statt
+  // geschwenkt. Ein Fehlgriff ist harmlos: Der Zug beginnt nur dort, wo man
+  // ohnehin ernten wollte.
+  if (ernteStart) {
+    var los = Math.abs(e.clientX - ernteStart.x) + Math.abs(e.clientY - ernteStart.y);
+    if (los > 16) {
+      var start = ernteStart.plot;
+      ernteStart = null;
+      if (erntbar(start)) { e.preventDefault(); ernteZugLos(start, e); return; }
+    }
+  }
+
   // Solange ein Platz-Griff aussteht, hat er Vorrang: Der Schwenk darf ihn NICHT
   // stehlen. Erst wenn der Finger klar wegwischt (großer Weg, bevor der Halte-
   // Timer greift), ist es doch ein Schwenk — dann übergeben wir sauber.
@@ -547,8 +669,12 @@ document.addEventListener('pointermove', function (e) {
   if (schwenk) { if (schwenkZu(e)) e.preventDefault(); return; }
 }, { passive: false });
 
-document.addEventListener('pointerup', function (e) { ziehEnde(); schwenkEnde(); });
-document.addEventListener('pointercancel', function (e) { ziehEnde(); schwenkEnde(); });
+document.addEventListener('pointerup', function (e) {
+  ernteStart = null; ernteZugEnde(); ziehEnde(); schwenkEnde();
+});
+document.addEventListener('pointercancel', function (e) {
+  ernteStart = null; ernteZugEnde(); ziehEnde(); schwenkEnde();
+});
 
 $('hof').addEventListener('pointerdown', function (e) {
   if (e.target.closest('.zahnrad, .setzen, .moebel')) return;

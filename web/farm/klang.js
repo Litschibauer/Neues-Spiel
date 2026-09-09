@@ -138,6 +138,20 @@ function klang(name) {
   try { mach(); } catch (e) {}
 }
 
+// Ernten im Zug: Mit jedem Platz steigt der Ton eine Halbtonstufe, gedeckelt,
+// damit es am Ende nicht schrill wird. Dadurch klingt ein Zug wie eine Kette
+// und nicht wie acht einzelne Ernten.
+function ernteKlang(stufe) {
+  if (sfxProz <= 0 || document.hidden) return;
+  var ctx = tonBereit();
+  if (!ctx || ctx.state !== 'running') return;
+  var f = Math.pow(1.0595, Math.min(stufe, 12));
+  try {
+    stimme('triangle', 520 * f, 780 * f, 0.09, 0.26);
+    stimme('triangle', 780 * f, 1040 * f, 0.1, 0.18, 0.06);
+  } catch (e) {}
+}
+
 document.addEventListener('pointerdown', function weck() {
   tonBereit();
   document.removeEventListener('pointerdown', weck);

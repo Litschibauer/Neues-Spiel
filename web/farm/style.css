@@ -156,6 +156,10 @@
     border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
     background: var(--meadow); touch-action: none; cursor: grab;
   }
+  /* Waehrend eines Erntezugs ist der Zeiger die Sichel, nicht die Hand. */
+  .hof.erntet, .hof.erntet .plot {
+    cursor: crosshair;
+  }
   #hof { flex: 1 1 auto; width: 100%; min-height: 60dvh; }
   /* Der Angelsee ist kleiner als der Bildschirm — ringsum Wasser statt Wiese. */
   #hof.see-zone { background: #4fa4d8; }

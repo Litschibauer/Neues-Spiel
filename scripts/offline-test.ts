@@ -970,6 +970,77 @@ try {
     `${beforeHarvest} → ${afterHarvest} Weizen`,
   );
 
+  // Ernten im Zug: über mehrere reife Plätze wischen erntet sie alle auf einmal
+  // — und meldet das EINMAL, nicht einmal pro Platz. Der Zug wird mit echten
+  // Zeigerereignissen gefahren, sonst prüft man nur den eigenen Testcode.
+  await api('/api/admin/time?seconds=4000', 'POST');
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await sleep(1200);
+
+  const reifePunkte = await evaluate<string>(
+    cdp,
+    `JSON.stringify([...document.querySelectorAll('#plots .plot.ripe')]
+       .map(function (t) {
+         var r = t.getBoundingClientRect();
+         return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+       })
+       .sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); }))`,
+  );
+  const punkte = JSON.parse(reifePunkte) as Array<{ x: number; y: number }>;
+
+  if (punkte.length >= 2) {
+    const weizenVorZug = await stockOf('Weizen');
+    const maus = (type: string, x: number, y: number) =>
+      cdp.send('Input.dispatchMouseEvent', {
+        type,
+        x: Math.round(x),
+        y: Math.round(y),
+        button: 'left',
+        buttons: type === 'mouseReleased' ? 0 : 1,
+        clickCount: 1,
+        pointerType: 'mouse',
+      });
+
+    await maus('mousePressed', punkte[0].x, punkte[0].y);
+    await sleep(40);
+    for (let k = 1; k < punkte.length; k++) {
+      const a = punkte[k - 1];
+      const z = punkte[k];
+      for (let t = 1; t <= 6; t++) {
+        await maus('mouseMoved', a.x + ((z.x - a.x) * t) / 6, a.y + ((z.y - a.y) * t) / 6);
+        await sleep(16);
+      }
+    }
+    await maus('mouseReleased', punkte[punkte.length - 1].x, punkte[punkte.length - 1].y);
+    await sleep(900);
+
+    const weizenNachZug = await stockOf('Weizen');
+    const meldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+    const nochReif = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot.ripe').length`);
+
+    check(
+      'Über reife Felder wischen erntet sie alle auf einmal',
+      weizenNachZug > weizenVorZug && nochReif < punkte.length,
+      `${punkte.length} reif → ${nochReif} übrig, Weizen ${weizenVorZug} → ${weizenNachZug}`,
+    );
+    check(
+      'Der Zug meldet sich einmal als Zug, nicht einmal pro Platz',
+      /Pl(ä|a)tze geerntet/.test(meldung),
+      meldung,
+    );
+    check(
+      'Nach dem Wischen geht kein Auswahlblatt auf',
+      await evaluate<boolean>(cdp, `document.getElementById('pick-bg').hidden`),
+      'Blatt zu',
+    );
+  } else {
+    check(
+      'Über reife Felder wischen erntet sie alle auf einmal',
+      false,
+      `nur ${punkte.length} reife Felder — Zug nicht prüfbar`,
+    );
+  }
+
   const obenauf = await evaluate<string>(
     cdp,
     `(function () {
