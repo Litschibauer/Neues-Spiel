@@ -175,6 +175,24 @@ export function buildSprites(): string {
   return buildBilder('sprites', 'SPRITES');
 }
 
+// Die Pixelschrift wandert als Data-URI direkt in das Stylesheet der Seite.
+// Damit gibt es keine zweite Anfrage, kein CDN und kein Umspringen der Schrift
+// beim ersten Bild — sie steht, sobald das CSS geparst ist, und ist offline
+// genauso da wie die Icons.
+export function buildSchrift(): string {
+  const datei = join(ROOT, 'web', 'farm', 'schrift', 'pixelify-sans.woff2');
+  if (!existsSync(datei)) return '';
+  const daten = readFileSync(datei).toString('base64');
+  return [
+    '@font-face {',
+    "  font-family: 'Pixelify Sans';",
+    '  font-style: normal;',
+    '  font-weight: 400 700;',
+    "  src: url(data:font/woff2;base64," + daten + ") format('woff2');",
+    '}',
+  ].join('\n');
+}
+
 function buildBilder(ordner: string, variable: string): string {
   const dir = join(ROOT, 'web', 'farm', ordner);
   if (!existsSync(dir)) return `var ${variable} = {};`;
@@ -218,6 +236,7 @@ function buildPageWithBundle(name: string): string {
   }
   return template
     .replace('<!--BUNDLE-->', () => buildClientBundle())
+    .replace('<!--SCHRIFT-->', () => buildSchrift())
     .replace('<!--ICONS-->', () => buildIcons())
     .replace('<!--SPRITES-->', () => buildSprites());
 }

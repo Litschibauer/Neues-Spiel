@@ -21,6 +21,10 @@
     --shadow: 0 1px 2px rgba(43, 37, 33, .06), 0 4px 14px rgba(43, 37, 33, .05);
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     --num: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    /* Pixelschrift nur fuer Namen und Ueberschriften. Zahlen bleiben in
+       --sans: in Pixelify Sans ist die 5 kaum von einem S zu unterscheiden,
+       und im Spiel ist fast jede Zahl Geld oder Menge. */
+    --pixel: 'Pixelify Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -638,6 +642,20 @@
   }
   .go[disabled] { background: var(--sunk); color: var(--muted); }
   .go.weg { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+  /* — Pixelschrift ————————————————————————————————————————————————————
+     Die Welt ist Pixelkunst, die Bedienung war Systemschrift. Namen und
+     Ueberschriften bekommen jetzt den gleichen Ton wie die Grafik; alles,
+     was ein Satz oder eine Zahl ist, bleibt in der Systemschrift lesbar.
+     Kein image-rendering: pixelated auf Text — Pixelify Sans ist eine
+     Umrissschrift und wird durch Kantenglaettung schaerfer, nicht unschaerfer. */
+  .gate h1, .tut-card h2, .sheet h3, .stufe-titel, .card .top,
+  .purse-main .who, .nachbar .top, .pfad .stein .karte .titel,
+  .zettel .ziel {
+    font-family: var(--pixel); font-weight: 700; letter-spacing: 0;
+  }
+  .card .top { font-size: .95rem; }
+  .sheet h3 { letter-spacing: 0; }
 
   /* Zutaten: ueberall dieselben Chips — Bild, Bedarf, Name, Fehlmenge. */
   .zutaten {
