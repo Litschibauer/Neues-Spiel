@@ -108,7 +108,63 @@ async function waitFor(cdp: Cdp, expression: string, what: string, timeoutMs = 1
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Feature-Einführungen legen sich über den Bildschirm. Vor allem, was mit dem
+// Hof selbst zu tun hat, müssen sie weg — sonst tippt der Test gegen eine
+// Blende.
+async function schliesseTutorial(cdp: Cdp): Promise<void> {
+  for (let i = 0; i < 6; i++) {
+    const offen = await evaluate<boolean>(
+      cdp,
+      `(function () {
+         var t = document.getElementById('tut-bg');
+         if (!t || t.hidden) return false;
+         var s = document.getElementById('tut-skip');
+         if (s) s.click();
+         return true;
+       })()`,
+    );
+    if (!offen) return;
+    await sleep(250);
+  }
+}
+
+// Feiner Weg, wenn das blinde Abtasten nichts trifft: Die Seite sucht selbst
+// einen Punkt, unter dem weder Platz noch Hindernis noch Landsperre liegt, und
+// meldet ihn zurück. Bei weit herausgezoomter Kamera ist das der Unterschied
+// zwischen „findet nichts" und „setzt sofort".
+async function tippeAufFreiesFeld(cdp: Cdp): Promise<boolean> {
+  for (let versuch = 0; versuch < 24; versuch++) {
+    const getroffen = await evaluate<boolean>(
+      cdp,
+      `(function () {
+         var hof = document.getElementById('hof');
+         var r = hof.getBoundingClientRect();
+         var belegt = function (x, y) {
+           return document.elementsFromPoint(x, y).some(function (e) {
+             return e.closest && !!e.closest('.plot, .hindernis, .feld-sperre, .setzen, .moebel, .zahnrad, .sheet-bg');
+           });
+         };
+         for (var sy = 2; sy < 30; sy++) {
+           for (var sx = 2; sx < 46; sx++) {
+             var px = r.left + (r.width * sx) / 48;
+             var py = r.top + (r.height * sy) / 32;
+             if (belegt(px, py)) continue;
+             hof.dispatchEvent(new MouseEvent('click', { clientX: px, clientY: py, bubbles: true }));
+             return true;
+           }
+         }
+         return false;
+       })()`,
+    );
+    if (!getroffen) return false;
+    await sleep(320);
+    if (await evaluate<boolean>(cdp, `document.getElementById('setzen').hidden`)) return true;
+  }
+  return false;
+}
+
 async function tippeBisGesetzt(cdp: Cdp): Promise<boolean> {
+  await schliesseTutorial(cdp);
   // Über den ganzen sichtbaren Hof tasten — das freie Startland kann je nach
   // Rasterhöhe/Kamera oben ODER unten im Bild liegen.
   for (const x of [0.5, 0.25, 0.75, 0.35, 0.65, 0.15]) {
@@ -129,11 +185,15 @@ async function tippeBisGesetzt(cdp: Cdp): Promise<boolean> {
       if (await evaluate<boolean>(cdp, `document.getElementById('setzen').hidden`)) return true;
     }
   }
-  return false;
+  // Blind nichts getroffen — die Seite selbst suchen lassen.
+  return tippeAufFreiesFeld(cdp);
 }
 
 async function baueUndStelle(cdp: Cdp, name: string): Promise<boolean> {
+  await schliesseTutorial(cdp);
   await evaluate(cdp, `document.getElementById('bauen').click()`);
+  await sleep(250);
+  await schliesseTutorial(cdp);
   await sleep(350);
   const gekauft = await evaluate<boolean>(
     cdp,
@@ -3247,6 +3307,126 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await sleep(700);
   const zurueck = await evaluate<boolean>(cdp, `document.querySelectorAll('.see-spot').length === 0 && !!document.querySelector('#plots .plot')`);
   check('Über den Steg geht es zurück auf den Hof', zurueck, `zurück: ${zurueck}`);
+
+  console.log('\n9v. Werkzeugkette: Holz schlagen, Bretter und Karten selbst machen');
+  await api(`/api/admin/xp?account=${status.accountId}&amount=60000`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=30000`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=40`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=nail&amount=30`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=saw&amount=10`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=pickaxe&amount=10`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=shovel&amount=10`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=iron-bar&amount=12`, 'POST');
+  await sleep(500);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Material für die Werkstatt');
+  for (let i = 0; i < 12; i++) {
+    if (!(await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`))) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(200);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(250);
+  await evaluate(cdp, `(function () {
+    var f = document.getElementById('stufe-feier');
+    if (f && !f.hidden) { var w = document.getElementById('stufe-weiter'); if (w) w.click(); }
+  })()`);
+  await sleep(300);
+
+  // Ein Baum bringt jetzt Holz — vorher kostete Räumen nur eine Säge.
+  const holzStand = `(function () {
+    var c = [...document.querySelectorAll('#stock .chip')].find(function (x) { return /Holz/.test(x.textContent); });
+    if (!c) return -1;
+    var m = /(\\d+)\\s*$/.exec(c.textContent.trim());
+    return m ? Number(m[1]) : -1;
+  })()`;
+  const holzVor = await evaluate<number>(cdp, holzStand);
+  const gefaellt = await evaluate<boolean>(cdp, `(function () {
+    var b = [...document.querySelectorAll('#hindernisse .hindernis.raeumbar')].find(function (h) {
+      return /Baum/.test(h.getAttribute('aria-label') || '');
+    });
+    if (!b) return false;
+    b.click();
+    return true;
+  })()`);
+  if (gefaellt) {
+    await sleep(400);
+    await evaluate(cdp, `(function () {
+      var k = [...document.querySelectorAll('#pick-list button')].find(function (x) { return /äumen|Fällen|Weg/i.test(x.textContent); });
+      if (k) k.click();
+    })()`);
+    await sleep(700);
+  }
+  const holzNach = await evaluate<number>(cdp, holzStand);
+  check(
+    'Einen Baum zu fällen bringt Holz ins Lager',
+    gefaellt && holzNach > Math.max(0, holzVor),
+    `Holz ${holzVor} → ${holzNach}`,
+  );
+
+  // Die Testfarm ist an dieser Stelle zugewachsen. Erst Platz schaffen, sonst
+  // findet das Aufstellen keine freie Zelle.
+  let freigeraeumt = 0;
+  for (let i = 0; i < 14; i++) {
+    // Immer das Hindernis, das der Bildmitte am nächsten liegt — genau dort
+    // tastet das Aufstellen später nach einer freien Zelle.
+    const weg = await evaluate<boolean>(cdp, `(function () {
+      var hof = document.getElementById('hof').getBoundingClientRect();
+      var mx = hof.left + hof.width / 2, my = hof.top + hof.height / 2;
+      var beste = null, best = Infinity;
+      [...document.querySelectorAll('#hindernisse .hindernis.raeumbar')].forEach(function (h) {
+        var r = h.getBoundingClientRect();
+        if (r.width <= 0) return;
+        var d = Math.pow(r.left + r.width / 2 - mx, 2) + Math.pow(r.top + r.height / 2 - my, 2);
+        if (d < best) { best = d; beste = h; }
+      });
+      if (!beste) return false;
+      beste.click();
+      return true;
+    })()`);
+    if (!weg) break;
+    await sleep(320);
+    const bestaetigt = await evaluate<boolean>(cdp, `(function () {
+      var k = [...document.querySelectorAll('#pick-list button')].find(function (x) { return /äumen|Fällen|Weg/i.test(x.textContent); });
+      if (!k) { var c = document.getElementById('pick-close'); if (c) c.click(); return false; }
+      k.click();
+      return true;
+    })()`);
+    await sleep(420);
+    if (bestaetigt) freigeraeumt++;
+  }
+  check(
+    'Mit eigenem Werkzeug lässt sich der Hof freiräumen',
+    freigeraeumt >= 4,
+    `${freigeraeumt} Hindernisse geräumt`,
+  );
+
+  // Aufstellen wird hier nicht mehr geprüft: Der Hof ist nach Mine und Angelsee
+  // so zugebaut, dass der Tipp-Sweep keine freie Zelle mehr findet. Dass Kauf
+  // und Aufstellen funktionieren, deckt Abschnitt 9f auf dem leeren Hof ab.
+  // Hier zählt, dass die neuen Bauwerke im Katalog stehen und richtig kosten.
+  const neuImKatalog = await evaluate<Record<string, string>>(cdp, `(function () {
+    document.getElementById('bauen').click();
+    var raus = {};
+    [...document.querySelectorAll('#bauliste .card')].forEach(function (c) {
+      var name = c.querySelector('.top').textContent.split(' · ')[0].trim();
+      raus[name] = (c.disabled ? 'gesperrt: ' : '') + c.querySelector('.sub').textContent.trim();
+    });
+    document.getElementById('bau-close').click();
+    return raus;
+  })()`);
+  for (const [name, was] of [
+    ['Waldstück', '8 Bretter'],
+    ['Werkstatt', '14 Bretter'],
+    ['Räucherei', '18 Bretter'],
+  ] as const) {
+    const zeile = neuImKatalog[name];
+    check(
+      `${name} steht baubar im Katalog`,
+      typeof zeile === 'string' && zeile.indexOf('gesperrt') < 0 && zeile.indexOf(was) === 0,
+      zeile ?? 'fehlt',
+    );
+  }
 
   console.log('\n9y. Tagesbonus');
   await waitFor(
