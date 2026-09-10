@@ -266,14 +266,19 @@ function moebelSvg(id, zustand, artId) {
     '" preserveAspectRatio="none" aria-hidden="true">' + artMoebelRaum(artId || id, m, zustand) + '</svg>';
 }
 
+// Die Moebelreihe am oberen Rand, [gx, gy, Breite, Hoehe] in Zellen. Die
+// Spalten duerfen sich NICHT ueberlappen — Wagen und Kiste sind meistens
+// versteckt, ein Zusammenstoss faellt deshalb erst auf, wenn sie auftauchen.
+// Belegt: 0-2 Nachbarn, 4-6 Brett, 8-10 Lager, 12-14 Stand, 16-19 Wagen,
+// 21-22 Kiste, 24-26 Abenteuerbrett.
 var MOEBEL_ORTE = {
   nachbarn: [0, -2.5, 3, 2],
-  abenteuer: [16, -2.5, 3, 3],
   brett: [4, -2.5, 3, 2],
   lagerhaus: [8, -2.5, 3, 2],
   stand: [12, -2.5, 3, 2],
   wagen: [16, -2.5, 4, 2],
   kiste: [21, -2.5, 2, 2],
+  abenteuer: [24, -2.5, 3, 3],
   boot: [0, 10, 6, 3],
 };
 

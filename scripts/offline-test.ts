@@ -2019,6 +2019,36 @@ try {
       `${nachAbfahrt.zettel} Zettel`,
   );
 
+  // Genau jetzt steht der Wagen auf dem Hof — der einzige Moment, in dem sich
+  // ein Zusammenstoss in der Möbelreihe zeigt. Wagen und Kiste sind sonst
+  // versteckt, ein neues Möbel auf ihrer Spalte fiele erst im Spiel auf.
+  const moebelStoss = await evaluate<string[]>(cdp, `(function () {
+    var ids = ['nachbarn', 'brett', 'lagerhaus', 'stand', 'wagen', 'kiste', 'abenteuer', 'boot'];
+    var sicht = ids
+      .map(function (id) { return { id: id, el: document.getElementById(id) }; })
+      .filter(function (m) { return m.el && !m.el.hidden && m.el.getBoundingClientRect().width > 0; })
+      .map(function (m) { var r = m.el.getBoundingClientRect(); return { id: m.id, r: r }; });
+    var stoss = [];
+    for (var i = 0; i < sicht.length; i++) {
+      for (var j = i + 1; j < sicht.length; j++) {
+        var a = sicht[i].r, b = sicht[j].r;
+        // Die Körper ragen nach oben über ihren Standplatz; unten sitzen sie
+        // auf. Deshalb zählt die Überdeckung erst, wenn sie deutlich ist.
+        var breit = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        var hoch = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (breit > 8 && hoch > 8) {
+          stoss.push(sicht[i].id + ' × ' + sicht[j].id + ' (' + Math.round(breit) + 'x' + Math.round(hoch) + 'px)');
+        }
+      }
+    }
+    return stoss;
+  })()`);
+  check(
+    'Kein Möbel auf dem Hof verdeckt ein anderes — auch der Wagen nicht',
+    moebelStoss.length === 0,
+    moebelStoss.length === 0 ? 'alle Spalten frei' : moebelStoss.join('; '),
+  );
+
   const gesperrt = await evaluate<boolean>(
     cdp,
     `[...document.querySelectorAll('#requests .abfahrt')].every(function (b) {
