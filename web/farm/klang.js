@@ -128,6 +128,14 @@ var KLAENGE = {
   },
 
   fehler: function () { stimme('sawtooth', 220, 150, 0.16, 0.16); },
+
+  // Fundstueck: eine kleine Fanfare, heller als die Ernte und kuerzer als der
+  // Stufenaufstieg. Sie soll den Kopf heben, ohne den Zug zu unterbrechen.
+  fund: function () {
+    stimme('triangle', 784, 784, 0.09, 0.24);
+    stimme('triangle', 1046, 1046, 0.09, 0.26, 0.07);
+    stimme('triangle', 1318, 1568, 0.2, 0.3, 0.14);
+  },
 };
 
 function klang(name) {
@@ -164,7 +172,9 @@ function magerModus() {
 }
 
 function zahlAuf(kasten, text, art) {
-  if (!kasten || flieger > 6) return;
+  // Ein Fund geht auch dann raus, wenn ueber dem Hof schon viele Zahlen
+  // schweben — er ist der seltene Fall, den man nicht verpassen soll.
+  if (!kasten || (flieger > 6 && art !== 'fund')) return;
   if (magerModus()) return;
   if (!kasten.width) return;
 
@@ -176,7 +186,7 @@ function zahlAuf(kasten, text, art) {
   document.body.appendChild(el);
 
   // Kleiner Funkenstoß beim Ernten und bei Münzen — macht Aktionen saftiger.
-  if (art === 'ware' || art === 'muenzen') funken(kasten, art);
+  if (art === 'ware' || art === 'muenzen' || art === 'fund') funken(kasten, art);
 
   flieger++;
   setTimeout(function () {
@@ -187,10 +197,10 @@ function zahlAuf(kasten, text, art) {
 
 function funken(kasten, art) {
   if (!kasten || !kasten.width || magerModus()) return;
-  var farbe = art === 'muenzen' ? '#f4c430' : '#7bbf5a';
+  var farbe = art === 'muenzen' || art === 'fund' ? '#f4c430' : '#7bbf5a';
   var cx = kasten.left + kasten.width / 2;
   var cy = kasten.top + kasten.height / 3;
-  var n = 6;
+  var n = art === 'fund' ? 12 : 6;
   for (var i = 0; i < n; i++) {
     var f = document.createElement('span');
     f.className = 'funke';

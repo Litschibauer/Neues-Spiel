@@ -28,6 +28,13 @@ function nameOf(id) {
   return NAMES[id] || id;
 }
 function itemName(i) { return nameOf(rules.items[i].id); }
+// Die Warennamen stehen in der Mehrzahl, weil man selten eine einzelne hat.
+// Ein Fund ist genau so ein Fall: „1 Bretter" liest sich falsch.
+var EINZAHL = { plank: 'Brett', nail: 'Nagel', apple: 'Apfel', eggs: 'Ei' };
+function stueckName(amount, i) {
+  var id = rules.items[i].id;
+  return amount === 1 && EINZAHL[id] ? EINZAHL[id] : itemName(i);
+}
 
 function iconFor(id) {
   return typeof ICONS === 'object' && ICONS[id] ? ICONS[id] : null;

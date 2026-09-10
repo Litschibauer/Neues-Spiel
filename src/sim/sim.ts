@@ -34,6 +34,7 @@ import {
   storedIn,
   zaehle,
   ZAEHLER,
+  zaehlerStand,
   tagesFortschritt,
   tagesAbgenommen,
   TAG_ABSCHLUSS,
@@ -163,6 +164,46 @@ function zieheFang(
     r -= t.weight;
   }
   return treffer;
+}
+
+// Fundstueck einer Ernte. Beide Wuerfe — ob ueberhaupt etwas liegt und was —
+// kommen aus dem Spielstand selbst: aus der Zahl der bisherigen Ernten, dem
+// Tick und dem Platz. Damit steht der Fund fest, bevor jemand das Feld
+// beruehrt; Server und Geraet rechnen ihn unabhaengig aus, und wer die Uhr
+// verstellt, verschiebt ihn nur — erwuerfeln kann ihn niemand.
+//
+// Kein Platz im Lager heisst kein Fund. Das ist Absicht: Sonst haenge der
+// Ausgang eines Wurfs davon ab, ob gerade Platz war, und zwei Geraete kaemen
+// bei gleichem Stand trotzdem auf verschiedene Ergebnisse.
+export function fundstueck(
+  s: State,
+  rules: Ruleset,
+  plot: number,
+): { item: number; amount: number } | null {
+  const f = rules.fundstuecke;
+  if (!f || f.jede <= 0 || f.tabelle.length === 0) return null;
+
+  const ernten = zaehlerStand(s, ZAEHLER.ERNTEN);
+  const saat = s.tick + ernten * 7919 + plot * 101;
+  let h = (1 + (saat % 1000003)) % 1000003;
+  h = (h * 48271) % 2147483647;
+  if (h % f.jede !== 0) return null;
+
+  let gesamt = 0;
+  for (const t of f.tabelle) gesamt += t.weight;
+  if (gesamt <= 0) return null;
+  let r = ((h * 48271) % 2147483647) % gesamt;
+  let treffer = f.tabelle[f.tabelle.length - 1]!;
+  for (const t of f.tabelle) {
+    if (r < t.weight) {
+      treffer = t;
+      break;
+    }
+    r -= t.weight;
+  }
+
+  if (rules.items[treffer.item]?.storable && spaceLeft(s, rules) < treffer.amount) return null;
+  return { item: treffer.item, amount: treffer.amount };
 }
 
 // Alles, was Erfolge auswerten müssen — an einer Stelle, damit Sim und Ansicht
@@ -402,6 +443,10 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       );
 
       next.xp = s.xp + recipe.xp;
+
+      // Der Fund kommt nach dem Ertrag: Erst muss die Ernte ins Lager passen.
+      const fund = fundstueck(next, rules, cmd.plot);
+      if (fund) next.items = addItem(next.items, fund.item, fund.amount);
       return next;
     }
 
@@ -1040,6 +1085,9 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
         ...plot,
         baum: { reifSeit: s.tick, geerntet: plot.baum.geerntet + 1 },
       });
+
+      const baumFund = fundstueck(next, rules, cmd.plot);
+      if (baumFund) next.items = addItem(next.items, baumFund.item, baumFund.amount);
       return next;
     }
 

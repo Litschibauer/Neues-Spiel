@@ -77,6 +77,9 @@
         </svg>
         <span id="gold">0</span>
       </span>
+      <button type="button" class="serie" id="serie" hidden aria-label="Tage in Folge">
+        <span class="flamme" aria-hidden="true">🔥</span><b id="serie-tage">1</b>
+      </button>
     <div class="silo" id="silo">
       <span>Lager</span>
       <span class="silo-track"><i class="silo-fill" id="silo-fill"></i></span>
@@ -144,7 +147,13 @@
           <span class="punkt" id="zahnrad-punkt" hidden></span>
         </button>
       </div>
-      <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
+      <div class="unterzeile">
+        <div class="conn" id="conn"><i></i><span id="conn-text">verbinde…</span></div>
+        <button type="button" class="naechstes" id="naechstes" hidden>
+          <span class="ns-icon" id="naechstes-icon">🌾</span>
+          <span class="ns-text" id="naechstes-text"></span>
+        </button>
+      </div>
       <div class="see-hud" id="see-hud" hidden>
         <span class="see-hud-info" id="see-hud-info"></span>
       </div>

@@ -941,6 +941,7 @@ try {
     );
 
   const beforeHarvest = await stockOf('Weizen');
+  const goldVorErnte = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
   await evaluate(cdp, `document.querySelector('#plots .plot.ripe').click()`);
 
   let afterHarvest = beforeHarvest;
@@ -994,6 +995,21 @@ try {
     'Beim Ernten steigt die Ausbeute über dem Feld auf',
     /flug/.test(flugzahl) && /\+/.test(flugzahl),
     flugzahl,
+  );
+
+  // Fundstuecke: Was die Sim in den Acker legt, muss die Oberflaeche genauso
+  // melden — und nie etwas erfinden. Weizen bringt kein Gold; steigt es
+  // trotzdem, war das ein Fund, und der muss in der Meldung stehen. Steht ein
+  // Gold-Fund in der Meldung, muss genau diese Summe angekommen sein.
+  const ernteMeldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+  const goldNachErnte = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  const goldDazu = goldNachErnte - goldVorErnte;
+  const fundGold = /Fund: (\d+) Gold/.exec(ernteMeldung);
+  const fundGenannt = /Fund:/.test(ernteMeldung);
+  check(
+    'Ein Fund beim Ernten wird genannt — und nur dann, wenn er wirklich kam',
+    (goldDazu > 0 ? fundGenannt : true) && (fundGold ? goldDazu === Number(fundGold[1]) : true),
+    `${ernteMeldung} · Gold ${goldVorErnte} → ${goldNachErnte}`,
   );
 
   check(
@@ -1192,6 +1208,89 @@ try {
     );
   }
 
+
+  // „Als Naechstes": Unter dem Hof steht immer ein Grund zu bleiben. Die
+  // Leiste liegt im Fluss, nicht ueber dem Hof — und Antippen bringt einen hin.
+  const leiste = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var k = document.getElementById('naechstes');
+         var hof = document.getElementById('hof').getBoundingClientRect();
+         var r = k.getBoundingClientRect();
+         var ueberlappt = !k.hidden && r.top < hof.bottom && r.bottom > hof.top
+           && r.left < hof.right && r.right > hof.left;
+         return {
+           da: !k.hidden,
+           text: (document.getElementById('naechstes-text').textContent || '').trim(),
+           ueberlappt: ueberlappt,
+           imBild: r.bottom <= window.innerHeight && r.width > 0,
+         };
+       })())`,
+    ),
+  ) as { da: boolean; text: string; ueberlappt: boolean; imBild: boolean };
+  check(
+    'Unter dem Hof steht, was als Nächstes dran ist',
+    leiste.da && leiste.text.length > 0,
+    leiste.text,
+  );
+  check(
+    'Die Leiste liegt unter dem Hof, nicht darüber — sie verdeckt keinen Platz',
+    leiste.da && !leiste.ueberlappt && leiste.imBild,
+    leiste.ueberlappt ? 'überlappt den Hof' : 'frei',
+  );
+
+  const vorSprung = await evaluate<string>(cdp, `document.getElementById('welt').style.transform`);
+  await evaluate(cdp, `document.getElementById('naechstes').click()`);
+  await sleep(300);
+  const nachSprung = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify({
+         transform: document.getElementById('welt').style.transform,
+         markiert: !!document.querySelector('#plots .plot.zeigt'),
+         blatt: [...document.querySelectorAll('.sheet-bg')].some(function (b) { return !b.hidden; }),
+       })`,
+    ),
+  ) as { transform: string; markiert: boolean; blatt: boolean };
+  check(
+    'Antippen bringt einen hin: Die Kamera fährt zum Platz, und der meldet sich',
+    nachSprung.markiert || nachSprung.blatt || nachSprung.transform !== vorSprung,
+    nachSprung.markiert ? 'Platz markiert' : nachSprung.blatt ? 'Blatt auf' : 'Kamera bewegt',
+  );
+
+  // Die Serie: „Tag N in Folge" gehoert in den Kopf, nicht hinter ein Blatt.
+  const serie = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var c = document.getElementById('serie');
+         var r = c.getBoundingClientRect();
+         var kopf = document.querySelector('.topbar').getBoundingClientRect();
+         var andere = [...document.querySelectorAll('.topbar .coins, .topbar .silo, .topbar .pfad-auf')]
+           .map(function (e) { return e.getBoundingClientRect(); });
+         var stoesst = andere.some(function (a) {
+           return r.left < a.right - 1 && r.right > a.left + 1 && r.top < a.bottom - 1 && r.bottom > a.top + 1;
+         });
+         return {
+           da: !c.hidden,
+           tage: Number(document.getElementById('serie-tage').textContent),
+           stoesst: stoesst,
+           imKopf: r.right <= kopf.right + 1 && r.left >= kopf.left - 1,
+         };
+       })())`,
+    ),
+  ) as { da: boolean; tage: number; stoesst: boolean; imKopf: boolean };
+  check(
+    'Die Serie steht im Kopf des Hofs — mit ihrer Tageszahl',
+    serie.da && serie.tage >= 1,
+    `Tag ${serie.tage}`,
+  );
+  check(
+    'Sie drängt weder Gold noch Lager aus der Zeile',
+    serie.da && !serie.stoesst && serie.imKopf,
+    serie.stoesst ? 'stößt an' : serie.imKopf ? 'passt' : 'ragt heraus',
+  );
 
   const haeuser = await evaluate<string>(
     cdp,

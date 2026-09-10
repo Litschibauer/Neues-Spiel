@@ -42,6 +42,7 @@ function render() {
   renderBauliste(v);
   renderSheet(v);
   renderEmpfang();
+  renderNaechstes(v);
   bonusKnopf();
   $('see-hud').hidden = true;
 }
@@ -1476,3 +1477,92 @@ var CODES = {
   ALREADY_EXPANDED: 'Schon freigeschaltet',
   NO_SUCH_EXPANSION: 'Kein Land zum Freischalten',
 };
+
+// — Als Naechstes ——————————————————————————————————————————————————————
+// Ein Hof ohne naechsten Schritt ist ein Hof, den man zumacht. Diese Zeile
+// nennt immer genau eine Sache: was gerade bereitliegt, sonst was als Naechstes
+// fertig wird, sonst was zu liefern waere, sonst dass Platz zum Saeen ist.
+// Sie steht unter dem Hof im Fluss und verdeckt nichts.
+function naechsterSchritt(v) {
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) return null;
+
+  var reif = [];
+  var laeuft = null;
+  v.plots.forEach(function (p) {
+    if (p.deco || p.level <= 0) return;
+    if (p.baum) {
+      if (p.baum.stufe === 'reif') reif.push(p);
+      else if (p.baum.reifIn > 0 && (laeuft === null || p.baum.reifIn < restVon(laeuft))) {
+        laeuft = p;
+      }
+      return;
+    }
+    if (p.tap === 'collect') { reif.push(p); return; }
+    if (p.busy && p.remaining > 0 && (laeuft === null || p.remaining < restVon(laeuft))) laeuft = p;
+  });
+
+  if (reif.length > 0) {
+    return {
+      icon: '🌾',
+      bereit: true,
+      text: reif.length === 1
+        ? plotName(reif[0].index) + ' ist fertig'
+        : reif.length + ' Plätze sind fertig',
+      plot: reif[0].index,
+    };
+  }
+  if (laeuft !== null) {
+    var was = laeuft.baum
+      ? plotName(laeuft.index)
+      : (laeuft.producing ? nameOf(laeuft.producing) : plotName(laeuft.index));
+    return { icon: '⏳', bereit: false, text: was + ' in ' + timeText(restVon(laeuft)), plot: laeuft.index };
+  }
+
+  var zettel = ((v.truck && v.truck.board) || []).filter(function (z) { return z.deliverable; });
+  if (zettel.length > 0) return { icon: '🚚', bereit: true, text: 'Zettel lieferbar', blatt: 'brett' };
+
+  var frei = null;
+  v.plots.forEach(function (p) {
+    if (frei === null && p.level > 0 && !p.deco && !p.baum && p.tap === 'start') frei = p;
+  });
+  if (frei !== null) return { icon: '🌱', bereit: false, text: 'Nichts läuft — säen?', plot: frei.index };
+  return null;
+}
+
+function restVon(p) {
+  return p && p.baum ? p.baum.reifIn : (p ? p.remaining : 0);
+}
+
+var naechstesZiel = null;
+
+function renderNaechstes(v) {
+  var knopf = $('naechstes');
+  if (!knopf) return;
+  var schritt = view === 'farm' ? naechsterSchritt(v) : null;
+  naechstesZiel = schritt;
+  knopf.hidden = schritt === null;
+  if (schritt === null) return;
+  $('naechstes-icon').textContent = schritt.icon;
+  $('naechstes-text').textContent = schritt.text;
+  knopf.classList.toggle('bereit', !!schritt.bereit);
+}
+
+// Antippen bringt einen hin, statt bloss zu erzaehlen.
+function naechstesHin() {
+  var ziel = naechstesZiel;
+  if (!ziel) return;
+  if (ziel.blatt) { show(ziel.blatt); return; }
+  if (typeof ziel.plot !== 'number') return;
+
+  var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[ziel.plot];
+  if (p && hatRaster() && p.gx >= 0) {
+    zentriere(p.gx + p.size.w / 2, p.gy + p.size.h / 2);
+    kameraKlemmen();
+    kameraAnwenden();
+  }
+  var kachel = document.querySelector('#plots .plot[data-platz="' + ziel.plot + '"]');
+  if (kachel) {
+    kachel.classList.add('zeigt');
+    setTimeout(function () { kachel.classList.remove('zeigt'); }, 2600);
+  }
+}

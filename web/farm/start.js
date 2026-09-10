@@ -123,6 +123,7 @@ function show(next) {
 // Zum See geht es nur noch über das Boot am Hof. Der Rückweg ist der Steg im
 // See selbst („Zum Hof"), Köder stellt man im Strandhaus her — keine HUD-Knöpfe.
 $('boot').addEventListener('click', function () { bootTap(); });
+$('naechstes').addEventListener('click', function () { naechstesHin(); });
 // Benachrichtigungen an- und abschalten. Um Erlaubnis wird erst hier gefragt,
 // nie beim Start — ein Dialog aus dem Nichts schreckt nur ab.
 function meldenAnzeigen() {
@@ -175,6 +176,7 @@ $('stand').addEventListener('click', function () {
 $('zahnrad').addEventListener('click', function () { show('rest'); });
 $('pfad-auf').addEventListener('click', function () { show('pfad'); });
 $('bonus-auf').addEventListener('click', function () { oeffneBonus(); });
+$('serie').addEventListener('click', function () { oeffneBonus(); });
 $('stufe-weiter').addEventListener('click', feierZu);
 $('stufe-feier').addEventListener('click', function (e) {
   if (e.target === $('stufe-feier')) feierZu();

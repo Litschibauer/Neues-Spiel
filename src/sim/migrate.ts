@@ -307,6 +307,9 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   // Der Tagesabschluss braucht kein neues Feld: Er liegt in derselben Liste
   // wie die abgeholten Aufgaben. Es waechst nur das Regelwerk.
   ['39->40', AUFS_RASTER],
+  // Fundstuecke brauchen kein Feld im Spielstand: Sie stehen im Regelwerk und
+  // werden aus dem Stand selbst gezogen.
+  ['40->41', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

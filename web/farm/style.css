@@ -129,6 +129,25 @@
   }
   .coins svg { flex: none; }
 
+  /* Die Serie: klein, warm, direkt neben dem Gold. Sie sagt in zwei Zeichen,
+     warum man morgen wiederkommt. Offen (heutiger Bonus noch da) glimmt sie. */
+  .serie {
+    display: inline-flex; align-items: center; gap: .15rem; flex: none;
+    background: var(--warn-soft); color: var(--warn);
+    border: 2px solid var(--kante); border-radius: 999px;
+    padding: .16rem .5rem .16rem .35rem;
+    font-weight: 750; font-variant-numeric: tabular-nums; font-size: .78rem;
+    box-shadow: 0 2px 0 var(--druck);
+  }
+  .serie:active { transform: translateY(2px); box-shadow: none; }
+  .serie .flamme { font-size: .8rem; line-height: 1; }
+  .serie.offen { animation: serieGlimmt 1.8s ease-in-out infinite; }
+  @keyframes serieGlimmt {
+    0%, 100% { box-shadow: 0 2px 0 var(--druck); }
+    50% { box-shadow: 0 2px 0 var(--druck), 0 0 .5rem var(--warn); }
+  }
+  @media (prefers-reduced-motion: reduce) { .serie.offen { animation: none; } }
+
   .silo { display: flex; align-items: center; gap: .5rem; font-size: .7rem; color: var(--muted); }
   .silo-track {
     flex: 1; height: .3rem; border-radius: 999px; background: var(--sunk); overflow: hidden;
@@ -1101,9 +1120,49 @@
     font-size: .58rem; font-weight: 800; line-height: .95rem; text-align: center;
   }
 
+  /* Die Zeile unter dem Hof traegt zwei Dinge: den Verbindungspunkt und den
+     naechsten Schritt. Sie steht im Fluss, nicht ueber dem Hof — verdeckt also
+     nichts, was man antippen will. */
+  .unterzeile {
+    display: flex; align-items: center; justify-content: center;
+    gap: .5rem; padding: .25rem .6rem; min-width: 0;
+  }
   .conn {
     display: flex; align-items: center; justify-content: center; gap: .4rem;
-    font-size: .68rem; color: var(--muted); padding: .3rem 0;
+    font-size: .68rem; color: var(--muted); padding: .3rem 0; flex: none;
+  }
+  /* Der naechste Schritt: immer ein Grund zu bleiben, nie eine Aufforderung. */
+  .naechstes {
+    display: flex; align-items: center; gap: .35rem; min-width: 0;
+    max-width: 62vw; padding: .28rem .6rem;
+    border: 2px solid var(--kante); border-radius: 6px;
+    background: var(--surface); color: var(--ink);
+    font-size: .72rem; font-weight: 700; line-height: 1.2;
+    box-shadow: 0 2px 0 var(--druck);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .naechstes:active { transform: translateY(2px); box-shadow: none; }
+  .naechstes .ns-icon { font-size: .85rem; flex: none; }
+  .naechstes .ns-text {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Liegt etwas bereit, blinzelt der Rahmen — laeuft nur etwas, bleibt er ruhig. */
+  .naechstes.bereit { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* Der Platz, den die Leiste gemeint hat, meldet sich kurz. */
+  .plot.zeigt::after {
+    content: ''; position: absolute; inset: -6px; border-radius: 10px;
+    border: 3px solid var(--accent); pointer-events: none;
+    animation: zeigtPuls 1.2s ease-out 2;
+  }
+  @keyframes zeigtPuls {
+    0% { opacity: 0; transform: scale(1.06); }
+    30% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.02); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .plot.zeigt::after { animation: none; opacity: 1; }
   }
   .conn i { width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
   .conn.live { color: var(--accent); }
@@ -1130,6 +1189,23 @@
   .flug.gold { color: var(--gold); }
   .flug.xp { color: var(--accent); font-size: .72rem; }
   .flug.ware { color: var(--surface); }
+  /* Ein Fund ist kein Ertrag: Er steht in Gold, traegt eine Fassung und
+     bleibt eine Spur laenger stehen als eine gewoehnliche Zahl. */
+  .flug.fund {
+    color: #3b2b3c; background: #f6c35a;
+    border: 2px solid #3b2b3c; border-radius: 5px;
+    padding: .12rem .4rem; font-size: .8rem;
+    box-shadow: 0 3px 0 rgba(59, 43, 60, .45);
+    text-shadow: none;
+    animation: fundSteigt 1.5s ease-out forwards;
+  }
+  @keyframes fundSteigt {
+    0% { opacity: 0; transform: translate(-50%, .4rem) scale(.7) rotate(-4deg); }
+    14% { opacity: 1; transform: translate(-50%, -.4rem) scale(1.18) rotate(2deg); }
+    26% { transform: translate(-50%, -.6rem) scale(1) rotate(-1deg); }
+    70% { opacity: 1; transform: translate(-50%, -1.6rem) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(-50%, -3.2rem) scale(.96) rotate(0deg); }
+  }
   @keyframes steigt {
     0% { opacity: 0; transform: translate(-50%, .3rem) scale(.9); }
     18% { opacity: 1; transform: translate(-50%, -.2rem) scale(1.06); }

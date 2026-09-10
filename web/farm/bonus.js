@@ -6,6 +6,22 @@ function bonusKnopf() {
   var frei = !!(bonusStatus && bonusStatus.verfuegbar) && netzOk();
   knopf.hidden = !frei;
   knopf.classList.toggle('winkt', frei);
+  serieZeigen();
+}
+
+// Die Serie stand bisher nur im Bonusblatt — also dort, wo sie niemand sieht,
+// der nicht ohnehin schon hinschaut. Sie gehoert in den Kopf: „Tag 4 in Folge"
+// ist der Satz, der einen morgen wiederkommen laesst.
+function serieZeigen() {
+  var chip = $('serie');
+  if (!chip) return;
+  var tage = bonusStatus && bonusStatus.streak > 0 ? bonusStatus.streak : 0;
+  chip.hidden = tage <= 0;
+  if (tage <= 0) return;
+  $('serie-tage').textContent = tage;
+  // Wartet der heutige Bonus noch, brennt die Flamme heller.
+  chip.classList.toggle('offen', !!(bonusStatus && bonusStatus.verfuegbar) && netzOk());
+  chip.setAttribute('aria-label', 'Tag ' + tage + ' in Folge');
 }
 
 function bonusHolen() {

@@ -41,6 +41,42 @@ var FEATURE_PLATZ = {
   kitchen: 'hofkueche',
 };
 
+// — Fundstuecke ————————————————————————————————————————————————————————
+// Was beim Ernten obendrauf lag, rechnet die Sim aus — deterministisch aus dem
+// Spielstand, damit Server und Geraet dasselbe finden. Die Oberflaeche braucht
+// dafuer keinen zweiten Kanal: Sie vergleicht das Lager vor und nach der Ernte
+// und zieht ab, was der Platz ohnehin gebracht haette. Was uebrig bleibt, lag
+// im Acker.
+function ertragVon(i, j) {
+  var platz = client.preview().plots[i];
+  var slot = platz && platz.slots ? platz.slots[j || 0] : null;
+  if (!slot || typeof slot.recipe !== 'number' || slot.recipe < 0) return [];
+  return ausbeute(slot.recipe);
+}
+
+function fundAus(vor, nach, erwartet) {
+  var offen = [];
+  (erwartet || []).forEach(function (e) { offen[e.item] = (offen[e.item] || 0) + e.amount; });
+  for (var i = 0; i < nach.length; i++) {
+    var dazu = (nach[i] || 0) - (vor[i] || 0) - (offen[i] || 0);
+    if (dazu > 0) return { item: i, amount: dazu };
+  }
+  return null;
+}
+
+function fundText(fund) {
+  return fund ? ' · Fund: ' + fund.amount + ' ' + stueckName(fund.amount, fund.item) : '';
+}
+
+// Ein Fund darf sich nicht anfuehlen wie eine Ernte mehr: eigener Klang,
+// eigene Farbe, ein Stoss im Handteller.
+function fundFeiern(wo, fund) {
+  if (!fund) return;
+  klang('fund');
+  zahlAuf(hoch(wo), 'Fund! ' + fund.amount + ' ' + stueckName(fund.amount, fund.item), 'fund');
+  if (navigator.vibrate) navigator.vibrate([10, 40, 18]);
+}
+
 function tapPlot(i) {
   var featureId = FEATURE_PLATZ[rules.plots[i] && rules.plots[i].id];
   if (featureId && typeof featureTutorial === 'function') featureTutorial(featureId);
@@ -54,12 +90,16 @@ function tapPlot(i) {
   if (p.tap === 'collect') {
     var wo = platzKasten(i);
     var vorher = client.preview().xp;
+    var vorLager = client.preview().items.slice();
+    var erwartet = ertragVon(i, 0);
     var res = client.collect(i);
-    act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item), res, 'ernte');
+    var fund = res.ok ? fundAus(vorLager, client.preview().items, erwartet) : null;
+    act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item) + fundText(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
       var dazu = client.preview().xp - vorher;
       if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+      fundFeiern(hoch(wo), fund);
     }
     return;
   }
@@ -101,12 +141,15 @@ function tapBaum(p) {
   if (b.stufe === 'reif') {
     var wo = platzKasten(p.index);
     var vorher = client.preview().xp;
+    var vorLager = client.preview().items.slice();
     var res = client.harvestTree(p.index);
-    act('Geerntet · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), res, 'ernte');
+    var fund = res.ok ? fundAus(vorLager, client.preview().items, [b.ertrag]) : null;
+    act('Geerntet · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item) + fundText(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), 'ware');
       var dazu = client.preview().xp - vorher;
       if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+      fundFeiern(hoch(wo), fund);
     }
     return;
   }
@@ -125,9 +168,15 @@ var pickerPlot = null;
 function collectSlot(p, j) {
   var out = p.slots[j].output;
   var woTier = platzKasten(p.index);
+  var vorLager = client.preview().items.slice();
+  var erwartet = ertragVon(p.index, j);
   var erg = client.collect(p.index, j);
-  act('Geerntet · ' + out.amount + ' ' + itemName(out.item), erg, 'ernte');
-  if (erg.ok) zahlAuf(woTier, '+' + out.amount + ' ' + itemName(out.item), 'ware');
+  var fund = erg.ok ? fundAus(vorLager, client.preview().items, erwartet) : null;
+  act('Geerntet · ' + out.amount + ' ' + itemName(out.item) + fundText(fund), erg, 'ernte');
+  if (erg.ok) {
+    zahlAuf(woTier, '+' + out.amount + ' ' + itemName(out.item), 'ware');
+    fundFeiern(hoch(woTier), fund);
+  }
 }
 
 function feedSlot(p, j) {
@@ -594,7 +643,8 @@ function ernteZugLos(i, e) {
   // Ein Tick fuer den ganzen Zug: Der Server weist Befehle ab, deren Tick
   // zurueckspringt, und pro Platz neu zu stellen bringt nichts.
   client.localTick = tickNow();
-  ernteZug = { hatte: {}, zahl: 0, menge: {}, xp: client.preview().xp, voll: false, letzter: -1 };
+  ernteZug = { hatte: {}, zahl: 0, menge: {}, funde: 0, fundMenge: {},
+    xp: client.preview().xp, voll: false, letzter: -1 };
   if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
   if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
   $('hof').classList.add('erntet');
@@ -617,6 +667,8 @@ function ernteSchritt(i) {
   if (!p.output) return;
 
   var wo = platzKasten(i);
+  var vorLager = client.preview().items.slice();
+  var erwartet = ertragVon(i, 0);
   var res = client.collect(i);
   if (!res.ok) {
     // Lager voll mitten im Zug: hier abbrechen und am Ende EINMAL sagen, wie
@@ -629,6 +681,12 @@ function ernteSchritt(i) {
   ernteZug.zahl++;
   ernteZug.menge[p.output.item] = (ernteZug.menge[p.output.item] || 0) + p.output.amount;
   zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
+  var fund = fundAus(vorLager, client.preview().items, erwartet);
+  if (fund) {
+    ernteZug.funde++;
+    ernteZug.fundMenge[fund.item] = (ernteZug.fundMenge[fund.item] || 0) + fund.amount;
+    fundFeiern(hoch(wo), fund);
+  }
   ernteKlang(ernteZug.zahl - 1);
   if (navigator.vibrate) navigator.vibrate(8);
   // Der volle Neuaufbau kommt erst am Zugende — bis dahin darf die Kachel nicht
@@ -747,8 +805,12 @@ function ernteZugEnde() {
   });
   var dazu = client.preview().xp - zug.xp;
   // Ein Zug, eine Meldung — nicht acht Toasts hintereinander.
+  var fundTeile = Object.keys(zug.fundMenge).map(function (k) {
+    return zug.fundMenge[k] + ' ' + stueckName(zug.fundMenge[k], Number(k));
+  });
   toast(zug.zahl + (zug.zahl === 1 ? ' Platz' : ' Plätze') + ' geerntet · ' +
     teile.join(' · ') + (dazu > 0 ? ' · +' + dazu + ' XP' : '') +
+    (zug.funde > 0 ? ' · Fund: ' + fundTeile.join(' · ') : '') +
     (zug.voll ? ' · Lager voll' : ''), zug.voll);
   save();
   scheduleSync();

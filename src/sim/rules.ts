@@ -251,6 +251,15 @@ export type Ruleset = {
   // Was es gibt, wenn alle Aufgaben eines Tages abgenommen sind. Ohne dieses
   // Feld gibt es keinen Tagesabschluss — alte Fassungen bleiben unberührt.
   tagesAbschluss?: { gold: number; xp: number };
+  // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
+  // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
+  // Spielstand (siehe sim.ts) — Server und Gerät kommen ohne Absprache auf
+  // dasselbe Stück, und niemand kann es sich erwürfeln. Ohne dieses Feld gibt
+  // es keine Funde.
+  fundstuecke?: {
+    jede: number;
+    tabelle: readonly { item: number; amount: number; weight: number }[];
+  };
   // Eigene Dimension „Angelsee": Das Boot auf dem Hof steht kaputt da; ab
   // minLevel lässt es sich mit `repair` (Gold + Material) wieder flottmachen.
   // Erst danach ist der See offen. Köder werden nicht gekauft, sondern im
@@ -2328,17 +2337,39 @@ const V40: Ruleset = {
   tagesAbschluss: { gold: 500, xp: 90 },
 };
 
-const DEV: Ruleset = {
+// V41: Fundstuecke. Ernten ist die haeufigste Handlung im Spiel und war bisher
+// immer gleich vorhersagbar. Jetzt liegt hin und wieder etwas im Acker: meist
+// ein paar Muenzen, manchmal ein Nagel oder ein Brett. Klein genug, dass es die
+// Wirtschaft nicht verschiebt, oft genug, dass sich das naechste Feld lohnt.
+// Nichts davon ist kaeuflich, und nichts davon laesst sich erwuerfeln: Der Fund
+// steht mit dem Spielstand fest, lange bevor der Finger das Feld beruehrt.
+const V41: Ruleset = {
   ...V40,
+  version: 41,
+  fundstuecke: {
+    jede: 8,
+    tabelle: [
+      { item: GOLD, amount: 25, weight: 34 },
+      { item: GOLD, amount: 70, weight: 16 },
+      { item: NAIL, amount: 1, weight: 16 },
+      { item: PLANK, amount: 1, weight: 14 },
+      { item: WOOD, amount: 1, weight: 12 },
+      { item: APPLE, amount: 1, weight: 8 },
+    ],
+  },
+};
+
+const DEV: Ruleset = {
+  ...V41,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V40.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V41.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V40.fishing!,
+    ...V41.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
@@ -2401,17 +2432,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [38, V38],
   [39, V39],
   [40, V40],
+  [41, V41],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 40;
+export const LATEST_RULESET_VERSION = 41;
 
 export const DEV_RULESET_VERSION = 1001;
 
