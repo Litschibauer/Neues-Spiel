@@ -43,7 +43,7 @@ export type SyncResult =
       reason?: string;
       dropped?: number[];
     }
-  | { ok: false; kind: 'rejected'; reason: string; snapshot: Snapshot };
+  | { ok: false; kind: 'rejected'; reason: string; snapshot: Snapshot; serverTime: number };
 
 export class Server {
   snapshot: Snapshot;
@@ -273,37 +273,37 @@ export class Server {
     try {
       rules = getRuleset(req.rulesetVersion);
     } catch {
-      return { ok: false, kind: 'rejected', reason: 'UNSUPPORTED_RULESET', snapshot: snap };
+      return { ok: false, kind: 'rejected', reason: 'UNSUPPORTED_RULESET', snapshot: snap, serverTime: nowMs };
     }
 
     if (req.rulesetVersion !== snap.rulesetVersion) {
-      return { ok: false, kind: 'rejected', reason: 'RULESET_MISMATCH', snapshot: snap };
+      return { ok: false, kind: 'rejected', reason: 'RULESET_MISMATCH', snapshot: snap, serverTime: nowMs };
     }
 
     if (req.deviceId !== undefined && !this.isActiveDevice(req.deviceId)) {
       if (!req.takeover) {
-        return { ok: false, kind: 'rejected', reason: 'NOT_ACTIVE_DEVICE', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'NOT_ACTIVE_DEVICE', snapshot: snap, serverTime: nowMs };
       }
     }
 
     for (let i = 0; i < req.commands.length; i++) {
       if (req.commands[i]!.seq !== req.baseSeq + i + 1) {
-        return { ok: false, kind: 'rejected', reason: 'SEQ_GAP', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'SEQ_GAP', snapshot: snap, serverTime: nowMs };
       }
     }
 
     if (req.baseSeq > snap.seq) {
-      return { ok: false, kind: 'rejected', reason: 'BASE_SEQ_AHEAD', snapshot: snap };
+      return { ok: false, kind: 'rejected', reason: 'BASE_SEQ_AHEAD', snapshot: snap, serverTime: nowMs };
     }
 
     for (const cmd of req.commands) {
       if (cmd.seq > snap.seq) break;
       if (cmd.seq < this.logStartSeq) {
-        return { ok: false, kind: 'rejected', reason: 'LOG_TRUNCATED', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'LOG_TRUNCATED', snapshot: snap, serverTime: nowMs };
       }
       const applied = this.appliedLog[cmd.seq - this.logStartSeq];
       if (!applied || canonicalizeCommand(applied) !== canonicalizeCommand(cmd)) {
-        return { ok: false, kind: 'rejected', reason: 'FORK_DETECTED', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'FORK_DETECTED', snapshot: snap, serverTime: nowMs };
       }
     }
 
@@ -320,10 +320,10 @@ export class Server {
     let prevTick = snap.state.tick;
     for (const cmd of tail) {
       if (cmd.tick < prevTick) {
-        return { ok: false, kind: 'rejected', reason: 'TIME_WENT_BACKWARDS', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'TIME_WENT_BACKWARDS', snapshot: snap, serverTime: nowMs };
       }
       if (cmd.tick > maxTick) {
-        return { ok: false, kind: 'rejected', reason: 'CLOCK_AHEAD_OF_SERVER', snapshot: snap };
+        return { ok: false, kind: 'rejected', reason: 'CLOCK_AHEAD_OF_SERVER', snapshot: snap, serverTime: nowMs };
       }
       prevTick = cmd.tick;
     }
@@ -368,7 +368,7 @@ export class Server {
     }
 
     if (verarbeitet.length === 0) {
-      return { ok: false, kind: 'rejected', reason: rejectReason ?? 'SIM_FAILURE', snapshot: snap };
+      return { ok: false, kind: 'rejected', reason: rejectReason ?? 'SIM_FAILURE', snapshot: snap, serverTime: nowMs };
     }
 
     // Vernichtete Ware dieses Syncs zählen (Economy-Senke).

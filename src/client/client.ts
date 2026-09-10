@@ -210,7 +210,16 @@ export class Client {
     };
   }
 
-  adopt(snapshot: Snapshot, keepAfterSeq?: number): { kept: number; dropped: number } {
+  // `tickDeckel` datiert die behaltenen Befehle auf die Serveruhr zurueck. Das
+  // braucht der Fall, in dem die Geraeteuhr vorgeht: Statt die Arbeit des
+  // ehrlichen Spielers wegzuwerfen, wird sie auf die echte Zeit gesetzt und
+  // erneut gerechnet. Was dann nicht mehr traegt — weil beim Schummler eben
+  // noch nichts reif war — faellt beim Nachspielen von selbst heraus.
+  adopt(
+    snapshot: Snapshot,
+    keepAfterSeq?: number,
+    tickDeckel?: number,
+  ): { kept: number; dropped: number } {
     if (keepAfterSeq === undefined && this.queue.length > 0) {
       throw new Error(
         `adopt() würde ${this.queue.length} nicht gesendete Aktion(en) verwerfen. ` +
@@ -234,10 +243,15 @@ export class Client {
     const rules = getRuleset(this.rulesetVersion);
     let dropped = 0;
     for (const cmd of pending) {
+      const gewuenscht = Math.max(cmd.tick, this.state.tick);
+      // Nie unter den schon erreichten Stand — sonst liefe die Zeit rueckwaerts
+      // und der Server lehnte die Sendung erneut ab.
+      const tick =
+        tickDeckel === undefined ? gewuenscht : Math.max(this.state.tick, Math.min(gewuenscht, tickDeckel));
       const moved = {
         ...cmd,
         seq: this.baseSeq + this.queue.length + 1,
-        tick: Math.max(cmd.tick, this.state.tick),
+        tick,
       } as Command;
       try {
         this.state = simulate(this.state, moved, rules);

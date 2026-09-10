@@ -70,6 +70,15 @@ function attempt(force) {
         setLease(false, null);
       } else if (!r.ok) {
         if (r.reason === 'RULESET_MISMATCH') { neueVersionLaden(); return; }
+        // Vorgehende Geräteuhr ist kein Fehler des Spielers: Die Sync-Maschine
+        // hat die Arbeit schon auf die Serverzeit umdatiert, der nächste
+        // Anlauf bringt sie durch. Kein Alarm, nur gleich nochmal versuchen.
+        if (r.reason === 'CLOCK_AHEAD_OF_SERVER') {
+          afterSync(r.snapshot, r.serverTime);
+          render();
+          setTimeout(function () { attempt(true); }, 60);
+          return;
+        }
         toast('Server hat abgelehnt', true);
       }
       if (r.ok || r.reason !== 'NOT_ACTIVE_DEVICE') afterSync(r.snapshot, r.serverTime);

@@ -39,6 +39,8 @@ export class SyncEngine {
   inFlight = false;
 
   resumes = 0;
+  // Wie oft eine vorgehende Geraeteuhr auf die Serverzeit zurueckdatiert wurde.
+  umdatiert = 0;
 
   timeouts = 0;
 
@@ -119,6 +121,25 @@ export class SyncEngine {
     this.inFlight = false;
 
     if (!result.ok) {
+      // Geht die Geraeteuhr vor, ist das fast immer Drift und kein Betrug: Die
+      // Uhr wird erst bei jedem Sync neu am Server ausgerichtet, und wer lange
+      // ohne Netz war, laeuft davon. Statt die Arbeit zu verwerfen, datieren
+      // wir sie auf die Serveruhr zurueck und rechnen sie neu. Der ehrliche
+      // Spieler verliert dadurch nichts; beim Schummler war zur echten Zeit
+      // nichts reif, seine Befehle fallen beim Nachspielen einzeln heraus —
+      // aus dem richtigen Grund, naemlich der Spielregel statt der Uhr.
+      if (result.reason === 'CLOCK_AHEAD_OF_SERVER') {
+        const snap = result.snapshot;
+        const deckel =
+          snap.state.tick + Math.floor((result.serverTime - snap.serverTs) / 1000);
+        this.umdatiert++;
+        this.client.adopt(snap, snap.seq, Math.max(snap.state.tick, deckel));
+        this.consecutiveFailures = 0;
+        this.nextAttemptAt = 0;
+        this.view = 'live';
+        return { kind: 'synced', result };
+      }
+
       this.client.adopt(result.snapshot, sentThrough);
       this.consecutiveFailures = 0;
       this.nextAttemptAt = 0;
