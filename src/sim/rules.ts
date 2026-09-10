@@ -177,6 +177,22 @@ export type AchievementDef = {
   menge?: number;
 };
 
+// Eine Tagesaufgabe misst einen der Lebenszeit-Zähler gegen den Stand vom
+// Tagesbeginn. `art` ist ein Index aus ZAEHLER (state.ts).
+export type AufgabeDef = {
+  id: string;
+  label: string;
+  art: number;
+  menge: number;
+  gold: number;
+  xp: number;
+  // Ziehungsgewicht: schwerere Aufgaben kommen seltener.
+  gewicht: number;
+  // Erst ab dieser Spielerstufe ziehbar — sonst bekäme ein Anfänger Aufgaben,
+  // für die ihm die Gebäude fehlen.
+  minLevel?: number;
+};
+
 export type Ruleset = {
   version: number;
   items: readonly ItemDef[];
@@ -228,6 +244,10 @@ export type Ruleset = {
   // muss erst verkaufen/verbrauchen.
   siloUeberlauf?: boolean;
   achievements?: readonly AchievementDef[];
+  // Topf, aus dem die Aufgaben des Tages gezogen werden.
+  tagesaufgaben?: readonly AufgabeDef[];
+  // Wie viele Aufgaben ein Tag hat.
+  aufgabenProTag?: number;
   // Eigene Dimension „Angelsee": Das Boot auf dem Hof steht kaputt da; ab
   // minLevel lässt es sich mit `repair` (Gold + Material) wieder flottmachen.
   // Erst danach ist der See offen. Köder werden nicht gekauft, sondern im
@@ -2223,22 +2243,93 @@ const V37: Ruleset = {
 // ganzen Lebenszyklus im Feldtest in Sekunden durchspielen kann.
 const zehntel = (n: number): number => (Math.floor(n / 10) < 1 ? 1 : Math.floor(n / 10));
 
+// V38: Tagesaufgaben. Das Regelwerk selbst aendert sich inhaltlich nicht — die
+// Fassung existiert, damit der Spielstand um die Lebenszeit-Zaehler und den
+// Server-Kalendertag wachsen kann (siehe migrate.ts, 37->38).
+const V38: Ruleset = { ...V37, version: 38 };
+
+// V39: Der Aufgabentopf. Gezogen wird gewichtet aus dem Kalendertag des
+// Servers, deshalb sehen Client und Server ohne Absprache dieselben drei
+// Aufgaben. Die Belohnungen liegen bewusst unter dem, was dieselbe Arbeit am
+// Verkaufsstand bringt — Aufgaben sollen einen Grund geben, heute
+// vorbeizuschauen, nicht die Wirtschaft ersetzen.
+const V39: Ruleset = {
+  ...V38,
+  version: 39,
+  aufgabenProTag: 3,
+  tagesaufgaben: [
+    { id: 'ernte10', label: '10 Plätze abernten', art: 0, menge: 10, gold: 120, xp: 25, gewicht: 10 },
+    { id: 'ernte25', label: '25 Plätze abernten', art: 0, menge: 25, gold: 320, xp: 60, gewicht: 6, minLevel: 6 },
+    { id: 'saeen12', label: '12 Mal etwas ansetzen', art: 1, menge: 12, gold: 130, xp: 28, gewicht: 10 },
+    { id: 'saeen30', label: '30 Mal etwas ansetzen', art: 1, menge: 30, gold: 360, xp: 70, gewicht: 5, minLevel: 8 },
+    { id: 'zettel1', label: 'Einen Wagen losschicken', art: 2, menge: 1, gold: 150, xp: 30, gewicht: 9, minLevel: 3 },
+    { id: 'zettel3', label: 'Drei Wagen losschicken', art: 2, menge: 3, gold: 480, xp: 95, gewicht: 4, minLevel: 9 },
+    { id: 'anfrage2', label: 'Zwei Anfragen erfüllen', art: 3, menge: 2, gold: 200, xp: 40, gewicht: 8, minLevel: 5 },
+    { id: 'verkauf15', label: '15 Waren verkaufen', art: 4, menge: 15, gold: 140, xp: 26, gewicht: 9, minLevel: 4 },
+    { id: 'gold800', label: '800 Gold einnehmen', art: 5, menge: 800, gold: 180, xp: 35, gewicht: 7, minLevel: 5 },
+    { id: 'fisch6', label: 'Sechs Fische einholen', art: 6, menge: 6, gold: 260, xp: 52, gewicht: 6, minLevel: 12 },
+    { id: 'raeumen3', label: 'Drei Hindernisse räumen', art: 7, menge: 3, gold: 240, xp: 48, gewicht: 5, minLevel: 7 },
+    { id: 'bauen1', label: 'Etwas bauen oder ausbauen', art: 8, menge: 1, gold: 160, xp: 32, gewicht: 6, minLevel: 4 },
+  ],
+};
+
+// Gewichtete Ziehung ohne Zuruecklegen — dieselbe Lehmer-Folge wie beim Fang.
+// Gezogen wird allein aus der Tagesnummer: Alle Hoefe haben an einem Tag
+// dieselben Aufgaben, damit man sich darueber austauschen kann. Client und
+// Server rechnen es unabhaengig aus, es muss also nichts uebertragen werden.
+export function tagesAufgabenFuer(
+  rules: Ruleset,
+  tag: number,
+  spielerLevel: number,
+): readonly AufgabeDef[] {
+  const topf = rules.tagesaufgaben;
+  if (!topf || topf.length === 0 || tag <= 0) return [];
+  const wieViele = rules.aufgabenProTag ?? 3;
+
+  const offen = topf.filter((a) => (a.minLevel ?? 0) <= spielerLevel);
+  if (offen.length === 0) return [];
+
+  const uebrig = offen.slice();
+  const raus: AufgabeDef[] = [];
+  let h = (1 + ((tag * 7919) % 1000003)) % 1000003;
+
+  while (raus.length < wieViele && uebrig.length > 0) {
+    h = (h * 48271) % 2147483647;
+    let gesamt = 0;
+    for (const a of uebrig) gesamt += a.gewicht;
+    let r = h % gesamt;
+    let treffer = uebrig.length - 1;
+    for (let i = 0; i < uebrig.length; i++) {
+      const a = uebrig[i]!;
+      if (r < a.gewicht) {
+        treffer = i;
+        break;
+      }
+      r -= a.gewicht;
+    }
+    raus.push(uebrig[treffer]!);
+    uebrig.splice(treffer, 1);
+  }
+
+  return raus;
+}
+
 const DEV: Ruleset = {
-  ...V37,
+  ...V39,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V37.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V39.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V37.fishing!,
+    ...V39.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
-  // Auf V35.plots aufsetzen, damit DEV die neue Minen-Position (im Sperrland) erbt.
-  plots: V37.plots.map((p) => {
+  // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
+  plots: V39.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2254,11 +2345,6 @@ const DEV: Ruleset = {
     return q;
   }),
 };
-
-// V38: Tagesaufgaben. Das Regelwerk selbst aendert sich inhaltlich nicht — die
-// Fassung existiert, damit der Spielstand um die Lebenszeit-Zaehler und den
-// Server-Kalendertag wachsen kann (siehe migrate.ts, 37->38).
-const V38: Ruleset = { ...V37, version: 38 };
 
 export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [1, V1],
@@ -2299,17 +2385,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [36, V36],
   [37, V37],
   [38, V38],
+  [39, V39],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 38;
+export const LATEST_RULESET_VERSION = 39;
 
 export const DEV_RULESET_VERSION = 1001;
 

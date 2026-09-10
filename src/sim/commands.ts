@@ -74,6 +74,9 @@ export type DiscardCommand = CommandBase & { type: 'DISCARD'; item: number; amou
 // Einen erreichten Erfolg einlösen — gibt einmalig die hinterlegte Belohnung.
 export type ClaimAchievementCommand = CommandBase & { type: 'CLAIM_ACHIEVEMENT'; id: string };
 
+// Belohnung einer Tagesaufgabe abholen.
+export type ClaimTaskCommand = CommandBase & { type: 'CLAIM_TASK'; id: string };
+
 // Ein gebautes Bauwerk abreißen — gibt die Hälfte des Gold-Einsatzes zurück.
 export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: number };
 
@@ -125,6 +128,7 @@ export type Command =
   | FellTreeCommand
   | DiscardCommand
   | ClaimAchievementCommand
+  | ClaimTaskCommand
   | RemovePlotCommand
   | PackPlotCommand
   | CastLineCommand

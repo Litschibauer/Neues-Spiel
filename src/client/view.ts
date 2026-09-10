@@ -15,9 +15,10 @@ import {
   recipeUnlocked,
   sizeOf,
   achievementFortschritt,
+  tagesAufgabenFuer,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
-import { EMPTY_PLOT, capacityOf, count, stored } from '../sim/state.ts';
+import { EMPTY_PLOT, capacityOf, count, stored, tagesFortschritt } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
@@ -288,11 +289,19 @@ export type FarmView = {
   expansions: readonly ExpansionView[];
   angeln: AngelView;
   erfolge: readonly ErfolgView[];
+  aufgaben: TagesaufgabenView;
 };
 
 // Ein Erfolg mit allem, was die Oberfläche zum Zeichnen braucht: Fortschritt,
 // Gruppe und ob er schon eingelöst ist. Die Bedingung rechnet allein das
 // Regelwerk, hier steht nur das Ergebnis.
+// Die Aufgaben des Tages. `tag` ist 0, solange der Hof noch nie Kontakt zum
+// Server hatte — dann gibt es noch nichts zu tun.
+export type TagesaufgabenView = {
+  tag: number;
+  liste: readonly ErfolgView[];
+};
+
 export type ErfolgView = {
   id: string;
   label: string;
@@ -767,6 +776,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     openBoxes: state.pendingBoxes.length,
     angeln: angelView(state, rules),
     erfolge: erfolgeView(state, rules),
+    aufgaben: aufgabenView(state, rules),
   };
 }
 
@@ -791,6 +801,29 @@ function erfolgeView(state: State, rules: Ruleset): readonly ErfolgView[] {
       prozent: f.ziel <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / f.ziel)),
     };
   });
+}
+
+function aufgabenView(state: State, rules: Ruleset): TagesaufgabenView {
+  const tag = state.serverTag ?? 0;
+  if (tag <= 0) return { tag: 0, liste: [] };
+
+  const geholt = state.tagGeholt ?? [];
+  const liste = tagesAufgabenFuer(rules, tag, levelOf(rules, state.xp)).map((a) => {
+    const ist = Math.min(tagesFortschritt(state, a.art), a.menge);
+    return {
+      id: a.id,
+      label: a.label,
+      gruppe: 'heute',
+      gold: a.gold,
+      xp: a.xp,
+      ist,
+      ziel: a.menge,
+      erfuellt: ist >= a.menge,
+      eingeloest: geholt.includes(a.id),
+      prozent: a.menge <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / a.menge)),
+    };
+  });
+  return { tag, liste };
 }
 
 function angelView(state: State, rules: Ruleset): AngelView {

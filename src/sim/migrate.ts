@@ -125,6 +125,22 @@ export const GROW: MigrationStep = (state, from, to) => {
 export const GROW_AND_RETIME: MigrationStep = (state, from, to) =>
   RETIME(GROW(state, from, to), from, to);
 
+export const TAGESLAUF_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (
+    gewachsen.tagNummer !== undefined &&
+    gewachsen.tagStart !== undefined &&
+    gewachsen.tagGeholt !== undefined
+  ) {
+    return gewachsen;
+  }
+  const next = cloneState(gewachsen);
+  next.tagNummer = gewachsen.tagNummer ?? 0;
+  next.tagStart = gewachsen.tagStart ?? [];
+  next.tagGeholt = gewachsen.tagGeholt ?? [];
+  return next;
+};
+
 export const ZAEHLER_DAZU: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   const vollstaendig =
@@ -285,6 +301,9 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   // null an — rueckwirkend zaehlen laesst sich nichts, und der Tag kommt beim
   // ersten Kontakt vom Server.
   ['37->38', ZAEHLER_DAZU],
+  // Der Tagesfortschritt faengt leer an. Den ersten Tagesbeginn setzt der
+  // Server beim naechsten Kontakt, zusammen mit dem Kalendertag.
+  ['38->39', TAGESLAUF_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

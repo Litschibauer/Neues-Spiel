@@ -202,9 +202,22 @@ export class Server {
     // liest den Tag nur. Ein Client ohne Verbindung behaelt den zuletzt
     // bekannten Tag, sammelt aber weiter Fortschritt.
     const heute = tagVon(nowMs);
-    if (state.serverTag !== heute) {
+    // Beide Bedingungen einzeln pruefen: Ein Stand, der noch unter einer
+    // aelteren Fassung gespeichert wurde, kann den Tag schon tragen, den
+    // Nullpunkt der Aufgaben aber noch nicht. Haenge man das zweite an das
+    // erste, bliebe der Nullpunkt leer — und die ganze Lebensleistung zaehlte
+    // als heutiger Fortschritt.
+    if (state.serverTag !== heute || state.tagNummer !== heute) {
       const datiert = cloneState(state);
       datiert.serverTag = heute;
+      // Der Tageswechsel setzt zugleich den Nullpunkt der Aufgaben: Der
+      // Fortschritt ist die Differenz zu diesen Staenden. Beides gehoert an
+      // dieselbe Stelle, sonst koennten Tag und Nullpunkt auseinanderlaufen.
+      if (datiert.tagNummer !== heute) {
+        datiert.tagNummer = heute;
+        datiert.tagStart = (datiert.zaehler ?? []).slice();
+        datiert.tagGeholt = [];
+      }
       state = datiert;
     }
 

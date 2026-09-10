@@ -542,10 +542,14 @@ var FEATURE_TUT = {
       text: 'Alle Höfe nach XP sortiert. Dein eigener Rang ist hervorgehoben.' },
   ],
   ziele: [
+    { emoji: '📅', titel: 'Aufgaben des Tages',
+      text: 'Ganz oben stehen drei Aufgaben, die nur heute gelten. Sie sind für alle Höfe gleich und wechseln jeden Tag.' },
+    { emoji: '🌙', titel: 'Zählt auch ohne Netz',
+      text: 'Was du im Funkloch schaffst, wird mitgezählt. Der neue Tag beginnt aber erst, wenn dein Hof wieder Verbindung hatte.' },
     { emoji: '🎯', titel: 'Ziele & Erfolge',
-      text: 'Erfolge sind in Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
+      text: 'Darunter stehen die Erfolge, nach Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
     { emoji: '⭐', titel: 'Einlösen nicht vergessen',
-      text: 'Ein erfüllter Erfolg zahlt erst aus, wenn du ihn einlöst. Der Punkt am Zahnrad erinnert dich daran.' },
+      text: 'Erfüllt heißt noch nicht ausgezahlt — erst das Einlösen bringt Gold und XP. Der Punkt am Zahnrad erinnert dich daran.' },
   ],
 };
 

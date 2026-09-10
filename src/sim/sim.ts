@@ -12,6 +12,7 @@ import {
   obstacleLocked,
   landLocked,
   nextLevel,
+  tagesAufgabenFuer,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -33,6 +34,7 @@ import {
   storedIn,
   zaehle,
   ZAEHLER,
+  tagesFortschritt,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
 
@@ -425,6 +427,25 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (ach.gold > 0) next.items = addItem(s.items, rules.currency, ach.gold);
       next.xp = s.xp + ach.xp;
       next.claimed = (s.claimed ?? []).concat(cmd.id);
+      return next;
+    }
+
+    case 'CLAIM_TASK': {
+      const tag = s.serverTag ?? 0;
+      // Vor dem allerersten Serverkontakt gibt es noch keinen Tag und damit
+      // auch keine Aufgaben — dann ist nichts abzuholen.
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+
+      const heute = tagesAufgabenFuer(rules, tag, levelOf(rules, s.xp));
+      const auf = heute.find((a) => a.id === cmd.id);
+      if (!auf) throw new SimError('NO_SUCH_TASK');
+      if ((s.tagGeholt ?? []).includes(cmd.id)) throw new SimError('ALREADY_CLAIMED');
+      if (tagesFortschritt(s, auf.art) < auf.menge) throw new SimError('NOT_YET_EARNED');
+
+      const next = cloneState(s);
+      if (auf.gold > 0) next.items = addItem(s.items, rules.currency, auf.gold);
+      next.xp = s.xp + auf.xp;
+      next.tagGeholt = (s.tagGeholt ?? []).concat(cmd.id);
       return next;
     }
 

@@ -54,6 +54,9 @@ export function canonicalize(state: State): string {
     `sud=[${(state.angelKoeder ?? []).join(',')}]`,
     `zaehler=[${(state.zaehler ?? []).join(',')}]`,
     `serverTag=${state.serverTag ?? 0}`,
+    `tagNr=${state.tagNummer ?? 0}`,
+    `tagStart=[${(state.tagStart ?? []).join(',')}]`,
+    `tagGeholt=[${(state.tagGeholt ?? []).join(',')}]`,
   ].join('|');
 }
 
@@ -95,6 +98,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|DISCARD|${c.item}|${c.amount}`;
     case 'CLAIM_ACHIEVEMENT':
       return `${c.seq}|${c.tick}|CLAIM_ACHIEVEMENT|${c.id}`;
+    case 'CLAIM_TASK':
+      return `${c.seq}|${c.tick}|CLAIM_TASK|${c.id}`;
     case 'REMOVE_PLOT':
       return `${c.seq}|${c.tick}|REMOVE_PLOT|${c.plot}`;
     case 'PACK_PLOT':

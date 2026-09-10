@@ -122,6 +122,14 @@ export type State = {
   // Stand ohne Kontakt behält den zuletzt bekannten Tag — deshalb rollen
   // Tagesaufgaben offline nicht weiter, während der Fortschritt trotzdem zählt.
   serverTag: number;
+  // Fuer welchen Tag tagStart/tagGeholt gelten. Wechselt der Server-Tag, setzt
+  // der Server beides zurueck — an derselben Stelle, an der er den Tag stempelt.
+  tagNummer: number;
+  // Zaehlerstaende bei Tagesbeginn. Der Fortschritt einer Aufgabe ist die
+  // Differenz dazu, so braucht es keinen zweiten Satz Zaehler.
+  tagStart: readonly number[];
+  // Heute schon abgeholte Aufgaben.
+  tagGeholt: readonly string[];
 };
 
 // Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
@@ -138,6 +146,18 @@ export const ZAEHLER = {
 } as const;
 
 export const ZAEHLER_ANZAHL = 9;
+
+// Fortschritt seit Tagesbeginn. Vor dem ersten Serverkontakt gibt es noch
+// keinen Tag, dann zaehlt nichts.
+export function tagesFortschritt(s: State, art: number): number {
+  const tag = s.serverTag ?? 0;
+  if (tag <= 0) return 0;
+  // Gehoert der Nullpunkt nicht zu diesem Tag, gibt es noch keinen Fortschritt.
+  // Ohne diese Wache zaehlte bei einem gerade gewanderten Stand die gesamte
+  // Lebensleistung als heute geleistet.
+  if ((s.tagNummer ?? 0) !== tag) return 0;
+  return Math.max(0, zaehlerStand(s, art) - (s.tagStart?.[art] ?? 0));
+}
 
 export function zaehlerStand(s: State, art: number): number {
   return s.zaehler?.[art] ?? 0;
@@ -242,6 +262,9 @@ export function initialState(rules: Ruleset): State {
     angelKoeder: [],
     zaehler: zaehler,
     serverTag: 0,
+    tagNummer: 0,
+    tagStart: [],
+    tagGeholt: [],
   };
 }
 
@@ -316,6 +339,9 @@ export function normalizeState(s: State): State {
     angelKoeder: s.angelKoeder ?? [],
     zaehler: s.zaehler ?? [],
     serverTag: s.serverTag ?? 0,
+    tagNummer: s.tagNummer ?? 0,
+    tagStart: s.tagStart ?? [],
+    tagGeholt: s.tagGeholt ?? [],
   };
 }
 
@@ -348,6 +374,9 @@ export function cloneState(s: State): State {
     angelKoeder: s.angelKoeder ?? [],
     zaehler: s.zaehler ?? [],
     serverTag: s.serverTag ?? 0,
+    tagNummer: s.tagNummer ?? 0,
+    tagStart: s.tagStart ?? [],
+    tagGeholt: s.tagGeholt ?? [],
   };
 }
 

@@ -813,12 +813,20 @@ function zielRang(e) {
 
 function renderZiele(v) {
   var liste = v.erfolge || [];
-  if (liste.length === 0) return;
+  var tages = (v.aufgaben && v.aufgaben.liste) || [];
+  if (liste.length === 0 && tages.length === 0) return;
 
   var offen = liste.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var tagesOffen = tages.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
   var fertig = liste.filter(function (e) { return e.eingeloest; }).length;
   var marke = $('ziele-zahl');
-  if (marke) marke.textContent = offen > 0 ? offen + ' 🎁' : fertig + '/' + liste.length;
+  // Tagesaufgaben zählen in dieselbe Marke — sonst übersieht man sie, weil man
+  // den Bildschirm sonst nur wegen der Erfolge öffnet.
+  if (marke) {
+    marke.textContent = offen + tagesOffen > 0
+      ? (offen + tagesOffen) + ' 🎁'
+      : fertig + '/' + liste.length;
+  }
 
   // Die Liste nur zeichnen, wenn der Ziele-Screen offen ist.
   if ($('ziele-bg').hidden) return;
@@ -834,6 +842,32 @@ function renderZiele(v) {
       Math.floor((fertig * 100) / liste.length) + '%"></i></span>' +
     (offen > 0 ? '<div class="ziel-kopf-hinweis">' + offen + ' warten auf dich</div>' : '');
   box.appendChild(kopf);
+
+  // Die Aufgaben des Tages stehen oben — sie sind der Grund, heute
+  // vorbeizuschauen, und morgen sind es andere.
+  if (tages.length > 0) {
+    var tagesTitel = document.createElement('div');
+    tagesTitel.className = 'ziel-gruppe heute';
+    tagesTitel.innerHTML = '<span class="ic">📅</span><span>Heute</span>' +
+      '<span class="ziel-gruppe-zahl">' +
+      tages.filter(function (e) { return e.eingeloest; }).length + '/' + tages.length +
+      '</span>';
+    box.appendChild(tagesTitel);
+
+    tages.forEach(function (e) {
+      var zeile = zielZeile(e);
+      zeile.classList.add('tagesziel');
+      zeile.dataset.tag = '1';
+      box.appendChild(zeile);
+    });
+
+    var fuss = document.createElement('p');
+    fuss.className = 'ziel-tagesfuss';
+    fuss.textContent = tagesOffen > 0
+      ? 'Hol dir, was fertig ist — morgen kommen neue Aufgaben.'
+      : 'Morgen gibt es neue Aufgaben.';
+    box.appendChild(fuss);
+  }
 
   ZIEL_GRUPPEN.forEach(function (gruppe) {
     var teil = liste.filter(function (e) { return e.gruppe === gruppe.id; });
@@ -856,7 +890,13 @@ function renderZiele(v) {
 
   box.querySelectorAll('.ziel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      act('Erfolg eingelöst', client.claimAchievement(btn.getAttribute('data-id')), 'stufe');
+      var id = btn.getAttribute('data-id');
+      // Tagesaufgabe oder Erfolg — dieselbe Zeile, zwei verschiedene Befehle.
+      if (btn.closest('.tagesziel')) {
+        act('Tagesaufgabe geschafft', client.claimTask(id), 'stufe');
+      } else {
+        act('Erfolg eingelöst', client.claimAchievement(id), 'stufe');
+      }
     });
   });
 }

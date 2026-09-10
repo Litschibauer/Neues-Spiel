@@ -661,6 +661,18 @@
   .card .top { font-size: .95rem; }
   .sheet h3 { letter-spacing: 0; }
 
+  /* Tagesaufgaben stehen oben in den Zielen und sind farblich abgesetzt,
+     damit man sieht: die hier sind morgen weg. */
+  .ziel-gruppe.heute { color: var(--gold); }
+  .ziel.tagesziel {
+    background: var(--gold-soft);
+    border-color: color-mix(in srgb, var(--gold) 28%, transparent);
+  }
+  .ziel.tagesziel.erreicht { background: var(--sunk); }
+  .ziel-tagesfuss {
+    font-size: .68rem; color: var(--muted); margin: .35rem 0 .9rem; text-align: center;
+  }
+
   /* Zutaten: ueberall dieselben Chips — Bild, Bedarf, Name, Fehlmenge. */
   .zutaten {
     display: flex; flex-wrap: wrap; align-items: center;

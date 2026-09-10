@@ -3393,6 +3393,35 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     zieleAmSee.zeilen > 20 && zieleAmSee.gruppen >= 4,
     `${zieleAmSee.zeilen} Ziele in ${zieleAmSee.gruppen} Gruppen`,
   );
+
+  // Die Aufgaben des Tages stehen über den Erfolgen, kommen vom Server-Tag und
+  // zeigen echten Fortschritt — der Hof hat bis hierhin reichlich geerntet.
+  const tagesziele = await evaluate<{
+    kopf: string;
+    zeilen: string[];
+    obenauf: boolean;
+  }>(cdp, `(function () {
+    var kopf = document.querySelector('#ziele-liste .ziel-gruppe.heute');
+    var zeilen = [...document.querySelectorAll('#ziele-liste .ziel.tagesziel')];
+    var gruppen = [...document.querySelectorAll('#ziele-liste .ziel-gruppe')];
+    return {
+      kopf: kopf ? kopf.textContent.trim() : 'FEHLT',
+      zeilen: zeilen.map(function (z) { return z.textContent.trim().replace(/\\s+/g, ' '); }),
+      obenauf: gruppen.length > 0 && gruppen[0] === kopf,
+    };
+  })()`);
+
+  check(
+    'Die Aufgaben des Tages stehen über den Erfolgen',
+    /Heute/.test(tagesziele.kopf) && tagesziele.zeilen.length > 0 && tagesziele.obenauf,
+    `${tagesziele.kopf} · ${tagesziele.zeilen.length} Aufgaben`,
+  );
+  check(
+    'Jede Tagesaufgabe zeigt Stand und Belohnung',
+    tagesziele.zeilen.every((z) => /\d+ \/ \d+/.test(z) || /eingelöst|Einlösen/.test(z)) &&
+      tagesziele.zeilen.every((z) => /Gold/.test(z) || /Einlösen|eingelöst/.test(z)),
+    tagesziele.zeilen.join(' | ').slice(0, 160),
+  );
   await evaluate(cdp, `document.getElementById('ziele-close').click()`);
   await sleep(300);
   await evaluate(cdp, `document.getElementById('rest-close').click()`);
