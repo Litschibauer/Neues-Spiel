@@ -3394,35 +3394,59 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `${zieleAmSee.zeilen} Ziele in ${zieleAmSee.gruppen} Gruppen`,
   );
 
-  // Die Aufgaben des Tages stehen über den Erfolgen, kommen vom Server-Tag und
-  // zeigen echten Fortschritt — der Hof hat bis hierhin reichlich geerntet.
-  const tagesziele = await evaluate<{
-    kopf: string;
-    zeilen: string[];
-    obenauf: boolean;
+  await evaluate(cdp, `document.getElementById('ziele-close').click()`);
+  await sleep(300);
+
+  // Die Aufgaben des Tages haengen am Abenteuerbrett — erreichbar ueber das
+  // Zahnrad, mit eigener Optik und echtem Fortschritt.
+  await evaluate(cdp, `document.getElementById('abenteuer-auf').click()`);
+  await sleep(700);
+  const brett = await evaluate<{
+    offen: boolean;
+    titel: string;
+    zettel: string[];
+    unter: string;
   }>(cdp, `(function () {
-    var kopf = document.querySelector('#ziele-liste .ziel-gruppe.heute');
-    var zeilen = [...document.querySelectorAll('#ziele-liste .ziel.tagesziel')];
-    var gruppen = [...document.querySelectorAll('#ziele-liste .ziel-gruppe')];
     return {
-      kopf: kopf ? kopf.textContent.trim() : 'FEHLT',
-      zeilen: zeilen.map(function (z) { return z.textContent.trim().replace(/\\s+/g, ' '); }),
-      obenauf: gruppen.length > 0 && gruppen[0] === kopf,
+      offen: !document.getElementById('abenteuer-bg').hidden,
+      titel: (document.getElementById('abenteuer-titel') || {}).textContent || '',
+      unter: (document.getElementById('abenteuer-unter') || {}).textContent || '',
+      zettel: [...document.querySelectorAll('#abenteuer-liste .zettel-brett')]
+        .map(function (z) { return z.textContent.trim().replace(/\\s+/g, ' '); }),
     };
   })()`);
 
   check(
-    'Die Aufgaben des Tages stehen über den Erfolgen',
-    /Heute/.test(tagesziele.kopf) && tagesziele.zeilen.length > 0 && tagesziele.obenauf,
-    `${tagesziele.kopf} · ${tagesziele.zeilen.length} Aufgaben`,
+    'Das Abenteuerbrett öffnet sich und hängt voller Tageszettel',
+    brett.offen && /Abenteuerbrett/.test(brett.titel) && brett.zettel.length > 0,
+    `${brett.titel} · ${brett.zettel.length} Zettel · ${brett.unter}`,
   );
   check(
-    'Jede Tagesaufgabe zeigt Stand und Belohnung',
-    tagesziele.zeilen.every((z) => /\d+ \/ \d+/.test(z) || /eingelöst|Einlösen/.test(z)) &&
-      tagesziele.zeilen.every((z) => /Gold/.test(z) || /Einlösen|eingelöst/.test(z)),
-    tagesziele.zeilen.join(' | ').slice(0, 160),
+    'Jeder Zettel zeigt Belohnung und entweder Stand oder Abhol-Knopf',
+    brett.zettel.every((z) => /Gold|XP/.test(z)) &&
+      brett.zettel.every((z) => /\d+ \/ \d+/.test(z) || /Abholen|abgeholt/.test(z)),
+    brett.zettel.join(' | ').slice(0, 170),
   );
-  await evaluate(cdp, `document.getElementById('ziele-close').click()`);
+
+  const zettelAbgenommen = await evaluate<string>(cdp, `(function () {
+    var k = document.querySelector('#abenteuer-liste .zettel-los');
+    if (!k) return 'nichts fertig';
+    var vorher = Number(document.getElementById('gold').textContent);
+    k.click();
+    return JSON.stringify({ vorher: vorher });
+  })()`);
+  if (zettelAbgenommen !== 'nichts fertig') {
+    await sleep(700);
+    const nachher = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+    const vorher = JSON.parse(zettelAbgenommen).vorher as number;
+    check(
+      'Einen fertigen Zettel abnehmen zahlt Gold aus',
+      nachher > vorher,
+      `${vorher} → ${nachher} Gold`,
+    );
+  }
+
+  await evaluate(cdp, `document.getElementById('abenteuer-close').click()`);
   await sleep(300);
   await evaluate(cdp, `document.getElementById('rest-close').click()`);
   await sleep(300);

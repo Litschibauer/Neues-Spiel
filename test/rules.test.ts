@@ -187,6 +187,59 @@ test('die benannten Versionen zeigen auf Regelwerke, die es gibt', () => {
   assert.ok(!PRODUCTION_VERSIONS.includes(DEV_RULESET_VERSION), 'Dev gehört nicht in die Reihe');
 });
 
+// DEV existiert nur, um Zeiten zu verkuerzen. Haengt es an einer alten Fassung,
+// pruefen die 173 Browser-Pruefungen (die gegen --env=dev laufen) ein anderes
+// Spiel als das, was Spieler bekommen — und neue Funktionen fallen still aus
+// dem Netz. Das ist zweimal passiert (V32, dann V37), deshalb steht es hier.
+test('DEV erbt alles vom neuesten Regelwerk — sonst testet der Feldtest ein anderes Spiel', () => {
+  const dev = getRuleset(DEV_RULESET_VERSION);
+  const neu = getRuleset(LATEST_RULESET_VERSION);
+
+  const gleichLang: Array<[string, readonly unknown[], readonly unknown[]]> = [
+    ['items', dev.items, neu.items],
+    ['recipes', dev.recipes, neu.recipes],
+    ['plots', dev.plots, neu.plots],
+  ];
+  for (const [name, a, b] of gleichLang) {
+    assert.equal(a.length, b.length, `DEV hat ${a.length} ${name}, das neueste ${b.length}`);
+  }
+
+  assert.deepEqual(
+    dev.items.map((i) => i.id),
+    neu.items.map((i) => i.id),
+    'DEV kennt andere Waren als die ausgelieferte Fassung',
+  );
+  assert.deepEqual(
+    dev.recipes.map((r) => r.id),
+    neu.recipes.map((r) => r.id),
+    'DEV kennt andere Rezepte als die ausgelieferte Fassung',
+  );
+  assert.deepEqual(
+    dev.plots.map((p) => p.id),
+    neu.plots.map((p) => p.id),
+    'DEV kennt andere Plätze als die ausgelieferte Fassung',
+  );
+  assert.deepEqual(
+    (dev.achievements ?? []).map((a) => a.id),
+    (neu.achievements ?? []).map((a) => a.id),
+    'DEV kennt andere Erfolge als die ausgelieferte Fassung',
+  );
+  assert.deepEqual(
+    (dev.tagesaufgaben ?? []).map((a) => a.id),
+    (neu.tagesaufgaben ?? []).map((a) => a.id),
+    'DEV kennt andere Tagesaufgaben als die ausgelieferte Fassung',
+  );
+  assert.equal(dev.aufgabenProTag, neu.aufgabenProTag);
+
+  // DEV darf schneller sein — aber nur schneller, nicht anders.
+  dev.recipes.forEach((r, i) => {
+    assert.ok(
+      r.durationTicks <= neu.recipes[i]!.durationTicks,
+      `DEV-Rezept ${r.id} ist nicht schneller, sondern anders`,
+    );
+  });
+});
+
 test('abgeleitete Abfragen stimmen mit dem Katalog überein', () => {
   const v1 = getRuleset(1);
 

@@ -661,16 +661,95 @@
   .card .top { font-size: .95rem; }
   .sheet h3 { letter-spacing: 0; }
 
-  /* Tagesaufgaben stehen oben in den Zielen und sind farblich abgesetzt,
-     damit man sieht: die hier sind morgen weg. */
-  .ziel-gruppe.heute { color: var(--gold); }
-  .ziel.tagesziel {
-    background: var(--gold-soft);
-    border-color: color-mix(in srgb, var(--gold) 28%, transparent);
+  /* — Abenteuerbrett ——————————————————————————————————————————————————
+     Ein Ort auf dem Hof, kein Menuepunkt: Holzbrett mit angepinnten Zetteln.
+     Die Farben kommen aus denselben Pixelfarben wie das Moebel draussen, damit
+     Innen und Aussen dasselbe Ding sind. */
+  .ziel-brettlink {
+    display: flex; align-items: center; gap: .5rem; width: 100%;
+    margin: 0 0 .8rem; padding: .55rem .7rem; text-align: left;
+    background: var(--gold-soft); color: var(--gold);
+    border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+    border-radius: 12px; font-size: .78rem; font-weight: 650;
   }
-  .ziel.tagesziel.erreicht { background: var(--sunk); }
-  .ziel-tagesfuss {
-    font-size: .68rem; color: var(--muted); margin: .35rem 0 .9rem; text-align: center;
+  .ziel-brettlink .ic { width: 1.2em; height: 1.2em; }
+
+  .sheet.brettblatt {
+    background: #8d5a35;
+    background-image:
+      repeating-linear-gradient(180deg,
+        rgba(0, 0, 0, .13) 0 2px, rgba(255, 255, 255, .05) 2px 14px);
+    border: 3px solid #3b2b3c;
+    box-shadow: 0 0 0 3px #6b4326, var(--shadow);
+    color: #f4ecd8;
+  }
+  /* Das Dach ist der klebende Titel selbst — sonst schoebe sich der weisse
+     Standard-Balken der Blaetter darueber und der Titel waere unlesbar. */
+  .sheet.brettblatt .brettdach { display: none; }
+  .sheet.brettblatt h3 {
+    font-family: var(--pixel); color: #f4ecd8; text-align: center;
+    letter-spacing: .02em; margin-bottom: .1rem;
+    background: #6b4326;
+    box-shadow: 0 3px 0 #3b2b3c;
+  }
+  .brett-unter {
+    text-align: center; font-size: .7rem; margin: 0 0 .8rem;
+    color: color-mix(in srgb, #f4ecd8 72%, transparent);
+  }
+  .sheet.brettblatt .sheet-close {
+    background: #6b4326; color: #f4ecd8; border: 2px solid #3b2b3c;
+    /* Der Standard deckt die Luecke mit --surface ab; hier muss Holz nachkommen. */
+    box-shadow: 0 -.6rem 0 .3rem #8d5a35;
+  }
+
+  /* Der einzelne Zettel: Papier, leicht schief, mit Nadel oben. */
+  .zettel-brett {
+    position: relative; background: #f4ecd8; color: #3b2b3c;
+    border: 2px solid #3b2b3c; border-radius: 3px;
+    padding: .7rem .7rem .55rem; margin-bottom: .7rem;
+    transform: rotate(var(--dreh, 0deg));
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, .25);
+  }
+  .zettel-brett .zettel-nadel {
+    position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    width: 11px; height: 11px; border-radius: 50%;
+    background: #e8553c; border: 2px solid #3b2b3c;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, .3);
+  }
+  .zettel-brett .zettel-kopf {
+    font-family: var(--pixel); font-size: .92rem; font-weight: 700; line-height: 1.25;
+  }
+  .zettel-brett .zettel-lohn {
+    font-size: .68rem; font-weight: 700; color: #8a6a1c; margin-top: .1rem;
+  }
+  .zettel-brett .zettel-unten {
+    display: flex; align-items: center; gap: .5rem; margin-top: .5rem;
+  }
+  .zettel-brett .zettel-balken {
+    flex: 1; height: .5rem; background: #ded2b4;
+    border: 2px solid #3b2b3c; border-radius: 0; overflow: hidden;
+  }
+  .zettel-brett .zettel-balken i { display: block; height: 100%; background: #5aa04f; }
+  .zettel-brett .zettel-stand {
+    font-size: .68rem; font-weight: 700; font-variant-numeric: tabular-nums; flex: none;
+  }
+  .zettel-brett .zettel-los {
+    flex: 1; padding: .45rem; border: 2px solid #3b2b3c; border-radius: 3px;
+    background: #f6c35a; color: #3b2b3c;
+    font-family: var(--pixel); font-size: .84rem; font-weight: 700;
+    box-shadow: 0 3px 0 #b8811f;
+  }
+  .zettel-brett .zettel-los:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8811f; }
+  .zettel-brett .zettel-fertig {
+    flex: 1; text-align: center; font-size: .72rem; font-weight: 700; color: #5aa04f;
+  }
+  /* Reif: der Zettel hebt sich, abgeholt: er tritt zurueck. */
+  .zettel-brett.reif { background: #fff6de; box-shadow: 3px 5px 0 rgba(0, 0, 0, .3); }
+  .zettel-brett.abgeholt { opacity: .62; transform: rotate(var(--dreh, 0deg)) scale(.985); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .zettel-brett { transform: none; }
+    .zettel-brett.abgeholt { transform: none; }
   }
 
   /* Zutaten: ueberall dieselben Chips — Bild, Bedarf, Name, Fehlmenge. */

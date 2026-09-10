@@ -21,6 +21,7 @@ var KOERPER = {
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
 var KOERPER_MOEBEL = {
   brett: 1.3, lagerhaus: 1.3, stand: 1.3, nachbarn: 1.3, wagen: 1.3, kiste: 1.3,
+  abenteuer: 1.6,
   boot: 0.6, schatz: 0.8,
 };
 var KOERPER_SEE = { haus: 1.85, dock: 0.4, spot: 0.9 };
@@ -87,6 +88,32 @@ var FARBEN = {
   n: '#2f6f9e', g: '#e6d19c', G: '#c9ad72', r: '#e8553c', y: '#f6c35a', q: '#cfd3d6',
   k: '#6b6b70', f: '#5aa04f', F: '#8bd06a',
 };
+
+// Das Abenteuerbrett: zwei Pfosten, ein Dach, zwei angepinnte Zettel und unten
+// eine Leiste, die sich einfaerbt, wenn etwas abzuholen ist.
+var ABENTEUER = [
+  'oooooooooooooooooooo',
+  'oddddddddddddddddddo',
+  'oddddddddddddddddddo',
+  'oooooooooooooooooooo',
+  '.oooooooooooooooooo.',
+  '.owwwwwwwwwwwwwwwwo.',
+  '.owssrssswwssrssswo.',
+  '.owskkkkswwskkkkswo.',
+  '.owskkksswwskkksswo.',
+  '.owsssssswwsssssswo.',
+  '.owwwwwwwwwwwwwwwwo.',
+  '.owwyyyywwwwyyyywwo.',
+  '.owwwwwwwwwwwwwwwwo.',
+  '.oooooooooooooooooo.',
+  '....oo........oo....',
+  '....od........do....',
+  '....od........do....',
+  '....oo........oo....',
+];
+
+// Wartet nichts, bleibt die Leiste holzfarben statt zu leuchten.
+var ABENTEUER_RUHIG = ABENTEUER.map(function (z) { return z.split('y').join('G'); });
 
 var BOOT_HEIL = [
   '.......o........',
@@ -402,6 +429,10 @@ function artMoebelRaum(id, k, z) {
   if (id === 'wagen') {
     return '<g opacity="' + (z.unterwegs ? 0.45 : 1) + '">' + schatten(k, 32, u, 40) +
       bild(k, 'lkw', 16, u - 32, 32, 32) + '</g>';
+  }
+  if (id === 'abenteuer') {
+    return schatten(k, 24, u, 30) +
+      pix(k, z.wartet ? ABENTEUER : ABENTEUER_RUHIG, FARBEN, 4, u - 35, 2);
   }
   if (id === 'kiste') return schatten(k, 16, u, 30) + bild(k, 'truhe', 0, u - 32, 32, 32);
   if (id === 'schatz') return bild(k, 'truhe-blau', 0, u - 15);

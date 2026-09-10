@@ -113,6 +113,7 @@
           <button class="moebel" id="lagerhaus"></button>
           <button class="moebel" id="stand"></button>
           <button class="moebel" id="nachbarn"></button>
+          <button class="moebel" id="abenteuer"></button>
           <button class="moebel" id="boot" hidden></button>
         </div>
         <div class="himmel" id="himmel" aria-hidden="true"></div>
@@ -286,6 +287,13 @@
         </div>
         <span class="go" id="melden-stand">Aus</span>
       </button>
+      <button class="card" id="abenteuer-auf">
+        <div class="body">
+          <div class="top">Abenteuerbrett</div>
+          <div class="sub">Die Aufgaben von heute</div>
+        </div>
+        <span class="go" id="abenteuer-zahl">📋</span>
+      </button>
       <button class="card" id="ziele-auf">
         <div class="body">
           <div class="top">Ziele &amp; Erfolge</div>
@@ -323,6 +331,16 @@
       <h3 id="ziele-titel">Ziele &amp; Erfolge</h3>
       <div id="ziele-liste"></div>
       <button class="sheet-close" id="ziele-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="abenteuer-bg" hidden>
+    <div class="sheet brettblatt" role="dialog" aria-modal="true" aria-labelledby="abenteuer-titel">
+      <div class="brettdach"></div>
+      <h3 id="abenteuer-titel">Abenteuerbrett</h3>
+      <p class="brett-unter" id="abenteuer-unter"></p>
+      <div id="abenteuer-liste"></div>
+      <button class="sheet-close" id="abenteuer-close">Schließen</button>
     </div>
   </div>
 

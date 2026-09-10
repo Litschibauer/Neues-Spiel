@@ -10,6 +10,7 @@ function render() {
   // gezeichnet werden, sonst steht man dort vor leeren Listen.
   renderBadges(v);
   renderZiele(v);
+  renderAbenteuer(v);
   renderHofinfo(v);
 
   // Angel-Dimension: eigenes Raster, eigene Objekte — die Hof-Renderer bleiben aus.
@@ -267,6 +268,7 @@ function moebelSvg(id, zustand, artId) {
 
 var MOEBEL_ORTE = {
   nachbarn: [0, -2.5, 3, 2],
+  abenteuer: [16, -2.5, 3, 3],
   brett: [4, -2.5, 3, 2],
   lagerhaus: [8, -2.5, 3, 2],
   stand: [12, -2.5, 3, 2],
@@ -298,7 +300,7 @@ function setzeMoebel(id) {
 
 function renderMoebel(v) {
   // Aus dem See zurück: Hof-Möbel wieder zeigen.
-  ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(function (id) { $(id).hidden = false; });
+  ['brett', 'lagerhaus', 'stand', 'nachbarn', 'abenteuer'].forEach(function (id) { $(id).hidden = false; });
 
   // Boot zum Angelsee — steht IMMER am Hof (auch kaputt). Repariert man es,
   // fährt es wieder und öffnet den See.
@@ -324,7 +326,25 @@ function renderMoebel(v) {
     v.mail.entries.length + (v.silo.upgrade && v.silo.upgrade.affordable ? 1 : 0));
   moebel($('stand'), {}, 'Stand', v.orders.filter(function (o) { return o.sold > 0; }).length);
   moebel($('nachbarn'), {}, 'Nachbarn', 0);
-  ['brett', 'lagerhaus', 'stand', 'nachbarn'].forEach(setzeMoebel);
+
+  // Abenteuerbrett: Die Leiste leuchtet, sobald etwas abzuholen ist.
+  var tages = (v.aufgaben && v.aufgaben.liste) || [];
+  var tagesOffen = tages.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var abBrett = $('abenteuer');
+  abBrett.hidden = tages.length === 0;
+  if (!abBrett.hidden) {
+    abBrett.innerHTML = moebelSvg('abenteuer', { wartet: tagesOffen > 0 }) +
+      (tagesOffen > 0 ? blase(null, String(tagesOffen)).outerHTML : '');
+    var abBlase = abBrett.querySelector('.badge');
+    if (abBlase) abBlase.style.width = blasenBreite(MOEBEL_ORTE.abenteuer[2]);
+    var abZahl = $('abenteuer-zahl');
+    if (abZahl) abZahl.textContent = tagesOffen > 0 ? tagesOffen + ' 🎁' : '📋';
+    abBrett.setAttribute('aria-label',
+      'Abenteuerbrett — ' + tages.length + ' Aufgaben heute' +
+      (tagesOffen > 0 ? ', ' + tagesOffen + ' abzuholen' : ''));
+  }
+
+  ['brett', 'lagerhaus', 'stand', 'nachbarn', 'abenteuer'].forEach(setzeMoebel);
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');
@@ -843,30 +863,17 @@ function renderZiele(v) {
     (offen > 0 ? '<div class="ziel-kopf-hinweis">' + offen + ' warten auf dich</div>' : '');
   box.appendChild(kopf);
 
-  // Die Aufgaben des Tages stehen oben — sie sind der Grund, heute
-  // vorbeizuschauen, und morgen sind es andere.
+  // Die Aufgaben des Tages haben ein eigenes Zuhause am Abenteuerbrett. Hier
+  // steht nur der Hinweis, damit man sie vom Ziele-Bildschirm aus findet.
   if (tages.length > 0) {
-    var tagesTitel = document.createElement('div');
-    tagesTitel.className = 'ziel-gruppe heute';
-    tagesTitel.innerHTML = '<span class="ic">📅</span><span>Heute</span>' +
-      '<span class="ziel-gruppe-zahl">' +
-      tages.filter(function (e) { return e.eingeloest; }).length + '/' + tages.length +
-      '</span>';
-    box.appendChild(tagesTitel);
-
-    tages.forEach(function (e) {
-      var zeile = zielZeile(e);
-      zeile.classList.add('tagesziel');
-      zeile.dataset.tag = '1';
-      box.appendChild(zeile);
-    });
-
-    var fuss = document.createElement('p');
-    fuss.className = 'ziel-tagesfuss';
-    fuss.textContent = tagesOffen > 0
-      ? 'Hol dir, was fertig ist — morgen kommen neue Aufgaben.'
-      : 'Morgen gibt es neue Aufgaben.';
-    box.appendChild(fuss);
+    var hinweis = document.createElement('button');
+    hinweis.type = 'button';
+    hinweis.className = 'ziel-brettlink';
+    hinweis.innerHTML = '<span class="ic">📋</span><span>Abenteuerbrett · ' +
+      tages.length + ' Aufgaben heute' +
+      (tagesOffen > 0 ? ' · <b>' + tagesOffen + " abzuholen</b>" : '') + '</span>';
+    hinweis.addEventListener('click', function () { show('abenteuer'); });
+    box.appendChild(hinweis);
   }
 
   ZIEL_GRUPPEN.forEach(function (gruppe) {
@@ -890,13 +897,59 @@ function renderZiele(v) {
 
   box.querySelectorAll('.ziel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var id = btn.getAttribute('data-id');
-      // Tagesaufgabe oder Erfolg — dieselbe Zeile, zwei verschiedene Befehle.
-      if (btn.closest('.tagesziel')) {
-        act('Tagesaufgabe geschafft', client.claimTask(id), 'stufe');
-      } else {
-        act('Erfolg eingelöst', client.claimAchievement(id), 'stufe');
-      }
+      act('Erfolg eingelöst', client.claimAchievement(btn.getAttribute('data-id')), 'stufe');
+    });
+  });
+}
+
+// Das Abenteuerbrett: die Aufgaben des Tages als angepinnte Zettel. Bewusst
+// eine eigene Optik statt der Ziele-Liste — es soll sich wie ein Ort auf dem
+// Hof anfuehlen und nicht wie ein Menuepunkt.
+function renderAbenteuer(v) {
+  if ($('abenteuer-bg').hidden) return;
+  var tages = (v.aufgaben && v.aufgaben.liste) || [];
+  var offen = tages.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var fertig = tages.filter(function (e) { return e.eingeloest; }).length;
+
+  $('abenteuer-unter').textContent = tages.length === 0
+    ? 'Sobald dein Hof das erste Mal Verbindung hatte, hängen hier Aufgaben.'
+    : offen > 0
+      ? 'Nimm ab, was fertig ist — morgen hängen neue Zettel.'
+      : fertig >= tages.length
+        ? 'Alles abgeholt. Morgen hängen neue Zettel.'
+        : 'Heute ' + fertig + ' von ' + tages.length + ' geschafft.';
+
+  var box = $('abenteuer-liste');
+  box.textContent = '';
+
+  tages.forEach(function (e, i) {
+    var zettel = document.createElement('div');
+    zettel.className = 'zettel-brett' +
+      (e.eingeloest ? ' abgeholt' : e.erfuellt ? ' reif' : '');
+    // Leicht wechselnde Neigung, damit es nach angepinntem Papier aussieht.
+    zettel.style.setProperty('--dreh', (i % 2 === 0 ? -1 : 1) * (0.4 + (i % 3) * 0.3) + 'deg');
+
+    var lohn = (e.gold > 0 ? e.gold + ' Gold' : '') +
+      (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
+
+    var unten = e.eingeloest
+      ? '<span class="zettel-fertig">abgeholt ✓</span>'
+      : e.erfuellt
+        ? '<button type="button" class="zettel-los" data-id="' + e.id + '">Abholen · ' + lohn + '</button>'
+        : '<span class="zettel-balken"><i style="width:' + e.prozent + '%"></i></span>' +
+          '<span class="zettel-stand">' + e.ist + ' / ' + e.ziel + '</span>';
+
+    zettel.innerHTML =
+      '<span class="zettel-nadel"></span>' +
+      '<div class="zettel-kopf">' + e.label + '</div>' +
+      '<div class="zettel-lohn">' + lohn + '</div>' +
+      '<div class="zettel-unten">' + unten + '</div>';
+    box.appendChild(zettel);
+  });
+
+  box.querySelectorAll('.zettel-los').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      act('Abenteuer geschafft', client.claimTask(btn.getAttribute('data-id')), 'stufe');
     });
   });
 }

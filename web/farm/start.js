@@ -100,7 +100,7 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -111,7 +111,7 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -153,9 +153,11 @@ $('melden-schalter').addEventListener('click', function () {
   else meldenAnmelden().then(fertig);
 });
 
+$('abenteuer-auf').addEventListener('click', function () { show('abenteuer'); });
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('brett').addEventListener('click', function () { show('brett'); });
+$('abenteuer').addEventListener('click', function () { show('abenteuer'); });
 $('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });
 
 $('loesch-minus').addEventListener('click', function () { loeschStellen(-1); });
@@ -541,15 +543,21 @@ var FEATURE_TUT = {
     { emoji: '🏆', titel: 'Bestenliste',
       text: 'Alle Höfe nach XP sortiert. Dein eigener Rang ist hervorgehoben.' },
   ],
-  ziele: [
-    { emoji: '📅', titel: 'Aufgaben des Tages',
-      text: 'Ganz oben stehen drei Aufgaben, die nur heute gelten. Sie sind für alle Höfe gleich und wechseln jeden Tag.' },
+  abenteuer: [
+    { emoji: '📋', titel: 'Das Abenteuerbrett',
+      text: 'Hier hängen drei Aufgaben, die nur heute gelten. Sie sind für alle Höfe gleich und wechseln jeden Tag.' },
+    { emoji: '📌', titel: 'Zettel abnehmen',
+      text: 'Ist ein Zettel voll, nimmst du ihn ab und bekommst Gold und XP. Wer liegen bleibt, ist morgen weg.' },
     { emoji: '🌙', titel: 'Zählt auch ohne Netz',
       text: 'Was du im Funkloch schaffst, wird mitgezählt. Der neue Tag beginnt aber erst, wenn dein Hof wieder Verbindung hatte.' },
+  ],
+  ziele: [
     { emoji: '🎯', titel: 'Ziele & Erfolge',
-      text: 'Darunter stehen die Erfolge, nach Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
+      text: 'Erfolge sind in Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
     { emoji: '⭐', titel: 'Einlösen nicht vergessen',
       text: 'Erfüllt heißt noch nicht ausgezahlt — erst das Einlösen bringt Gold und XP. Der Punkt am Zahnrad erinnert dich daran.' },
+    { emoji: '📋', titel: 'Tagesaufgaben hängen draußen',
+      text: 'Die Aufgaben des Tages stehen nicht hier, sondern am Abenteuerbrett auf deinem Hof.' },
   ],
 };
 
@@ -565,6 +573,7 @@ var BILDSCHIRM_TUT = {
   bonus: 'bonus',
   bestenliste: 'liste',
   ziele: 'ziele',
+  abenteuer: 'abenteuer',
 };
 var featureSeiten = null;
 var featureSchritt = 0;
