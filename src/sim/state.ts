@@ -147,6 +147,21 @@ export const ZAEHLER = {
 
 export const ZAEHLER_ANZAHL = 9;
 
+// Der Tagesabschluss liegt in derselben Liste wie die abgeholten Aufgaben —
+// dann raeumt der Tageswechsel ihn ohne Zutun mit weg. Der Name kann mit keiner
+// Aufgabe kollidieren; ein Test im Regelwerk haelt das fest.
+export const TAG_ABSCHLUSS = 'tagesabschluss';
+
+// Wie viele Aufgaben heute schon abgenommen wurden (der Abschluss zaehlt nicht
+// mit). Gezaehlt statt verglichen: Steigt jemand mitten am Tag eine Stufe auf,
+// wechselt sein Aufgabensatz — abgearbeitet hat er sie trotzdem.
+export function tagesAbgenommen(s: State): number {
+  const geholt = s.tagGeholt ?? [];
+  let n = 0;
+  for (const id of geholt) if (id !== TAG_ABSCHLUSS) n++;
+  return n;
+}
+
 // Fortschritt seit Tagesbeginn. Vor dem ersten Serverkontakt gibt es noch
 // keinen Tag, dann zaehlt nichts.
 export function tagesFortschritt(s: State, art: number): number {

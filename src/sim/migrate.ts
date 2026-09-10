@@ -304,6 +304,9 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   // Der Tagesfortschritt faengt leer an. Den ersten Tagesbeginn setzt der
   // Server beim naechsten Kontakt, zusammen mit dem Kalendertag.
   ['38->39', TAGESLAUF_DAZU],
+  // Der Tagesabschluss braucht kein neues Feld: Er liegt in derselben Liste
+  // wie die abgeholten Aufgaben. Es waechst nur das Regelwerk.
+  ['39->40', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

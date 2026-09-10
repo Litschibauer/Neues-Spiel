@@ -100,6 +100,8 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CLAIM_ACHIEVEMENT|${c.id}`;
     case 'CLAIM_TASK':
       return `${c.seq}|${c.tick}|CLAIM_TASK|${c.id}`;
+    case 'CLAIM_DAY':
+      return `${c.seq}|${c.tick}|CLAIM_DAY`;
     case 'REMOVE_PLOT':
       return `${c.seq}|${c.tick}|REMOVE_PLOT|${c.plot}`;
     case 'PACK_PLOT':

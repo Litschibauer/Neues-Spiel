@@ -35,6 +35,8 @@ import {
   zaehle,
   ZAEHLER,
   tagesFortschritt,
+  tagesAbgenommen,
+  TAG_ABSCHLUSS,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
 
@@ -446,6 +448,30 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (auf.gold > 0) next.items = addItem(s.items, rules.currency, auf.gold);
       next.xp = s.xp + auf.xp;
       next.tagGeholt = (s.tagGeholt ?? []).concat(cmd.id);
+      return next;
+    }
+
+    case 'CLAIM_DAY': {
+      const lohn = rules.tagesAbschluss;
+      if (!lohn) throw new SimError('NO_DAY_BONUS');
+      const tag = s.serverTag ?? 0;
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+      if ((s.tagGeholt ?? []).includes(TAG_ABSCHLUSS)) throw new SimError('ALREADY_CLAIMED');
+
+      // Verlangt wird der ganze heutige Satz — und der ist auf den ersten
+      // Stufen kuerzer als `aufgabenProTag`, weil der Topf dort noch wenig
+      // hergibt. Waere die Zahl fest, koennten Anfaenger den Abschluss nie
+      // holen. Gezaehlt statt Namen verglichen: Steigt jemand mitten am Tag
+      // auf, wechselt sein Satz — die Arbeit von vorhin bleibt trotzdem getan.
+      const heute = tagesAufgabenFuer(rules, tag, levelOf(rules, s.xp));
+      if (heute.length === 0) throw new SimError('NO_TASKS_YET');
+      const noetig = Math.min(rules.aufgabenProTag ?? 3, heute.length);
+      if (tagesAbgenommen(s) < noetig) throw new SimError('NOT_YET_EARNED');
+
+      const next = cloneState(s);
+      if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
+      next.xp = s.xp + lohn.xp;
+      next.tagGeholt = (s.tagGeholt ?? []).concat(TAG_ABSCHLUSS);
       return next;
     }
 

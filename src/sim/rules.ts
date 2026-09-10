@@ -248,6 +248,9 @@ export type Ruleset = {
   tagesaufgaben?: readonly AufgabeDef[];
   // Wie viele Aufgaben ein Tag hat.
   aufgabenProTag?: number;
+  // Was es gibt, wenn alle Aufgaben eines Tages abgenommen sind. Ohne dieses
+  // Feld gibt es keinen Tagesabschluss — alte Fassungen bleiben unberührt.
+  tagesAbschluss?: { gold: number; xp: number };
   // Eigene Dimension „Angelsee": Das Boot auf dem Hof steht kaputt da; ab
   // minLevel lässt es sich mit `repair` (Gold + Material) wieder flottmachen.
   // Erst danach ist der See offen. Köder werden nicht gekauft, sondern im
@@ -2314,17 +2317,28 @@ export function tagesAufgabenFuer(
   return raus;
 }
 
-const DEV: Ruleset = {
+// V40: Der Tagesabschluss. Drei Zettel sind schnell erzaehlt, aber ohne
+// Schlussstrich bleibt der Tag ein Sack voll Einzelaufgaben. Wer alle drei
+// abnimmt, schliesst ihn ab und bekommt mehr, als der einzelne Zettel bringt —
+// das ist der Grund, den dritten auch noch zu holen, statt nach dem zweiten
+// aufzuhoeren. Weiterhin ohne Kaufmoeglichkeit: erarbeiten kann man ihn nur.
+const V40: Ruleset = {
   ...V39,
+  version: 40,
+  tagesAbschluss: { gold: 500, xp: 90 },
+};
+
+const DEV: Ruleset = {
+  ...V40,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V39.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V40.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V39.fishing!,
+    ...V40.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
@@ -2386,17 +2400,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [37, V37],
   [38, V38],
   [39, V39],
+  [40, V40],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 39;
+export const LATEST_RULESET_VERSION = 40;
 
 export const DEV_RULESET_VERSION = 1001;
 

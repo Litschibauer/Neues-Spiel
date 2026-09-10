@@ -18,7 +18,15 @@ import {
   tagesAufgabenFuer,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
-import { EMPTY_PLOT, capacityOf, count, stored, tagesFortschritt } from '../sim/state.ts';
+import {
+  EMPTY_PLOT,
+  TAG_ABSCHLUSS,
+  capacityOf,
+  count,
+  stored,
+  tagesAbgenommen,
+  tagesFortschritt,
+} from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
@@ -300,6 +308,15 @@ export type FarmView = {
 export type TagesaufgabenView = {
   tag: number;
   liste: readonly ErfolgView[];
+  // Der Schlussstrich unter den Tag: null, wenn das Regelwerk keinen kennt.
+  abschluss: {
+    gold: number;
+    xp: number;
+    abgenommen: number;
+    noetig: number;
+    erfuellt: boolean;
+    eingeloest: boolean;
+  } | null;
 };
 
 export type ErfolgView = {
@@ -805,7 +822,7 @@ function erfolgeView(state: State, rules: Ruleset): readonly ErfolgView[] {
 
 function aufgabenView(state: State, rules: Ruleset): TagesaufgabenView {
   const tag = state.serverTag ?? 0;
-  if (tag <= 0) return { tag: 0, liste: [] };
+  if (tag <= 0) return { tag: 0, liste: [], abschluss: null };
 
   const geholt = state.tagGeholt ?? [];
   const liste = tagesAufgabenFuer(rules, tag, levelOf(rules, state.xp)).map((a) => {
@@ -823,7 +840,24 @@ function aufgabenView(state: State, rules: Ruleset): TagesaufgabenView {
       prozent: a.menge <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / a.menge)),
     };
   });
-  return { tag, liste };
+  const lohn = rules.tagesAbschluss;
+  // Derselbe Massstab wie in der Sim: der heutige Satz, nicht die Wunschzahl.
+  const noetig = Math.min(rules.aufgabenProTag ?? 3, liste.length);
+  const abgenommen = tagesAbgenommen(state);
+  return {
+    tag,
+    liste,
+    abschluss: lohn
+      ? {
+          gold: lohn.gold,
+          xp: lohn.xp,
+          abgenommen,
+          noetig,
+          erfuellt: abgenommen >= noetig,
+          eingeloest: geholt.includes(TAG_ABSCHLUSS),
+        }
+      : null,
+  };
 }
 
 function angelView(state: State, rules: Ruleset): AngelView {

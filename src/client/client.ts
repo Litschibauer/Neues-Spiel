@@ -137,6 +137,10 @@ export class Client {
     return this.apply({ type: 'CLAIM_TASK', id } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  claimDay(): ActionResult {
+    return this.apply({ type: 'CLAIM_DAY' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   removePlot(plot: number): ActionResult {
     return this.apply({ type: 'REMOVE_PLOT', plot } as Omit<Command, 'seq' | 'tick'>);
   }

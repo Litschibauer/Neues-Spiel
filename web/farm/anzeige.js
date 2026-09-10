@@ -922,7 +922,9 @@ function renderAbenteuer(v) {
     : offen > 0
       ? 'Nimm ab, was fertig ist — morgen hängen neue Zettel.'
       : fertig >= tages.length
-        ? 'Alles abgeholt. Morgen hängen neue Zettel.'
+        ? (v.aufgaben.abschluss && !v.aufgaben.abschluss.eingeloest
+            ? 'Alle Zettel ab — jetzt den Tag abschließen.'
+            : 'Alles abgeholt. Morgen hängen neue Zettel.')
         : 'Heute ' + fertig + ' von ' + tages.length + ' geschafft.';
 
   var box = $('abenteuer-liste');
@@ -952,6 +954,36 @@ function renderAbenteuer(v) {
       '<div class="zettel-unten">' + unten + '</div>';
     box.appendChild(zettel);
   });
+
+  // Der Schlussstrich unter den Tag. Er haengt unter den Zetteln wie eine
+  // Urkunde am Brett: gesperrt, solange noch einer offen ist, und danach das
+  // Groesste, was der Tag hergibt.
+  var ab = v.aufgaben && v.aufgaben.abschluss;
+  if (ab && tages.length > 0) {
+    var urkunde = document.createElement('div');
+    urkunde.className = 'tagesabschluss' +
+      (ab.eingeloest ? ' abgeholt' : ab.erfuellt ? ' reif' : '');
+    var abLohn = (ab.gold > 0 ? ab.gold + ' Gold' : '') +
+      (ab.gold > 0 && ab.xp > 0 ? ' · ' : '') + (ab.xp > 0 ? ab.xp + ' XP' : '');
+    urkunde.innerHTML =
+      '<div class="ta-kopf">Tagesabschluss</div>' +
+      '<div class="ta-lohn">' + abLohn + '</div>' +
+      '<div class="ta-unten">' + (
+        ab.eingeloest
+          ? '<span class="ta-fertig">Heute geschafft ✓</span>'
+          : ab.erfuellt
+            ? '<button type="button" class="ta-los">Abholen · ' + abLohn + '</button>'
+            : '<span class="ta-stand">Noch ' + (ab.noetig - ab.abgenommen) +
+              ' von ' + ab.noetig + ' Zetteln abnehmen</span>'
+      ) + '</div>';
+    box.appendChild(urkunde);
+    var abKnopf = urkunde.querySelector('.ta-los');
+    if (abKnopf) {
+      abKnopf.addEventListener('click', function () {
+        act('Tag abgeschlossen', client.claimDay(), 'stufe');
+      });
+    }
+  }
 
   box.querySelectorAll('.zettel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {

@@ -2,8 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, DISCARD_QUEUE } from '../src/client/client.ts';
 import { Server } from '../src/server/server.ts';
-import { getRuleset, tagesAufgabenFuer } from '../src/sim/rules.ts';
-import { ZAEHLER, count, initialState, tagesFortschritt } from '../src/sim/state.ts';
+import { PRODUCTION_VERSIONS, getRuleset, tagesAufgabenFuer } from '../src/sim/rules.ts';
+import {
+  TAG_ABSCHLUSS,
+  ZAEHLER,
+  count,
+  initialState,
+  tagesAbgenommen,
+  tagesFortschritt,
+} from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 
 const T0 = 1_700_000_000_000;
@@ -199,4 +206,105 @@ test('der Tageswechsel setzt Fortschritt und Abholungen zurück', () => {
     0,
     'der Fortschritt von gestern zählt heute nicht mehr',
   );
+});
+
+// — Der Tagesabschluss ————————————————————————————————————————————————
+// Drei Zettel sind schnell erzaehlt, aber ohne Schlussstrich bleibt der Tag
+// ein Sack voll Einzelaufgaben. Der Abschluss ist der Grund, den dritten auch
+// noch zu holen, statt nach dem zweiten aufzuhoeren.
+const regelnMitAbschluss = getRuleset(40);
+
+// Ein Hof mit Tag und schon abgenommenen Zetteln — ohne den langen Weg dorthin.
+function hofMitAbnahmen(anzahl: number) {
+  const heute = tagesAufgabenFuer(regelnMitAbschluss, TAG, 1);
+  return {
+    ...initialState(regelnMitAbschluss),
+    serverTag: TAG,
+    tagNummer: TAG,
+    tagGeholt: heute.slice(0, anzahl).map((a) => a.id),
+  };
+}
+
+test('solange ein Zettel offen ist, gibt es keinen Abschluss', () => {
+  const s = hofMitAbnahmen(SATZ_HEUTE - 1);
+  assert.throws(
+    () => simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, regelnMitAbschluss),
+    /NOT_YET_EARNED/,
+  );
+});
+
+// Auf Stufe 1 gibt der Topf nur zwei Aufgaben her — der Abschluss verlangt
+// deshalb den heutigen Satz, nicht die Wunschzahl. Sonst koennten ausgerechnet
+// Anfaenger ihn nie holen.
+const SATZ_HEUTE = tagesAufgabenFuer(getRuleset(40), TAG, 1).length;
+
+test('auf Stufe 1 ist der Satz kürzer als drei — der Abschluss richtet sich danach', () => {
+  assert.ok(SATZ_HEUTE > 0 && SATZ_HEUTE < 3, `Stufe 1 bekam ${SATZ_HEUTE} Aufgaben`);
+  const s = hofMitAbnahmen(SATZ_HEUTE);
+  assert.doesNotThrow(() => simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, regelnMitAbschluss));
+});
+
+test('wer alle Zettel abnimmt, schließt den Tag ab — und das genau einmal', () => {
+  const s = hofMitAbnahmen(SATZ_HEUTE);
+  const lohn = regelnMitAbschluss.tagesAbschluss!;
+  const goldVor = count(s, regelnMitAbschluss.currency);
+
+  const fertig = simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, regelnMitAbschluss);
+  assert.equal(count(fertig, regelnMitAbschluss.currency), goldVor + lohn.gold);
+  assert.equal(fertig.xp, s.xp + lohn.xp);
+  assert.ok(fertig.tagGeholt.includes(TAG_ABSCHLUSS));
+
+  assert.throws(
+    () => simulate(fertig, { seq: 2, tick: 1, type: 'CLAIM_DAY' }, regelnMitAbschluss),
+    /ALREADY_CLAIMED/,
+  );
+});
+
+test('der Abschluss zählt sich selbst nicht als Zettel', () => {
+  // Sonst waere er mit einem Zettel weniger plus dem Eintrag von sich selbst
+  // zu haben.
+  const basis = hofMitAbnahmen(SATZ_HEUTE - 1);
+  const s = { ...basis, tagGeholt: [...basis.tagGeholt, TAG_ABSCHLUSS] };
+  assert.equal(tagesAbgenommen(s), SATZ_HEUTE - 1);
+  assert.throws(
+    () => simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, regelnMitAbschluss),
+    /ALREADY_CLAIMED/,
+  );
+});
+
+test('ein Regelwerk ohne Abschluss kennt den Befehl nicht', () => {
+  const s = { ...initialState(rules), serverTag: TAG, tagNummer: TAG, tagGeholt: ['a', 'b', 'c'] };
+  assert.throws(() => simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, rules), /NO_DAY_BONUS/);
+});
+
+test('ohne Serverkontakt gibt es auch keinen Abschluss', () => {
+  const s = initialState(regelnMitAbschluss);
+  assert.throws(
+    () => simulate(s, { seq: 1, tick: 0, type: 'CLAIM_DAY' }, regelnMitAbschluss),
+    /NO_TASKS_YET/,
+  );
+});
+
+test('der Tageswechsel öffnet den Abschluss wieder', () => {
+  const server = new Server(hofMitAbnahmen(SATZ_HEUTE) as never, T0, 40);
+  const client = new Client(server.snapshot);
+  assert.equal(client.claimDay().ok, true, 'heute geht er');
+  assert.equal(server.sync(client.buildSyncRequest(), T0).ok, true);
+
+  client.adopt(server.snapshot, DISCARD_QUEUE);
+  client.advanceClock(5);
+  client.start(0, R_WHEAT);
+  assert.equal(server.sync(client.buildSyncRequest(), T0 + TAG_MS).ok, true);
+
+  const st = server.snapshot.state;
+  assert.deepEqual(st.tagGeholt, [], 'am neuen Tag ist die Liste leer');
+  assert.equal(tagesAbgenommen(st), 0, 'und damit auch der Abschluss wieder zu verdienen');
+});
+
+test('keine Aufgabe heißt wie der Abschluss — sonst ließe er sich doppelt holen', () => {
+  for (const version of PRODUCTION_VERSIONS) {
+    for (const a of getRuleset(version).tagesaufgaben ?? []) {
+      assert.notEqual(a.id, TAG_ABSCHLUSS, `Regelwerk ${version} hat eine Aufgabe „${TAG_ABSCHLUSS}"`);
+    }
+  }
 });

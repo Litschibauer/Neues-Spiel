@@ -77,6 +77,10 @@ export type ClaimAchievementCommand = CommandBase & { type: 'CLAIM_ACHIEVEMENT';
 // Belohnung einer Tagesaufgabe abholen.
 export type ClaimTaskCommand = CommandBase & { type: 'CLAIM_TASK'; id: string };
 
+// Den Tagesabschluss abholen — geht erst, wenn alle Aufgaben des Tages
+// abgenommen sind, und an einem Tag nur einmal.
+export type ClaimDayCommand = CommandBase & { type: 'CLAIM_DAY' };
+
 // Ein gebautes Bauwerk abreißen — gibt die Hälfte des Gold-Einsatzes zurück.
 export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: number };
 
@@ -129,6 +133,7 @@ export type Command =
   | DiscardCommand
   | ClaimAchievementCommand
   | ClaimTaskCommand
+  | ClaimDayCommand
   | RemovePlotCommand
   | PackPlotCommand
   | CastLineCommand

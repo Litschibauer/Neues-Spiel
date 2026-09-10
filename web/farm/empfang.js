@@ -92,6 +92,12 @@ function empfangSammeln(v) {
       gold: a.gold, xp: a.xp, aufgabe: a.id });
   });
 
+  var ab = v.aufgaben && v.aufgaben.abschluss;
+  if (ab && ab.erfuellt && !ab.eingeloest) {
+    zeilen.push({ art: 'lohn', icon: '🏁', text: 'Tagesabschluss steht bereit',
+      gold: ab.gold, xp: ab.xp, abschluss: true });
+  }
+
   // Der Tagesbonus kommt vom Server — ohne Verbindung steht er nicht zu.
   if (typeof bonusStatus === 'object' && bonusStatus && bonusStatus.verfuegbar && netzOk()) {
     zeilen.push({ art: 'lohn', icon: '🎁',
@@ -211,6 +217,24 @@ function empfangEinsammeln() {
     z.geholt = true;
     etwas = true;
   });
+
+  // Der Abschluss erst nach den Zetteln: Er verlangt, dass sie abgenommen sind.
+  // Deshalb kann er auch erst durch diesen Griff fällig geworden sein — dann
+  // kommt seine Zeile jetzt dazu, statt bis zum nächsten Mal zu warten.
+  var abZeile = null;
+  empfangZeilen.forEach(function (z) { if (z.art === 'lohn' && z.abschluss && !z.geholt) abZeile = z; });
+  if (abZeile === null) {
+    var ab = NS.farmView(client.preview(), rules, navigator.onLine).aufgaben.abschluss;
+    if (ab && ab.erfuellt && !ab.eingeloest) {
+      abZeile = { art: 'lohn', icon: '🏁', text: 'Tagesabschluss steht bereit',
+        gold: ab.gold, xp: ab.xp, abschluss: true };
+      empfangZeilen.push(abZeile);
+    }
+  }
+  if (abZeile !== null && client.claimDay().ok) {
+    abZeile.geholt = true;
+    etwas = true;
+  }
 
   var post = null;
   empfangZeilen.forEach(function (z) { if (z.art === 'lohn' && z.post && !z.geholt) post = z; });

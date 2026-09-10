@@ -761,6 +761,35 @@
   .zettel-brett.reif { background: #fff6de; box-shadow: 3px 5px 0 rgba(0, 0, 0, .3); }
   .zettel-brett.abgeholt { opacity: .62; transform: rotate(var(--dreh, 0deg)) scale(.985); }
 
+  /* Der Tagesabschluss: keine Notiz mehr, sondern die Urkunde darunter —
+     gerade angeschlagen statt schief, mit Siegelrand und einer Farbe, die
+     kein Zettel hat. Gesperrt bleibt sie ruhig; reif traegt sie das Gold. */
+  .tagesabschluss {
+    position: relative; margin-top: 1rem; padding: .75rem .7rem .6rem;
+    background: #efe2c0; color: #3b2b3c;
+    border: 3px double #3b2b3c; border-radius: 4px;
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, .28);
+    text-align: center;
+  }
+  .tagesabschluss .ta-kopf {
+    font-family: var(--pixel); font-size: .96rem; font-weight: 700; letter-spacing: .02em;
+  }
+  .tagesabschluss .ta-lohn {
+    font-size: .7rem; font-weight: 700; color: #8a6a1c; margin-top: .1rem;
+  }
+  .tagesabschluss .ta-unten { margin-top: .55rem; }
+  .tagesabschluss .ta-stand { font-size: .72rem; font-weight: 700; opacity: .75; }
+  .tagesabschluss .ta-fertig { font-size: .74rem; font-weight: 700; color: #5aa04f; }
+  .tagesabschluss .ta-los {
+    width: 100%; padding: .5rem; border: 2px solid #3b2b3c; border-radius: 3px;
+    background: #f6c35a; color: #3b2b3c;
+    font-family: var(--pixel); font-size: .86rem; font-weight: 700;
+    box-shadow: 0 3px 0 #b8811f;
+  }
+  .tagesabschluss .ta-los:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8811f; }
+  .tagesabschluss.reif { background: #fff3d0; box-shadow: 3px 5px 0 rgba(0, 0, 0, .32); }
+  .tagesabschluss.abgeholt { opacity: .62; }
+
   @media (prefers-reduced-motion: reduce) {
     .zettel-brett { transform: none; }
     .zettel-brett.abgeholt { transform: none; }

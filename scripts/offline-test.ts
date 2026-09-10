@@ -4017,6 +4017,81 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     mobile: true,
   });
 
+  console.log('\n9y2. Der Tagesabschluss — der Schlussstrich unter den Tag');
+
+  await evaluate(cdp, `document.getElementById('abenteuer').click()`);
+  await sleep(600);
+  const urkunde = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var u = document.querySelector('.tagesabschluss');
+         return {
+           da: !!u,
+           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett').length,
+           text: u ? u.textContent.trim().replace(/\\s+/g, ' ') : '',
+           knopf: !!(u && u.querySelector('.ta-los')),
+           abgeholt: !!(u && u.classList.contains('abgeholt')),
+         };
+       })())`,
+    ),
+  ) as { da: boolean; zettel: number; text: string; knopf: boolean; abgeholt: boolean };
+
+  // Was der Server über den Tag weiß — daran muss sich das Brett messen lassen.
+  const tagStand = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { tagGeholt?: string[] };
+  };
+  const geholteZettel = (tagStand.state.tagGeholt ?? []).filter((id) => id !== 'tagesabschluss');
+  const schonAbgeschlossen = (tagStand.state.tagGeholt ?? []).includes('tagesabschluss');
+  const noetig = urkunde.zettel;
+
+  check(
+    'Unter den Zetteln hängt der Tagesabschluss mit seiner Belohnung',
+    urkunde.da && /Tagesabschluss/.test(urkunde.text) && /Gold/.test(urkunde.text),
+    urkunde.text.slice(0, 80),
+  );
+  check(
+    'Er geht genau dann auf, wenn alle Zettel des Tages abgenommen sind',
+    (geholteZettel.length >= noetig) === (urkunde.knopf || schonAbgeschlossen),
+    `${geholteZettel.length}/${noetig} abgenommen · Knopf ${urkunde.knopf} · schon geholt ${schonAbgeschlossen}`,
+  );
+
+  if (urkunde.knopf) {
+    const goldVorTag = await evaluate<number>(
+      cdp,
+      `Number(document.getElementById('gold').textContent)`,
+    );
+    await evaluate(cdp, `document.querySelector('.tagesabschluss .ta-los').click()`);
+    await sleep(2000);
+    const goldNachTag = await evaluate<number>(
+      cdp,
+      `Number(document.getElementById('gold').textContent)`,
+    );
+    const danach = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+      state: { tagGeholt?: string[] };
+    };
+    check(
+      'Abholen zahlt den Tagesabschluss aus, und der Server schreibt ihn fest',
+      goldNachTag > goldVorTag && (danach.state.tagGeholt ?? []).includes('tagesabschluss'),
+      `${goldVorTag} → ${goldNachTag} Gold`,
+    );
+  } else if (schonAbgeschlossen) {
+    check(
+      'Ein abgeschlossener Tag lässt sich nicht zweimal abschließen',
+      urkunde.abgeholt && !urkunde.knopf,
+      urkunde.text.slice(0, 60),
+    );
+  } else {
+    check(
+      'Solange Zettel offen sind, sagt die Urkunde genau, wie viele noch fehlen',
+      new RegExp('Noch ' + (noetig - geholteZettel.length) + ' von ' + noetig).test(urkunde.text),
+      `${urkunde.text.slice(0, 60)} (offen: ${noetig - geholteZettel.length})`,
+    );
+  }
+
+  await evaluate(cdp, `document.getElementById('abenteuer-close').click()`);
+  await sleep(300);
+
   console.log('\n9z. Der Empfang — was der Hof erarbeitet hat, wenn man wiederkommt');
 
   // Ein echter Spieler legt das Telefon weg und kommt wieder — die Seite wird
