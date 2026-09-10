@@ -253,6 +253,41 @@ const harvestAll = `(function () {
 // scheitern, wird gewartet und ein reifes Feld vorher abgeerntet — genau das,
 // was ein Spieler auch täte. Wer eine Aktion misst, ruft das vorher auf, damit
 // die Wartezeit nicht als Antwortzeit des Servers erscheint.
+// Schreibt jede Meldung mit, die das Spiel zeigt — samt der Frage, ob sie
+// antippbar war. Nach einem Neuladen muss der Mitschnitt neu angehaengt werden.
+// Der Mitschnitt liegt im localStorage, damit er Neuladen und Navigieren
+// ueberlebt. Der Beobachter selbst wird ueber CDP auf jedes neue Dokument
+// gesetzt — so muss nach einem Reload niemand daran denken, ihn neu
+// anzuhaengen.
+const MELDUNGEN = 'ns-test-meldungen';
+const MELDUNGEN_SKRIPT = `(function () {
+  function an() {
+    var t = document.getElementById('toast');
+    if (!t || window.__meldungenAn) return;
+    window.__meldungenAn = true;
+    new MutationObserver(function () {
+      if (t.className.indexOf('show') < 0 || !t.textContent) return;
+      var liste = [];
+      try { liste = JSON.parse(localStorage.getItem('${MELDUNGEN}') || '[]'); } catch (e) {}
+      var e = { text: t.textContent, tippbar: t.className.indexOf('tippbar') >= 0 };
+      var l = liste[liste.length - 1];
+      if (l && l.text === e.text) return;
+      liste.push(e);
+      try { localStorage.setItem('${MELDUNGEN}', JSON.stringify(liste)); } catch (x) {}
+    }).observe(t, { attributes: true, childList: true, characterData: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', an);
+  else an();
+})()`;
+let meldungenAngemeldet = false;
+async function meldungenMitschneiden(cdp: Cdp): Promise<void> {
+  if (!meldungenAngemeldet) {
+    meldungenAngemeldet = true;
+    await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: MELDUNGEN_SKRIPT });
+  }
+  await evaluate(cdp, MELDUNGEN_SKRIPT);
+}
+
 async function warteAufFreiesFeld(cdp: Cdp): Promise<boolean> {
   for (let versuch = 0; versuch < 50; versuch++) {
     const lage = await evaluate<string>(
@@ -928,6 +963,7 @@ try {
     'Verbindung steht und ein Platz ist reif',
     20_000,
   );
+  await meldungenMitschneiden(cdp);
 
   const stockOf = (name: string) =>
     evaluate<number>(
@@ -1163,6 +1199,7 @@ try {
   await cdp.send('Page.reload', { ignoreCache: false });
   await sleep(3000);
   await schliesseTutorial(cdp);
+  await meldungenMitschneiden(cdp);
 
   const ohneWahl = await leereFelder();
   if (ohneWahl.length >= 2) {
@@ -2225,7 +2262,38 @@ try {
        if (b) b.click();
      })()`,
   );
-  await sleep(700);
+  await sleep(120);
+  // Der Lohn des Wagens kommt sofort — und soll auch sofort zu sehen sein:
+  // Muenzen steigen vom Zettel auf, ueber dem Blatt, nicht dahinter.
+  const wagenLohn = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var f = [...document.querySelectorAll('.flug')];
+         var m = f.find(function (x) { return x.className.indexOf('muenzen') >= 0; });
+         var blatt = document.getElementById('brett-bg').getBoundingClientRect();
+         var r = m ? m.getBoundingClientRect() : null;
+         return {
+           muenzen: !!m, text: m ? m.textContent : '',
+           xp: f.some(function (x) { return x.className.indexOf('xp') >= 0; }),
+           sichtbar: !!r && r.top >= blatt.top - 1 && r.bottom <= blatt.bottom + 1 && r.width > 0,
+           obenauf: !!m && Number(getComputedStyle(m).zIndex) > Number(getComputedStyle(document.getElementById('brett-bg')).zIndex),
+         };
+       })())`,
+    ),
+  ) as { muenzen: boolean; text: string; xp: boolean; sichtbar: boolean; obenauf: boolean };
+  check(
+    'Beim Abschicken steigen die Münzen vom Zettel auf — vor dem Blatt, nicht dahinter',
+    wagenLohn.muenzen && wagenLohn.obenauf && wagenLohn.sichtbar,
+    `${wagenLohn.text}${wagenLohn.xp ? ' + XP' : ''} · obenauf ${wagenLohn.obenauf}`,
+  );
+  await sleep(400);
+  check(
+    'Kurz nach dem Motor klingelt die Kasse: Der Geldbeutel oben hüpft',
+    await evaluate<boolean>(cdp, `document.querySelector('.coins').classList.contains('huepft')`),
+    'huepft',
+  );
+  await sleep(180);
 
   const nachAbfahrt = await evaluate<{ gold: number; unterwegs: boolean; zettel: number }>(
     cdp,
@@ -2353,6 +2421,46 @@ try {
     nachKiste.state.mail.length > vorKiste.state.mail.length &&
       nachKiste.state.pendingBoxes.length === 0,
     `Postfach ${vorKiste.state.mail.length} → ${nachKiste.state.mail.length}`,
+  );
+
+  // Der Moment, was drin war: Sobald der Abgleich die Beute bringt, geht die
+  // Karte auf und zeigt genau die Stuecke, die im Postfach gelandet sind.
+  const beute = nachKiste.state.mail.slice(vorKiste.state.mail.length);
+  const karte = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var k = document.getElementById('kiste-feier');
+         return {
+           auf: !k.hidden,
+           zeilen: [...document.querySelectorAll('#kiste-beute .zeile')]
+             .map(function (z) { return z.textContent.trim(); }),
+           bild: !!document.querySelector('#kiste-bild svg'),
+           knopf: (document.getElementById('kiste-weiter') || {}).textContent || '',
+         };
+       })())`,
+    ),
+  ) as { auf: boolean; zeilen: string[]; bild: boolean; knopf: string };
+  check(
+    'Die Kiste enthüllt ihre Beute — als Moment, nicht als Karte im Postfach',
+    karte.auf && karte.bild && karte.zeilen.length === beute.length && karte.zeilen.length > 0,
+    `${karte.zeilen.join(' | ')} (Postfach: ${beute.length} Stück)`,
+  );
+
+  const goldVorEinpacken = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  const goldInBeute = beute.filter((b) => b.item === 0).reduce((n, b) => n + b.amount, 0);
+  await evaluate(cdp, `document.getElementById('kiste-weiter').click()`);
+  await sleep(1500);
+  const eingepackt = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { mail: unknown[] };
+  };
+  const goldNachEinpacken = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  check(
+    '„Einpacken" holt die Beute aus dem Postfach ins Lager — Gold in den Geldbeutel',
+    eingepackt.state.mail.length < nachKiste.state.mail.length &&
+      goldNachEinpacken === goldVorEinpacken + goldInBeute &&
+      (await evaluate<boolean>(cdp, `document.getElementById('kiste-feier').hidden`)),
+    `Postfach ${nachKiste.state.mail.length} → ${eingepackt.state.mail.length} · Gold ${goldVorEinpacken} → ${goldNachEinpacken}`,
   );
 
   const nachDemOeffnen = await evaluate<number>(
@@ -3976,6 +4084,8 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     mobile: true,
   });
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+  await waitFor(cdp, 'document.getElementById("plots")', 'Hof nach dem Neuladen');
+  await meldungenMitschneiden(cdp);
   await waitFor(
     cdp,
     'document.getElementById("shell") && !document.getElementById("shell").hidden',
@@ -4302,6 +4412,24 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     'Danach steht man auf dem Hof, nicht vor einem Blatt',
     await evaluate<boolean>(cdp, `document.getElementById('empfang-bg').hidden`),
     'Blatt zu',
+  );
+
+  console.log('\n9z2. Momente — gute Nachrichten kommen von selbst');
+  const meldungen = JSON.parse(
+    await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`),
+  ) as Array<{ text: string; tippbar: boolean }>;
+  const erfolgMeldung = meldungen.find((m) => /★ Erfolg · Stufe 3 erreichen/.test(m.text));
+  check(
+    'Wer Stufe 3 erreicht, erfährt sofort, dass ein Erfolg wartet — antippbar',
+    !!erfolgMeldung && erfolgMeldung.tippbar,
+    erfolgMeldung ? erfolgMeldung.text : `nicht gemeldet (${meldungen.length} Meldungen mitgeschnitten)`,
+  );
+  const zettelMeldung = meldungen.find((m) => /Zettel erfüllt/.test(m.text));
+  const zettelGeschafft = empfang.zeilen.some((z) => /Geschafft/.test(z));
+  check(
+    'Kippt ein Zettel über die Ziellinie, sagt es der Hof — mit dem Weg zum Brett',
+    !zettelGeschafft || (!!zettelMeldung && zettelMeldung.tippbar),
+    zettelMeldung ? zettelMeldung.text : zettelGeschafft ? 'kein Zettel gemeldet' : 'im Lauf kippte kein Zettel',
   );
 
   console.log('\n10. Eine neue Version erreicht den Browser');

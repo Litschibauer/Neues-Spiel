@@ -128,6 +128,8 @@
     font-weight: 700; font-variant-numeric: tabular-nums; font-size: .9rem;
   }
   .coins svg { flex: none; }
+  .coins.huepft { animation: huepfer .5s cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes huepfer { 0% { transform: scale(1); } 35% { transform: scale(1.22); } 100% { transform: scale(1); } }
 
   /* Die Serie: klein, warm, direkt neben dem Gold. Sie sagt in zwei Zeichen,
      warum man morgen wiederkommt. Offen (heutiger Bonus noch da) glimmt sie. */
@@ -346,6 +348,10 @@
   .hammer { right: 3.7rem; }
   .geschenk { right: 6.95rem; color: var(--on-accent); background: var(--accent); }
   .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
+  /* Ein Moebel, das einen Moment lang auf sich aufmerksam macht. */
+  .moebel.winkt { animation: winken .9s ease-in-out 3; }
+  .zahnrad .punkt.neu { animation: punktPuls .7s ease-out 3; }
+  @keyframes punktPuls { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.9); } }
   @keyframes winken {
     0%, 70%, 100% { transform: rotate(0); }
     78% { transform: rotate(-10deg); }
@@ -1395,6 +1401,29 @@
     animation: strahlDreh 14s linear infinite;
   }
   @keyframes strahlDreh { to { transform: translateX(-50%) rotate(360deg); } }
+  /* Die Kiste: goldene Strahlen statt gruener, der Deckel wackelt, die Beute
+     springt Stueck fuer Stueck heraus. */
+  .kiste-feier { background: radial-gradient(circle at 50% 42%, rgba(246,195,90,.32), rgba(0,0,0,.66)); }
+  .kiste-feier .stufe-strahlen {
+    background: repeating-conic-gradient(from 0deg, rgba(246,195,90,.38) 0deg 12deg, transparent 12deg 24deg);
+  }
+  .kiste-bild { width: 6.5rem; margin: 0 auto .5rem; animation: kisteWackelt .8s ease-in-out .1s 1; }
+  .kiste-bild svg { width: 100%; height: auto; display: block; }
+  @keyframes kisteWackelt {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(-6deg) scale(1.04); }
+    40% { transform: rotate(5deg) scale(1.08); }
+    60% { transform: rotate(-3deg) scale(1.04); }
+    80% { transform: rotate(2deg); }
+  }
+  .kiste-beute .zeile {
+    justify-content: center; font-size: .92rem;
+    animation: beuteRein .5s cubic-bezier(.2, 1.4, .4, 1) both;
+  }
+  @keyframes beuteRein { from { opacity: 0; transform: translateY(.9rem) scale(.5); } }
+  @media (prefers-reduced-motion: reduce) {
+    .kiste-bild, .kiste-beute .zeile, .coins.huepft, .moebel.winkt, .zahnrad .punkt.neu { animation: none; }
+  }
   .stufe-karte > *:not(.stufe-strahlen) { position: relative; z-index: 1; }
   .stufe-zahl {
     width: 4.4rem; height: 4.4rem; margin: 0 auto .5rem; border-radius: 50%;
@@ -1426,7 +1455,7 @@
     display: flex; align-items: center; justify-content: center; font-size: .8rem;
   }
   .stufe-neu .zeile .was { color: var(--muted); font-weight: 650; font-size: .68rem; }
-  #stufe-weiter {
+  #stufe-weiter, #kiste-weiter {
     width: 100%; height: 2.6rem; margin-top: 1rem; border: 0; border-radius: 13px;
     background: var(--accent); color: var(--on-accent); font-size: .9rem; font-weight: 700;
   }
@@ -1441,6 +1470,12 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem); }
   .toast.bad { background: var(--bad); color: var(--surface); }
+  /* Eine Meldung mit Weg: antippbar, mit Pfeil, und sie bleibt laenger. */
+  .toast.tippbar {
+    pointer-events: auto; cursor: pointer;
+    box-shadow: var(--shadow), 0 0 0 2px var(--accent);
+  }
+  .toast.tippbar::after { content: '  ›'; font-weight: 800; opacity: .8; }
 
   .gate {
     min-height: 100%; display: flex; flex-direction: column; justify-content: center;

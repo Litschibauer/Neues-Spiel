@@ -989,10 +989,19 @@ function zeichneHindernis(h) {
   box.appendChild(knopf);
 }
 
+// Die Beute wuerfelt der Server; sie kommt mit dem naechsten Abgleich und wird
+// dann enthuellt (momente.js). Ohne Netz dauert das bis zur naechsten Verbindung
+// — das soll dastehen, sonst wartet man auf eine Karte, die nicht kommt.
+function kisteText() {
+  return navigator.onLine
+    ? 'Kiste geöffnet · gleich siehst du, was drin war'
+    : 'Kiste geöffnet · was drin war, siehst du mit der nächsten Verbindung';
+}
+
 function oeffneKiste(id) {
   if (!isActive) return;
   client.localTick = tickNow();
-  act('Kiste geöffnet · der Inhalt kommt mit der Post', client.openChest(id), 'kiste');
+  act(kisteText(), client.openChest(id), 'kiste');
 }
 
 $('kiste').addEventListener('click', function () {

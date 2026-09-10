@@ -56,13 +56,28 @@ function loadSaved() {
 }
 
 var toastTimer = null;
-function toast(message, bad) {
+// Eine Meldung kann einen Weg anbieten: Mit `weiter` wird sie antippbar und
+// bleibt dafuer etwas laenger stehen. Ohne bleibt sie, was sie war.
+var toastWeiter = null;
+function toast(message, bad, weiter) {
   var el = $('toast');
   el.textContent = message;
-  el.className = 'toast show' + (bad ? ' bad' : '');
+  toastWeiter = typeof weiter === 'function' ? weiter : null;
+  el.className = 'toast show' + (bad ? ' bad' : '') + (toastWeiter ? ' tippbar' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function () { el.className = 'toast'; }, 2200);
+  toastTimer = setTimeout(function () {
+    el.className = 'toast';
+    toastWeiter = null;
+  }, toastWeiter ? 3400 : 2200);
 }
+$('toast').addEventListener('click', function () {
+  if (!toastWeiter) return;
+  var weiter = toastWeiter;
+  toastWeiter = null;
+  clearTimeout(toastTimer);
+  $('toast').className = 'toast';
+  weiter();
+});
 
 function api(path, options) {
   options = options || {};

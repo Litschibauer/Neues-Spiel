@@ -43,6 +43,8 @@ function render() {
   renderSheet(v);
   renderEmpfang();
   renderNaechstes(v);
+  momentePruefen(v);
+  winkeAnwenden();
   bonusKnopf();
   $('see-hud').hidden = true;
 }
@@ -665,7 +667,18 @@ function renderRequests(v) {
       ? 'Wagen unterwegs'
       : z.deliverable ? 'Abschicken' : 'Ware fehlt';
     los.addEventListener('click', function () {
-      act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), client.sendSlip(z.slot), 'wagen');
+      // Der Lohn kommt sofort — also soll man ihn auch ankommen sehen: Muenzen
+      // steigen vom Zettel auf, der Geldbeutel oben huepft, kurz nach dem
+      // Motor klingelt die Kasse.
+      var wo = los.getBoundingClientRect();
+      var lohnGold = 0;
+      z.reward.forEach(function (r) { if (r.item === rules.currency) lohnGold += r.amount; });
+      var res = client.sendSlip(z.slot);
+      act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), res, 'wagen');
+      if (!res.ok) return;
+      if (lohnGold > 0) zahlAuf(wo, '+' + lohnGold, 'muenzen');
+      if (z.xp > 0) zahlAuf(hoch(wo), '+' + z.xp + ' XP', 'xp');
+      setTimeout(function () { klang('muenzen'); geldbeutelHuepft(); }, 320);
     });
     reihe.appendChild(los);
 
@@ -1178,7 +1191,7 @@ function vollesKaestchen(o) {
       var wo = b.getBoundingClientRect();
       var erg = client.collectSale(o.id);
       act('Kasse · +' + geld + ' ' + itemName(rules.currency), erg, 'muenzen');
-      if (erg.ok) zahlAuf(wo, '+' + geld, 'gold');
+      if (erg.ok) { zahlAuf(wo, '+' + geld, 'muenzen'); geldbeutelHuepft(); }
     });
     return b;
   }

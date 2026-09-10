@@ -86,6 +86,22 @@ function empfangSammeln(v) {
     zeilen.push({ art: 'lohn', icon: '📬', text: 'Post ist da · ' + stacks(v.mail.entries), post: true });
   }
 
+  // Über Nacht verkaufte Kästchen: reiner Lohn, der am Stand wartet.
+  var verkauft = (v.orders || []).filter(function (o) { return o.sold > 0; });
+  if (verkauft.length > 0) {
+    var kasse = 0;
+    verkauft.forEach(function (o) { kasse += o.sold; });
+    zeilen.push({ art: 'lohn', icon: '💰',
+      text: verkauft.length === 1 ? 'Ein Kästchen ist verkauft' : verkauft.length + ' Kästchen sind verkauft',
+      gold: kasse, xp: 0, verkaeufe: verkauft.map(function (o) { return o.id; }) });
+  }
+
+  (v.erfolge || []).forEach(function (e) {
+    if (!e.erfuellt || e.eingeloest) return;
+    zeilen.push({ art: 'lohn', icon: '★', text: 'Erfolg · ' + e.label,
+      gold: e.gold, xp: e.xp, erfolg: e.id });
+  });
+
   ((v.aufgaben && v.aufgaben.liste) || []).forEach(function (a) {
     if (!a.erfuellt || a.eingeloest) return;
     zeilen.push({ art: 'lohn', icon: '⭐', text: 'Geschafft · ' + a.label,
@@ -212,7 +228,18 @@ function empfangEinsammeln() {
   var etwas = false;
 
   empfangZeilen.forEach(function (z) {
-    if (z.art !== 'lohn' || z.geholt || !z.aufgabe) return;
+    if (z.art !== 'lohn' || z.geholt) return;
+    if (z.verkaeufe) {
+      var alle = true;
+      z.verkaeufe.forEach(function (id) { if (!client.collectSale(id).ok) alle = false; });
+      if (alle) { z.geholt = true; etwas = true; }
+      return;
+    }
+    if (z.erfolg) {
+      if (client.claimAchievement(z.erfolg).ok) { z.geholt = true; etwas = true; }
+      return;
+    }
+    if (!z.aufgabe) return;
     if (!client.claimTask(z.aufgabe).ok) return;
     z.geholt = true;
     etwas = true;
@@ -276,6 +303,7 @@ function empfangFeiern(gold, xp) {
   if (typeof zahlAuf === 'function' && muenzen && gold > 0) {
     zahlAuf(muenzen.getBoundingClientRect(), '+' + gold, 'muenzen');
   }
+  if (gold > 0) geldbeutelHuepft();
   toast('Eingesammelt' + (gold > 0 ? ' · +' + gold + ' Gold' : '') +
     (xp > 0 ? (gold > 0 ? ' + ' : ' · +') + xp + ' XP' : ''));
 }

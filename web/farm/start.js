@@ -64,6 +64,9 @@ function netzWache() {
 function attempt(force) {
   if (!engine) return Promise.resolve();
   client.localTick = tickNow();
+  // Die Sicht von eben aufheben: Daran erkennen die Momente, was der Abgleich
+  // gebracht hat — etwa die Beute einer Kiste.
+  var vorher = NS.farmView(client.preview(), rules, navigator.onLine);
   return engine.attempt(Date.now(), force === true).then(function (outcome) {
     setConn(engine.view);
     if (outcome.kind === 'synced') {
@@ -93,6 +96,7 @@ function attempt(force) {
       toast(/OFFER_GONE/.test(outcome.reason || '') ? 'Jemand war schneller' : 'Teil verworfen', true);
       afterSync(outcome.snapshot, outcome.serverTime);
     }
+    momenteNachAbgleich(vorher);
     render();
   }).catch(function () { setConn('offline'); netzWache(); });
 }
@@ -178,6 +182,10 @@ $('pfad-auf').addEventListener('click', function () { show('pfad'); });
 $('bonus-auf').addEventListener('click', function () { oeffneBonus(); });
 $('serie').addEventListener('click', function () { oeffneBonus(); });
 $('stufe-weiter').addEventListener('click', feierZu);
+$('kiste-weiter').addEventListener('click', function () { kisteEinpacken(); });
+$('kiste-feier').addEventListener('click', function (e) {
+  if (e.target === $('kiste-feier')) kisteZu();
+});
 $('stufe-feier').addEventListener('click', function (e) {
   if (e.target === $('stufe-feier')) feierZu();
 });

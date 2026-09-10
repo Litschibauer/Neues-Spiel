@@ -136,7 +136,39 @@ var KLAENGE = {
     stimme('triangle', 1046, 1046, 0.09, 0.26, 0.07);
     stimme('triangle', 1318, 1568, 0.2, 0.3, 0.14);
   },
+
+  // Die Kiste geht auf: erst das Knarzen des Deckels, dann Glitzer.
+  truhe: function () {
+    stimme('sawtooth', 120, 95, 0.2, 0.12);
+    rauschen(0.12, 0.08, 900);
+    stimme('triangle', 880, 880, 0.08, 0.2, 0.24);
+    stimme('triangle', 1108, 1108, 0.08, 0.22, 0.32);
+    stimme('triangle', 1318, 1760, 0.28, 0.28, 0.4);
+  },
+
+  // Ein Erfolg wird faellig: drei steigende Toene, feierlich, aber kurz.
+  erfolg: function () {
+    stimme('triangle', 659, 659, 0.1, 0.24);
+    stimme('triangle', 880, 880, 0.1, 0.24, 0.1);
+    stimme('triangle', 1318, 1318, 0.28, 0.28, 0.2);
+  },
+
+  // Ein Zettel kippt ueber die Ziellinie: ein heller Doppelklang.
+  zettel: function () {
+    stimme('triangle', 988, 988, 0.07, 0.22);
+    stimme('triangle', 1318, 1318, 0.16, 0.26, 0.09);
+  },
 };
+
+// Der Geldbeutel oben huepft, wenn Muenzen ankommen — damit man sieht, wo das
+// Gold hingeht, ohne hinzuschauen.
+function geldbeutelHuepft() {
+  var m = document.querySelector('.coins');
+  if (!m || magerModus()) return;
+  m.classList.remove('huepft');
+  void m.offsetWidth;
+  m.classList.add('huepft');
+}
 
 function klang(name) {
   if (sfxProz <= 0 || document.hidden) return;
