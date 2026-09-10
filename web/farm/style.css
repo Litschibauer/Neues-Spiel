@@ -18,6 +18,8 @@
     --corn: #e5c045; --corn-leaf: #6ea34a; --hide: #efeae2; --hide-spot: #4a4039;
     --milk: #fbfaf6;
     --on-ripe: #3a2a06;
+    /* Umrissfarbe der Pixelkunst — Oberflaeche und Welt teilen sie sich. */
+    --kante: #3b2b3c; --druck: rgba(59, 43, 60, .3);
     --shadow: 0 1px 2px rgba(43, 37, 33, .06), 0 4px 14px rgba(43, 37, 33, .05);
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     --num: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -45,6 +47,7 @@
       --wood: #8b6440; --wood-dark: #63472c;
       --on-accent: #10251c; --feather: #ded7c8; --feather-2: #c9c1b1; --egg: #f0e9d8;
       --on-ripe: #2a1d04;
+      --kante: #0c0a09; --druck: rgba(0, 0, 0, .6);
       --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
     }
   }
@@ -66,6 +69,7 @@
     --wood: #8b6440; --wood-dark: #63472c;
     --on-accent: #10251c; --feather: #ded7c8; --feather-2: #c9c1b1; --egg: #f0e9d8;
     --on-ripe: #2a1d04;
+    --kante: #0c0a09; --druck: rgba(0, 0, 0, .6);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
   }
 
@@ -1386,3 +1390,76 @@
 
   .tiny { font-size: .68rem; color: var(--muted); text-align: center; }
   .tiny a { color: inherit; }
+
+  /* — Retro-Schliff auf allen Blaettern ————————————————————————————————
+     Jeder Bildschirm ist aus denselben Bausteinen gebaut. Deshalb wird hier
+     nicht Bildschirm fuer Bildschirm gestaltet, sondern der Baustein: harte
+     Kanten statt Haarlinien, ein versetzter Schatten statt weichgezeichneter,
+     kleine Radien statt Pillenformen. Die Kantenfarbe ist dieselbe wie der
+     Umriss der Pixelkunst, damit Oberflaeche und Welt zusammengehoeren. */
+
+  .sheet {
+    border: 3px solid var(--kante); border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -6px 0 rgba(0, 0, 0, .18);
+  }
+  .sheet h3 { box-shadow: 0 3px 0 var(--kante); }
+  .sheet-close {
+    border: 2px solid var(--kante); border-radius: 7px;
+    color: var(--ink); font-weight: 700;
+  }
+
+  .card, .kaestchen, .hofkarte, .zettel, .nachbar, .note {
+    border: 2px solid var(--kante);
+    box-shadow: 0 3px 0 var(--druck);
+  }
+  .card, .zettel, .nachbar, .note { border-radius: 7px; }
+  .kaestchen, .hofkarte { border-radius: 9px; }
+
+  /* Gedrueckt wird gedrueckt: der Schatten faellt zusammen, nichts skaliert. */
+  .card { transition: transform .08s, box-shadow .08s; }
+  .card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+  .kaestchen { transition: transform .08s, box-shadow .08s; }
+  .kaestchen:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+
+  .chip {
+    border: 2px solid var(--kante); border-radius: 6px;
+    box-shadow: 0 2px 0 var(--druck);
+  }
+  .chip:not([disabled]):active { transform: translateY(2px); box-shadow: none; }
+
+  .go {
+    border: 2px solid var(--kante); border-radius: 6px;
+    box-shadow: 0 2px 0 var(--druck);
+  }
+  .go.weg { border-color: var(--kante); }
+
+  .abfahrt {
+    border: 2px solid var(--kante); border-radius: 7px;
+    box-shadow: 0 3px 0 var(--druck);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .abfahrt:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+
+  /* Balken bekommen einen echten Rahmen — dafuer brauchen sie etwas Hoehe. */
+  .balken {
+    height: .55rem; border-radius: 3px;
+    border: 2px solid var(--kante); background: var(--sunk);
+  }
+  .balken i { border-radius: 0; }
+
+  .tut-card, .stufe-karte {
+    border: 3px solid var(--kante); border-radius: 12px;
+    box-shadow: 0 5px 0 rgba(0, 0, 0, .4);
+  }
+  .tut-card h2, .stufe-titel { letter-spacing: 0; }
+
+  /* Beschriftungen, die unter 10 px lagen — auf dem Telefon war das zu klein. */
+  .bonus-tag .d { font-size: .68rem; }
+  .bonus-tag .x { font-size: .66rem; }
+  .kaestchen .rest { font-size: .66rem; }
+  .kaestchen .p { font-size: .68rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card:active, .kaestchen:active, .abfahrt:active, .chip:active { transform: none; }
+  }
