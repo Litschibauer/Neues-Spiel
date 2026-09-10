@@ -59,10 +59,12 @@ function netzWache() {
   return true;
 }
 
+// Gibt die laufende Abgleich-Zusage zurueck, damit ein Aufrufer darauf warten
+// kann — der Empfang etwa, der die Post erst leert, wenn der Tagesbonus da ist.
 function attempt(force) {
-  if (!engine) return;
+  if (!engine) return Promise.resolve();
   client.localTick = tickNow();
-  engine.attempt(Date.now(), force === true).then(function (outcome) {
+  return engine.attempt(Date.now(), force === true).then(function (outcome) {
     setConn(engine.view);
     if (outcome.kind === 'synced') {
       var r = outcome.result;
@@ -100,7 +102,7 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -111,7 +113,7 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -242,13 +244,19 @@ function begin(restored) {
   setTimeout(bonusHolen, 1500);
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
+      save();
       stopLive();
     } else {
+      // Zuerst die Abwesenheit festhalten: Der Abgleich gleich danach schreibt
+      // ein frisches Lebenszeichen. Wer aus der Tasche zurückkommt, kommt
+      // zurück — nach einer längeren Pause empfängt der Hof ihn noch einmal.
+      empfangAnmelden();
       if (engine) engine.revive();
       attempt(true);
       refreshLease();
       startLive();
       bonusHolen();
+      empfangPruefen();
     }
   });
   window.addEventListener('online', function () {
@@ -283,22 +291,26 @@ function begin(restored) {
 function start(snapshot, serverTime, id) {
   accountId = id || accountId;
   ladeSaat();
+  empfangAnmelden();
   if (!begin(new NS.Client(snapshot, deviceId))) return;
   adopt(snapshot, serverTime);
   setConn('live');
   render();
   tutorialStarten(false);
+  empfangPruefen();
 }
 
 function startOffline(saved) {
   clockOffsetMs = saved.clockOffsetMs;
   accountId = saved.accountId || null;
   ladeSaat();
+  empfangAnmelden();
   if (!begin(saved.client)) return;
   setConn(navigator.onLine ? 'catching-up' : 'offline');
   render();
   attempt(true);
   refreshLease();
+  empfangPruefen();
 }
 
 function connect() {
@@ -422,6 +434,8 @@ function tutorialAbschliessen() {
   }
   featureSeiten = null;
   $('tut-bg').hidden = true;
+  // Die Einführung hatte Vorrang — jetzt darf der Empfang.
+  empfangPruefen();
 }
 function tutorialZeigen() {
   var seiten = featureSeiten || TUTORIAL;

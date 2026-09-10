@@ -13,7 +13,23 @@ function bonusHolen() {
   return api('/api/tagesbonus').then(function (s) {
     bonusStatus = s;
     bonusKnopf();
-  }).catch(function () {});
+  }).catch(function () {}).then(function () {
+    // Der Empfang wartet auf diese Antwort — mit ihr steht fest, ob der
+    // Tagesbonus in der Liste steht.
+    empfangPruefen();
+  });
+}
+
+// Den Bonus abholen und nur die Zahlen zurückgeben. Was daraus wird — Meldung,
+// Klang, Münzflug — entscheidet, wer ihn abholt: das Bonusblatt oder der
+// Empfang.
+function bonusEinloesenRoh() {
+  if (!bonusStatus || !bonusStatus.verfuegbar || !netzOk()) return Promise.resolve(null);
+  return api('/api/tagesbonus', { method: 'POST' }).then(function (r) {
+    bonusStatus = r.status;
+    bonusKnopf();
+    return r;
+  });
 }
 
 function oeffneBonus() {
@@ -60,8 +76,8 @@ function renderBonus() {
 
 function bonusEinloesen() {
   if (!bonusStatus || !bonusStatus.verfuegbar || !netzOk()) return;
-  api('/api/tagesbonus', { method: 'POST' }).then(function (r) {
-    bonusStatus = r.status;
+  bonusEinloesenRoh().then(function (r) {
+    if (!r) return;
     klang('muenzen');
     var muenzen = document.querySelector('.coins');
     if (typeof zahlAuf === 'function' && muenzen) {

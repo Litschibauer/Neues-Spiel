@@ -1464,6 +1464,33 @@
   }
   .tut-card h2, .stufe-titel { letter-spacing: 0; }
 
+  /* — Der Empfang ————————————————————————————————————————————————————
+     Eine Liste, keine Tabelle: Bild, Satz, Wert. Was zusteht, ist warm
+     unterlegt; was schon geholt wurde, tritt zurueck und bekommt den Haken. */
+  .empfang-liste { display: flex; flex-direction: column; gap: .4rem; margin: .2rem 0 .9rem; }
+  .empfang-zeile {
+    display: grid; grid-template-columns: 1.7rem 1fr auto; align-items: center; gap: .5rem;
+    padding: .5rem .6rem; border: 2px solid var(--kante); border-radius: 7px;
+    background: var(--surface); box-shadow: 0 3px 0 var(--druck);
+  }
+  .empfang-zeile .e { font-size: 1.1rem; text-align: center; }
+  .empfang-zeile .t { font-weight: 700; font-size: .84rem; }
+  .empfang-zeile .w { font-weight: 750; font-size: .82rem; white-space: nowrap; }
+  .empfang-zeile .w .ic { width: 1em; height: 1em; vertical-align: -.12em; margin-left: .1rem; }
+  .empfang-zeile .w .x { color: var(--leaf); font-size: .74rem; }
+  .empfang-zeile.lohn { background: var(--sunk); border-color: var(--accent); }
+  .empfang-zeile.geholt { opacity: .5; box-shadow: 0 1px 0 var(--druck); transform: translateY(2px); }
+  .empfang-weiter {
+    margin: 0 0 .9rem; font-size: .78rem; color: var(--muted); text-align: center;
+  }
+  #empfang-inhalt .primär {
+    width: 100%; height: 2.8rem; border: 2px solid var(--kante); border-radius: 8px;
+    background: var(--accent); color: var(--on-accent); font-weight: 750; font-size: .95rem;
+    box-shadow: 0 3px 0 var(--druck); transition: transform .08s, box-shadow .08s;
+  }
+  #empfang-inhalt .primär:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+  #empfang-inhalt .primär[disabled] { opacity: .5; }
+
   /* Beschriftungen, die unter 10 px lagen — auf dem Telefon war das zu klein. */
   .bonus-tag .d { font-size: .68rem; }
   .bonus-tag .x { font-size: .66rem; }

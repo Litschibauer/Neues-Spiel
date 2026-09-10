@@ -35,6 +35,9 @@ var SAVE_KEY = NS.storageKeyFor(NS_BASIS || location.origin);
 
 function save() {
   if (!client) return;
+  // Jeder Spielzug ist zugleich ein Lebenszeichen: Daran misst der Empfang,
+  // wie lange der Hof allein gearbeitet hat.
+  merkeDa();
   try {
     localStorage.setItem(
       SAVE_KEY,

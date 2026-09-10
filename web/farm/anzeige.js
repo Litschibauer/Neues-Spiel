@@ -41,6 +41,7 @@ function render() {
   if (view === 'erweiterung') renderErweiterungSheet(v);
   renderBauliste(v);
   renderSheet(v);
+  renderEmpfang();
   bonusKnopf();
   $('see-hud').hidden = true;
 }

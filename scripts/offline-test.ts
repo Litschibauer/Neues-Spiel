@@ -4017,6 +4017,119 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     mobile: true,
   });
 
+  console.log('\n9z. Der Empfang — was der Hof erarbeitet hat, wenn man wiederkommt');
+
+  // Ein echter Spieler legt das Telefon weg und kommt wieder — die Seite wird
+  // dabei nicht neu geladen, sie war nur im Hintergrund. Genau das wird hier
+  // nachgestellt: erst wegdrehen (dabei stempelt der Hof sein Lebenszeichen),
+  // dann die Uhr des Lebenszeichens zurückdrehen, dann zurückkommen.
+  const sichtbar = async (wie: 'hidden' | 'visible') => {
+    await evaluate(
+      cdp,
+      `(function () {
+         Object.defineProperty(document, 'visibilityState',
+           { configurable: true, get: function () { return '${wie}'; } });
+         Object.defineProperty(document, 'hidden',
+           { configurable: true, get: function () { return ${wie === 'hidden'}; } });
+         document.dispatchEvent(new Event('visibilitychange'));
+       })()`,
+    );
+  };
+  const wegGewesen = async (sekunden: number) => {
+    await sichtbar('hidden');
+    await sleep(400);
+    await evaluate(
+      cdp,
+      `Object.keys(localStorage).forEach(function (k) {
+         if (k.indexOf('ns-da') === 0) localStorage.setItem(k, String(Date.now() - ${sekunden} * 1000));
+       })`,
+    );
+    await sichtbar('visible');
+    await sleep(2500);
+  };
+
+  // Damit wirklich etwas wartet: notfalls etwas ansetzen und reif werden lassen.
+  const zaehleReif = () =>
+    evaluate<number>(cdp, `document.querySelectorAll('#plots .plot.ripe').length`);
+  if ((await zaehleReif()) === 0) {
+    await plantSomething(cdp);
+    await sleep(33000);
+  }
+
+  // Wer eben erst weggeschaut hat, kommt nicht „zurück".
+  await wegGewesen(30);
+  check(
+    'Nach kurzem Wegschauen empfängt niemand — das wäre nur ein Fenster zum Wegtippen',
+    await evaluate<boolean>(cdp, `document.getElementById('empfang-bg').hidden`),
+    'Blatt blieb zu',
+  );
+
+  // Drei Stunden weg: Jetzt zählt der Hof auf, was in der Zeit zusammenkam.
+  await wegGewesen(3 * 3600);
+  const empfang = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var bg = document.getElementById('empfang-bg');
+         return {
+           offen: !bg.hidden,
+           kopf: ((document.querySelector('#empfang-inhalt .lead') || {}).textContent || '').trim(),
+           zeilen: [...document.querySelectorAll('.empfang-zeile')]
+             .map(function (z) { return z.textContent.trim().replace(/\\s+/g, ' '); }),
+           lohn: document.querySelectorAll('.empfang-zeile.lohn').length,
+           knopf: ((document.getElementById('empfang-los') || {}).textContent || '').trim(),
+         };
+       })())`,
+    ),
+  ) as { offen: boolean; kopf: string; zeilen: string[]; lohn: number; knopf: string };
+
+  check(
+    'Nach Stunden ohne Hof geht der Empfang von selbst auf und sagt, wie lange man weg war',
+    empfang.offen && /weg/.test(empfang.kopf),
+    `${empfang.offen ? 'auf' : 'zu'} · ${empfang.kopf}`,
+  );
+  check(
+    'Er zählt auf, was wartet — jede Zeile steht für etwas, das der Hof wirklich hat',
+    empfang.zeilen.length > 0,
+    empfang.zeilen.join(' | ').slice(0, 110),
+  );
+
+  const goldVorEmpfang = await evaluate<number>(
+    cdp,
+    `Number(document.getElementById('gold').textContent)`,
+  );
+  await evaluate(cdp, `document.getElementById('empfang-los').click()`);
+  await sleep(2500);
+  const nachEmpfang = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify({
+         gold: Number(document.getElementById('gold').textContent),
+         haken: document.querySelectorAll('.empfang-zeile.geholt').length,
+         knopf: ((document.getElementById('empfang-los') || {}).textContent || '').trim(),
+       })`,
+    ),
+  ) as { gold: number; haken: number; knopf: string };
+
+  check(
+    'Einsammeln zahlt wirklich aus — das Gold liegt danach im Geldbeutel, nicht im Postfach',
+    nachEmpfang.gold > goldVorEmpfang,
+    `${goldVorEmpfang} → ${nachEmpfang.gold} Gold`,
+  );
+  check(
+    'Abgeholte Zeilen tragen den Haken, und der Knopf führt zurück auf den Hof',
+    nachEmpfang.haken > 0 && /Hof/.test(nachEmpfang.knopf),
+    `${nachEmpfang.haken} abgehakt · Knopf: ${nachEmpfang.knopf}`,
+  );
+
+  await evaluate(cdp, `document.getElementById('empfang-los').click()`);
+  await sleep(500);
+  check(
+    'Danach steht man auf dem Hof, nicht vor einem Blatt',
+    await evaluate<boolean>(cdp, `document.getElementById('empfang-bg').hidden`),
+    'Blatt zu',
+  );
+
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
