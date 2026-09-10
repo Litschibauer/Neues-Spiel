@@ -700,6 +700,15 @@
     text-align: center; font-size: .7rem; margin: 0 0 .8rem;
     color: color-mix(in srgb, #f4ecd8 72%, transparent);
   }
+  /* Das Schild am Rahmen: wann haengen neue Zettel. */
+  .brett-uhr {
+    margin: .2rem 0 .1rem; text-align: center;
+    font-size: .72rem; color: #f4ecd8;
+    background: #6b4326; border: 2px solid #3b2b3c; border-radius: 4px;
+    padding: .35rem .5rem;
+  }
+  .brett-uhr b { font-family: var(--pixel); font-weight: 700; font-size: .84rem; }
+
   .sheet.brettblatt .sheet-close {
     background: #6b4326; color: #f4ecd8; border: 2px solid #3b2b3c;
     /* Der Standard deckt die Luecke mit --surface ab; hier muss Holz nachkommen. */

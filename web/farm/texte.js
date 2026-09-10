@@ -134,6 +134,25 @@ function ausbeuteText(recipeIndex) {
   return ausbeute(recipeIndex).map(function (s) { return s.amount + ' ' + itemName(s.item); }).join(' + ');
 }
 
+// Der Tageswechsel haengt am Kalendertag des Servers, und der zaehlt in UTC:
+// tagVon(ms) = floor(ms / 86400000). Der naechste Wechsel ist also die
+// naechste UTC-Mitternacht — gerechnet auf der Serveruhr, nicht auf der des
+// Geraets, sonst laege eine schiefe Uhr auch beim Countdown daneben.
+var TAG_MS = 86400000;
+
+function naechsterTageswechsel() {
+  var serverJetzt = Date.now() + (typeof clockOffsetMs === 'number' ? clockOffsetMs : 0);
+  return { jetzt: serverJetzt, wechsel: (Math.floor(serverJetzt / TAG_MS) + 1) * TAG_MS };
+}
+
+// Angezeigt wird in der Zeitzone des Geraets — der Moment ist derselbe, nur
+// eben so, wie er auf der Uhr des Spielers steht. Fest 24 Stunden, damit es
+// nicht je nach Systemsprache zwischen 14:00 und 2 PM springt.
+function uhrzeitKurz(ms) {
+  var d = new Date(ms);
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+
 function timeText(seconds) {
   if (seconds < 60) return seconds + ' s';
   if (seconds < 3600) return Math.ceil(seconds / 60) + ' min';

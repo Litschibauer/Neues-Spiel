@@ -957,6 +957,18 @@ function renderAbenteuer(v) {
       act('Abenteuer geschafft', client.claimTask(btn.getAttribute('data-id')), 'stufe');
     });
   });
+
+  // Wann haengen neue Zettel? Der Countdown laeuft auf der Serveruhr, die
+  // Uhrzeit steht in der Zeitzone des Geraets. Ohne Verbindung wechselt der
+  // Tag nicht von allein — das muss dastehen, sonst wartet man vergeblich.
+  var uhr = $('abenteuer-uhr');
+  if (!uhr) return;
+  if (tages.length === 0) { uhr.textContent = ''; return; }
+  var w = naechsterTageswechsel();
+  var rest = Math.max(0, Math.floor((w.wechsel - w.jetzt) / 1000));
+  uhr.innerHTML = navigator.onLine
+    ? 'Neue Zettel um <b>' + uhrzeitKurz(w.wechsel) + '</b> · noch ' + timeText(rest)
+    : 'Neue Zettel um <b>' + uhrzeitKurz(w.wechsel) + '</b> — sobald dein Hof wieder Verbindung hat';
 }
 
 function zielZeile(e) {

@@ -3451,6 +3451,29 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     brett.offen && /Abenteuerbrett/.test(brett.titel) && brett.zettel.length > 0,
     `${brett.titel} · ${brett.zettel.length} Zettel · ${brett.unter}`,
   );
+  // Wann haengen neue Zettel? Die Uhrzeit steht in der Zeitzone des Geraets,
+  // der Countdown laeuft auf der Serveruhr. Beides muss zusammenpassen: Jetzt
+  // plus Restzeit ergibt die angezeigte Uhrzeit.
+  const brettUhr = await evaluate<string>(cdp, `(function () {
+    var u = document.getElementById('abenteuer-uhr');
+    if (!u) return 'FEHLT';
+    var t = u.textContent || '';
+    var m = /(\\d{2}):(\\d{2})/.exec(t);
+    var r = /noch (.+)$/.exec(t);
+    if (!m || !r) return 'unvollstaendig: ' + t;
+    // Restzeit grob zurueckrechnen und mit der genannten Uhrzeit vergleichen.
+    var teile = /(?:(\\d+) h )?(?:(\\d+) min|(\\d+) s)/.exec(r[1]) || [];
+    var min = (Number(teile[1] || 0) * 60) + Number(teile[2] || 0);
+    var ziel = new Date(Date.now() + min * 60000);
+    var stimmt = Math.abs(ziel.getHours() - Number(m[1])) <= 1;
+    return JSON.stringify({ text: t.trim(), uhrzeit: m[0], passt: stimmt });
+  })()`);
+  check(
+    'Das Brett sagt, wann neue Zettel hängen — Uhrzeit und Countdown',
+    /"passt":true/.test(brettUhr),
+    brettUhr,
+  );
+
   check(
     'Jeder Zettel zeigt Belohnung und entweder Stand oder Abhol-Knopf',
     brett.zettel.every((z) => /Gold|XP/.test(z)) &&
