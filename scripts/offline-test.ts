@@ -249,9 +249,41 @@ const harvestAll = `(function () {
 
 
 
+// Auf einem bespielten Hof ist nicht immer gerade ein Feld frei. Statt daran zu
+// scheitern, wird gewartet und ein reifes Feld vorher abgeerntet — genau das,
+// was ein Spieler auch täte. Wer eine Aktion misst, ruft das vorher auf, damit
+// die Wartezeit nicht als Antwortzeit des Servers erscheint.
+async function warteAufFreiesFeld(cdp: Cdp): Promise<boolean> {
+  for (let versuch = 0; versuch < 50; versuch++) {
+    const lage = await evaluate<string>(
+      cdp,
+      `(function () {
+         var felder = [...document.querySelectorAll('#plots .plot')];
+         var frei = felder.find(function (p) {
+           var s = (p.querySelector('.status') || {}).textContent || '';
+           if (/→/.test(s) || / oder /.test(s)) return true;
+           var al = p.getAttribute('aria-label') || '';
+           return /^Feld [0-9]/.test(al) && !p.classList.contains('ripe') && !p.querySelector('.bar');
+         });
+         if (frei) return 'frei';
+         var reif = felder.find(function (p) {
+           return /^Feld [0-9]/.test(p.getAttribute('aria-label') || '') && p.classList.contains('ripe');
+         });
+         if (reif) { reif.click(); return 'geerntet'; }
+         return 'warten';
+       })()`,
+    );
+    if (lage === 'frei') return true;
+    await sleep(lage === 'geerntet' ? 400 : 1000);
+  }
+  return false;
+}
+
 async function plantSomething(cdp: Cdp): Promise<boolean> {
   await evaluate(cdp, `document.getElementById('brett-close') && (document.getElementById('brett-bg').hidden = true, document.getElementById('lager-bg').hidden = true, document.getElementById('stand-bg').hidden = true)`);
   await sleep(200);
+
+  if (!(await warteAufFreiesFeld(cdp))) return false;
 
   const clicked = await evaluate<boolean>(
     cdp,
@@ -1041,6 +1073,7 @@ try {
     );
   }
 
+
   const obenauf = await evaluate<string>(
     cdp,
     `(function () {
@@ -1067,6 +1100,97 @@ try {
     obenauf === 'ok',
     obenauf,
   );
+
+  // Die andere Hälfte: über leere Felder wischen setzt überall dasselbe an.
+  // Das darf aber ERST greifen, wenn einmal bewusst gewählt wurde — Ernten ist
+  // reiner Gewinn, Säen kostet Saatgut, und wer nur schwenken will, soll nicht
+  // ungewollt aussäen.
+  const maus = (type: string, x: number, y: number) =>
+    cdp.send('Input.dispatchMouseEvent', {
+      type, x: Math.round(x), y: Math.round(y), button: 'left',
+      buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, pointerType: 'mouse',
+    });
+  const mausZug = async (pts: Array<{ x: number; y: number }>) => {
+    await maus('mousePressed', pts[0]!.x, pts[0]!.y);
+    await sleep(40);
+    for (let k = 1; k < pts.length; k++) {
+      const a = pts[k - 1]!;
+      const z = pts[k]!;
+      for (let t = 1; t <= 6; t++) {
+        await maus('mouseMoved', a.x + ((z.x - a.x) * t) / 6, a.y + ((z.y - a.y) * t) / 6);
+        await sleep(16);
+      }
+    }
+    await maus('mouseReleased', pts[pts.length - 1]!.x, pts[pts.length - 1]!.y);
+    await sleep(800);
+  };
+  const leereFelder = async () =>
+    JSON.parse(
+      await evaluate<string>(cdp, `JSON.stringify(
+        [...document.querySelectorAll('#plots .plot[data-platz]')]
+          .filter(function (t) {
+            var a = t.getAttribute('aria-label') || '';
+            return /^Feld /.test(a) && !t.classList.contains('ripe') && !t.querySelector('.bar');
+          })
+          .map(function (t) { var r = t.getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })
+          .sort(function (a, b) { return (a.y - b.y) || (a.x - b.x); }))`),
+    ) as Array<{ x: number; y: number }>;
+
+  // Gemerkte Sorte löschen und neu laden: der Zustand eines Spielers, der noch
+  // nie bewusst gewählt hat.
+  await evaluate(cdp, `(function () { try {
+    Object.keys(localStorage).forEach(function (k) {
+      if (k.indexOf('ns-saat') === 0) localStorage.removeItem(k);
+    });
+  } catch (e) {} })()`);
+  await cdp.send('Page.reload', { ignoreCache: false });
+  await sleep(3000);
+  await schliesseTutorial(cdp);
+
+  const ohneWahl = await leereFelder();
+  if (ohneWahl.length >= 2) {
+    const vorher = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
+    await mausZug(ohneWahl);
+    const nachher = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
+    check(
+      'Ohne vorherige Wahl sät ein Wisch nichts — Saatgut wird nicht verschenkt',
+      nachher === vorher,
+      `${vorher} → ${nachher} laufende Felder`,
+    );
+  }
+
+  // Einmal bewusst wählen, dann wischen.
+  await evaluate(cdp, `(function () {
+    var t = [...document.querySelectorAll('#plots .plot[data-platz]')].find(function (x) {
+      return /^Feld /.test(x.getAttribute('aria-label') || '');
+    });
+    if (t) t.click();
+  })()`);
+  await sleep(400);
+  const sorte = await evaluate<string>(cdp, `(function () {
+    var o = document.querySelector('#pick-list .opt:not([disabled])');
+    var n = o ? o.querySelector('.top').textContent.trim() : '-';
+    if (o) o.click();
+    var c = document.getElementById('pick-close');
+    if (c && !document.getElementById('pick-bg').hidden) c.click();
+    return n;
+  })()`);
+  await sleep(700);
+  await schliesseTutorial(cdp);
+
+  const nachWahl = await leereFelder();
+  if (nachWahl.length >= 1) {
+    const vor = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
+    await mausZug(nachWahl);
+    const nach = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
+    const meldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+    check(
+      'Nach der Wahl sät ein Wisch alle leeren Felder mit derselben Sorte an',
+      nach > vor && /angesetzt/.test(meldung),
+      `${vor} → ${nach} laufende Felder · ${meldung} (gewählt: ${sorte})`,
+    );
+  }
 
 
   const haeuser = await evaluate<string>(
@@ -1456,6 +1580,9 @@ try {
   await evaluate(cdp, `document.getElementById('erweiterung-close').click()`);
   await sleep(150);
 
+  // Erst den Hof bereit machen, dann die Uhr starten — sonst misst die Prüfung
+  // das Warten auf ein freies Feld statt den Weg zum Server.
+  await warteAufFreiesFeld(cdp);
   const seqBeforeTap = ((await api(`/api/admin/status?account=${status.accountId}`)) as { seq: number })
     .seq;
   const tapped = Date.now();
@@ -3465,7 +3592,13 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     var teile = /(?:(\\d+) h )?(?:(\\d+) min|(\\d+) s)/.exec(r[1]) || [];
     var min = (Number(teile[1] || 0) * 60) + Number(teile[2] || 0);
     var ziel = new Date(Date.now() + min * 60000);
-    var stimmt = Math.abs(ziel.getHours() - Number(m[1])) <= 1;
+    // In Minuten des Tages rechnen und ueber Mitternacht hinweg vergleichen:
+    // Der Countdown rundet ab, also landet das Ziel kurz vor der vollen
+    // Stunde — ein Stundenvergleich fiele genau dort auseinander (23 statt 0).
+    var soll = (ziel.getHours() * 60) + ziel.getMinutes();
+    var ist = (Number(m[1]) * 60) + Number(m[2]);
+    var abstand = Math.abs(soll - ist);
+    var stimmt = Math.min(abstand, 1440 - abstand) <= 2;
     return JSON.stringify({ text: t.trim(), uhrzeit: m[0], passt: stimmt });
   })()`);
   check(

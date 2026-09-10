@@ -80,6 +80,7 @@ function tapPlot(i) {
     return;
   }
   if (p.tap === 'start') {
+    if (istFeld(p)) merkeSaat(p.next.recipe);
     act('Gestartet · ' + nameOf(p.next.id) +
           (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
         client.start(i, p.next.recipe), 'saat');
@@ -435,6 +436,35 @@ var schwenk = null;
 // auf allem anderen bleibt es beim Schwenken.
 var ernteStart = null;
 var ernteZug = null;
+// Zuletzt bewusst gewaehltes Rezept. Der Sae-Zug nimmt es, damit man nicht bei
+// jedem Feld neu waehlen muss.
+//
+// Und er startet AUSSCHLIESSLICH, wenn es diese Wahl schon gab. Ernten ist
+// reiner Gewinn, ein Fehlgriff also harmlos — Saeen kostet Saatgut. Wer nur
+// schwenken will und dabei ueber leere Felder faehrt, soll nicht ungewollt
+// aussaeen. Damit entspricht es auch dem Vorbild: dort nimmt man erst den
+// Saatsack in die Hand und zieht dann.
+var letzteSaat = null;
+var saeZug = null;
+
+function saatSchluessel() {
+  return accountId ? 'ns-saat-' + accountId : 'ns-saat';
+}
+
+function merkeSaat(recipe) {
+  letzteSaat = recipe;
+  try { localStorage.setItem(saatSchluessel(), String(recipe)); } catch (e) {}
+}
+
+// Nach einem Neustart soll die Geste sich genauso verhalten wie vorher.
+function ladeSaat() {
+  try {
+    var roh = localStorage.getItem(saatSchluessel());
+    letzteSaat = roh === null || roh === '' ? null : Number(roh);
+  } catch (e) {
+    letzteSaat = null;
+  }
+}
 
 function schwenkStart(e) {
   if (!isActive || setzePlot >= 0 || bauModus) return;
@@ -615,6 +645,93 @@ function ernteSchritt(i) {
   renderPurse(NS.farmView(client.preview(), rules, navigator.onLine));
 }
 
+// — Saeen im Zug ————————————————————————————————————————————————————————
+// Die andere Haelfte der Sichel: ueber leere Felder wischen setzt ueberall
+// dasselbe an. Welches Rezept, entscheidet nicht der Finger, sondern die
+// letzte bewusste Wahl — sonst muesste man mitten im Zug etwas auswaehlen.
+// Nur ein gewoehnliches Feld saet man im Zug an: kein Baum, kein Stall, kein
+// Platz mit mehreren Faechern.
+function istFeld(p) {
+  return !!p && !p.baum && !p.stall && !(p.capacity > 1);
+}
+
+function saatFuer(p) {
+  if (!istFeld(p) || p.tap !== 'start') return null;
+  var offen = p.options.filter(function (o) { return o.unlocked; });
+  if (offen.length === 0) return null;
+  // Nur die gemerkte Sorte, und nur wenn sie auf diesem Platz ueberhaupt geht.
+  var gewaehlt = null;
+  offen.forEach(function (o) { if (o.recipe === letzteSaat) gewaehlt = o; });
+  return gewaehlt;
+}
+
+function saebar(i) {
+  if (letzteSaat === null) return false;
+  var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
+  var saat = saatFuer(p);
+  return !!saat && saat.affordable && saat.recipe === letzteSaat;
+}
+
+function saeZugLos(i, e) {
+  client.localTick = tickNow();
+  saeZug = { hatte: {}, zahl: 0, was: null, leer: false, letzter: -1 };
+  if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
+  if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
+  $('hof').classList.add('saet');
+  saeSchritt(i);
+  saeZugZu(e);
+}
+
+function saeZugZu(e) {
+  if (!saeZug || saeZug.leer) return;
+  var i = platzUnterZeiger(e);
+  if (i < 0 || i === saeZug.letzter) return;
+  saeZug.letzter = i;
+  saeSchritt(i);
+}
+
+function saeSchritt(i) {
+  if (!saeZug || saeZug.leer || saeZug.hatte[i]) return;
+  var p = NS.farmView(client.preview(), rules, navigator.onLine).plots[i];
+  var saat = saatFuer(p);
+  if (!saat) return;
+  // Der Zug bleibt bei einer Sorte — sonst saet ein Wisch quer ueber den Hof
+  // ein Durcheinander, das man einzeln wieder zurueckbauen muesste.
+  if (saeZug.was !== null && saat.recipe !== saeZug.was) return;
+
+  var wo = platzKasten(i);
+  var res = client.start(i, saat.recipe);
+  if (!res.ok) {
+    // Saatgut alle: hier abbrechen und am Ende EINMAL sagen, wie weit es kam.
+    saeZug.leer = true;
+    return;
+  }
+
+  saeZug.hatte[i] = true;
+  saeZug.zahl++;
+  saeZug.was = saat.recipe;
+  saeZug.name = nameOf(saat.id);
+  zahlAuf(wo, nameOf(saat.id), 'saat');
+  ernteKlang(saeZug.zahl - 1);
+  if (navigator.vibrate) navigator.vibrate(8);
+  renderPurse(NS.farmView(client.preview(), rules, navigator.onLine));
+}
+
+function saeZugEnde() {
+  if (!saeZug) return;
+  var zug = saeZug;
+  saeZug = null;
+  $('hof').classList.remove('saet');
+  if (zug.zahl === 0) return;
+
+  klickSchlucken = Date.now();
+  toast(zug.zahl + (zug.zahl === 1 ? ' Feld' : ' Felder') + ' angesetzt · ' + zug.name +
+    (zug.leer ? ' · dann war Schluss' : ''), zug.leer);
+  save();
+  scheduleSync();
+  render();
+}
+
 function ernteZugEnde() {
   if (!ernteZug) return;
   var zug = ernteZug;
@@ -640,17 +757,19 @@ function ernteZugEnde() {
 
 document.addEventListener('pointermove', function (e) {
   if (ernteZug) { e.preventDefault(); ernteZugZu(e); return; }
+  if (saeZug) { e.preventDefault(); saeZugZu(e); return; }
   if (ziehen && ziehen.aktiv) { e.preventDefault(); ziehZu(e); return; }
 
-  // Wischt der Finger von einem erntereifen Platz weg, wird geerntet statt
-  // geschwenkt. Ein Fehlgriff ist harmlos: Der Zug beginnt nur dort, wo man
-  // ohnehin ernten wollte.
+  // Wischt der Finger von einem reifen Platz weg, wird geerntet; von einem
+  // leeren gesaet. Beides statt zu schwenken, und beides nur dort, wo man
+  // ohnehin genau das tun wollte — ein Fehlgriff ist deshalb harmlos.
   if (ernteStart) {
     var los = Math.abs(e.clientX - ernteStart.x) + Math.abs(e.clientY - ernteStart.y);
     if (los > 16) {
       var start = ernteStart.plot;
       ernteStart = null;
       if (erntbar(start)) { e.preventDefault(); ernteZugLos(start, e); return; }
+      if (saebar(start)) { e.preventDefault(); saeZugLos(start, e); return; }
     }
   }
 
@@ -670,10 +789,10 @@ document.addEventListener('pointermove', function (e) {
 }, { passive: false });
 
 document.addEventListener('pointerup', function (e) {
-  ernteStart = null; ernteZugEnde(); ziehEnde(); schwenkEnde();
+  ernteStart = null; ernteZugEnde(); saeZugEnde(); ziehEnde(); schwenkEnde();
 });
 document.addEventListener('pointercancel', function (e) {
-  ernteStart = null; ernteZugEnde(); ziehEnde(); schwenkEnde();
+  ernteStart = null; ernteZugEnde(); saeZugEnde(); ziehEnde(); schwenkEnde();
 });
 
 $('hof').addEventListener('pointerdown', function (e) {
@@ -883,6 +1002,9 @@ function zeichnePicker(p) {
     card.addEventListener('click', function () {
       var slot = sheet.slot;
       closePicker();
+      // Ein Stallrezept darf die gemerkte Saat nicht verdraengen — sonst waere
+      // das Wischen nach einem Besuch im Huehnerstall stumm aus.
+      if (istFeld(p)) merkeSaat(o.recipe);
       act('Gestartet · ' + nameOf(o.id) +
             (o.inputs.length > 0 ? ' · −' + costText(o.inputs) : ''),
           client.start(p.index, o.recipe, slot));

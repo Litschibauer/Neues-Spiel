@@ -282,6 +282,7 @@ function begin(restored) {
 
 function start(snapshot, serverTime, id) {
   accountId = id || accountId;
+  ladeSaat();
   if (!begin(new NS.Client(snapshot, deviceId))) return;
   adopt(snapshot, serverTime);
   setConn('live');
@@ -292,6 +293,7 @@ function start(snapshot, serverTime, id) {
 function startOffline(saved) {
   clockOffsetMs = saved.clockOffsetMs;
   accountId = saved.accountId || null;
+  ladeSaat();
   if (!begin(saved.client)) return;
   setConn(navigator.onLine ? 'catching-up' : 'offline');
   render();

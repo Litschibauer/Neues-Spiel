@@ -161,7 +161,8 @@
     background: var(--meadow); touch-action: none; cursor: grab;
   }
   /* Waehrend eines Erntezugs ist der Zeiger die Sichel, nicht die Hand. */
-  .hof.erntet, .hof.erntet .plot {
+  .hof.erntet, .hof.erntet .plot,
+  .hof.saet, .hof.saet .plot {
     cursor: crosshair;
   }
   #hof { flex: 1 1 auto; width: 100%; min-height: 60dvh; }
