@@ -101,7 +101,7 @@ function tapPlot(i) {
       zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
       warenFliegen(wo, p.output.item, p.output.amount);
       var dazu = client.preview().xp - vorher;
-      if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+      if (dazu > 0) xpAuf(wo, dazu);
       fundFeiern(hoch(wo), fund);
     }
     return;
@@ -154,7 +154,7 @@ function tapBaum(p) {
       zahlAuf(wo, '+' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), 'ware');
       warenFliegen(wo, b.ertrag.item, b.ertrag.amount);
       var dazu = client.preview().xp - vorher;
-      if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+      if (dazu > 0) xpAuf(wo, dazu);
       fundFeiern(hoch(wo), fund);
     }
     return;
@@ -918,6 +918,7 @@ function baueUndSetze(plot) {
   var vorher = client.preview().plots[plot].level;
   if (vorher <= 0) {
     var res = client.buy(plot);
+    if (res.ok) bauMoment(plot);
     if (!res.ok) { toast(CODES[res.code] || res.code, true); return; }
     toast('Gekauft · ' + plotName(plot));
     save();
@@ -953,6 +954,7 @@ $('hof').addEventListener('click', function (e) {
   var gy = Math.max(0, Math.min(g.h - groesse.h, feld.gy - (groesse.h >> 1)));
 
   var res = client.place(setzePlot, gx, gy);
+  if (res.ok) bauMoment(setzePlot);
   if (!res.ok) { toast(CODES[res.code] || res.code, true); render(); return; }
 
   toast(plotName(setzePlot) + ' steht');
@@ -1159,5 +1161,7 @@ function tapBuy(i) {
   client.localTick = tickNow();
   var level = nextLevelOf(i, client.preview().plots[i].level);
   if (!level) { toast('Voll ausgebaut'); return; }
-  act(level.label + ' gekauft', client.buy(i));
+  var gekauft = client.buy(i);
+  act(level.label + ' gekauft', gekauft);
+  if (gekauft.ok) bauMoment(i);
 }

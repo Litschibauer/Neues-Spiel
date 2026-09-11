@@ -26,13 +26,21 @@ function lohnText(e) {
 }
 
 function momentePruefen(v) {
-  var jetzt = { erfolge: {}, aufgaben: {}, abschluss: false };
+  var jetzt = {
+    erfolge: {}, aufgaben: {}, abschluss: false,
+    // Was von aussen kommt, waehrend man spielt: Kaeufe im eigenen Stand, der
+    // Wagen, der wiederkommt, eine Kiste, die auftaucht, der neue Tag.
+    kasse: {}, wagenDa: !!(v.truck && v.truck.enabled && v.truck.here),
+    kisten: {}, tag: (v.aufgaben && v.aufgaben.tag) || 0,
+  };
   (v.erfolge || []).forEach(function (e) { if (e.erfuellt && !e.eingeloest) jetzt.erfolge[e.id] = e; });
   ((v.aufgaben && v.aufgaben.liste) || []).forEach(function (a) {
     if (a.erfuellt && !a.eingeloest) jetzt.aufgaben[a.id] = a;
   });
   var ab = v.aufgaben && v.aufgaben.abschluss;
   jetzt.abschluss = !!(ab && ab.erfuellt && !ab.eingeloest);
+  (v.orders || []).forEach(function (o) { jetzt.kasse[o.id] = { sold: o.sold || 0, item: o.item }; });
+  (v.chests || []).forEach(function (k) { if (k.ready) jetzt.kisten[k.id] = k; });
 
   if (momenteGesehen === null) {
     momenteGesehen = jetzt;
@@ -42,6 +50,43 @@ function momentePruefen(v) {
   var alt = momenteGesehen;
   momenteGesehen = jetzt;
   if (Date.now() < momenteStummBis) return;
+
+  // „Verkauft!" — ein anderer Mensch hat gerade etwas aus dem Stand gekauft.
+  Object.keys(jetzt.kasse).forEach(function (id) {
+    var war = alt.kasse[id] ? alt.kasse[id].sold : 0;
+    var o = jetzt.kasse[id];
+    if (o.sold <= war) return;
+    moment({
+      klang: 'muenzen', winkt: 'stand', hin: 'stand',
+      text: 'Verkauft · ' + itemName(o.item) + ' für ' + (o.sold - war) + ' Gold — Kasse am Stand',
+    });
+  });
+
+  if (jetzt.wagenDa && !alt.wagenDa) {
+    moment({ klang: 'wagen', winkt: 'wagen', hin: 'brett', text: 'Der Wagen ist zurück — neue Zettel am Brett' });
+  }
+
+  Object.keys(jetzt.kisten).forEach(function (id) {
+    if (alt.kisten[id]) return;
+    var k = jetzt.kisten[id];
+    momenteFunkeltBis = Date.now() + 3000;
+    moment({
+      klang: 'kiste', text: 'Eine Kiste ist aufgetaucht',
+      hin: function () {
+        if (typeof hatRaster === 'function' && hatRaster() && k.gx >= 0) {
+          zentriere(k.gx, k.gy);
+          kameraKlemmen();
+          kameraAnwenden();
+        }
+        momenteFunkeltBis = Date.now() + 2500;
+        winkeAnwenden();
+      },
+    });
+  });
+
+  if (alt.tag > 0 && jetzt.tag !== alt.tag) {
+    moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', text: 'Neuer Tag — neue Zettel am Brett' });
+  }
 
   Object.keys(jetzt.aufgaben).forEach(function (id) {
     if (alt.aufgaben[id]) return;
@@ -84,9 +129,24 @@ function momenteWeiter() {
 }
 
 function momentZeigen(m) {
+  // Steht gerade eine frische Meldung — „Geholfen · +12 XP" etwa —, darf der
+  // Moment sie nicht wegwischen. Er wartet, bis sie gelesen ist.
+  var frisch = Date.now() - toastSeit;
+  if (frisch < 1500) {
+    setTimeout(function () { momentZeigen(m); }, 1500 - frisch + 50);
+    return;
+  }
+  // Auf einem fremden Hof gehen die Neuigkeiten vom eigenen niemanden an —
+  // und der Stand, der winken soll, ist gar nicht im Bild. Sie warten, bis
+  // man wieder zu Hause ist.
+  if (client && client.besuch) {
+    setTimeout(function () { momentZeigen(m); }, 1500);
+    return;
+  }
   klang(m.klang);
   if (navigator.vibrate) navigator.vibrate(12);
-  toast(m.text, false, m.hin ? function () { show(m.hin); } : null);
+  var hin = typeof m.hin === 'function' ? m.hin : m.hin ? function () { show(m.hin); } : null;
+  toast(m.text, false, hin);
   if (m.winkt) winke(m.winkt);
   if (m.punkt) {
     var p = $('zahnrad-punkt');
@@ -104,6 +164,12 @@ function winke(id) {
   winkeAnwenden();
 }
 
+// Kacheln und Kisten werden bei jedem Neuaufbau frisch erzeugt — was an ihnen
+// gerade passiert (ein Bauwerk waechst, eine Kiste funkelt), muss deshalb bei
+// jedem Aufbau neu angelegt werden.
+var momenteWaechst = {};
+var momenteFunkeltBis = 0;
+
 function winkeAnwenden() {
   var jetzt = Date.now();
   Object.keys(momenteWinkt).forEach(function (id) {
@@ -112,6 +178,24 @@ function winkeAnwenden() {
     if (momenteWinkt[id] > jetzt) el.classList.add('winkt');
     else { el.classList.remove('winkt'); delete momenteWinkt[id]; }
   });
+  Object.keys(momenteWaechst).forEach(function (plot) {
+    var kachel = document.querySelector('#plots .plot[data-platz="' + plot + '"]');
+    if (momenteWaechst[plot] > jetzt) { if (kachel) kachel.classList.add('waechst'); }
+    else { if (kachel) kachel.classList.remove('waechst'); delete momenteWaechst[plot]; }
+  });
+  var funkelt = momenteFunkeltBis > jetzt;
+  document.querySelectorAll('#kisten .schatz').forEach(function (k) { k.classList.toggle('funkelt', funkelt); });
+}
+
+// Ein Bauwerk kommt nicht „einfach hin": Es waechst aus dem Boden, Staub
+// fliegt, der Hammer klopft. Der groesste Geldmoment im Spiel verdient das.
+function bauMoment(plot) {
+  momenteWaechst[plot] = Date.now() + 800;
+  klang('bau');
+  var wo = typeof platzKasten === 'function' ? platzKasten(plot) : null;
+  if (wo && wo.width) { funken(wo, 'staub'); setTimeout(function () { funken(wo, 'staub'); }, 160); }
+  if (navigator.vibrate) { try { navigator.vibrate([0, 20, 40, 20, 40, 30]); } catch (e) {} }
+  winkeAnwenden();
 }
 
 // — Die Kiste ————————————————————————————————————————————————————————

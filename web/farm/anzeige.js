@@ -56,6 +56,9 @@ function renderPurse(v) {
 
   var pct = v.xp.atMax ? 1 : v.xp.into / v.xp.span;
 
+  // Beim Stufenwechsel springt der Ring zurueck auf leer — das darf nicht
+  // rueckwaerts animieren, sonst sieht es aus, als ginge etwas verloren.
+  $('ring-fill').classList.toggle('sofort', String(v.level) !== $('lvl').textContent.trim() && $('lvl').textContent.trim() !== '');
   $('ring-fill').setAttribute(
     'stroke-dashoffset',
     String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))),
@@ -677,7 +680,7 @@ function renderRequests(v) {
       act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), res, 'wagen');
       if (!res.ok) return;
       if (lohnGold > 0) { zahlAuf(wo, '+' + lohnGold, 'muenzen'); muenzenFliegen(wo, lohnGold); }
-      if (z.xp > 0) zahlAuf(hoch(wo), '+' + z.xp + ' XP', 'xp');
+      if (z.xp > 0) xpAuf(wo, z.xp);
       setTimeout(function () { klang('muenzen'); }, 320);
     });
     reihe.appendChild(los);
@@ -922,6 +925,7 @@ function renderZiele(v) {
       var r = client.claimAchievement(btn.getAttribute('data-id'));
       act('Erfolg eingelöst', r, 'stufe');
       if (r.ok && gold > 0) muenzenFliegen(wo, gold);
+      if (r.ok) xpAuf(wo, Number(btn.getAttribute('data-xp')) || 0);
     });
   });
 }
@@ -961,7 +965,7 @@ function renderAbenteuer(v) {
     var unten = e.eingeloest
       ? '<span class="zettel-fertig">abgeholt ✓</span>'
       : e.erfuellt
-        ? '<button type="button" class="zettel-los" data-id="' + e.id + '" data-gold="' + e.gold + '">Abholen · ' + lohn + '</button>'
+        ? '<button type="button" class="zettel-los" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Abholen · ' + lohn + '</button>'
         : '<span class="zettel-balken"><i style="width:' + e.prozent + '%"></i></span>' +
           '<span class="zettel-stand">' + e.ist + ' / ' + e.ziel + '</span>';
 
@@ -1002,6 +1006,7 @@ function renderAbenteuer(v) {
         var r = client.claimDay();
         act('Tag abgeschlossen', r, 'stufe');
         if (r.ok && ab.gold > 0) muenzenFliegen(wo, ab.gold);
+        if (r.ok) xpAuf(wo, ab.xp);
       });
     }
   }
@@ -1013,6 +1018,7 @@ function renderAbenteuer(v) {
       var r = client.claimTask(btn.getAttribute('data-id'));
       act('Abenteuer geschafft', r, 'stufe');
       if (r.ok && gold > 0) muenzenFliegen(wo, gold);
+      if (r.ok) xpAuf(wo, Number(btn.getAttribute('data-xp')) || 0);
     });
   });
 
@@ -1047,7 +1053,7 @@ function zielZeile(e) {
   var rechts = e.eingeloest
     ? '<span class="ziel-hinweis erledigt">eingelöst</span>'
     : einloesbar
-      ? '<button type="button" class="ziel-los" data-id="' + e.id + '" data-gold="' + e.gold + '">Einlösen</button>'
+      ? '<button type="button" class="ziel-los" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Einlösen</button>'
       : '<span class="ziel-hinweis">' + belohnung.replace(' · ', '<br>') + '</span>';
 
   row.innerHTML =

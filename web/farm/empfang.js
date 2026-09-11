@@ -284,6 +284,7 @@ function empfangEinsammeln() {
   bonusEinloesenRoh().then(function (r) {
     if (!r) { abschluss(); return; }
     bonus.geholt = true;
+    if (r.streak >= (r.status && r.status.laenge ? r.status.laenge : 7)) feiereSerie(r.streak, r.gold);
     // Der Bonus liegt jetzt beim Server im Postfach. Erst abgleichen, dann
     // leeren — sonst stünde die Belohnung im Fach statt im Geldbeutel.
     return attempt(true).then(function () {

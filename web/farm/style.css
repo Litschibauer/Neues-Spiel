@@ -143,6 +143,31 @@
   .flieger .ic, .flieger img, .flieger svg { width: 100%; height: 100%; display: block; }
   .flieger.muenzen { width: 1.15rem; height: 1.15rem; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .35)); }
   .flieger.saat { width: 1.2rem; height: 1.2rem; }
+  .flieger.xp { width: 1rem; height: 1rem; color: var(--accent); }
+  .flieger.xp b { display: block; font-size: .95rem; line-height: 1; text-align: center; text-shadow: 0 0 4px rgba(255, 255, 255, .8); }
+  .ring.huepft { animation: huepfer .5s cubic-bezier(.2, 1.4, .4, 1); }
+  /* Der Ring fuellt weich nach; beim Stufenwechsel springt er ohne Uebergang. */
+  #ring-fill { transition: stroke-dashoffset .6s ease-out; }
+  #ring-fill.sofort { transition: none; }
+
+  /* Ein Bauwerk waechst aus dem Boden. */
+  .plot.waechst { animation: waechst .8s cubic-bezier(.2, 1.4, .4, 1) both; transform-origin: 50% 100%; }
+  @keyframes waechst {
+    0% { transform: scaleY(.08) scaleX(.6); }
+    60% { transform: scaleY(1.1) scaleX(.97); }
+    100% { transform: none; }
+  }
+  /* Eine frisch aufgetauchte Kiste funkelt, bis man hingeschaut hat. */
+  .schatz.funkelt::after {
+    content: '\2726'; position: absolute; top: -.5rem; right: -.35rem;
+    color: #f6c35a; font-size: 1rem; text-shadow: 0 0 6px #fff3c4;
+    animation: funkeln .45s ease-in-out infinite alternate; pointer-events: none;
+  }
+  @keyframes funkeln { from { opacity: .3; transform: scale(.7) rotate(-10deg); } to { opacity: 1; transform: scale(1.15) rotate(12deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    #ring-fill { transition: none; }
+    .plot.waechst, .ring.huepft, .schatz.funkelt::after { animation: none; }
+  }
   @keyframes fliegt {
     0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
     80% { opacity: 1; }

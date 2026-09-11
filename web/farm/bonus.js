@@ -94,6 +94,7 @@ function bonusEinloesen() {
   if (!bonusStatus || !bonusStatus.verfuegbar || !netzOk()) return;
   bonusEinloesenRoh().then(function (r) {
     if (!r) return;
+    if (r.streak >= (r.status && r.status.laenge ? r.status.laenge : 7)) feiereSerie(r.streak, r.gold);
     klang('muenzen');
     var muenzen = document.querySelector('.coins');
     if (typeof zahlAuf === 'function' && muenzen) {

@@ -158,7 +158,41 @@ var KLAENGE = {
     stimme('triangle', 988, 988, 0.07, 0.22);
     stimme('triangle', 1318, 1318, 0.16, 0.26, 0.09);
   },
+
+  // Bauen: drei Hammerschlaege, Holz auf Holz, dann Staub.
+  bau: function () {
+    stimme('square', 190, 150, 0.05, 0.18);
+    stimme('square', 200, 150, 0.05, 0.18, 0.14);
+    stimme('square', 210, 160, 0.06, 0.2, 0.28);
+    rauschen(0.22, 0.1, 700);
+  },
 };
+
+// XP: die Zahl steigt am Ort auf, und ein Funke fliegt zum Ring oben, der
+// sich fuellt und bei Ankunft huepft. Damit fliegt alles, was man bekommt.
+function xpAuf(wo, dazu) {
+  if (!wo || dazu <= 0) return;
+  zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
+  flugZu(wo, document.querySelector('.ring'), '<b>\u2726</b>', 'xp', 1);
+}
+
+// Sieben Tage in Folge: die hoechste Bonusstufe — das ist eine Karte wert,
+// nicht nur eine Zeile.
+function feiereSerie(tage, gold) {
+  $('stufe-zahl').textContent = '\ud83d\udd25';
+  $('stufe-titel').textContent = tage + ' Tage in Folge!';
+  $('stufe-neu').innerHTML =
+    '<div class="zeile"><span class="mark">\ud83c\udf81</span><span>Höchste Bonusstufe</span>' +
+    '<span class="was">' + gold + ' Gold</span></div>' +
+    '<div class="zeile"><span class="mark">\u2600\ufe0f</span><span>Jeden Tag vorbeischauen zahlt sich aus</span>' +
+    '<span class="was">weiter so</span></div>';
+  $('stufe-feier').hidden = false;
+  klang('stufe');
+  konfetti();
+  if (navigator.vibrate) { try { navigator.vibrate([0, 40, 40, 60]); } catch (e) {} }
+  if (feierTimer) clearTimeout(feierTimer);
+  feierTimer = setTimeout(feierZu, 6000);
+}
 
 // Der Geldbeutel oben huepft, wenn Muenzen ankommen — damit man sieht, wo das
 // Gold hingeht, ohne hinzuschauen.
@@ -290,10 +324,10 @@ function zahlAuf(kasten, text, art) {
 
 function funken(kasten, art) {
   if (!kasten || !kasten.width || magerModus()) return;
-  var farbe = art === 'muenzen' || art === 'fund' ? '#f4c430' : '#7bbf5a';
+  var farbe = art === 'muenzen' || art === 'fund' ? '#f4c430' : art === 'staub' ? '#c9b899' : '#7bbf5a';
   var cx = kasten.left + kasten.width / 2;
   var cy = kasten.top + kasten.height / 3;
-  var n = art === 'fund' ? 12 : 6;
+  var n = art === 'fund' ? 12 : art === 'staub' ? 10 : 6;
   for (var i = 0; i < n; i++) {
     var f = document.createElement('span');
     f.className = 'funke';
@@ -362,6 +396,7 @@ function feiereStufe(level) {
   });
 
   $('stufe-zahl').textContent = level;
+  $('stufe-titel').textContent = 'Stufe erreicht!';
   $('stufe-neu').innerHTML = zeilen.slice(0, 4).join('');
   $('stufe-feier').hidden = false;
 

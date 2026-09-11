@@ -988,6 +988,7 @@ try {
          var f = [...document.querySelectorAll('.flieger.ware')];
          var lager = document.getElementById('silo').getBoundingClientRect();
          return {
+           xp: document.querySelectorAll('.flieger.xp').length,
            anzahl: f.length,
            bilder: f.filter(function (x) { return !!x.querySelector('img.ic'); }).length,
            zielOben: f.every(function (x) {
@@ -998,7 +999,12 @@ try {
          };
        })())`,
     ),
-  ) as { anzahl: number; bilder: number; zielOben: boolean; lagerDa: boolean };
+  ) as { xp: number; anzahl: number; bilder: number; zielOben: boolean; lagerDa: boolean };
+  check(
+    'Auch die XP fliegen — als Funke zum Ring oben',
+    ernteFlug.xp > 0,
+    `${ernteFlug.xp} Funke(n)`,
+  );
   check(
     'Die Ernte fliegt als Bild ins Lager, nicht nur als Zahl nach oben',
     ernteFlug.anzahl > 0 && ernteFlug.bilder === ernteFlug.anzahl && ernteFlug.zielOben && ernteFlug.lagerDa,
@@ -3474,6 +3480,109 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     `${schwenken.vorher} → ${schwenken.nachher}`,
   );
 
+  console.log('\n9j. Verkauft! — ein anderer kauft im eigenen Stand, während man spielt');
+
+  // Wir stellen Weizen in den Stand — durch die Oberflaeche, wie ein Spieler.
+  await evaluate(cdp, `document.getElementById('stand').click()`);
+  await sleep(400);
+  const kaestchenFrei = await evaluate<boolean>(
+    cdp,
+    `(function () {
+       var k = document.querySelector('#stand-kaesten .kaestchen.leer');
+       if (!k) return false;
+       k.click();
+       return true;
+     })()`,
+  );
+  if (kaestchenFrei) {
+    await sleep(300);
+    await evaluate(
+      cdp,
+      `(function () {
+         var w = [...document.querySelectorAll('#stand-fuellen .kaestchen.wahl')]
+           .find(function (b) { return b.textContent.indexOf('Weizen') >= 0; });
+         if (w) w.click();
+       })()`,
+    );
+    await sleep(300);
+    // Preis wie ein Spieler waehlen (Schnellknopf), dann hinstellen.
+    const hingestellt = await evaluate<string>(
+      cdp,
+      `(function () {
+         var g = [...document.querySelectorAll('#stand-fuellen button')]
+           .find(function (b) { return /günstig/i.test(b.textContent); });
+         if (g) g.click();
+         var d = document.querySelector('#stand-fuellen .done');
+         if (!d) return 'kein Hinstellen-Knopf';
+         if (d.disabled) return 'Knopf gesperrt: ' + d.textContent;
+         d.click();
+         return 'ok';
+       })()`,
+    );
+    await sleep(500);
+    console.log('  Stand:', hingestellt);
+  } else {
+    console.log('  Stand: kein leeres Kästchen');
+  }
+  await evaluate(cdp, `document.getElementById('stand-close').click()`);
+  await sleep(2500);
+  const unsereOrders = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { orders: Array<{ id: number; verkauft: number }> };
+  };
+  console.log('  Unsere Kästchen beim Server:', unsereOrders.state.orders.length);
+
+  // Der Nachbar sieht das Angebot und kauft es — als eigenes Konto, direkt
+  // beim Server, so wie es sein Telefon taete.
+  const markt = (await stateAs(second.key)) as unknown as {
+    snapshot: { seq: number; serverTs: number; state: { tick: number; offers: Array<{ id: number; seller: string }> } };
+  };
+  // Im Regal steht der Hofcode als Verkaeufer, nicht die Kontonummer.
+  const eigenerCode = hofkarte.split('|')[1] ?? '';
+  const unserAngebot = markt.snapshot.state.offers.find((o) => o.seller === eigenerCode);
+  console.log('  Regal des Nachbarn:', markt.snapshot.state.offers.map((o) => o.seller).join(', ') || 'leer', '· wir:', eigenerCode);
+  check(
+    'Was man in den Stand stellt, sieht der Nachbar als Angebot',
+    !!unserAngebot,
+    unserAngebot ? `Angebot ${unserAngebot.id}` : `${markt.snapshot.state.offers.length} fremde Angebote, keins von uns`,
+  );
+  if (unserAngebot) {
+    await api(`/api/admin/grant?account=${second.accountId}&item=gold&amount=500`, 'POST');
+    await sleep(300);
+    const vorKauf = await stateAs(second.key);
+    const kaufTick = tickFuer(vorKauf.snapshot);
+    const kauf = await syncAs(second.key, vorKauf.snapshot.seq, [
+      { seq: vorKauf.snapshot.seq + 1, tick: kaufTick, type: 'COLLECT_MAIL' },
+      { seq: vorKauf.snapshot.seq + 2, tick: kaufTick, type: 'BUY_OFFER', offerId: unserAngebot.id },
+    ]);
+    check('Der Nachbar kauft — der Server nimmt den Kauf an', kauf.ok === true, kauf.ok ? 'ok' : `${kauf.kind} ${kauf.reason}`);
+
+    // Unser Hof erfaehrt davon beim naechsten Abgleich — und sagt es sofort.
+    await waitFor(
+      cdp,
+      `[...document.querySelectorAll('.moebel#stand .badge')].length > 0`,
+      'Kasse am Stand blinkt',
+      15_000,
+    ).catch(() => {});
+    await sleep(2200);
+    const verkauftMeldung = JSON.parse(
+      await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`),
+    ) as Array<{ text: string; tippbar: boolean }>;
+    // Gesucht ist genau dieser Kauf — nicht ein frueherer, den der Markt
+    // abgerechnet hat.
+    const gemeldet = verkauftMeldung.find((m) => /^Verkauft · Weizen/.test(m.text));
+    check(
+      'Kauft jemand im eigenen Stand, sagt es der Hof sofort — antippbar, mit dem Weg zur Kasse',
+      !!gemeldet && gemeldet.tippbar && /Gold/.test(gemeldet.text),
+      gemeldet ? gemeldet.text : 'nicht gemeldet (' +
+        verkauftMeldung.filter((m) => /^Verkauft/.test(m.text)).map((m) => m.text).join(' | ') + ')',
+    );
+    check(
+      'Der Stand winkt dabei',
+      await evaluate<boolean>(cdp, `document.getElementById('stand').classList.contains('winkt') || !!document.querySelector('#stand .badge')`),
+      'Blase oder Wink am Stand',
+    );
+  }
+
   console.log('\n9w. Bergbau: Mine bauen, graben, Erze ernten');
   await api(`/api/admin/xp?account=${status.accountId}&amount=16000`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=60`, 'POST');
@@ -4467,6 +4576,18 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     'Wer Stufe 3 erreicht, erfährt sofort, dass ein Erfolg wartet — antippbar',
     !!erfolgMeldung && erfolgMeldung.tippbar,
     erfolgMeldung ? erfolgMeldung.text : `nicht gemeldet (${meldungen.length} Meldungen mitgeschnitten)`,
+  );
+  const wagenMeldung = meldungen.find((m) => /Der Wagen ist zurück/.test(m.text));
+  check(
+    'Kommt der Wagen zurück, sagt es der Hof — mit dem Weg zum Brett',
+    !!wagenMeldung && wagenMeldung.tippbar,
+    wagenMeldung ? wagenMeldung.text : 'nicht gemeldet',
+  );
+  const kisteMeldung = meldungen.find((m) => /Eine Kiste ist aufgetaucht/.test(m.text));
+  check(
+    'Taucht eine Kiste auf, sagt es der Hof — antippbar, die Kamera fährt hin',
+    !!kisteMeldung && kisteMeldung.tippbar,
+    kisteMeldung ? kisteMeldung.text : 'nicht gemeldet',
   );
   const zettelMeldung = meldungen.find((m) => /Zettel erfüllt/.test(m.text));
   const zettelGeschafft = empfang.zeilen.some((z) => /Geschafft/.test(z));

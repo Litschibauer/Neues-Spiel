@@ -59,8 +59,12 @@ var toastTimer = null;
 // Eine Meldung kann einen Weg anbieten: Mit `weiter` wird sie antippbar und
 // bleibt dafuer etwas laenger stehen. Ohne bleibt sie, was sie war.
 var toastWeiter = null;
+// Wann die letzte Meldung kam — Momente warten, statt eine frische zu
+// ueberschreiben.
+var toastSeit = 0;
 function toast(message, bad, weiter) {
   var el = $('toast');
+  toastSeit = Date.now();
   el.textContent = message;
   toastWeiter = typeof weiter === 'function' ? weiter : null;
   el.className = 'toast show' + (bad ? ' bad' : '') + (toastWeiter ? ' tippbar' : '');
