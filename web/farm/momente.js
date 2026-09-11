@@ -39,6 +39,13 @@ function momentePruefen(v) {
   });
   var ab = v.aufgaben && v.aufgaben.abschluss;
   jetzt.abschluss = !!(ab && ab.erfuellt && !ab.eingeloest);
+  jetzt.wochen = {};
+  ((v.wochenaufgaben && v.wochenaufgaben.liste) || []).forEach(function (a) {
+    if (a.erfuellt && !a.eingeloest) jetzt.wochen[a.id] = a;
+  });
+  var wab = v.wochenaufgaben && v.wochenaufgaben.abschluss;
+  jetzt.wochenAbschluss = !!(wab && wab.erfuellt && !wab.eingeloest);
+  jetzt.woche = (v.wochenaufgaben && v.wochenaufgaben.tag) || 0;
   (v.orders || []).forEach(function (o) { jetzt.kasse[o.id] = { sold: o.sold || 0, item: o.item }; });
   (v.chests || []).forEach(function (k) { if (k.ready) jetzt.kisten[k.id] = k; });
 
@@ -86,6 +93,24 @@ function momentePruefen(v) {
 
   if (alt.tag > 0 && jetzt.tag !== alt.tag) {
     moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', text: 'Neuer Tag — neue Zettel am Brett' });
+  }
+
+  Object.keys(jetzt.wochen).forEach(function (id) {
+    if (alt.wochen && alt.wochen[id]) return;
+    var a = jetzt.wochen[id];
+    moment({
+      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer',
+      text: 'Wochenzettel erfüllt · ' + a.label + ' — ' + lohnText(a) + ' am Brett',
+    });
+  });
+  if (jetzt.wochenAbschluss && !alt.wochenAbschluss) {
+    moment({
+      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer',
+      text: 'Alle Wochenzettel ab — die Wochentruhe wartet am Brett',
+    });
+  }
+  if (alt.woche > 0 && jetzt.woche !== alt.woche) {
+    moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', text: 'Neue Woche — neue Wochenzettel am Brett' });
   }
 
   Object.keys(jetzt.aufgaben).forEach(function (id) {

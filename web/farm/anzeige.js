@@ -342,6 +342,10 @@ function renderMoebel(v) {
   // Abenteuerbrett: Die Leiste leuchtet, sobald etwas abzuholen ist.
   var tages = (v.aufgaben && v.aufgaben.liste) || [];
   var tagesOffen = tages.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var wochenListe = (v.wochenaufgaben && v.wochenaufgaben.liste) || [];
+  tagesOffen += wochenListe.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var wAb = v.wochenaufgaben && v.wochenaufgaben.abschluss;
+  if (wAb && wAb.erfuellt && !wAb.eingeloest) tagesOffen += 1;
   var abBrett = $('abenteuer');
   abBrett.hidden = tages.length === 0;
   if (!abBrett.hidden) {
@@ -1011,12 +1015,79 @@ function renderAbenteuer(v) {
     }
   }
 
+  // Die Woche: groessere Zettel auf anderem Papier, darunter die Wochenurkunde
+  // mit der Truhe. Derselbe Bauplan wie beim Tag — nur ist hier alles auf
+  // sieben Tage bemessen.
+  var wochen = (v.wochenaufgaben && v.wochenaufgaben.liste) || [];
+  if (wochen.length > 0) {
+    var kopf = document.createElement('div');
+    kopf.className = 'brett-abschnitt';
+    kopf.textContent = 'Diese Woche';
+    box.appendChild(kopf);
+
+    wochen.forEach(function (e, i) {
+      var zettel = document.createElement('div');
+      zettel.className = 'zettel-brett woche' +
+        (e.eingeloest ? ' abgeholt' : e.erfuellt ? ' reif' : '');
+      zettel.style.setProperty('--dreh', (i % 2 === 0 ? 1 : -1) * (0.3 + (i % 3) * 0.25) + 'deg');
+      var wLohn = (e.gold > 0 ? e.gold + ' Gold' : '') +
+        (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
+      var wUnten = e.eingeloest
+        ? '<span class="zettel-fertig">abgeholt ✓</span>'
+        : e.erfuellt
+          ? '<button type="button" class="zettel-los" data-woche="1" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Abholen · ' + wLohn + '</button>'
+          : '<span class="zettel-balken"><i style="width:' + e.prozent + '%"></i></span>' +
+            '<span class="zettel-stand">' + e.ist + ' / ' + e.ziel + '</span>';
+      zettel.innerHTML =
+        '<span class="zettel-nadel"></span>' +
+        '<div class="zettel-kopf">' + e.label + '</div>' +
+        '<div class="zettel-lohn">' + wLohn + '</div>' +
+        '<div class="zettel-unten">' + wUnten + '</div>';
+      box.appendChild(zettel);
+    });
+
+    var wab = v.wochenaufgaben.abschluss;
+    if (wab) {
+      var wUrkunde = document.createElement('div');
+      wUrkunde.className = 'tagesabschluss woche' +
+        (wab.eingeloest ? ' abgeholt' : wab.erfuellt ? ' reif' : '');
+      var wabLohn = (wab.gold > 0 ? wab.gold + ' Gold' : '') +
+        (wab.xp > 0 ? ' · ' + wab.xp + ' XP' : '') + ' · Wochentruhe';
+      wUrkunde.innerHTML =
+        '<div class="ta-kopf">Wochenabschluss</div>' +
+        '<div class="ta-lohn">' + wabLohn + '</div>' +
+        '<div class="ta-unten">' + (
+          wab.eingeloest
+            ? '<span class="ta-fertig">Diese Woche geschafft ✓</span>'
+            : wab.erfuellt
+              ? '<button type="button" class="ta-los">Abholen · ' + wabLohn + '</button>'
+              : '<span class="ta-stand">Noch ' + (wab.noetig - wab.abgenommen) +
+                ' von ' + wab.noetig + ' Wochenzetteln abnehmen</span>'
+        ) + '</div>';
+      box.appendChild(wUrkunde);
+      var wKnopf = wUrkunde.querySelector('.ta-los');
+      if (wKnopf) {
+        wKnopf.addEventListener('click', function () {
+          var wo = wKnopf.getBoundingClientRect();
+          var r = client.claimWeek();
+          act('Woche abgeschlossen · die Wochentruhe kommt mit der Post', r, 'stufe');
+          if (r.ok && wab.gold > 0) muenzenFliegen(wo, wab.gold);
+          if (r.ok) xpAuf(wo, wab.xp);
+          if (r.ok) konfetti();
+        });
+      }
+    }
+  }
+
   box.querySelectorAll('.zettel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var wo = btn.getBoundingClientRect();
       var gold = Number(btn.getAttribute('data-gold')) || 0;
-      var r = client.claimTask(btn.getAttribute('data-id'));
-      act('Abenteuer geschafft', r, 'stufe');
+      var woche = btn.getAttribute('data-woche') === '1';
+      var r = woche
+        ? client.claimWeekTask(btn.getAttribute('data-id'))
+        : client.claimTask(btn.getAttribute('data-id'));
+      act(woche ? 'Wochenzettel geschafft' : 'Abenteuer geschafft', r, 'stufe');
       if (r.ok && gold > 0) muenzenFliegen(wo, gold);
       if (r.ok) xpAuf(wo, Number(btn.getAttribute('data-xp')) || 0);
     });
@@ -1033,6 +1104,13 @@ function renderAbenteuer(v) {
   uhr.innerHTML = navigator.onLine
     ? 'Neue Zettel um <b>' + uhrzeitKurz(w.wechsel) + '</b> · noch ' + timeText(rest)
     : 'Neue Zettel um <b>' + uhrzeitKurz(w.wechsel) + '</b> — sobald dein Hof wieder Verbindung hat';
+
+  var wochenUhr = $('abenteuer-wochenuhr');
+  if (!wochenUhr) return;
+  if (wochen.length === 0) { wochenUhr.textContent = ''; return; }
+  var ww = naechsterWochenwechsel();
+  var wRest = Math.max(0, Math.floor((ww.wechsel - ww.jetzt) / 1000));
+  wochenUhr.innerHTML = 'Neue Wochenzettel am <b>Montag, ' + uhrzeitKurz(ww.wechsel) + '</b> · noch ' + tageText(wRest);
 }
 
 function zielZeile(e) {

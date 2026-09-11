@@ -251,6 +251,12 @@ export type Ruleset = {
   // Was es gibt, wenn alle Aufgaben eines Tages abgenommen sind. Ohne dieses
   // Feld gibt es keinen Tagesabschluss — alte Fassungen bleiben unberührt.
   tagesAbschluss?: { gold: number; xp: number };
+  // Die Woche: eigener Topf mit groesseren Zielen, eigene Zahl je Woche, und
+  // der Wochenabschluss darf zusaetzlich eine Kiste bringen (Index in
+  // chestKinds) — die geht denselben Weg wie jede Kiste.
+  wochenaufgaben?: readonly AufgabeDef[];
+  aufgabenProWoche?: number;
+  wochenAbschluss?: { gold: number; xp: number; kiste?: number };
   // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
   // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
   // Spielstand (siehe sim.ts) — Server und Gerät kommen ohne Absprache auf
@@ -2294,16 +2300,35 @@ export function tagesAufgabenFuer(
   tag: number,
   spielerLevel: number,
 ): readonly AufgabeDef[] {
-  const topf = rules.tagesaufgaben;
-  if (!topf || topf.length === 0 || tag <= 0) return [];
-  const wieViele = rules.aufgabenProTag ?? 3;
+  if (tag <= 0) return [];
+  return ziehAufgaben(rules.tagesaufgaben, rules.aufgabenProTag ?? 3, tag, spielerLevel);
+}
+
+// Die Woche zieht aus ihrem eigenen Topf mit eigener Saat — sonst haengen
+// Wochen- und Tageszettel derselben Zahl an.
+export function wochenAufgabenFuer(
+  rules: Ruleset,
+  woche: number,
+  spielerLevel: number,
+): readonly AufgabeDef[] {
+  if (woche <= 0) return [];
+  return ziehAufgaben(rules.wochenaufgaben, rules.aufgabenProWoche ?? 3, woche * 104729 + 31, spielerLevel);
+}
+
+function ziehAufgaben(
+  topf: readonly AufgabeDef[] | undefined,
+  wieViele: number,
+  saat: number,
+  spielerLevel: number,
+): readonly AufgabeDef[] {
+  if (!topf || topf.length === 0) return [];
 
   const offen = topf.filter((a) => (a.minLevel ?? 0) <= spielerLevel);
   if (offen.length === 0) return [];
 
   const uebrig = offen.slice();
   const raus: AufgabeDef[] = [];
-  let h = (1 + ((tag * 7919) % 1000003)) % 1000003;
+  let h = (1 + ((saat * 7919) % 1000003)) % 1000003;
 
   while (raus.length < wieViele && uebrig.length > 0) {
     h = (h * 48271) % 2147483647;
@@ -2359,17 +2384,62 @@ const V41: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V42: Die Woche. Drei Tageszettel sind schnell erzaehlt; der Bogen darueber
+// fehlte. Jede Woche (Montag bis Sonntag, Serverzeit) haengen drei grosse
+// Zettel am Brett, und wer alle abnimmt, schliesst die Woche ab: Gold, XP und
+// die Wochentruhe — eine eigene Kistenart, reicher als alles, was der Hof
+// sonst ausspuckt. Die Truhe geht den Weg jeder Kiste: Server wuerfelt, Post,
+// Enthuellung. Die Ziele sind auf sieben Tage bemessen, nicht auf einen.
+const WOCHENTRUHE = (V41.chestKinds ?? []).length;
+const V42: Ruleset = {
   ...V41,
+  version: 42,
+  chestKinds: [
+    ...(V41.chestKinds ?? []),
+    {
+      id: 'wochentruhe',
+      label: 'Wochentruhe',
+      picks: 4,
+      drops: [
+        { item: GOLD, min: 200, max: 600, weight: 20 },
+        { item: PLANK, min: 3, max: 6, weight: 18 },
+        { item: NAIL, min: 3, max: 5, weight: 18 },
+        { item: SAW, min: 1, max: 1, weight: 8 },
+        { item: MAP, min: 1, max: 1, weight: 8 },
+        { item: MALLET, min: 1, max: 1, weight: 8 },
+        { item: STAKE, min: 1, max: 1, weight: 8 },
+        { item: EXPLOSIVE, min: 1, max: 1, weight: 6 },
+        { item: APPLE, min: 3, max: 6, weight: 6 },
+      ],
+    },
+  ],
+  aufgabenProWoche: 3,
+  wochenaufgaben: [
+    { id: 'w-ernte100', label: '100 Plätze abernten', art: 0, menge: 100, gold: 900, xp: 180, gewicht: 10 },
+    { id: 'w-ernte250', label: '250 Plätze abernten', art: 0, menge: 250, gold: 2200, xp: 420, gewicht: 5, minLevel: 8 },
+    { id: 'w-saeen120', label: '120 Mal etwas ansetzen', art: 1, menge: 120, gold: 950, xp: 190, gewicht: 10 },
+    { id: 'w-zettel8', label: 'Acht Wagen losschicken', art: 2, menge: 8, gold: 1300, xp: 260, gewicht: 8, minLevel: 3 },
+    { id: 'w-anfrage10', label: 'Zehn Anfragen erfüllen', art: 3, menge: 10, gold: 1200, xp: 240, gewicht: 7, minLevel: 5 },
+    { id: 'w-verkauf80', label: '80 Waren verkaufen', art: 4, menge: 80, gold: 1000, xp: 200, gewicht: 8, minLevel: 4 },
+    { id: 'w-gold5000', label: '5.000 Gold einnehmen', art: 5, menge: 5000, gold: 1400, xp: 280, gewicht: 7, minLevel: 6 },
+    { id: 'w-fisch25', label: '25 Fische einholen', art: 6, menge: 25, gold: 1300, xp: 260, gewicht: 6, minLevel: 12 },
+    { id: 'w-raeumen10', label: 'Zehn Hindernisse räumen', art: 7, menge: 10, gold: 1100, xp: 220, gewicht: 5, minLevel: 7 },
+    { id: 'w-bauen3', label: 'Dreimal bauen oder ausbauen', art: 8, menge: 3, gold: 1000, xp: 200, gewicht: 6, minLevel: 4 },
+  ],
+  wochenAbschluss: { gold: 2500, xp: 400, kiste: WOCHENTRUHE },
+};
+
+const DEV: Ruleset = {
+  ...V42,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V41.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V42.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V41.fishing!,
+    ...V42.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
@@ -2433,17 +2503,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [39, V39],
   [40, V40],
   [41, V41],
+  [42, V42],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 41;
+export const LATEST_RULESET_VERSION = 42;
 
 export const DEV_RULESET_VERSION = 1001;
 

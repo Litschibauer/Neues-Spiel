@@ -155,6 +155,22 @@ function naechsterTageswechsel() {
 // Angezeigt wird in der Zeitzone des Geraets — der Moment ist derselbe, nur
 // eben so, wie er auf der Uhr des Spielers steht. Fest 24 Stunden, damit es
 // nicht je nach Systemsprache zwischen 14:00 und 2 PM springt.
+// Die Woche beginnt am Montag (UTC): Tag 0 der Epoche war ein Donnerstag,
+// darum die drei Tage Versatz — dieselbe Rechnung wie in der Sim.
+function naechsterWochenwechsel() {
+  var serverJetzt = Date.now() + (typeof clockOffsetMs === 'number' ? clockOffsetMs : 0);
+  var tag = Math.floor(serverJetzt / TAG_MS);
+  var woche = Math.floor((tag + 3) / 7);
+  var ersterTag = (woche + 1) * 7 - 3;
+  return { jetzt: serverJetzt, wechsel: ersterTag * TAG_MS };
+}
+// Restzeit in Tagen und Stunden — fuer alles, was laenger als einen Tag dauert.
+function tageText(seconds) {
+  if (seconds < 86400) return timeText(seconds);
+  var d = Math.floor(seconds / 86400);
+  var h = Math.floor((seconds % 86400) / 3600);
+  return d + (d === 1 ? ' Tag' : ' Tage') + (h > 0 ? ' ' + h + ' h' : '');
+}
 function uhrzeitKurz(ms) {
   var d = new Date(ms);
   return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);

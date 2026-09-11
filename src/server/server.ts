@@ -1,7 +1,7 @@
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { MailItem, Offer, State } from '../sim/state.ts';
-import { EMPTY_PLOT, cloneState } from '../sim/state.ts';
+import { EMPTY_PLOT, cloneState, wocheVonTag } from '../sim/state.ts';
 import { getRuleset, helpSpeedup } from '../sim/rules.ts';
 import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
@@ -219,6 +219,16 @@ export class Server {
         datiert.tagGeholt = [];
       }
       state = datiert;
+    }
+    // Die Woche haengt am Tag und wird an derselben Stelle gestempelt. Der
+    // Nullpunkt der Wochenaufgaben ist der Zaehlerstand bei Wochenbeginn.
+    const dieseWoche = wocheVonTag(heute);
+    if (state.wochenNummer !== dieseWoche) {
+      const woche = cloneState(state);
+      woche.wochenNummer = dieseWoche;
+      woche.wochenStart = (woche.zaehler ?? []).slice();
+      woche.wochenGeholt = [];
+      state = woche;
     }
 
     if (this.pendingXp > 0) {

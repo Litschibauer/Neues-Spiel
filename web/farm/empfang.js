@@ -114,6 +114,17 @@ function empfangSammeln(v) {
       gold: ab.gold, xp: ab.xp, abschluss: true });
   }
 
+  ((v.wochenaufgaben && v.wochenaufgaben.liste) || []).forEach(function (a) {
+    if (!a.erfuellt || a.eingeloest) return;
+    zeilen.push({ art: 'lohn', icon: '📅', text: 'Wochenzettel · ' + a.label,
+      gold: a.gold, xp: a.xp, wochenAufgabe: a.id });
+  });
+  var wab = v.wochenaufgaben && v.wochenaufgaben.abschluss;
+  if (wab && wab.erfuellt && !wab.eingeloest) {
+    zeilen.push({ art: 'lohn', icon: '🏆', text: 'Wochenabschluss steht bereit · Wochentruhe',
+      gold: wab.gold, xp: wab.xp, wochenAbschluss: true });
+  }
+
   // Der Tagesbonus kommt vom Server — ohne Verbindung steht er nicht zu.
   if (typeof bonusStatus === 'object' && bonusStatus && bonusStatus.verfuegbar && netzOk()) {
     zeilen.push({ art: 'lohn', icon: '🎁',
@@ -239,11 +250,32 @@ function empfangEinsammeln() {
       if (client.claimAchievement(z.erfolg).ok) { z.geholt = true; etwas = true; }
       return;
     }
+    if (z.wochenAufgabe) {
+      if (client.claimWeekTask(z.wochenAufgabe).ok) { z.geholt = true; etwas = true; }
+      return;
+    }
     if (!z.aufgabe) return;
     if (!client.claimTask(z.aufgabe).ok) return;
     z.geholt = true;
     etwas = true;
   });
+
+  // Der Wochenabschluss nach den Wochenzetteln — auch er kann erst durch
+  // diesen Griff faellig geworden sein.
+  var wabZeile = null;
+  empfangZeilen.forEach(function (z) { if (z.art === 'lohn' && z.wochenAbschluss && !z.geholt) wabZeile = z; });
+  if (wabZeile === null) {
+    var wabJetzt = NS.farmView(client.preview(), rules, navigator.onLine).wochenaufgaben.abschluss;
+    if (wabJetzt && wabJetzt.erfuellt && !wabJetzt.eingeloest) {
+      wabZeile = { art: 'lohn', icon: '🏆', text: 'Wochenabschluss steht bereit · Wochentruhe',
+        gold: wabJetzt.gold, xp: wabJetzt.xp, wochenAbschluss: true };
+      empfangZeilen.push(wabZeile);
+    }
+  }
+  if (wabZeile !== null && client.claimWeek().ok) {
+    wabZeile.geholt = true;
+    etwas = true;
+  }
 
   // Der Abschluss erst nach den Zetteln: Er verlangt, dass sie abgenommen sind.
   // Deshalb kann er auch erst durch diesen Griff fällig geworden sein — dann

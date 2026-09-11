@@ -4390,7 +4390,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
          var u = document.querySelector('.tagesabschluss');
          return {
            da: !!u,
-           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett').length,
+           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett:not(.woche)').length,
            text: u ? u.textContent.trim().replace(/\\s+/g, ' ') : '',
            knopf: !!(u && u.querySelector('.ta-los')),
            abgeholt: !!(u && u.classList.contains('abgeholt')),
@@ -4450,6 +4450,48 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
       `${urkunde.text.slice(0, 60)} (offen: ${noetig - geholteZettel.length})`,
     );
   }
+
+  // Die Woche: drei grosse Zettel und die Wochenurkunde — gemessen am Stand
+  // des Servers, wie beim Tag.
+  const woche = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var u = document.querySelector('.tagesabschluss.woche');
+         return {
+           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett.woche').length,
+           abschnitt: !!document.querySelector('#abenteuer-liste .brett-abschnitt'),
+           urkunde: u ? u.textContent.trim().replace(/\\s+/g, ' ') : '',
+           knopf: !!(u && u.querySelector('.ta-los')),
+           uhr: (document.getElementById('abenteuer-wochenuhr') || {}).textContent || '',
+         };
+       })())`,
+    ),
+  ) as { zettel: number; abschnitt: boolean; urkunde: string; knopf: boolean; uhr: string };
+  const wochenStand = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { wochenGeholt?: string[]; wochenNummer?: number; serverTag?: number };
+  };
+  const wochenGeholt = (wochenStand.state.wochenGeholt ?? []).filter((id) => id !== 'wochenabschluss');
+  check(
+    'Unter den Tageszetteln hängen drei Wochenzettel und die Wochenurkunde mit der Truhe',
+    woche.abschnitt && woche.zettel === 3 && /Wochenabschluss/.test(woche.urkunde) && /Wochentruhe/.test(woche.urkunde),
+    `${woche.zettel} Wochenzettel · ${woche.urkunde.slice(0, 70)}`,
+  );
+  check(
+    'Die Woche des Servers beginnt am Montag und passt zum Tag',
+    wochenStand.state.wochenNummer === Math.floor(((wochenStand.state.serverTag ?? 0) + 3) / 7),
+    `Woche ${wochenStand.state.wochenNummer} zu Tag ${wochenStand.state.serverTag}`,
+  );
+  check(
+    'Die Urkunde sagt, wie viele Wochenzettel noch fehlen — und stimmt mit dem Server überein',
+    woche.knopf || new RegExp('Noch ' + (3 - wochenGeholt.length) + ' von 3').test(woche.urkunde) || /geschafft/.test(woche.urkunde),
+    `${wochenGeholt.length}/3 abgenommen`,
+  );
+  check(
+    'Das Brett sagt, wann die neuen Wochenzettel hängen — am Montag, mit Restzeit in Tagen',
+    /Montag/.test(woche.uhr) && /noch/.test(woche.uhr),
+    woche.uhr,
+  );
 
   await evaluate(cdp, `document.getElementById('abenteuer-close').click()`);
   await sleep(300);

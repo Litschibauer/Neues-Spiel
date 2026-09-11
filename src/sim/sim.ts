@@ -13,6 +13,7 @@ import {
   landLocked,
   nextLevel,
   tagesAufgabenFuer,
+  wochenAufgabenFuer,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -38,6 +39,10 @@ import {
   tagesFortschritt,
   tagesAbgenommen,
   TAG_ABSCHLUSS,
+  WOCHE_ABSCHLUSS,
+  wocheVonTag,
+  wochenAbgenommen,
+  wochenFortschritt,
 } from './state.ts';
 import { advancePassives } from './produce.ts';
 
@@ -517,6 +522,47 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
       next.xp = s.xp + lohn.xp;
       next.tagGeholt = (s.tagGeholt ?? []).concat(TAG_ABSCHLUSS);
+      return next;
+    }
+
+    case 'CLAIM_WEEK_TASK': {
+      const tag = s.serverTag ?? 0;
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+      const diese = wochenAufgabenFuer(rules, wocheVonTag(tag), levelOf(rules, s.xp));
+      const auf = diese.find((a) => a.id === cmd.id);
+      if (!auf) throw new SimError('NO_SUCH_TASK');
+      if ((s.wochenGeholt ?? []).includes(cmd.id)) throw new SimError('ALREADY_CLAIMED');
+      if (wochenFortschritt(s, auf.art) < auf.menge) throw new SimError('NOT_YET_EARNED');
+
+      const next = cloneState(s);
+      if (auf.gold > 0) next.items = addItem(s.items, rules.currency, auf.gold);
+      next.xp = s.xp + auf.xp;
+      next.wochenGeholt = (s.wochenGeholt ?? []).concat(cmd.id);
+      return next;
+    }
+
+    case 'CLAIM_WEEK': {
+      const lohn = rules.wochenAbschluss;
+      if (!lohn) throw new SimError('NO_WEEK_BONUS');
+      const tag = s.serverTag ?? 0;
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+      if ((s.wochenGeholt ?? []).includes(WOCHE_ABSCHLUSS)) throw new SimError('ALREADY_CLAIMED');
+      const diese = wochenAufgabenFuer(rules, wocheVonTag(tag), levelOf(rules, s.xp));
+      if (diese.length === 0) throw new SimError('NO_TASKS_YET');
+      const noetig = Math.min(rules.aufgabenProWoche ?? 3, diese.length);
+      if (wochenAbgenommen(s) < noetig) throw new SimError('NOT_YET_EARNED');
+      // Die Wochentruhe geht denselben Weg wie jede Kiste: Der Server wuerfelt
+      // sie beim naechsten Abgleich, die Beute kommt mit der Post — und wird
+      // dann enthuellt.
+      if (lohn.kiste !== undefined && s.pendingBoxes.length >= MAX_PENDING_BOXES) {
+        throw new SimError('TOO_MANY_BOXES');
+      }
+
+      const next = cloneState(s);
+      if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
+      next.xp = s.xp + lohn.xp;
+      next.wochenGeholt = (s.wochenGeholt ?? []).concat(WOCHE_ABSCHLUSS);
+      if (lohn.kiste !== undefined) next.pendingBoxes = s.pendingBoxes.concat(lohn.kiste);
       return next;
     }
 

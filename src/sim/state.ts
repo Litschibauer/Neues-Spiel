@@ -130,6 +130,12 @@ export type State = {
   tagStart: readonly number[];
   // Heute schon abgeholte Aufgaben.
   tagGeholt: readonly string[];
+  // Dasselbe fuer die Woche (Montag bis Sonntag, UTC): Nummer der Serverwoche,
+  // Zaehlerstaende bei Wochenbeginn, diese Woche abgeholte Wochenaufgaben.
+  // Die Woche selbst leitet sich aus dem Server-Tag ab — kein zweiter Stempel.
+  wochenNummer: number;
+  wochenStart: readonly number[];
+  wochenGeholt: readonly string[];
 };
 
 // Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
@@ -159,6 +165,28 @@ export function tagesAbgenommen(s: State): number {
   const geholt = s.tagGeholt ?? [];
   let n = 0;
   for (const id of geholt) if (id !== TAG_ABSCHLUSS) n++;
+  return n;
+}
+
+// Die Woche haengt am Server-Tag: Tag 0 der Epoche war ein Donnerstag, darum
+// die Verschiebung um drei — so beginnt jede Woche am Montag (UTC).
+export function wocheVonTag(tag: number): number {
+  return Math.floor((tag + 3) / 7);
+}
+
+export const WOCHE_ABSCHLUSS = 'wochenabschluss';
+
+export function wochenFortschritt(s: State, art: number): number {
+  const tag = s.serverTag ?? 0;
+  if (tag <= 0) return 0;
+  if ((s.wochenNummer ?? 0) !== wocheVonTag(tag)) return 0;
+  return Math.max(0, zaehlerStand(s, art) - (s.wochenStart?.[art] ?? 0));
+}
+
+export function wochenAbgenommen(s: State): number {
+  const geholt = s.wochenGeholt ?? [];
+  let n = 0;
+  for (const id of geholt) if (id !== WOCHE_ABSCHLUSS) n++;
   return n;
 }
 
@@ -280,6 +308,9 @@ export function initialState(rules: Ruleset): State {
     tagNummer: 0,
     tagStart: [],
     tagGeholt: [],
+    wochenNummer: 0,
+    wochenStart: [],
+    wochenGeholt: [],
   };
 }
 
@@ -357,6 +388,9 @@ export function normalizeState(s: State): State {
     tagNummer: s.tagNummer ?? 0,
     tagStart: s.tagStart ?? [],
     tagGeholt: s.tagGeholt ?? [],
+    wochenNummer: s.wochenNummer ?? 0,
+    wochenStart: s.wochenStart ?? [],
+    wochenGeholt: s.wochenGeholt ?? [],
   };
 }
 
@@ -392,6 +426,9 @@ export function cloneState(s: State): State {
     tagNummer: s.tagNummer ?? 0,
     tagStart: s.tagStart ?? [],
     tagGeholt: s.tagGeholt ?? [],
+    wochenNummer: s.wochenNummer ?? 0,
+    wochenStart: s.wochenStart ?? [],
+    wochenGeholt: s.wochenGeholt ?? [],
   };
 }
 

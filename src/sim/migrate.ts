@@ -141,6 +141,24 @@ export const TAGESLAUF_DAZU: MigrationStep = (state, from, to) => {
   return next;
 };
 
+// Die Woche faengt leer an; Nummer und Nullpunkt setzt der Server beim
+// naechsten Kontakt, so wie beim Tag.
+export const WOCHE_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (
+    gewachsen.wochenNummer !== undefined &&
+    gewachsen.wochenStart !== undefined &&
+    gewachsen.wochenGeholt !== undefined
+  ) {
+    return gewachsen;
+  }
+  const next = cloneState(gewachsen);
+  next.wochenNummer = gewachsen.wochenNummer ?? 0;
+  next.wochenStart = gewachsen.wochenStart ?? [];
+  next.wochenGeholt = gewachsen.wochenGeholt ?? [];
+  return next;
+};
+
 export const ZAEHLER_DAZU: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   const vollstaendig =
@@ -310,6 +328,7 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   // Fundstuecke brauchen kein Feld im Spielstand: Sie stehen im Regelwerk und
   // werden aus dem Stand selbst gezogen.
   ['40->41', AUFS_RASTER],
+  ['41->42', WOCHE_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

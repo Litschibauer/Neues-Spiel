@@ -16,16 +16,21 @@ import {
   sizeOf,
   achievementFortschritt,
   tagesAufgabenFuer,
+  wochenAufgabenFuer,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import {
   EMPTY_PLOT,
   TAG_ABSCHLUSS,
+  WOCHE_ABSCHLUSS,
   capacityOf,
   count,
   stored,
   tagesAbgenommen,
   tagesFortschritt,
+  wocheVonTag,
+  wochenAbgenommen,
+  wochenFortschritt,
 } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
@@ -298,6 +303,8 @@ export type FarmView = {
   angeln: AngelView;
   erfolge: readonly ErfolgView[];
   aufgaben: TagesaufgabenView;
+  // Die Wochenaufgaben — dieselbe Form, `tag` ist hier die Wochennummer.
+  wochenaufgaben: TagesaufgabenView;
 };
 
 // Ein Erfolg mit allem, was die Oberfläche zum Zeichnen braucht: Fortschritt,
@@ -794,6 +801,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     angeln: angelView(state, rules),
     erfolge: erfolgeView(state, rules),
     aufgaben: aufgabenView(state, rules),
+    wochenaufgaben: wochenView(state, rules),
   };
 }
 
@@ -855,6 +863,46 @@ function aufgabenView(state: State, rules: Ruleset): TagesaufgabenView {
           noetig,
           erfuellt: abgenommen >= noetig,
           eingeloest: geholt.includes(TAG_ABSCHLUSS),
+        }
+      : null,
+  };
+}
+
+function wochenView(state: State, rules: Ruleset): TagesaufgabenView {
+  const tag = state.serverTag ?? 0;
+  if (tag <= 0) return { tag: 0, liste: [], abschluss: null };
+
+  const woche = wocheVonTag(tag);
+  const geholt = state.wochenGeholt ?? [];
+  const liste = wochenAufgabenFuer(rules, woche, levelOf(rules, state.xp)).map((a) => {
+    const ist = Math.min(wochenFortschritt(state, a.art), a.menge);
+    return {
+      id: a.id,
+      label: a.label,
+      gruppe: 'woche',
+      gold: a.gold,
+      xp: a.xp,
+      ist,
+      ziel: a.menge,
+      erfuellt: ist >= a.menge,
+      eingeloest: geholt.includes(a.id),
+      prozent: a.menge <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / a.menge)),
+    };
+  });
+  const lohn = rules.wochenAbschluss;
+  const noetig = Math.min(rules.aufgabenProWoche ?? 3, liste.length);
+  const abgenommen = wochenAbgenommen(state);
+  return {
+    tag: woche,
+    liste,
+    abschluss: lohn
+      ? {
+          gold: lohn.gold,
+          xp: lohn.xp,
+          abgenommen,
+          noetig,
+          erfuellt: abgenommen >= noetig,
+          eingeloest: geholt.includes(WOCHE_ABSCHLUSS),
         }
       : null,
   };
