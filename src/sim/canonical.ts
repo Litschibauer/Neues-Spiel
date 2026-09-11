@@ -8,7 +8,8 @@ export function canonicalize(state: State): string {
       (p) =>
         `${p.level}@${p.gx},${p.gy}#${p.slots.map((x) => `${x.recipe}:${x.startedAt}`).join('/')}` +
         `~${p.tiere.join('/')}` +
-        (p.baum ? `%${p.baum.reifSeit}:${p.baum.geerntet}` : ''),
+        (p.baum ? `%${p.baum.reifSeit}:${p.baum.geerntet}` : '') +
+        (p.meister ? `*${p.meister}` : ''),
     )
     .join(',');
   const passives = state.passives.join(',');

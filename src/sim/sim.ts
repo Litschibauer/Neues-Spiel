@@ -15,6 +15,8 @@ import {
   tagesAufgabenFuer,
   wochenAufgabenFuer,
   wetterBei,
+  meisterFaehig,
+  sterneVon,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -216,6 +218,10 @@ export function fundstueck(
 // garantiert dasselbe rechnen.
 export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
   const gebaut = rules.plots.filter((_, i) => (s.plots[i]?.level ?? 0) > 0);
+  const sterneJePlatz = rules.plots.map((_, i) =>
+    meisterFaehig(rules, i) ? sterneVon(rules, s.plots[i]?.meister ?? 0) : 0,
+  );
+  const alleSterne = rules.meisterschaft?.stufen.length ?? 0;
   return {
     level: levelOf(rules, s.xp),
     gold: count(s, rules.currency),
@@ -228,6 +234,8 @@ export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
     fisch: s.angelFang ?? 0,
     boot: !!s.bootRepariert,
     items: s.items,
+    sterne: sterneJePlatz.reduce((a, b) => a + b, 0),
+    meister: alleSterne > 0 ? sterneJePlatz.filter((n) => n >= alleSterne).length : 0,
   };
 }
 
@@ -353,6 +361,12 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (wetter && wetter.plaetze.includes(cmd.plot) && wetterBei(rules, s.tick) === 'regen') {
         schub = Math.floor((recipe.durationTicks * wetter.regenSchubProzent) / 100);
       }
+      // Erster Meisterstern: Alles, was hier angesetzt wird, läuft schneller —
+      // ebenfalls als Startschub, damit die Sicht nichts Neues rechnen muss.
+      const meister = rules.meisterschaft;
+      if (meister && meisterFaehig(rules, cmd.plot) && sterneVon(rules, plot.meister ?? 0) >= 1) {
+        schub += Math.floor((recipe.durationTicks * meister.schnellerProzent) / 100);
+      }
       next.plots = replaceAt(s.plots, cmd.plot, {
         ...plot,
         slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick - schub }),
@@ -471,6 +485,24 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       );
 
       next.xp = s.xp + recipe.xp;
+
+      // Meisterschaft: Jede Abholung zählt. Es wirken die Sterne von JETZT —
+      // der Stern, der mit dieser Abholung kommt, erst ab der nächsten.
+      const meister = rules.meisterschaft;
+      if (meister && meisterFaehig(rules, cmd.plot)) {
+        const sterne = sterneVon(rules, plot.meister ?? 0);
+        const punkte = (plot.meister ?? 0) + 1;
+        next.plots = replaceAt(next.plots, cmd.plot, { ...next.plots[cmd.plot]!, meister: punkte });
+        if (sterne >= 2) next.xp += Math.floor((recipe.xp * meister.xpProzent) / 100);
+        // Das Extrastück ist ein Geschenk: Passt es nicht mehr ins Lager,
+        // verfällt es, statt die Abholung zu blockieren.
+        if (sterne >= 3 && meister.extraJede > 0 && punkte % meister.extraJede === 0) {
+          const extra = recipe.output.item;
+          if (!rules.items[extra]?.storable || spaceLeft(next, rules) >= 1) {
+            next.items = addItem(next.items, extra, 1);
+          }
+        }
+      }
 
       // Der Fund kommt nach dem Ertrag: Erst muss die Ernte ins Lager passen.
       const fund = fundstueck(next, rules, cmd.plot);

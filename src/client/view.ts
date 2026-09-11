@@ -19,6 +19,9 @@ import {
   wochenAufgabenFuer,
   wetterBei,
   wetterWechselIn,
+  meisterFaehig,
+  meisterGrenzen,
+  sterneVon,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import {
@@ -93,6 +96,20 @@ export type PlotView = {
     unlocked: boolean;
     affordable: boolean;
   } | null;
+  // Meisterschaft — nur an Werkstätten und Ställen, sonst null.
+  meister: MeisterView | null;
+};
+
+export type MeisterView = {
+  punkte: number;
+  sterne: number;
+  maxSterne: number;
+  // Zuletzt überschrittene Grenze und die nächste (null, wenn alle Sterne da sind).
+  von: number;
+  ziel: number | null;
+  schnellerProzent: number;
+  xpProzent: number;
+  extraJede: number;
 };
 
 export type StallView = {
@@ -608,6 +625,23 @@ function plotView(state: State, rules: Ruleset, i: number): PlotView {
     baum,
     deco: def.deco === true,
     upgrade,
+    meister: meisterView(rules, i, plot.meister ?? 0),
+  };
+}
+
+function meisterView(rules: Ruleset, i: number, punkte: number): MeisterView | null {
+  const m = rules.meisterschaft;
+  if (!m || !meisterFaehig(rules, i)) return null;
+  const grenzen = meisterGrenzen(rules, punkte);
+  return {
+    punkte,
+    sterne: sterneVon(rules, punkte),
+    maxSterne: m.stufen.length,
+    von: grenzen.von,
+    ziel: grenzen.ziel,
+    schnellerProzent: m.schnellerProzent,
+    xpProzent: m.xpProzent,
+    extraJede: m.extraJede,
   };
 }
 

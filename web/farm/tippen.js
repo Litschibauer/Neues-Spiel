@@ -456,6 +456,7 @@ function renderStall(p) {
 
   var lager = lagerJetzt();
   p.slots.forEach(function (s) { box.appendChild(stallRow(p, s, lager)); });
+  meisterKarte(p, box);
   ausbauKnopf(p, box);
   verschiebeKnopf(p, box);
 }
@@ -1062,7 +1063,7 @@ function zeichnePicker(p) {
   }
 
   // Rezepte nur zum Starten zeigen, wenn der Slot frei ist.
-  if (s0 && (s0.busy || s0.done)) { ausbauKnopf(p, box); verschiebeKnopf(p, box); return; }
+  if (s0 && (s0.busy || s0.done)) { meisterKarte(p, box); ausbauKnopf(p, box); verschiebeKnopf(p, box); return; }
 
   var lager = lagerAusSicht(v);
   p.options.forEach(function (o) {
@@ -1098,8 +1099,37 @@ function zeichnePicker(p) {
     if (o.unlocked && !o.affordable) nachkaufZeile(v, o, box);
   });
 
+  meisterKarte(p, box);
   ausbauKnopf(p, box);
   verschiebeKnopf(p, box);
+}
+
+// Die Meisterschaft eines Gebäudes: Sterne, der Weg zum nächsten und was die
+// verdienten schon bringen. Steht unter den Rezepten — man soll erst arbeiten
+// und dann sehen, wohin es führt.
+function meisterKarte(p, box) {
+  var m = p.meister;
+  if (!m) return;
+  var karte = document.createElement('div');
+  karte.className = 'card meister';
+  var html = '<div class="body"><div class="top">' + iconTag('stern') + 'Meisterschaft ' +
+    '<span class="sterne-text">' + sterneText(m.sterne, m.maxSterne) + '</span></div>';
+  if (m.ziel !== null) {
+    var noch = m.ziel - m.punkte;
+    html += '<div class="sub">Noch ' + noch + (noch === 1 ? ' Abholung' : ' Abholungen') +
+      ' bis ' + sterneText(m.sterne + 1, m.sterne + 1) + ' · ' + meisterVorteil(m.sterne + 1, m) + '</div>' +
+      '<div class="balken"><i style="width:' +
+      Math.round((100 * (m.punkte - m.von)) / Math.max(1, m.ziel - m.von)) + '%"></i></div>';
+  } else {
+    html += '<div class="sub">Gemeistert — alle Sterne verdient</div>';
+  }
+  if (m.sterne > 0) {
+    var gilt = [];
+    for (var i = 1; i <= m.sterne; i++) gilt.push(meisterVorteil(i, m));
+    html += '<div class="sub gilt">Gilt hier: ' + gilt.join(' · ') + '</div>';
+  }
+  karte.innerHTML = html + '</div>';
+  box.appendChild(karte);
 }
 
 function nachkaufZeile(v, o, box) {

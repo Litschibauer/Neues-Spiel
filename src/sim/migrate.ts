@@ -103,7 +103,8 @@ export const GROW: MigrationStep = (state, from, to) => {
     if (p.slots.length === wanted[i]!) return p;
     const slots: Slot[] = p.slots.slice();
     while (slots.length < wanted[i]!) slots.push({ recipe: EMPTY_PLOT, startedAt: 0 });
-    return { level: p.level, slots };
+    // Die Meisterschaft überlebt, wenn ein Platz mehr Plätze bekommt.
+    return p.meister ? { level: p.level, slots, meister: p.meister } : { level: p.level, slots };
   });
 
   while (plots.length < to.plots.length) {
@@ -345,6 +346,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['44->45', AUFS_RASTER],
   // Schaffutter: eine Ware und ein Rezept mehr, sonst bleibt alles stehen.
   ['45->46', AUFS_RASTER],
+  // Meisterschaft: Sterne zählen ab jetzt — der Zustand braucht nichts Neues.
+  ['46->47', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

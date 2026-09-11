@@ -160,10 +160,12 @@ export type AchievementKind =
   | 'silo' // Lager so oft ausgebaut
   | 'fish' // so viele Fänge aus dem See
   | 'boat' // Boot repariert
-  | 'item'; // so viel von einer Ware im Lager
+  | 'item' // so viel von einer Ware im Lager
+  | 'sterne' // so viele Meistersterne über alle Gebäude
+  | 'meister'; // so viele Gebäude mit allen Sternen
 
 // Erfolge sind in Gruppen einsortiert; die Oberfläche zeigt sie darunter.
-export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat';
+export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat' | 'meister';
 
 export type AchievementDef = {
   id: string;
@@ -268,6 +270,19 @@ export type Ruleset = {
   // `regenSchubProzent` seiner Dauer geschenkt. Ohne dieses Feld ist das
   // Wetter Stimmung und sonst nichts.
   wetter?: { fensterTicks: number; regenSchubProzent: number; plaetze: readonly number[] };
+  // Meisterschaft: Jede Werkstatt und jeder Stall zählt seine Abholungen. Ab
+  // `stufen[k]` Abholungen leuchtet der (k+1)-te Stern. Erster Stern: Alles,
+  // was dort angesetzt wird, läuft `schnellerProzent` schneller. Zweiter:
+  // `xpProzent` mehr XP je Abholung. Dritter: Jede `extraJede`-te Abholung
+  // bringt ein Stück obendrauf. Felder, Bäume und Deko machen nicht mit —
+  // davon gibt es viele und gleiche; Sterne gehören an Gebäude. Ohne dieses
+  // Feld gibt es keine Sterne, alte Fassungen bleiben unberührt.
+  meisterschaft?: {
+    stufen: readonly number[];
+    schnellerProzent: number;
+    xpProzent: number;
+    extraJede: number;
+  };
   // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
   // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
   // Spielstand (siehe sim.ts) — Server und Gerät kommen ohne Absprache auf
@@ -2618,22 +2633,45 @@ const V46: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// Meisterschaft: Sterne für Werkstätten und Ställe. Die Grenzen sind in
+// Abholungen, nicht in Stücken — so braucht jedes Gebäude gleich viele
+// Durchläufe, ob es zwei Säcke oder einen Pullover je Lauf hergibt.
+const V47: Ruleset = {
   ...V46,
+  version: 47,
+  meisterschaft: { stufen: [25, 100, 300], schnellerProzent: 10, xpProzent: 50, extraJede: 5 },
+  achievements: [
+    ...(V46.achievements ?? []),
+    { id: 'stern1', label: 'Ersten Meisterstern verdienen', kind: 'sterne', arg: 1, gold: 300, xp: 40, group: 'meister' },
+    { id: 'sterne5', label: 'Fünf Meistersterne verdienen', kind: 'sterne', arg: 5, gold: 1200, xp: 150, group: 'meister' },
+    { id: 'meister1', label: 'Ein Gebäude ganz gemeistert', kind: 'meister', arg: 1, gold: 2500, xp: 300, group: 'meister' },
+    { id: 'sterne15', label: 'Fünfzehn Meistersterne verdienen', kind: 'sterne', arg: 15, gold: 4000, xp: 500, group: 'meister' },
+    { id: 'meister5', label: 'Fünf Gebäude ganz gemeistert', kind: 'meister', arg: 5, gold: 9000, xp: 1200, group: 'meister' },
+  ],
+  wetter: {
+    ...V46.wetter!,
+    plaetze: V46.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V47,
+  // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
+  meisterschaft: { ...V47.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V46.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V47.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V46.fishing!,
+    ...V47.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V46.plots.map((p) => {
+  plots: V47.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2697,17 +2735,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [44, V44],
   [45, V45],
   [46, V46],
+  [47, V47],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 46;
+export const LATEST_RULESET_VERSION = 47;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -2871,6 +2910,37 @@ export function nextLevel(rules: Ruleset, plot: number, level: number): LevelDef
   return rules.plots[plot]?.levels[level] ?? null;
 }
 
+// Meisterschaft: Welche Plätze machen mit, wie viele Sterne ergeben so viele
+// Abholungen, und wo liegt die nächste Grenze. Reine Regelwerksfragen — Sim
+// und Sicht rechnen mit denselben Antworten.
+export function meisterFaehig(rules: Ruleset, plot: number): boolean {
+  const def = rules.plots[plot];
+  if (!rules.meisterschaft || !def || def.deco || def.baum) return false;
+  if (def.id.indexOf('field') === 0) return false;
+  return def.levels.some((l) => l.recipes.length > 0);
+}
+
+export function sterneVon(rules: Ruleset, punkte: number): number {
+  const m = rules.meisterschaft;
+  if (!m) return 0;
+  let n = 0;
+  for (const grenze of m.stufen) if (punkte >= grenze) n++;
+  return n;
+}
+
+// Die Grenze, die der Platz zuletzt überschritten hat, und die nächste —
+// daraus wird der Balken im Tipp-Menü. `ziel` ist null, wenn alle Sterne da sind.
+export function meisterGrenzen(rules: Ruleset, punkte: number): { von: number; ziel: number | null } {
+  const m = rules.meisterschaft;
+  if (!m) return { von: 0, ziel: null };
+  let von = 0;
+  for (const grenze of m.stufen) {
+    if (punkte < grenze) return { von, ziel: grenze };
+    von = grenze;
+  }
+  return { von, ziel: null };
+}
+
 // Alles, was ein Erfolg wissen muss. Lose Werte statt State, um keinen
 // Ringimport rules<->state zu erzeugen.
 export type AchievementCtx = {
@@ -2885,6 +2955,8 @@ export type AchievementCtx = {
   fisch: number;
   boot: boolean;
   items: readonly number[];
+  sterne: number;
+  meister: number;
 };
 
 // Stand und Ziel eines Erfolgs — daraus ergeben sich Fortschrittsbalken UND
@@ -2925,6 +2997,10 @@ export function achievementFortschritt(
       const habe = index < 0 ? 0 : (ctx.items[index] ?? 0);
       return { ist: habe, ziel: ach.menge ?? 1 };
     }
+    case 'sterne':
+      return { ist: ctx.sterne, ziel: ach.arg as number };
+    case 'meister':
+      return { ist: ctx.meister, ziel: ach.arg as number };
     default:
       return { ist: 0, ziel: 1 };
   }

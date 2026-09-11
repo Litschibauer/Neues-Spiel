@@ -4571,6 +4571,109 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     muehleFutter.muehle ? muehleFutter.optionen.join(' | ') : 'keine Mühle auf dem Hof',
   );
 
+  console.log('\n9v. Meisterschaft — Sterne an der Mühle');
+  // Weizen ins Postfach und ins Lager, damit die Mühle mehrfach mahlen kann.
+  await api(`/api/admin/grant?account=${status.accountId}&item=wheat&amount=30`, 'POST');
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Weizen im Postfach', 20_000);
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(400);
+  const muehleTile = `[...document.querySelectorAll('#plots .plot')].find(function (t) {
+       var n = t.querySelector('.name'); return n && n.textContent.indexOf('Mühle') === 0; })`;
+  // Erst den Stand ablesen: Wie viele Abholungen hat die Mühle schon?
+  const meisterVorher = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var tile = ${muehleTile};
+         if (!tile) return { da: false };
+         tile.click();
+         var karte = document.querySelector('#pick-list .card.meister');
+         var text = karte ? karte.textContent.replace(/\\s+/g, ' ').trim() : '';
+         document.getElementById('pick-close').click();
+         return { da: true, karte: !!karte, text: text, sterne: (text.match(/★/g) || []).length };
+       })())`,
+    ),
+  ) as { da: boolean; karte?: boolean; text?: string; sterne?: number };
+  check(
+    'Das Tipp-Menü der Mühle zeigt die Meisterschaft mit Weg zum nächsten Stern',
+    meisterVorher.da && meisterVorher.karte === true && /Meisterschaft/.test(meisterVorher.text ?? '') && /Abholung/.test(meisterVorher.text ?? ''),
+    meisterVorher.text ?? 'keine Mühle',
+  );
+  // So oft Hühnerfutter mahlen, wie der Feldtest für den ersten Stern verlangt.
+  const sterneNoetig = getRuleset(1001).meisterschaft!.stufen[0]!;
+  let meisterAbgeholt = 0;
+  for (let runde = 0; runde < sterneNoetig + 2 && meisterAbgeholt < sterneNoetig; runde++) {
+    await evaluate(
+      cdp,
+      `(function () {
+         var tile = ${muehleTile};
+         if (!tile) return;
+         var s = tile.querySelector('.status').textContent;
+         if (s.indexOf('fertig') === 0) { tile.click(); return; }
+         tile.click();
+         var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+           return o.textContent.indexOf('Hühnerfutter') >= 0 && !o.disabled;
+         });
+         if (opt) opt.click(); else document.getElementById('pick-close').click();
+       })()`,
+    );
+    await api(`/api/admin/time?account=${status.accountId}&seconds=60`, 'POST');
+    await sleep(700);
+    const geholt = await evaluate<boolean>(
+      cdp,
+      `(function () {
+         var tile = ${muehleTile};
+         if (!tile || tile.querySelector('.status').textContent.indexOf('fertig') !== 0) return false;
+         tile.click();
+         return true;
+       })()`,
+    );
+    if (geholt) meisterAbgeholt++;
+    await sleep(500);
+  }
+  // Der Stern reiht sich hinter anderen Momenten ein (Erfolge, Verkäufe) —
+  // jeder braucht ein paar Sekunden. Warten, bis er dran war.
+  let sternGemeldet = true;
+  try {
+    await waitFor(
+      cdp,
+      `JSON.parse(localStorage.getItem('${MELDUNGEN}') || '[]').some(function (m) { return /Meisterstern/.test(m.text); })`,
+      'Meisterstern als Moment',
+      90_000,
+    );
+  } catch (e) {
+    sternGemeldet = false;
+    console.log('    (Meisterstern-Moment: ' + String((e as Error).message) + ')');
+  }
+  await sleep(300);
+  const meisterDanach = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var tile = ${muehleTile};
+         var dach = tile ? tile.querySelectorAll('.sterne polygon').length : -1;
+         tile.click();
+         var karte = document.querySelector('#pick-list .card.meister');
+         var text = karte ? karte.textContent.replace(/\\s+/g, ' ').trim() : '';
+         document.getElementById('pick-close').click();
+         var liste = [];
+         try { liste = JSON.parse(localStorage.getItem('${MELDUNGEN}') || '[]'); } catch (e) {}
+         var moment = liste.filter(function (m) { return /Meisterstern/.test(m.text); }).map(function (m) { return m.text; });
+         return { dach: dach, sterne: (text.match(/★/g) || []).length, text: text, moment: moment };
+       })())`,
+    ),
+  ) as { dach: number; sterne: number; text: string; moment: string[] };
+  check(
+    'Nach genug Abholungen leuchtet der erste Stern — am Dach der Mühle und im Tipp-Menü',
+    meisterDanach.sterne >= 1 && meisterDanach.dach >= 1,
+    `${meisterAbgeholt} abgeholt · ${meisterDanach.dach} Stern(e) am Dach · „${meisterDanach.text}"`,
+  );
+  check(
+    'Der neue Stern kommt als Moment mit seinem Vorteil',
+    sternGemeldet && meisterDanach.moment.some((m) => /schneller/.test(m)),
+    meisterDanach.moment.join(' | ') || 'kein Moment im Mitschnitt (90 s gewartet)',
+  );
+
   console.log('\n9y. Tagesbonus');
   await waitFor(
     cdp,

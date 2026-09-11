@@ -214,6 +214,9 @@ function renderPlots(v) {
       tile.appendChild(badge);
     }
 
+    // Meistersterne sitzen am Dach — nur die verdienten, nichts Leeres.
+    if (p.meister && p.meister.sterne > 0) tile.appendChild(sterneBadge(p.meister, p.size.w));
+
     var baumWaechst = p.baum && (p.baum.stufe === 'setzling' || p.baum.stufe === 'wachsen');
     if (p.busy || baumWaechst) {
       var bar = document.createElement('div');
@@ -603,6 +606,21 @@ function moebel(knopf, zustand, name, zahl, artId) {
 
 // Blasen sind rund 0,9 Zellen breit — gleich groß über Feld, Stall und Boot,
 // egal wie viele Zellen das Objekt selbst einnimmt.
+// Verdiente Meistersterne über einem Gebäude. Wie die Blase in
+// viewBox-Einheiten, damit sie mit dem Zoom wachsen.
+function sterneBadge(m, zellen) {
+  var el = document.createElement('span');
+  el.className = 'sterne';
+  el.style.width = (60 / Math.max(1, zellen)) + '%';
+  var stern = '5,0.6 6.4,3.6 9.6,3.9 7.2,6.1 7.9,9.3 5,7.7 2.1,9.3 2.8,6.1 0.4,3.9 3.6,3.6';
+  var svg = '<svg viewBox="0 0 ' + (m.sterne * 10) + ' 10" aria-hidden="true">';
+  for (var i = 0; i < m.sterne; i++) {
+    svg += '<polygon points="' + stern + '" transform="translate(' + (i * 10) + ' 0)" fill="#f4c430" stroke="#7a4b12" stroke-width=".7"/>';
+  }
+  el.innerHTML = svg + '</svg>';
+  return el;
+}
+
 function blasenBreite(zellen) {
   return (90 / Math.max(1, zellen)) + '%';
 }
@@ -854,6 +872,7 @@ var ZIEL_GRUPPEN = [
   { id: 'land', label: 'Land', bild: 'map' },
   { id: 'see', label: 'Angelsee', bild: 'fish-perch' },
   { id: 'vorrat', label: 'Vorrat', bild: 'plank' },
+  { id: 'meister', label: 'Meisterschaft', bild: 'stern' },
 ];
 
 // Reihenfolge in einer Gruppe: zuerst was man abholen kann, dann die

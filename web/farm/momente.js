@@ -50,6 +50,9 @@ function momentePruefen(v) {
   jetzt.woche = (v.wochenaufgaben && v.wochenaufgaben.tag) || 0;
   (v.orders || []).forEach(function (o) { jetzt.kasse[o.id] = { sold: o.sold || 0, item: o.item }; });
   (v.chests || []).forEach(function (k) { if (k.ready) jetzt.kisten[k.id] = k; });
+  // Meistersterne je Platz — ein neuer Stern ist ein Moment.
+  jetzt.sterne = {};
+  (v.plots || []).forEach(function (p) { if (p.meister && p.meister.sterne > 0) jetzt.sterne[p.index] = p.meister.sterne; });
 
   if (momenteGesehen === null) {
     momenteGesehen = jetzt;
@@ -137,6 +140,26 @@ function momentePruefen(v) {
       text: 'Alle Zettel ab — der Tagesabschluss wartet am Brett',
     });
   }
+  Object.keys(jetzt.sterne).forEach(function (i) {
+    var neu = jetzt.sterne[i], vorher = (alt.sterne && alt.sterne[i]) || 0;
+    if (neu <= vorher) return;
+    var platz = Number(i);
+    var p = (v.plots || [])[platz];
+    if (!p || !p.meister) return;
+    moment({
+      klang: 'erfolg', art: 'stern', platz: platz,
+      text: '★ Meisterstern · ' + plotName(platz) + ' — ab jetzt ' + meisterVorteil(neu, p.meister),
+      hin: function () {
+        if (typeof hatRaster === 'function' && hatRaster() && p.gx >= 0) {
+          zentriere(p.gx, p.gy);
+          kameraKlemmen();
+          kameraAnwenden();
+        }
+        var kachel = document.querySelector('#plots .plot[data-platz="' + platz + '"]');
+        if (kachel) funken(kachel.getBoundingClientRect(), 'fund');
+      },
+    });
+  });
   Object.keys(jetzt.erfolge).forEach(function (id) {
     if (alt.erfolge[id]) return;
     var e = jetzt.erfolge[id];
@@ -196,6 +219,10 @@ function momentZeigen(m) {
   var hin = typeof m.hin === 'function' ? m.hin : m.hin ? function () { show(m.hin); } : null;
   toast(m.text, false, hin);
   if (m.winkt) winke(m.winkt);
+  if (m.art === 'stern') {
+    var kachel = document.querySelector('#plots .plot[data-platz="' + m.platz + '"]');
+    if (kachel) funken(kachel.getBoundingClientRect(), 'fund');
+  }
   if (m.punkt) {
     var p = $('zahnrad-punkt');
     if (p) {

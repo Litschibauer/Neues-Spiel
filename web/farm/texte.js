@@ -183,6 +183,18 @@ function uhrzeitKurz(ms) {
   return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
 }
 
+// Meisterschaft: Sterne als Zeichen und der Vorteil je Stern in Worten.
+function sterneText(n, max) {
+  var s = '';
+  for (var i = 0; i < max; i++) s += i < n ? '★' : '☆';
+  return s;
+}
+function meisterVorteil(stern, m) {
+  if (stern === 1) return m.schnellerProzent + ' % schneller';
+  if (stern === 2) return '+' + m.xpProzent + ' % XP';
+  return 'jede ' + m.extraJede + '. Abholung ein Stück extra';
+}
+
 function timeText(seconds) {
   if (seconds < 60) return seconds + ' s';
   if (seconds < 3600) return Math.ceil(seconds / 60) + ' min';

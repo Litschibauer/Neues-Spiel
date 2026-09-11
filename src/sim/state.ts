@@ -21,6 +21,9 @@ export type Plot = {
   gy: number;
   tiere: readonly number[];
   baum?: Baum;
+  // Meisterschaft: Abholungen an diesem Platz. Fehlt, solange es keine gab —
+  // so bleibt der Zustand alter Fassungen Byte für Byte, wie er war.
+  meister?: number;
 };
 
 export const EMPTY_SLOT: Slot = { recipe: -1, startedAt: 0 };

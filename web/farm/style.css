@@ -398,6 +398,16 @@
   }
   @media (prefers-reduced-motion: reduce) { .plot .badge { animation: none; } }
 
+  /* Meistersterne am Dach: nur verdiente, in viewBox-Einheiten wie die Blase. */
+  .plot .sterne {
+    position: absolute; left: 3%; top: 0; transform: translateY(-45%);
+    display: block; pointer-events: none;
+  }
+  .plot .sterne > svg {
+    display: block; width: 100%; height: auto; overflow: visible;
+    filter: drop-shadow(0 .6px 1px rgba(0, 0, 0, .35));
+  }
+
   .moebel {
     position: absolute; padding: 0; border: 0; background: none;
     display: block; transition: transform .12s;
@@ -734,6 +744,12 @@
   .opt.laufend .yield { color: var(--muted); }
   .opt .yield { font-weight: 700; color: var(--leaf-dark); font-variant-numeric: tabular-nums; }
   .opt:disabled { opacity: .62; }
+
+  /* Meisterschaft im Tipp-Menü: kein Knopf, eine Karte mit Balken. */
+  .card.meister { cursor: default; border-style: dashed; }
+  .card.meister .sterne-text { color: #d9a400; letter-spacing: .08em; margin-left: .25em; }
+  .card.meister .balken { margin-top: .35rem; }
+  .card.meister .gilt { color: var(--leaf-dark); }
 
   .skip {
     margin-top: .4rem; width: 100%; height: 2rem; border-radius: 10px;
