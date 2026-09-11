@@ -155,9 +155,12 @@ function kisteEnthuellen(beute) {
 }
 
 function kisteEinpacken() {
+  // Woher die Stuecke fliegen, muss feststehen, bevor die Karte zugeht.
+  var von = $('kiste-beute') ? $('kiste-beute').getBoundingClientRect() : null;
   $('kiste-feier').hidden = true;
   if (!client) return;
   var vorher = NS.farmView(client.preview(), rules, navigator.onLine);
+  var beute = vorher.mail.entries;
   var r = client.collectMail();
   if (!r.ok) {
     // Zum Beispiel: Lager voll. Die Beute bleibt im Postfach — sie ist nicht weg.
@@ -171,8 +174,15 @@ function kisteEinpacken() {
   var dazu = nachher.currency.amount - vorher.currency.amount;
   klang('muenzen');
   var muenzen = document.querySelector('.coins');
-  if (dazu > 0 && muenzen) zahlAuf(muenzen.getBoundingClientRect(), '+' + dazu, 'muenzen');
-  geldbeutelHuepft();
+  if (dazu > 0 && muenzen) {
+    muenzenFliegen(von || muenzen, dazu, function () {
+      zahlAuf(muenzen.getBoundingClientRect(), '+' + dazu, 'muenzen');
+    });
+  }
+  beute.forEach(function (b, i) {
+    if (b.item === rules.currency) return;
+    setTimeout(function () { flugZu(von, $('silo'), itemIcon(b.item), 'ware', 1); }, i * 90);
+  });
   toast('Eingepackt');
   render();
 }

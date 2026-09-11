@@ -300,10 +300,12 @@ function empfangFeiern(gold, xp) {
   if (gold <= 0 && xp <= 0) return;
   klang('muenzen');
   var muenzen = document.querySelector('.coins');
-  if (typeof zahlAuf === 'function' && muenzen && gold > 0) {
-    zahlAuf(muenzen.getBoundingClientRect(), '+' + gold, 'muenzen');
+  if (muenzen && gold > 0) {
+    // Vom Knopf in den Geldbeutel; die Zahl oben springt erst bei Ankunft.
+    muenzenFliegen($('empfang-los') || muenzen, gold, function () {
+      zahlAuf(muenzen.getBoundingClientRect(), '+' + gold, 'muenzen');
+    });
   }
-  if (gold > 0) geldbeutelHuepft();
   toast('Eingesammelt' + (gold > 0 ? ' · +' + gold + ' Gold' : '') +
     (xp > 0 ? (gold > 0 ? ' + ' : ' · +') + xp + ' XP' : ''));
 }

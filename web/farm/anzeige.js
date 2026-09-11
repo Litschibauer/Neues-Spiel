@@ -676,9 +676,9 @@ function renderRequests(v) {
       var res = client.sendSlip(z.slot);
       act('Abgeschickt nach ' + z.dest + ' · ' + stacks(z.reward), res, 'wagen');
       if (!res.ok) return;
-      if (lohnGold > 0) zahlAuf(wo, '+' + lohnGold, 'muenzen');
+      if (lohnGold > 0) { zahlAuf(wo, '+' + lohnGold, 'muenzen'); muenzenFliegen(wo, lohnGold); }
       if (z.xp > 0) zahlAuf(hoch(wo), '+' + z.xp + ' XP', 'xp');
-      setTimeout(function () { klang('muenzen'); geldbeutelHuepft(); }, 320);
+      setTimeout(function () { klang('muenzen'); }, 320);
     });
     reihe.appendChild(los);
 
@@ -917,7 +917,11 @@ function renderZiele(v) {
 
   box.querySelectorAll('.ziel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      act('Erfolg eingelöst', client.claimAchievement(btn.getAttribute('data-id')), 'stufe');
+      var wo = btn.getBoundingClientRect();
+      var gold = Number(btn.getAttribute('data-gold')) || 0;
+      var r = client.claimAchievement(btn.getAttribute('data-id'));
+      act('Erfolg eingelöst', r, 'stufe');
+      if (r.ok && gold > 0) muenzenFliegen(wo, gold);
     });
   });
 }
@@ -957,7 +961,7 @@ function renderAbenteuer(v) {
     var unten = e.eingeloest
       ? '<span class="zettel-fertig">abgeholt ✓</span>'
       : e.erfuellt
-        ? '<button type="button" class="zettel-los" data-id="' + e.id + '">Abholen · ' + lohn + '</button>'
+        ? '<button type="button" class="zettel-los" data-id="' + e.id + '" data-gold="' + e.gold + '">Abholen · ' + lohn + '</button>'
         : '<span class="zettel-balken"><i style="width:' + e.prozent + '%"></i></span>' +
           '<span class="zettel-stand">' + e.ist + ' / ' + e.ziel + '</span>';
 
@@ -994,14 +998,21 @@ function renderAbenteuer(v) {
     var abKnopf = urkunde.querySelector('.ta-los');
     if (abKnopf) {
       abKnopf.addEventListener('click', function () {
-        act('Tag abgeschlossen', client.claimDay(), 'stufe');
+        var wo = abKnopf.getBoundingClientRect();
+        var r = client.claimDay();
+        act('Tag abgeschlossen', r, 'stufe');
+        if (r.ok && ab.gold > 0) muenzenFliegen(wo, ab.gold);
       });
     }
   }
 
   box.querySelectorAll('.zettel-los').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      act('Abenteuer geschafft', client.claimTask(btn.getAttribute('data-id')), 'stufe');
+      var wo = btn.getBoundingClientRect();
+      var gold = Number(btn.getAttribute('data-gold')) || 0;
+      var r = client.claimTask(btn.getAttribute('data-id'));
+      act('Abenteuer geschafft', r, 'stufe');
+      if (r.ok && gold > 0) muenzenFliegen(wo, gold);
     });
   });
 
@@ -1036,7 +1047,7 @@ function zielZeile(e) {
   var rechts = e.eingeloest
     ? '<span class="ziel-hinweis erledigt">eingelöst</span>'
     : einloesbar
-      ? '<button type="button" class="ziel-los" data-id="' + e.id + '">Einlösen</button>'
+      ? '<button type="button" class="ziel-los" data-id="' + e.id + '" data-gold="' + e.gold + '">Einlösen</button>'
       : '<span class="ziel-hinweis">' + belohnung.replace(' · ', '<br>') + '</span>';
 
   row.innerHTML =
@@ -1191,7 +1202,7 @@ function vollesKaestchen(o) {
       var wo = b.getBoundingClientRect();
       var erg = client.collectSale(o.id);
       act('Kasse · +' + geld + ' ' + itemName(rules.currency), erg, 'muenzen');
-      if (erg.ok) { zahlAuf(wo, '+' + geld, 'muenzen'); geldbeutelHuepft(); }
+      if (erg.ok) { zahlAuf(wo, '+' + geld, 'muenzen'); muenzenFliegen(wo, geld); }
     });
     return b;
   }

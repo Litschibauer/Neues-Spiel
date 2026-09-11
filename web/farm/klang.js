@@ -163,11 +163,72 @@ var KLAENGE = {
 // Der Geldbeutel oben huepft, wenn Muenzen ankommen — damit man sieht, wo das
 // Gold hingeht, ohne hinzuschauen.
 function geldbeutelHuepft() {
-  var m = document.querySelector('.coins');
-  if (!m || magerModus()) return;
-  m.classList.remove('huepft');
-  void m.offsetWidth;
-  m.classList.add('huepft');
+  zielHuepft(document.querySelector('.coins'));
+}
+
+function zielHuepft(el) {
+  if (!el || !el.classList || magerModus()) return;
+  el.classList.remove('huepft');
+  void el.offsetWidth;
+  el.classList.add('huepft');
+}
+
+function rechteck(x) {
+  return x && typeof x.getBoundingClientRect === 'function' ? x.getBoundingClientRect() : x;
+}
+
+// Etwas fliegt von A nach B — als Bild, nicht als Zahl: der Weizen ins Lager,
+// die Muenzen in den Geldbeutel, die Saat aufs Feld. Am Ziel hüpft, was es
+// aufnimmt. `danach` laeuft, wenn der letzte Flieger angekommen ist — damit
+// die Zahl oben erst dann springt, wenn das Gold wirklich da ist.
+var fliegerZahl = 0;
+function flugZu(von, ziel, html, art, anzahl, danach) {
+  var v = rechteck(von);
+  var z = rechteck(ziel);
+  var zielEl = ziel && ziel.classList ? ziel : null;
+  var fertig = function () { zielHuepft(zielEl); if (danach) danach(); };
+  if (!v || !z || !v.width || !z.width || !html || magerModus() || fliegerZahl > 30) { fertig(); return; }
+
+  var n = Math.max(1, Math.min(anzahl || 1, 5));
+  var tx = z.left + z.width / 2;
+  var ty = z.top + z.height / 2;
+  for (var i = 0; i < n; i++) {
+    (function (k) {
+      var el = document.createElement('span');
+      el.className = 'flieger' + (art ? ' ' + art : '');
+      el.innerHTML = '<i>' + html + '</i>';
+      var sx = v.left + v.width / 2 + (Math.random() - 0.5) * v.width * 0.5;
+      var sy = v.top + v.height / 2 + (Math.random() - 0.5) * v.height * 0.4;
+      el.style.left = Math.round(sx) + 'px';
+      el.style.top = Math.round(sy) + 'px';
+      el.style.setProperty('--dx', Math.round(tx - sx) + 'px');
+      el.style.setProperty('--dy', Math.round(ty - sy) + 'px');
+      el.style.animationDelay = (k * 70) + 'ms';
+      el.firstChild.style.animationDelay = (k * 70) + 'ms';
+      document.body.appendChild(el);
+      fliegerZahl++;
+      setTimeout(function () {
+        el.remove();
+        fliegerZahl--;
+        if (k === n - 1) fertig();
+      }, 640 + k * 70);
+    })(i);
+  }
+}
+
+// Die drei Wege, die es im Spiel gibt.
+function warenFliegen(von, item, amount, deckel) {
+  var n = Math.min(deckel || 4, Math.max(1, amount || 1));
+  flugZu(von, $('silo'), itemIcon(item), 'ware', n);
+}
+function muenzenFliegen(von, gold, danach) {
+  var n = gold >= 500 ? 5 : gold >= 100 ? 4 : gold >= 30 ? 3 : 2;
+  flugZu(von, document.querySelector('.coins'), itemIcon(rules.currency), 'muenzen', n, danach);
+}
+function saatFliegt(plot, inputs) {
+  if (!inputs || inputs.length === 0) return;
+  var kachel = document.querySelector('#plots .plot[data-platz="' + plot + '"]');
+  flugZu($('silo'), kachel || platzKasten(plot), itemIcon(inputs[0].item), 'saat', 1);
 }
 
 function klang(name) {

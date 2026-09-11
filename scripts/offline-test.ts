@@ -979,6 +979,31 @@ try {
   const beforeHarvest = await stockOf('Weizen');
   const goldVorErnte = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
   await evaluate(cdp, `document.querySelector('#plots .plot.ripe').click()`);
+  await sleep(90);
+  // Die Ernte fliegt als Bild ins Lager — nicht nur als Zahl nach oben.
+  const ernteFlug = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var f = [...document.querySelectorAll('.flieger.ware')];
+         var lager = document.getElementById('silo').getBoundingClientRect();
+         return {
+           anzahl: f.length,
+           bilder: f.filter(function (x) { return !!x.querySelector('img.ic'); }).length,
+           zielOben: f.every(function (x) {
+             var dy = parseFloat(getComputedStyle(x).getPropertyValue('--dy'));
+             return dy < 0;
+           }),
+           lagerDa: lager.width > 0,
+         };
+       })())`,
+    ),
+  ) as { anzahl: number; bilder: number; zielOben: boolean; lagerDa: boolean };
+  check(
+    'Die Ernte fliegt als Bild ins Lager, nicht nur als Zahl nach oben',
+    ernteFlug.anzahl > 0 && ernteFlug.bilder === ernteFlug.anzahl && ernteFlug.zielOben && ernteFlug.lagerDa,
+    `${ernteFlug.anzahl} Flieger, ${ernteFlug.bilder} mit Bild, Richtung Lager ${ernteFlug.zielOben}`,
+  );
 
   let afterHarvest = beforeHarvest;
   for (let i = 0; i < 40 && afterHarvest <= beforeHarvest; i++) {
@@ -2273,7 +2298,18 @@ try {
          var m = f.find(function (x) { return x.className.indexOf('muenzen') >= 0; });
          var blatt = document.getElementById('brett-bg').getBoundingClientRect();
          var r = m ? m.getBoundingClientRect() : null;
+         var flieger = [...document.querySelectorAll('.flieger.muenzen')];
+         var beutel = document.querySelector('.coins').getBoundingClientRect();
          return {
+           flieger: flieger.length,
+           fliegerBild: flieger.filter(function (x) { return !!x.querySelector('img.ic'); }).length,
+           fliegerZiel: flieger.every(function (x) {
+             var r = x.getBoundingClientRect();
+             var dx = parseFloat(getComputedStyle(x).getPropertyValue('--dx'));
+             var dy = parseFloat(getComputedStyle(x).getPropertyValue('--dy'));
+             return Math.abs((r.left + r.width / 2 + dx) - (beutel.left + beutel.width / 2)) < 40
+               && Math.abs((r.top + r.height / 2 + dy) - (beutel.top + beutel.height / 2)) < 40;
+           }),
            muenzen: !!m, text: m ? m.textContent : '',
            xp: f.some(function (x) { return x.className.indexOf('xp') >= 0; }),
            sichtbar: !!r && r.top >= blatt.top - 1 && r.bottom <= blatt.bottom + 1 && r.width > 0,
@@ -2281,7 +2317,15 @@ try {
          };
        })())`,
     ),
-  ) as { muenzen: boolean; text: string; xp: boolean; sichtbar: boolean; obenauf: boolean };
+  ) as {
+    flieger: number; fliegerBild: number; fliegerZiel: boolean;
+    muenzen: boolean; text: string; xp: boolean; sichtbar: boolean; obenauf: boolean;
+  };
+  check(
+    'Die Münzen fliegen als Bild in den Geldbeutel oben — und genau dorthin',
+    wagenLohn.flieger > 0 && wagenLohn.fliegerBild === wagenLohn.flieger && wagenLohn.fliegerZiel,
+    `${wagenLohn.flieger} Münzen unterwegs, Ziel stimmt ${wagenLohn.fliegerZiel}`,
+  );
   check(
     'Beim Abschicken steigen die Münzen vom Zettel auf — vor dem Blatt, nicht dahinter',
     wagenLohn.muenzen && wagenLohn.obenauf && wagenLohn.sichtbar,

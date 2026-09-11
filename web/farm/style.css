@@ -128,7 +128,32 @@
     font-weight: 700; font-variant-numeric: tabular-nums; font-size: .9rem;
   }
   .coins svg { flex: none; }
-  .coins.huepft { animation: huepfer .5s cubic-bezier(.2, 1.4, .4, 1); }
+  .coins.huepft, .silo.huepft { animation: huepfer .5s cubic-bezier(.2, 1.4, .4, 1); }
+  .plot.huepft { animation: huepfer .4s cubic-bezier(.2, 1.4, .4, 1); }
+
+  /* Flieger: Bilder, die von A nach B ziehen. Der aeussere Rahmen fliegt
+     gerade zum Ziel, der innere hebt und senkt sich — zusammen ein Bogen.
+     Am Ende schrumpft er ins Ziel, als wuerde er aufgenommen. */
+  .flieger {
+    position: fixed; z-index: 61; pointer-events: none;
+    width: 1.5rem; height: 1.5rem; transform: translate(-50%, -50%);
+    animation: fliegt .62s cubic-bezier(.35, 0, .7, 1) both;
+  }
+  .flieger i { display: block; width: 100%; height: 100%; animation: fliegtBogen .62s ease-out both; }
+  .flieger .ic, .flieger img, .flieger svg { width: 100%; height: 100%; display: block; }
+  .flieger.muenzen { width: 1.15rem; height: 1.15rem; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .35)); }
+  .flieger.saat { width: 1.2rem; height: 1.2rem; }
+  @keyframes fliegt {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    80% { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.4); opacity: 0; }
+  }
+  @keyframes fliegtBogen {
+    0% { transform: translateY(0); }
+    40% { transform: translateY(-2.4rem); }
+    100% { transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .flieger { display: none; } .silo.huepft, .plot.huepft { animation: none; } }
   @keyframes huepfer { 0% { transform: scale(1); } 35% { transform: scale(1.22); } 100% { transform: scale(1); } }
 
   /* Die Serie: klein, warm, direkt neben dem Gold. Sie sagt in zwei Zeichen,

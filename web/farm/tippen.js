@@ -74,6 +74,8 @@ function fundFeiern(wo, fund) {
   if (!fund) return;
   klang('fund');
   zahlAuf(hoch(wo), 'Fund! ' + fund.amount + ' ' + stueckName(fund.amount, fund.item), 'fund');
+  if (fund.item === rules.currency) muenzenFliegen(wo, fund.amount);
+  else flugZu(wo, $('silo'), itemIcon(fund.item), 'ware', 1);
   if (navigator.vibrate) navigator.vibrate([10, 40, 18]);
 }
 
@@ -97,6 +99,7 @@ function tapPlot(i) {
     act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item) + fundText(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
+      warenFliegen(wo, p.output.item, p.output.amount);
       var dazu = client.preview().xp - vorher;
       if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
       fundFeiern(hoch(wo), fund);
@@ -121,9 +124,11 @@ function tapPlot(i) {
   }
   if (p.tap === 'start') {
     if (istFeld(p)) merkeSaat(p.next.recipe);
+    var gestartet = client.start(i, p.next.recipe);
     act('Gestartet · ' + nameOf(p.next.id) +
           (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
-        client.start(i, p.next.recipe), 'saat');
+        gestartet, 'saat');
+    if (gestartet.ok) saatFliegt(i, p.next.inputs);
     return;
   }
   // Gebautes, nicht-festes Bauwerk ohne andere Aktion (z. B. Deko): Menü zum
@@ -147,6 +152,7 @@ function tapBaum(p) {
     act('Geerntet · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item) + fundText(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), 'ware');
+      warenFliegen(wo, b.ertrag.item, b.ertrag.amount);
       var dazu = client.preview().xp - vorher;
       if (dazu > 0) zahlAuf(hoch(wo), '+' + dazu + ' XP', 'xp');
       fundFeiern(hoch(wo), fund);
@@ -175,6 +181,7 @@ function collectSlot(p, j) {
   act('Geerntet · ' + out.amount + ' ' + itemName(out.item) + fundText(fund), erg, 'ernte');
   if (erg.ok) {
     zahlAuf(woTier, '+' + out.amount + ' ' + itemName(out.item), 'ware');
+    warenFliegen(woTier, out.item, out.amount);
     fundFeiern(hoch(woTier), fund);
   }
 }
@@ -681,6 +688,7 @@ function ernteSchritt(i) {
   ernteZug.zahl++;
   ernteZug.menge[p.output.item] = (ernteZug.menge[p.output.item] || 0) + p.output.amount;
   zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
+  warenFliegen(wo, p.output.item, p.output.amount, 2);
   var fund = fundAus(vorLager, client.preview().items, erwartet);
   if (fund) {
     ernteZug.funde++;
@@ -770,6 +778,7 @@ function saeSchritt(i) {
   saeZug.was = saat.recipe;
   saeZug.name = nameOf(saat.id);
   zahlAuf(wo, nameOf(saat.id), 'saat');
+  saatFliegt(i, saat.inputs);
   ernteKlang(saeZug.zahl - 1);
   if (navigator.vibrate) navigator.vibrate(8);
   renderPurse(NS.farmView(client.preview(), rules, navigator.onLine));
@@ -1076,9 +1085,11 @@ function zeichnePicker(p) {
       // Ein Stallrezept darf die gemerkte Saat nicht verdraengen — sonst waere
       // das Wischen nach einem Besuch im Huehnerstall stumm aus.
       if (istFeld(p)) merkeSaat(o.recipe);
+      var los = client.start(p.index, o.recipe, slot);
       act('Gestartet · ' + nameOf(o.id) +
             (o.inputs.length > 0 ? ' · −' + costText(o.inputs) : ''),
-          client.start(p.index, o.recipe, slot));
+          los);
+      if (los.ok) saatFliegt(p.index, o.inputs);
     });
     box.appendChild(card);
 
