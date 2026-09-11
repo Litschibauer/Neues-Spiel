@@ -373,6 +373,7 @@ function plotIdName(id) {
   if (id.indexOf('field-') === 0) return { name: 'Feld ' + id.slice(6), art: 'Neues Feld' };
   if (id.indexOf('coop-') === 0) return { name: 'Hühnerstall', art: 'Neuer Stall' };
   if (id.indexOf('pasture-') === 0) return { name: 'Kuhweide', art: 'Neue Weide' };
+  if (id.indexOf('sheep-') === 0) return { name: 'Schafweide', art: 'Neue Weide' };
   if (id === 'mill') return { name: 'Mühle', art: 'Neues Gebäude' };
   if (id === 'dairy') return { name: 'Molkerei', art: 'Neues Gebäude' };
   return { name: nameOf(id), art: 'Neu' };

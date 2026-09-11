@@ -15,7 +15,7 @@ var KACHEL = 16;
 var KOERPER = {
   'field-': 0.6, 'coop-': 3.1, mill: 3.1, dairy: 3.1, 'pasture-': 1.3, mine: 1.5,
   forge: 1.6, oven: 1.6, grill: 1.0, 'apple-tree': 1.3,
-  woodlot: 1.4, workshop: 3.1, smokehouse: 4.4, kitchen: 3.1,
+  woodlot: 1.4, workshop: 3.1, smokehouse: 4.4, kitchen: 3.1, 'sheep-': 1.3, weberei: 3.1,
   'deco-fence': 0.7, 'deco-flowers': 0.7, 'deco-bench': 0.7,
 };
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
@@ -184,6 +184,8 @@ function artRaumFor(p, k) {
   var tiere = p.stall ? p.stall.animals : 0;
   if (id.indexOf('coop-') === 0) return artStall(k, tiere, p.done);
   if (id.indexOf('pasture-') === 0) return artWeide(k, tiere, p.done);
+  if (id.indexOf('sheep-') === 0) return artSchafweide(k, tiere, p.done);
+  if (id === 'weberei') return artWeberei(k, p.busy);
   if (id === 'mill') return artMuehle(k, p.busy);
   if (id === 'dairy') return artMolkerei(k, p.busy);
   if (id === 'mine') return artMine(k, p.busy);
@@ -250,6 +252,33 @@ function artWeide(k, tiere, fertig) {
   }
   out += bild(k, 'zaun-ecke-lu', 0, u - 16) + bild(k, 'zaun-m', 16, u - 16) + bild(k, 'zaun-ecke-ru', 32, u - 16);
   if (fertig) out += bild(k, 'milch', 35, u - 12, 10, 10);
+  return out;
+}
+
+// Zaun um eine Wiese, Schafe darin — wie die Kuhweide, mit Wollkorb.
+function artSchafweide(k, tiere, fertig) {
+  // Zwei Kacheln breit wie der Huehnerstall — so findet die Weide auch auf
+  // einem vollen Hof noch Platz.
+  var u = k.ph - 1;
+  var out = bild(k, 'zaun-ecke-lo', 0, u - 32) + bild(k, 'zaun-ecke-ro', 16, u - 32);
+  var plaetze = [[2, u - 25], [17, u - 22], [9, u - 18]];
+  for (var t = 0; t < Math.min(3, tiere); t++) {
+    out += '<g class="tier langsam" style="animation-delay:' + (t * 1100) + 'ms">' +
+      bild(k, 'schaf', plaetze[t][0], plaetze[t][1], 12, 12) + '</g>';
+  }
+  out += bild(k, 'zaun-ecke-lu', 0, u - 16) + bild(k, 'zaun-ecke-ru', 16, u - 16);
+  if (fertig) out += bild(k, 'wolle-korb', 21, u - 11, 10, 10);
+  return out;
+}
+
+// Die Weberei: Holzhaus mit Webstuhl-Schild an der Wand.
+function artWeberei(k, laeuft) {
+  var u = k.ph - 1;
+  var out = schatten(k, 16, u, 34) +
+    bild(k, 'dach-blau-l', 0, u - 48) + bild(k, 'dach-blau-r', 16, u - 48) +
+    bild(k, 'holz-wand', 0, u - 32) + bild(k, 'holz-wand', 16, u - 32) +
+    bild(k, 'tor-holz', 0, u - 16) + bild(k, 'holz-wand', 16, u - 16);
+  out += '<g class="' + (laeuft ? 'tier' : '') + '">' + bild(k, 'webstuhl', 17, u - 31, 14, 14) + '</g>';
   return out;
 }
 

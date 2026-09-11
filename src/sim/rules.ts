@@ -2509,22 +2509,95 @@ const V44: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V45: Schafe. Ein drittes Tier mit eigener Kette: Die Schafweide gibt Wolle
+// (gefuettert mit Mais), die Weberei spinnt Garn und strickt Pullover — das
+// Ende der Kette, wertvoll wie ein Kaese. Dazu Zettel, die Wolle und Garn
+// verlangen, und Erfolge fuer Weide, Weberei und den ersten Stapel Pullover.
+const WOOL = 42;
+const YARN = 43;
+const SWEATER = 44;
+const R_WOOL = 35;
+const R_YARN = 36;
+const R_SWEATER = 37;
+const V45: Ruleset = {
   ...V44,
+  version: 45,
+  items: [
+    ...V44.items,
+    { id: 'wool', storable: true, npcPrice: 34, npcBuyPrice: 0 },
+    { id: 'yarn', storable: true, npcPrice: 120, npcBuyPrice: 0 },
+    { id: 'sweater', storable: true, npcPrice: 520, npcBuyPrice: 0 },
+  ],
+  recipes: [
+    ...V44.recipes,
+    { id: 'wool', inputs: [want(CORN, 2)], output: want(WOOL, 2), durationTicks: 600, xp: 20 },
+    { id: 'yarn', inputs: [want(WOOL, 2)], output: want(YARN, 1), durationTicks: 480, xp: 24, minPlayerLevel: 11 },
+    { id: 'sweater', inputs: [want(YARN, 3), want(WOOL, 1)], output: want(SWEATER, 1), durationTicks: 1500, xp: 70, minPlayerLevel: 12 },
+  ],
+  plots: [
+    ...V44.plots,
+    {
+      id: 'sheep-1',
+      startLevel: 0,
+      place: at(91, 62, 9, 13),
+      size: { w: 2, h: 2 },
+      animal: { cost: 600, growTicks: 1200 },
+      levels: [
+        { label: 'Schafweide', cost: gold(2600), recipes: [R_WOOL], minPlayerLevel: 9, slots: 2 },
+        { label: 'Dritter Platz', cost: gold(1600), recipes: [R_WOOL], slots: 3 },
+      ],
+    },
+    {
+      id: 'weberei',
+      startLevel: 0,
+      place: at(50, 63, 8, 15),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Weberei',
+          cost: [want(PLANK, 12), want(NAIL, 8), want(GOLD, 3200)],
+          recipes: [R_YARN, R_SWEATER],
+          minPlayerLevel: 11,
+          slots: 1,
+        },
+        { label: 'Zweiter Webstuhl', cost: [want(PLANK, 10), want(GOLD, 4800)], recipes: [R_YARN, R_SWEATER], minPlayerLevel: 13, slots: 2 },
+      ],
+    },
+  ],
+  requestTemplates: [
+    ...V44.requestTemplates,
+    { id: 'wolle-klein', wants: [want(WOOL, 4)], reward: gold(220), xp: 40 },
+    { id: 'garn', wants: [want(YARN, 2)], reward: gold(420), xp: 72 },
+    { id: 'pullover', wants: [want(SWEATER, 1)], reward: gold(900), xp: 140 },
+  ],
+  achievements: [
+    ...(V44.achievements ?? []),
+    { id: 'sheep', label: 'Schafweide bauen', kind: 'plotPrefix', arg: 'sheep-', gold: 700, xp: 80, group: 'hof' },
+    { id: 'weberei', label: 'Weberei bauen', kind: 'plot', arg: 'weberei', gold: 1400, xp: 150, group: 'hof' },
+    { id: 'sweater5', label: 'Fünf Pullover im Lager', kind: 'item', arg: 'sweater', menge: 5, gold: 1800, xp: 200, group: 'vorrat' },
+  ],
+  wetter: {
+    ...V44.wetter!,
+    plaetze: V44.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V45,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V44.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V45.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V44.fishing!,
+    ...V45.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V39.plots.map((p) => {
+  plots: V45.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2586,17 +2659,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [42, V42],
   [43, V43],
   [44, V44],
+  [45, V45],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 44;
+export const LATEST_RULESET_VERSION = 45;
 
 export const DEV_RULESET_VERSION = 1001;
 

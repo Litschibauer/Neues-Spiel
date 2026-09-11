@@ -182,7 +182,7 @@ test('nur noch Endprodukte enden im Verkauf', () => {
   const werkzeug = new Set(Object.values(V.obstacleKinds ?? {}).map((x) => x.tool));
 
   // Das sind die gewollten Endpunkte: Spitzenwaren und der Wohlstandsbarren.
-  const erlaubt = new Set(['gold-bar', 'smoked-fish', 'farm-platter', 'cream-cake']);
+  const erlaubt = new Set(['gold-bar', 'smoked-fish', 'farm-platter', 'cream-cake', 'sweater']);
   const offen: string[] = [];
   // Booster werden eingesetzt, nicht verarbeitet — auch das ist ein Ende.
   const eingesetzt = new Set(V.booster ? [V.booster.xpItem, V.booster.wuchsItem] : []);

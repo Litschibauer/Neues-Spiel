@@ -341,6 +341,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['42->43', BOOSTER_DAZU],
   // Wetter braucht kein Feld: Es kommt aus dem Tick.
   ['43->44', AUFS_RASTER],
+  // Schafe: Waren, Rezepte und Plaetze wachsen, der Stand waechst mit.
+  ['44->45', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

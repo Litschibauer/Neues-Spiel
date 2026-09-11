@@ -20,6 +20,7 @@ var NAMES = {
   'woodlot': 'Waldstück', 'workshop': 'Werkstatt', 'smokehouse': 'Räucherei',
   'kitchen': 'Hofküche', 'farm-platter': 'Bauernbrettl', 'cream-cake': 'Sahnetorte',
   'booster-xp': 'XP-Verdoppler', 'booster-wuchs': 'Schnellwuchs',
+  wool: 'Wolle', yarn: 'Garn', sweater: 'Pullover', weberei: 'Weberei',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
@@ -31,7 +32,7 @@ function nameOf(id) {
 function itemName(i) { return nameOf(rules.items[i].id); }
 // Die Warennamen stehen in der Mehrzahl, weil man selten eine einzelne hat.
 // Ein Fund ist genau so ein Fall: „1 Bretter" liest sich falsch.
-var EINZAHL = { plank: 'Brett', nail: 'Nagel', apple: 'Apfel', eggs: 'Ei' };
+var EINZAHL = { plank: 'Brett', nail: 'Nagel', apple: 'Apfel', eggs: 'Ei', yarn: 'Garn', sweater: 'Pullover' };
 function stueckName(amount, i) {
   var id = rules.items[i].id;
   return amount === 1 && EINZAHL[id] ? EINZAHL[id] : itemName(i);
@@ -73,6 +74,9 @@ function animalOf(i) {
   if (id.indexOf('pasture-') === 0) {
     return { one: 'Kuh', many: 'Kühe', jung: 'Kalb', artikel: 'eine' };
   }
+  if (id.indexOf('sheep-') === 0) {
+    return { one: 'Schaf', many: 'Schafe', jung: 'Lamm', artikel: 'ein' };
+  }
   return { one: 'Platz', many: 'Plätze', jung: 'Platz', artikel: 'ein' };
 }
 function plotName(i) {
@@ -80,6 +84,7 @@ function plotName(i) {
   if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
   if (id.indexOf('coop-') === 0) return 'Hühnerstall';
   if (id.indexOf('pasture-') === 0) return 'Kuhweide';
+  if (id.indexOf('sheep-') === 0) return 'Schafweide';
   if (id.indexOf('apple-tree') === 0) return 'Apfelbaum';
   return nameOf(id);
 }

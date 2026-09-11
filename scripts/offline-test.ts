@@ -163,8 +163,86 @@ async function tippeAufFreiesFeld(cdp: Cdp): Promise<boolean> {
   return false;
 }
 
+// Gezielt setzen: Die Seite kapselt ihre Innereien, aber der Spielstand liegt
+// im localStorage und die Sim-Bibliothek haengt an globalThis. Daraus baut der
+// Test dieselbe Sicht wie die Seite, sucht einen Platz, an dem der gekaufte
+// Bau wirklich hinpasst (auch 2×2 und groesser), und tippt genau dorthin —
+// die Welt hat ihren Ursprung oben links, also reicht ihr Bildkasten fuer die
+// Umrechnung. Liefert einen kurzen Befund, wenn nirgends Platz ist.
+async function setzeGezielt(cdp: Cdp): Promise<string> {
+  for (let versuch = 0; versuch < 6; versuch++) {
+    const befund = await evaluate<string>(
+      cdp,
+      `(function () {
+         var NS = globalThis.NeuesSpiel;
+         var raw = localStorage.getItem(NS.storageKeyFor(location.origin));
+         if (!raw) return 'kein Spielstand';
+         var c; try { c = NS.restoreClient(JSON.parse(raw)).client; } catch (e) { return 'Spielstand kaputt: ' + e.message; }
+         var s = c.preview();
+         var rules = NS.getRuleset(c.baseSnapshot.rulesetVersion);
+         var g = rules.grid;
+         if (!g) return 'kein Raster';
+         var offen = [];
+         for (var i = 0; i < s.plots.length; i++) if (s.plots[i].level > 0 && s.plots[i].gx < 0) offen.push(i);
+         if (offen.length !== 1) return 'zu setzen: ' + offen.length;
+         var plot = offen[0];
+         var groesse = rules.plots[plot].size || { w: 1, h: 1 };
+         var passt = function (gx, gy) {
+           if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return false;
+           var frei = function (o, w, h) {
+             return gx + groesse.w <= o.gx || o.gx + w <= gx || gy + groesse.h <= o.gy || o.gy + h <= gy;
+           };
+           var hs = rules.obstacles || [];
+           for (var k = 0; k < hs.length; k++) if (!frei(hs[k], hs[k].w, hs[k].h)) return false;
+           var es = rules.expansions || [], auf = s.expandiert || [];
+           for (k = 0; k < es.length; k++) {
+             if (auf.indexOf(es[k].id) >= 0) continue;
+             if (!frei(es[k], es[k].w, es[k].h)) return false;
+           }
+           for (k = 0; k < s.plots.length; k++) {
+             if (k === plot || s.plots[k].gx < 0) continue;
+             var s2 = rules.plots[k].size || { w: 1, h: 1 };
+             if (!frei(s.plots[k], s2.w, s2.h)) return false;
+           }
+           return true;
+         };
+         // Nah beim Gebauten, damit es im Bild bleibt.
+         var mx = 0, my = 0, n = 0;
+         for (i = 0; i < s.plots.length; i++) {
+           if (s.plots[i].gx < 0 || s.plots[i].level <= 0) continue;
+           mx += s.plots[i].gx; my += s.plots[i].gy; n++;
+         }
+         if (n > 0) { mx /= n; my /= n; } else { mx = g.w / 2; my = g.h / 2; }
+         var ziel = null, beste = 1e9;
+         for (var gy = 0; gy + groesse.h <= g.h; gy++) {
+           for (var gx = 0; gx + groesse.w <= g.w; gx++) {
+             if (!passt(gx, gy)) continue;
+             var d = Math.abs(gx - mx) + Math.abs(gy - my);
+             if (d < beste) { beste = d; ziel = { gx: gx, gy: gy }; }
+           }
+         }
+         if (!ziel) return 'kein freier ' + groesse.w + 'x' + groesse.h + '-Platz';
+         // Die Seite setzt den Bau um seine halbe Groesse versetzt zum Tipp.
+         var zx = ziel.gx + (groesse.w >> 1), zy = ziel.gy + (groesse.h >> 1);
+         var BAND = 3;
+         var wr = document.getElementById('welt').getBoundingClientRect();
+         var cx = wr.left + ((zx + 0.5) / g.w) * wr.width;
+         var cy = wr.top + ((zy + BAND + 0.5) / (g.h + BAND)) * wr.height;
+         document.getElementById('hof').dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, bubbles: true }));
+         return 'getippt ' + ziel.gx + ',' + ziel.gy;
+       })()`,
+    );
+    if (!/^getippt/.test(befund)) return befund;
+    await sleep(320);
+    if (await evaluate<boolean>(cdp, `document.getElementById('setzen').hidden`)) return 'gesetzt';
+  }
+  return 'getippt, aber nicht gesetzt';
+}
+
 async function tippeBisGesetzt(cdp: Cdp): Promise<boolean> {
   await schliesseTutorial(cdp);
+  // Erst gezielt — schnell und auch fuer grosse Plaetze verlaesslich.
+  if ((await setzeGezielt(cdp)) === 'gesetzt') return true;
   // Über den ganzen sichtbaren Hof tasten — das freie Startland kann je nach
   // Rasterhöhe/Kamera oben ODER unten im Bild liegen.
   for (const x of [0.5, 0.25, 0.75, 0.35, 0.65, 0.15]) {
@@ -4371,6 +4449,98 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
       `${name} steht baubar im Katalog — mit sichtbaren Zutaten`,
       typeof zeile === 'string' && zeile.indexOf('gesperrt') < 0 && zeile.indexOf(was) >= 0,
       zeile ?? 'fehlt',
+    );
+  }
+
+  console.log('\n9u. Schafe — Weide, Lamm, Wolle');
+
+  await evaluate(cdp, `document.getElementById('bauen').click()`);
+  await sleep(400);
+  const bauAngebot = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify([...document.querySelectorAll('#bauliste .card')].map(function (c) {
+         return { name: (c.querySelector('.top') || {}).textContent || '', frei: !c.disabled,
+                  text: c.textContent.replace(/\\s+/g, ' ').slice(0, 80) };
+       }).filter(function (c) { return /Schafweide|Weberei/.test(c.name); }))`,
+    ),
+  ) as Array<{ name: string; frei: boolean; text: string }>;
+  check(
+    'Die Bauliste kennt Schafweide und Weberei',
+    bauAngebot.some((c) => /Schafweide/.test(c.name)) && bauAngebot.some((c) => /Weberei/.test(c.name)),
+    bauAngebot.map((c) => c.name + (c.frei ? ' (baubar)' : ' (gesperrt)')).join(' · ') || 'keins gefunden',
+  );
+  const weidePlotsVorher = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot').length`);
+  const weideGekauft = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#bauliste .card')].find(function (c) {
+         return /Schafweide/.test((c.querySelector('.top') || {}).textContent || '') && !c.disabled;
+       });
+       if (!k) return 'nicht baubar';
+       k.click();
+       return 'gekauft';
+     })()`,
+  );
+  await sleep(600);
+  const nachKlick = await evaluate<string>(
+    cdp,
+    `JSON.stringify({ toast: document.getElementById('toast').textContent,
+       setzen: !document.getElementById('setzen').hidden, bau: !document.getElementById('bau-bg').hidden,
+       text: document.getElementById('setzen-text').textContent })`,
+  );
+  const gesetzt = weideGekauft === 'gekauft' ? await setzeGezielt(cdp) : 'nicht gekauft';
+  if (gesetzt !== 'gesetzt' && weideGekauft === 'gekauft') await tippeBisGesetzt(cdp);
+  await sleep(600);
+  const weideToastDanach = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+  const weideDa = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var t = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+           return /Schafweide/.test(p.getAttribute('aria-label') || '');
+         });
+         return { da: !!t, plots: document.querySelectorAll('#plots .plot').length, platz: t ? t.getAttribute('data-platz') : null };
+       })())`,
+    ),
+  ) as { da: boolean; plots: number; platz: string | null };
+  check(
+    'Die Schafweide lässt sich kaufen und hinstellen — sie steht als eigener Platz auf dem Hof',
+    weideGekauft === 'gekauft' && weideDa.da && weideDa.plots === weidePlotsVorher + 1,
+    `${weideGekauft} · ${weidePlotsVorher} → ${weideDa.plots} Plätze · nach Klick ${nachKlick} · gesetzt ${gesetzt} · „${weideToastDanach}"`,
+  );
+
+  if (weideDa.da) {
+    await evaluate(cdp, `document.querySelector('#plots .plot[data-platz="${weideDa.platz}"]').click()`);
+    await sleep(400);
+    const lamm = await evaluate<string>(
+      cdp,
+      `(function () {
+         var k = [...document.querySelectorAll('#pick-list .tierplatz')].find(function (c) {
+           return /Lamm/.test(c.textContent) && !c.disabled;
+         });
+         if (!k) return 'kein Lamm: ' + [...document.querySelectorAll('#pick-list .opt')].map(function (o) { return o.textContent.replace(/\\s+/g, ' ').slice(0, 30); }).join(' | ');
+         k.click();
+         return 'gekauft';
+       })()`,
+    );
+    await sleep(700);
+    const weideBild = JSON.parse(
+      await evaluate<string>(
+        cdp,
+        `JSON.stringify((function () {
+           document.getElementById('pick-close') && document.getElementById('pick-close').click();
+           var t = document.querySelector('#plots .plot[data-platz="${weideDa.platz}"]');
+           var tiere = t ? t.querySelectorAll('g.tier').length : -1;
+           var schaf = t ? [...t.querySelectorAll('image')].some(function (i) { return (i.getAttribute('href') || '').length > 100; }) : false;
+           return { tiere: tiere, schaf: schaf, meldung: document.getElementById('toast').textContent };
+         })())`,
+      ),
+    ) as { tiere: number; schaf: boolean; meldung: string };
+    check(
+      'Ein Lamm lässt sich dazukaufen, und die Weide zeigt das Schaf',
+      lamm === 'gekauft' && weideBild.tiere >= 1 && weideBild.schaf,
+      `${lamm} · ${weideBild.tiere} Tier(e) im Bild · „${weideBild.meldung}"`,
     );
   }
 
