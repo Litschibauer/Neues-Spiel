@@ -343,6 +343,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['43->44', AUFS_RASTER],
   // Schafe: Waren, Rezepte und Plaetze wachsen, der Stand waechst mit.
   ['44->45', AUFS_RASTER],
+  // Schaffutter: eine Ware und ein Rezept mehr, sonst bleibt alles stehen.
+  ['45->46', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

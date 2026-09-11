@@ -7,7 +7,7 @@ import { count, initialState } from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 
 const T0 = 1_700_000_000_000;
-const rules = getRuleset(45);
+const rules = getRuleset(46);
 const alt = getRuleset(44);
 const idx = (id: string) => rules.items.findIndex((i) => i.id === id);
 const plotIdx = (id: string) => rules.plots.findIndex((p) => p.id === id);
@@ -16,11 +16,15 @@ const WOOL = idx('wool');
 const YARN = idx('yarn');
 const SWEATER = idx('sweater');
 const CORN = idx('corn');
+const WHEAT = idx('wheat');
+const SHEEP_FEED = idx('sheep-feed');
+const MILL = plotIdx('mill');
 const SCHAF = plotIdx('sheep-1');
 const WEBEREI = plotIdx('weberei');
 const R_WOOL = rezept('wool');
 const R_YARN = rezept('yarn');
 const R_SWEATER = rezept('sweater');
+const R_SHEEP_FEED = rezept('sheep-feed');
 
 // Irgendwo hinstellen, wo Platz ist: Zellen durchprobieren, bis die Sim ja sagt.
 function setzeIrgendwo(s: ReturnType<typeof initialState>, plot: number, seq: number) {
@@ -40,14 +44,14 @@ function setzeIrgendwo(s: ReturnType<typeof initialState>, plot: number, seq: nu
 // Ein Hof mit viel Gold und Stufe, Schafweide gebaut und aufs Raster gesetzt.
 function hofMitWeide() {
   let s = initialState(rules);
-  s = { ...s, xp: 100_000, items: s.items.map((n, i) => (i === rules.currency ? 100_000 : i === CORN ? 50 : n)) };
+  s = { ...s, xp: 100_000, items: s.items.map((n, i) => (i === rules.currency ? 100_000 : i === SHEEP_FEED ? 50 : n)) };
   s = simulate(s, { seq: 1, tick: 0, type: 'BUY', plot: SCHAF }, rules);
   return setzeIrgendwo(s, SCHAF, 2);
 }
 
 test('alles Neue haengt hinten an — kein alter Index hat sich bewegt', () => {
-  assert.equal(rules.items.length, alt.items.length + 3);
-  assert.equal(rules.recipes.length, alt.recipes.length + 3);
+  assert.equal(rules.items.length, alt.items.length + 4);
+  assert.equal(rules.recipes.length, alt.recipes.length + 4);
   assert.equal(rules.plots.length, alt.plots.length + 2);
   alt.items.forEach((it, i) => assert.equal(rules.items[i]!.id, it.id));
   alt.recipes.forEach((r, i) => assert.equal(rules.recipes[i]!.id, r.id));
@@ -69,13 +73,13 @@ test('die Schafweide ist ein Tierplatz, den man mit Lämmern besetzt', () => {
   );
 });
 
-test('Mais rein, Wolle raus — nach der Wachszeit', () => {
+test('Schaffutter rein, Wolle raus — nach der Wachszeit', () => {
   let s = hofMitWeide();
   s = simulate(s, { seq: 3, tick: 0, type: 'BUY_ANIMAL', plot: SCHAF }, rules);
   const reif = rules.plots[SCHAF]!.animal!.growTicks;
-  const maisVor = count(s, CORN);
+  const futterVor = count(s, SHEEP_FEED);
   s = simulate(s, { seq: 4, tick: reif, type: 'START', plot: SCHAF, recipe: R_WOOL, slot: 0 }, rules);
-  assert.equal(count(s, CORN), maisVor - 2, 'zwei Mais gefüttert');
+  assert.equal(count(s, SHEEP_FEED), futterVor - 1, 'ein Sack Schaffutter gefüttert');
   const dauer = rules.recipes[R_WOOL]!.durationTicks;
   s = simulate(s, { seq: 5, tick: reif + dauer, type: 'COLLECT', plot: SCHAF, slot: 0 }, rules);
   assert.equal(count(s, WOOL), 2, 'zwei Wolle geschoren');
@@ -124,7 +128,7 @@ test('Zettel und Erfolge kennen die neuen Waren', () => {
 
 test('Server und Geraet scheren dasselbe', () => {
   const start = hofMitWeide();
-  const server = new Server(start as never, T0, 45);
+  const server = new Server(start as never, T0, 46);
   const client = new Client(server.snapshot, 'handy');
   assert.equal(client.buyAnimal(SCHAF).ok, true);
   const reif = rules.plots[SCHAF]!.animal!.growTicks;
@@ -135,6 +139,37 @@ test('Server und Geraet scheren dasselbe', () => {
   const res = server.sync(client.buildSyncRequest(), T0 + (reif + rules.recipes[R_WOOL]!.durationTicks) * 1000);
   assert.equal(res.ok, true);
   assert.equal(count(server.snapshot.state, WOOL), 2);
+});
+
+test('Schafe fressen Futter aus der Mühle, kein rohes Korn — wie Hühner und Kühe', () => {
+  const wolle = rules.recipes[R_WOOL]!;
+  assert.deepEqual(wolle.inputs.map((w) => w.item), [SHEEP_FEED]);
+  assert.ok(!wolle.inputs.some((w) => w.item === CORN || w.item === WHEAT));
+  const muehle = rules.plots[MILL]!;
+  assert.ok(muehle.levels.every((l) => l.recipes.includes(R_SHEEP_FEED)), 'die Mühle macht Schaffutter');
+  assert.equal(recipeUnlocked(rules, R_SHEEP_FEED, 8), false);
+  assert.equal(recipeUnlocked(rules, R_SHEEP_FEED, 9), true, 'ab Stufe 9, mit der Weide');
+  // Kein Sack ohne Weizen und Mais.
+  const futter = rules.recipes[R_SHEEP_FEED]!;
+  assert.deepEqual(new Set(futter.inputs.map((w) => w.item)), new Set([WHEAT, CORN]));
+});
+
+test('Weizen und Mais werden in der Mühle zu Schaffutter', () => {
+  let s = initialState(rules);
+  s = { ...s, xp: 100_000, items: s.items.map((n, i) => (i === rules.currency ? 100_000 : i === WHEAT || i === CORN ? 10 : n)) };
+  if (s.plots[MILL]!.level <= 0) s = simulate(s, { seq: 1, tick: 0, type: 'BUY', plot: MILL }, rules);
+  s = setzeIrgendwo(s, MILL, 2);
+  s = simulate(s, { seq: 3, tick: 0, type: 'START', plot: MILL, recipe: R_SHEEP_FEED }, rules);
+  assert.equal(count(s, WHEAT), 8);
+  assert.equal(count(s, CORN), 8);
+  s = simulate(s, { seq: 4, tick: rules.recipes[R_SHEEP_FEED]!.durationTicks, type: 'COLLECT', plot: MILL }, rules);
+  assert.equal(count(s, SHEEP_FEED), 2);
+});
+
+test('alte Fassung 45 bleibt, wie sie war — dort fraßen Schafe noch Mais', () => {
+  const v45 = getRuleset(45);
+  assert.deepEqual(v45.recipes[R_WOOL]!.inputs.map((w) => w.item), [CORN]);
+  assert.equal(v45.items.length, rules.items.length - 1);
 });
 
 test('alle Produktionsfassungen bleiben in sich stimmig', () => {

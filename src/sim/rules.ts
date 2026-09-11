@@ -2582,22 +2582,58 @@ const V45: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// Schafe fressen wie Hühner und Kühe: Futter aus der Mühle, nicht rohes Korn.
+// Schaffutter braucht Weizen UND Mais — der teuerste Futtersack, für die
+// teuerste Wolle.
+const SHEEP_FEED = 45;
+const R_SHEEP_FEED = 38;
+
+const V46: Ruleset = {
   ...V45,
+  version: 46,
+  items: [...V45.items, { id: 'sheep-feed', storable: true, npcPrice: 14, npcBuyPrice: 0 }],
+  recipes: [
+    ...V45.recipes.map((r, i) => (i === R_WOOL ? { ...r, inputs: [want(SHEEP_FEED, 1)] } : r)),
+    {
+      id: 'sheep-feed',
+      inputs: [want(WHEAT, 2), want(CORN, 2)],
+      output: want(SHEEP_FEED, 2),
+      durationTicks: 360,
+      xp: 9,
+      minPlayerLevel: 9,
+    },
+  ],
+  plots: V45.plots.map((p) =>
+    p.id === 'mill'
+      ? { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_SHEEP_FEED] })) }
+      : p,
+  ),
+  requestTemplates: [
+    ...V45.requestTemplates,
+    { id: 'schaffutter', wants: [want(SHEEP_FEED, 4)], reward: gold(100), xp: 26 },
+  ],
+  wetter: {
+    ...V45.wetter!,
+    plaetze: V45.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V46,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V45.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V46.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V45.fishing!,
+    ...V46.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V45.plots.map((p) => {
+  plots: V46.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2660,17 +2696,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [43, V43],
   [44, V44],
   [45, V45],
+  [46, V46],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 45;
+export const LATEST_RULESET_VERSION = 46;
 
 export const DEV_RULESET_VERSION = 1001;
 

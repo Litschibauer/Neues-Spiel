@@ -4544,6 +4544,33 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     );
   }
 
+  // Schafe fressen Futter aus der Mühle, wie Hühner und Kühe — die Mühle muss
+  // Schaffutter anbieten, sobald die Weide erreichbar ist.
+  const muehleFutter = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var tile = [...document.querySelectorAll('#plots .plot')].find(function (t) {
+           var n = t.querySelector('.name');
+           return n && n.textContent.indexOf('Mühle') === 0;
+         });
+         if (!tile) return { muehle: false, optionen: [] };
+         tile.click();
+         var optionen = [...document.querySelectorAll('#pick-list .opt')].map(function (o) {
+           return o.textContent.replace(/\\s+/g, ' ').slice(0, 40);
+         });
+         var close = document.getElementById('pick-close');
+         if (close) close.click();
+         return { muehle: true, optionen: optionen };
+       })())`,
+    ),
+  ) as { muehle: boolean; optionen: string[] };
+  check(
+    'Die Mühle mahlt Schaffutter — Schafe fressen Futter wie Hühner und Kühe',
+    muehleFutter.muehle && muehleFutter.optionen.some((o) => /Schaffutter/.test(o)),
+    muehleFutter.muehle ? muehleFutter.optionen.join(' | ') : 'keine Mühle auf dem Hof',
+  );
+
   console.log('\n9y. Tagesbonus');
   await waitFor(
     cdp,

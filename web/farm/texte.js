@@ -21,6 +21,7 @@ var NAMES = {
   'kitchen': 'Hofküche', 'farm-platter': 'Bauernbrettl', 'cream-cake': 'Sahnetorte',
   'booster-xp': 'XP-Verdoppler', 'booster-wuchs': 'Schnellwuchs',
   wool: 'Wolle', yarn: 'Garn', sweater: 'Pullover', weberei: 'Weberei',
+  'sheep-feed': 'Schaffutter',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
