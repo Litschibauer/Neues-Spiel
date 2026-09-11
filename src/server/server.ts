@@ -1,7 +1,7 @@
 import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { MailItem, Offer, State } from '../sim/state.ts';
-import { EMPTY_PLOT, cloneState, wocheVonTag } from '../sim/state.ts';
+import { EMPTY_PLOT, addItem, cloneState, count, wocheVonTag } from '../sim/state.ts';
 import { getRuleset, helpSpeedup } from '../sim/rules.ts';
 import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
@@ -87,6 +87,18 @@ export class Server {
   grantXp(xp: number): void {
     if (!Number.isInteger(xp) || xp <= 0) return;
     this.pendingXp += xp;
+    this.soldSinceLastSync = true;
+  }
+
+  // Ware, die der Hof hergibt, ohne dass ein Befehl des Spielers sie bewegt —
+  // ein Geschenk an einen Nachbarn. Geht denselben Weg wie die Hilfe-XP: als
+  // aeussere Aenderung nach dem Divergenz-Vergleich. Abgezogen wird nur, was
+  // da ist; sonst bleibt es liegen und der Aufrufer sieht es am Bestand.
+  pendingAbzuege: Array<{ item: number; amount: number }> = [];
+
+  nimmAb(item: number, amount: number): void {
+    if (!Number.isInteger(amount) || amount <= 0) return;
+    this.pendingAbzuege.push({ item, amount });
     this.soldSinceLastSync = true;
   }
 
@@ -236,6 +248,16 @@ export class Server {
       belohnt.xp = state.xp + this.pendingXp;
       this.pendingXp = 0;
       state = belohnt;
+    }
+
+    if (this.pendingAbzuege.length > 0) {
+      const abgezogen = cloneState(state);
+      for (const a of this.pendingAbzuege) {
+        if (count(abgezogen, a.item) < a.amount) continue;
+        abgezogen.items = addItem(abgezogen.items, a.item, -a.amount);
+      }
+      this.pendingAbzuege = [];
+      state = abgezogen;
     }
 
     if (state.pendingBoxes.length > 0) {

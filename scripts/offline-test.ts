@@ -269,10 +269,13 @@ const MELDUNGEN_SKRIPT = `(function () {
       if (t.className.indexOf('show') < 0 || !t.textContent) return;
       var liste = [];
       try { liste = JSON.parse(localStorage.getItem('${MELDUNGEN}') || '[]'); } catch (e) {}
-      var e = { text: t.textContent, tippbar: t.className.indexOf('tippbar') >= 0 };
+      var e = { text: t.textContent, tippbar: t.className.indexOf('tippbar') >= 0, n: 1, t: Date.now() };
       var l = liste[liste.length - 1];
-      if (l && l.text === e.text) return;
-      liste.push(e);
+      // Gleiche Meldung direkt hintereinander: zaehlen statt verschlucken —
+      // sonst bliebe eine Wiederholungsschleife unsichtbar.
+      if (l && l.text === e.text && Date.now() - (l.t || 0) < 800) return;
+      if (l && l.text === e.text) { l.n = (l.n || 1) + 1; l.t = Date.now(); }
+      else liste.push(e);
       try { localStorage.setItem('${MELDUNGEN}', JSON.stringify(liste)); } catch (x) {}
     }).observe(t, { attributes: true, childList: true, characterData: true, subtree: true });
   }
@@ -3713,6 +3716,99 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     maisGesaet && wuchsGing === 'geklickt' && laufende.length > 0 && geschoben > 0,
     `Mais gesät ${maisGesaet} · ${wuchsGing} · ${geschoben} von ${laufende.length} vorgerückt · „${wuchsMeldung}"`,
   );
+
+  console.log('\n9l. Geschenke — etwas aus dem eigenen Lager an den Nachbarn');
+
+  // Der Nachbar schenkt uns etwas — als eigenes Konto, direkt beim Server.
+  await api(`/api/admin/grant?account=${second.accountId}&item=wheat&amount=5`, 'POST');
+  await sleep(300);
+  const vorGeschenk = await stateAs(second.key);
+  await syncAs(second.key, vorGeschenk.snapshot.seq, [
+    { seq: vorGeschenk.snapshot.seq + 1, tick: tickFuer(vorGeschenk.snapshot), type: 'COLLECT_MAIL' },
+  ]);
+  const postVorGeschenk = ((await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { mail: unknown[] };
+  }).state.mail.length;
+  const geschenkAntwort = await fetch(
+    `http://127.0.0.1:${PORT}/api/geschenk?code=${encodeURIComponent(eigenerCode)}&item=wheat&amount=2`,
+    { method: 'POST', headers: { authorization: `Bearer ${second.key}` } },
+  );
+  check('Der Nachbar kann uns beschenken — der Server nimmt es an', geschenkAntwort.ok, `HTTP ${geschenkAntwort.status}`);
+  await sleep(800);
+  const postNachGeschenk = ((await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { mail: unknown[] };
+  }).state.mail.length;
+  check(
+    'Das Geschenk liegt in unserer Post',
+    postNachGeschenk > postVorGeschenk,
+    `Post ${postVorGeschenk} → ${postNachGeschenk}`,
+  );
+  let geschenkMeldung: { text: string; tippbar: boolean } | undefined;
+  // Momente kommen nacheinander, mit Abstand — steht noch etwas an, dauert es.
+  for (let w = 0; w < 130 && !geschenkMeldung; w++) {
+    await sleep(300);
+    const liste = JSON.parse(await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`)) as Array<{ text: string; tippbar: boolean }>;
+    geschenkMeldung = liste.find((m) => /Geschenk von/.test(m.text));
+  }
+  // Falls nicht gemeldet: Liegt das Geschenk noch ungesehen beim Server (dann
+  // hat der Client nie nachgefragt) oder ist es abgeholt (dann fehlt der Moment)?
+  const ungesehen = geschenkMeldung
+    ? null
+    : (((await (await fetch(`http://127.0.0.1:${PORT}/api/geschenke`, {
+        headers: { authorization: `Bearer ${shownKey}` },
+      })).json()) as { geschenke?: unknown[] }).geschenke ?? []).length;
+  const letzteMeldungen = geschenkMeldung ? '' : (JSON.parse(await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`)) as Array<{ text: string; n?: number; t?: number }>).slice(-8).map((m) => `${m.text.slice(0, 96)}${(m.n || 1) > 1 ? ' ×' + m.n : ''}@${Math.round(((m.t || 0) - Date.now()) / 1000)}s`).join(' | ');
+  check(
+    'Der Hof sagt sofort, von wem es kommt — antippbar, mit dem Weg zur Post',
+    !!geschenkMeldung && geschenkMeldung.tippbar && /Weizen/.test(geschenkMeldung.text),
+    geschenkMeldung ? geschenkMeldung.text : `nicht gemeldet · beim Server ungesehen: ${ungesehen} · zuletzt: ${letzteMeldungen}`,
+  );
+
+  // Und wir schenken zurueck — durch die Oberflaeche: Nachbarn, Karte, Schenken.
+  await evaluate(cdp, `document.getElementById('nachbarn').click()`);
+  await sleep(900);
+  const geschenkKnopf = await evaluate<string>(cdp, `(function () {
+    var karte = document.querySelector('#freundeliste .nachbar[data-hof="${zweiterCode.code}"]');
+    if (!karte) return 'keine Karte';
+    var b = karte.querySelector('.schenken');
+    if (!b) return 'kein Knopf';
+    if (b.disabled) return 'gesperrt: ' + b.textContent;
+    b.click();
+    return 'auf';
+  })()`);
+  await sleep(300);
+  const gewaehlt = await evaluate<string>(cdp, `(function () {
+    var karte = document.querySelector('#freundeliste .nachbar[data-hof="${zweiterCode.code}"]');
+    var wahl = karte && karte.querySelector('.geschenk-wahl');
+    if (!wahl) return 'kein Wähler';
+    var chip = [...wahl.querySelectorAll('.chip')].find(function (c) { return /Weizen/.test(c.textContent); });
+    if (!chip) return 'kein Weizen: ' + wahl.textContent.slice(0, 60);
+    chip.click();
+    var s = wahl.querySelector('.schicken');
+    if (!s) return 'kein Schicken';
+    s.click();
+    return wahl.querySelector('.zahl').textContent;
+  })()`);
+  await sleep(2500);
+  const nachbarPost = (await stateAs(second.key)).snapshot.state as unknown as { mail: unknown[] };
+  check(
+    'Schenken durch die Oberfläche: Der Weizen liegt in der Post des Nachbarn',
+    geschenkKnopf === 'auf' && /Weizen/.test(gewaehlt) && nachbarPost.mail.length > 0,
+    `${geschenkKnopf} · ${gewaehlt} · Post des Nachbarn: ${nachbarPost.mail.length}`,
+  );
+  await sleep(600);
+  const nochmal = await evaluate<string>(cdp, `(function () {
+    var karte = document.querySelector('#freundeliste .nachbar[data-hof="${zweiterCode.code}"]');
+    var b = karte && karte.querySelector('.schenken');
+    return b ? (b.disabled ? 'gesperrt: ' + b.textContent : 'offen') : 'kein Knopf';
+  })()`);
+  check(
+    'Einmal am Tag je Nachbar — danach ist der Knopf zu und sagt es',
+    /gesperrt: heute beschenkt/.test(nochmal),
+    nochmal,
+  );
+  await evaluate(cdp, `document.getElementById('freunde-close').click()`);
+  await sleep(300);
 
   console.log('\n9w. Bergbau: Mine bauen, graben, Erze ernten');
   await api(`/api/admin/xp?account=${status.accountId}&amount=16000`, 'POST');

@@ -9,6 +9,8 @@
 // hier bekommt es nur den Ton, den es verdient.
 
 var momenteGesehen = null;
+// Kaestchen-Nummern, deren Verkauf schon gemeldet wurde.
+var momenteVerkauftGemeldet = {};
 // Beim Start hat der Empfang Vorrang: Was er aufzählt, muss nicht auch noch
 // als Meldung hereinschneien.
 var momenteStummBis = 0;
@@ -52,20 +54,28 @@ function momentePruefen(v) {
   if (momenteGesehen === null) {
     momenteGesehen = jetzt;
     momenteStummBis = Date.now() + 6000;
-    return;
   }
   var alt = momenteGesehen;
   momenteGesehen = jetzt;
-  if (Date.now() < momenteStummBis) return;
+  if (Date.now() < momenteStummBis) {
+    // Was jetzt schon verkauft ist, hat der Empfang aufgezaehlt — kein Moment.
+    Object.keys(jetzt.kasse).forEach(function (id) { if (jetzt.kasse[id].sold > 0) momenteVerkauftGemeldet[id] = true; });
+    return;
+  }
 
-  // „Verkauft!" — ein anderer Mensch hat gerade etwas aus dem Stand gekauft.
+  // „Verkauft!" — ein anderer hat gerade etwas aus dem Stand gekauft. Ein
+  // Kaestchen meldet sich EINMAL, gemerkt an seiner Nummer. Nicht am
+  // Uebergang von eben zu jetzt: Ein abgelaufenes Kaestchen wandert in der
+  // lokalen Vorschau ins Postfach zurueck und kommt mit dem naechsten
+  // Abgleich vom Server wieder — es flackert, und jedes Flackern saehe wie ein
+  // neuer Verkauf aus. Die Nummer flackert nicht.
   Object.keys(jetzt.kasse).forEach(function (id) {
-    var war = alt.kasse[id] ? alt.kasse[id].sold : 0;
     var o = jetzt.kasse[id];
-    if (o.sold <= war) return;
+    if (o.sold <= 0 || momenteVerkauftGemeldet[id]) return;
+    momenteVerkauftGemeldet[id] = true;
     moment({
-      klang: 'muenzen', winkt: 'stand', hin: 'stand',
-      text: 'Verkauft · ' + itemName(o.item) + ' für ' + (o.sold - war) + ' Gold — Kasse am Stand',
+      klang: 'muenzen', winkt: 'stand', hin: 'stand', art: 'verkauft', zahl: 1, gold: o.sold,
+      text: 'Verkauft · ' + itemName(o.item) + ' für ' + o.sold + ' Gold — Kasse am Stand',
     });
   });
 
@@ -140,6 +150,19 @@ function momentePruefen(v) {
 // Eine Warteschlange, damit drei Momente auf einmal nicht drei Meldungen
 // übereinander sind, sondern drei nacheinander.
 function moment(m) {
+  // Verkaeufe, die noch in der Schlange stehen, werden zusammengelegt: Sechs
+  // Kaestchen sind eine Nachricht, nicht sechs — und was danach kommt
+  // (ein Geschenk etwa), wartet nicht eine halbe Minute.
+  if (m.art === 'verkauft') {
+    var offen = null;
+    momenteSchlange.forEach(function (x) { if (x.art === 'verkauft') offen = x; });
+    if (offen !== null) {
+      offen.zahl += m.zahl;
+      offen.gold += m.gold;
+      offen.text = offen.zahl + ' Kästchen verkauft · ' + offen.gold + ' Gold — Kasse am Stand';
+      return;
+    }
+  }
   momenteSchlange.push(m);
   momenteWeiter();
 }
@@ -244,6 +267,10 @@ function momenteNachAbgleich(vorher) {
     kisteEnthuellen(nachher.mail.entries.slice(vorher.mail.entries.length));
   } else if (gefallen) {
     kisteWartet = true;
+  } else if (dazu > 0 && typeof geschenkeHolen === 'function') {
+    // Post ohne Kiste: vielleicht ein Geschenk. Der Live-Stups sagt es
+    // meistens vorher — aber nicht, wenn die App gerade in der Tasche war.
+    geschenkeHolen();
   }
 }
 

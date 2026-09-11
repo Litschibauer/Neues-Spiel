@@ -252,6 +252,8 @@ function begin(restored) {
   }, 20000 + Math.floor(Math.random() * 10000));
   setInterval(refreshLease, 15000);
   setTimeout(bonusHolen, 1500);
+  // Geschenke, die waehrend der Abwesenheit kamen — als Momente, nicht stumm.
+  setTimeout(geschenkeHolen, 2500);
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       save();

@@ -134,6 +134,17 @@ function hofZeile(h, art) {
   var tun = document.createElement('div');
   tun.className = 'tun';
 
+  // Nachbarn kann man beschenken — einmal am Tag, aus dem eigenen Lager.
+  if (art === 'freund') {
+    var schenken = document.createElement('button');
+    schenken.type = 'button';
+    schenken.className = 'leise schenken';
+    schenken.disabled = !!h.beschenkt;
+    schenken.textContent = h.beschenkt ? 'heute beschenkt' : 'Schenken';
+    schenken.addEventListener('click', function () { geschenkWahl(h, karte); });
+    tun.appendChild(schenken);
+  }
+
   var knopf = document.createElement('button');
   knopf.type = 'button';
   knopf.className = 'go';
@@ -629,4 +640,104 @@ function renderPfad(v) {
   if (hier) setTimeout(function () {
     hier.scrollIntoView({ block: 'center', behavior: 'auto' });
   }, 30);
+}
+
+// — Geschenke ————————————————————————————————————————————————————————
+// Etwas aus dem eigenen Lager an einen Nachbarn schicken. Der Waehler haengt
+// sich unter die Karte: Ware antippen, Menge, Schicken. Vor dem Schicken wird
+// abgeglichen, damit der Server denselben Bestand sieht wie das Geraet.
+var GESCHENK_MAX = 5;
+
+function geschenkWahl(h, karte) {
+  var alt = karte.querySelector('.geschenk-wahl');
+  if (alt) { alt.remove(); return; }
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  var waren = v.stock.filter(function (e) {
+    return e.amount > 0 && e.item !== rules.currency && rules.items[e.item].storable;
+  }).sort(function (a, b) { return b.amount - a.amount; }).slice(0, 10);
+
+  var box = document.createElement('div');
+  box.className = 'geschenk-wahl';
+  if (waren.length === 0) {
+    box.innerHTML = '<p class="empty">Nichts im Lager, das man verschenken könnte.</p>';
+    karte.appendChild(box);
+    return;
+  }
+  var gewaehlt = waren[0].item;
+  var menge = Math.min(GESCHENK_MAX, waren[0].amount);
+
+  var chips = document.createElement('div');
+  chips.className = 'chips';
+  waren.forEach(function (e) {
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip' + (e.item === gewaehlt ? ' an' : '');
+    chip.innerHTML = itemIcon(e.item) + '<span>' + itemName(e.item) + '</span><span class="n">' + e.amount + '</span>';
+    chip.addEventListener('click', function () {
+      gewaehlt = e.item;
+      menge = Math.min(GESCHENK_MAX, e.amount);
+      chips.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('an'); });
+      chip.classList.add('an');
+      zeigeMenge();
+    });
+    chips.appendChild(chip);
+  });
+  box.appendChild(chips);
+
+  var reihe = document.createElement('div');
+  reihe.className = 'geschenk-menge';
+  reihe.innerHTML = '<button type="button" class="leise" data-tu="-1">−</button>' +
+    '<b class="zahl"></b><button type="button" class="leise" data-tu="1">+</button>' +
+    '<button type="button" class="go schicken">Schicken</button>';
+  box.appendChild(reihe);
+  function zeigeMenge() {
+    var have = (v.stock.find(function (e) { return e.item === gewaehlt; }) || { amount: 0 }).amount;
+    menge = Math.max(1, Math.min(menge, GESCHENK_MAX, have));
+    reihe.querySelector('.zahl').textContent = menge + '× ' + stueckName(menge, gewaehlt);
+  }
+  reihe.querySelectorAll('[data-tu]').forEach(function (b) {
+    b.addEventListener('click', function () { menge += Number(b.getAttribute('data-tu')); zeigeMenge(); });
+  });
+  reihe.querySelector('.schicken').addEventListener('click', function () {
+    reihe.querySelector('.schicken').disabled = true;
+    geschenkSenden(h, gewaehlt, menge, karte);
+  });
+  zeigeMenge();
+  karte.appendChild(box);
+}
+
+function geschenkSenden(h, item, menge, karte) {
+  if (!netzOk()) { toast('Ohne Verbindung geht das nicht', true); return; }
+  var zielKarte = karte;
+  attempt(true).then(function () {
+    return api('/api/geschenk?code=' + encodeURIComponent(h.code) + '&item=' +
+      encodeURIComponent(rules.items[item].id) + '&amount=' + menge, { method: 'POST' });
+  }).then(function () {
+    toast('Geschenk an ' + h.name + ' unterwegs · ' + menge + '× ' + stueckName(menge, item));
+    klang('stufe');
+    flugZu($('silo'), zielKarte, itemIcon(item), 'ware', Math.min(menge, 3));
+    h.beschenkt = true;
+    attempt(true);
+    setTimeout(freundeLaden, 700);
+  }).catch(function (e) {
+    var code = (e && e.message) || '';
+    toast(/429/.test(code) ? h.name + ' hast du heute schon beschenkt'
+      : /409/.test(code) ? 'So viel hast du nicht mehr'
+      : /403/.test(code) ? 'Nur Nachbarn kann man beschenken'
+      : 'Geschenk ging nicht', true);
+    freundeLaden();
+  });
+}
+
+// Was einem geschenkt wurde: einmal abholen, je Geschenk ein Moment.
+function geschenkeHolen() {
+  if (!token || !netzOk()) return;
+  api('/api/geschenke').then(function (d) {
+    (d.geschenke || []).forEach(function (g) {
+      moment({
+        klang: 'truhe', winkt: 'lagerhaus', hin: 'lager',
+        text: '🎁 Geschenk von ' + g.von + ' · ' + g.amount + '× ' + stueckName(g.amount, g.item) + ' — im Postfach',
+      });
+    });
+  }).catch(function () {});
 }

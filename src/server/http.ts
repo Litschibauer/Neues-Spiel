@@ -15,14 +15,14 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
 import type { SyncRequest } from './server.ts';
 import { load, save } from './store.ts';
-import { initialState, normalizeState } from '../sim/state.ts';
+import { initialState, normalizeState, count } from '../sim/state.ts';
 import type { State } from '../sim/state.ts';
 import { LATEST_RULESET_VERSION, RULESETS, getRuleset, levelOf } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isLoopback, isSecureTransport, resolveConfig } from './config.ts';
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 import { SqliteStorage } from './storage.ts';
-import { NAME_MAX, Sozial } from './sozial.ts';
+import { NAME_MAX, Sozial, tagVon } from './sozial.ts';
 import type { HofKarte } from './sozial.ts';
 import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
@@ -1016,7 +1016,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
 
     if (url.pathname === '/api/freunde' && req.method === 'GET') {
       return json(res, 200, {
-        freunde: sozial.freunde(account.id).map((f) => hofZeile(f, account.id)),
+        freunde: sozial.freunde(account.id).map((f) => ({
+          ...hofZeile(f, account.id),
+          beschenkt: geschenktHeute(account.id, f.id, Date.now()),
+        })),
         anfragen: sozial.anfragenAn(account.id).map((f) => hofZeile(f, account.id)),
         gefragt: sozial.anfragenVon(account.id).map((f) => hofZeile(f, account.id)),
       });
@@ -1049,6 +1052,56 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const ziel = sozial.perCode(code);
       if (!ziel || ziel.id === account.id) return json(res, 404, { error: 'NO_SUCH_FARM' });
       return json(res, 200, besuchsBild(ziel, account.id));
+    }
+
+    // Ein Geschenk an einen Nachbarn: Ware verlaesst diesen Hof und landet in
+    // seiner Post. Kontouebergreifend, also Sache des Servers — der Abzug geht
+    // den Weg der Hilfe-XP (aeussere Aenderung), die Lieferung den Weg jeder
+    // Post. Einmal am Tag je Nachbar, hoechstens fuenf Stueck, nur Lagerware.
+    if (url.pathname === '/api/geschenk' && req.method === 'POST') {
+      const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
+      const amount = Number(url.searchParams.get('amount') ?? '1');
+      const ziel = sozial.perCode(code);
+      if (!ziel || ziel.id === account.id) return json(res, 404, { error: 'NO_SUCH_FARM' });
+      if (!sozial.istFreund(account.id, ziel.id)) return json(res, 403, { error: 'NOT_A_FRIEND' });
+      const item = resolveItem(game, url.searchParams.get('item') ?? '');
+      const rules = getRuleset(game.snapshot.rulesetVersion);
+      if (item === null || item === rules.currency || !rules.items[item]?.storable) {
+        return json(res, 400, { error: 'NOT_GIFTABLE' });
+      }
+      if (!Number.isInteger(amount) || amount <= 0 || amount > GESCHENK_MAX) {
+        return json(res, 400, { error: 'BAD_AMOUNT' });
+      }
+      const jetzt = Date.now();
+      if (geschenktHeute(account.id, ziel.id, jetzt)) return json(res, 429, { error: 'ALREADY_GIFTED' });
+
+      game.receiveExternal();
+      if (count(game.snapshot.state, item) < amount) return json(res, 409, { error: 'NOT_ENOUGH_ITEMS' });
+      const vorher = count(game.snapshot.state, item);
+      game.nimmAb(item, amount);
+      game.receiveExternal();
+      if (count(game.snapshot.state, item) !== vorher - amount) {
+        return json(res, 409, { error: 'NOT_ENOUGH_ITEMS' });
+      }
+      persist(account, game);
+
+      const zielSpiel = gameFor(zielKonto(ziel.id));
+      zielSpiel.deliver({ item, amount, arrivedAt: jetzt });
+      zielSpiel.receiveExternal();
+      persist(zielKonto(ziel.id), zielSpiel);
+      merkeGeschenk(account.id, ziel.id, jetzt);
+      const von = sozial.karte(account.id);
+      geschenkAblegen(ziel.id, { von: von?.name ?? 'Ein Nachbar', code: von?.code ?? '', item, amount, wann: jetzt });
+      events.nudge(ziel.id, 'geschenk');
+      events.nudge(ziel.id, 'farm');
+      console.log(`[geschenk] ${account.id} -> ${ziel.id}: ${amount}x ${rules.items[item]?.id}`);
+      return json(res, 200, { ok: true, item, amount, an: hofZeile(ziel, account.id) });
+    }
+
+    // Was einem geschenkt wurde und noch nicht gezeigt — einmal abgeholt, weg.
+    if (url.pathname === '/api/geschenke' && req.method === 'GET') {
+      const liste = geschenkeAbholen(account.id);
+      return json(res, 200, { geschenke: liste });
     }
 
     if (url.pathname === '/api/helfen' && req.method === 'POST') {
@@ -1327,6 +1380,32 @@ function meldeText(w: { reif: number; reusen: number; koeder: number }): string 
   if (w.koeder > 0) teile.push(w.koeder === 1 ? '1 Sud Köder wartet' : `${w.koeder} Sude Köder warten`);
   if (teile.length === 0) return null;
   return `${teile.join(', ')}. Schau mal vorbei.`;
+}
+
+const GESCHENK_MAX = 5;
+
+function geschenktHeute(von: string, an: string, nowMs: number): boolean {
+  return Number(accounts.storage.getMeta(`geschenk-${von}-${an}`) ?? '-1') === tagVon(nowMs);
+}
+
+function merkeGeschenk(von: string, an: string, nowMs: number): void {
+  accounts.storage.setMeta(`geschenk-${von}-${an}`, String(tagVon(nowMs)));
+}
+
+type Geschenk = { von: string; code: string; item: number; amount: number; wann: number };
+
+function geschenkAblegen(an: string, g: Geschenk): void {
+  let liste: Geschenk[] = [];
+  try { liste = JSON.parse(accounts.storage.getMeta(`geschenke-${an}`) ?? '[]') as Geschenk[]; } catch { liste = []; }
+  liste.push(g);
+  accounts.storage.setMeta(`geschenke-${an}`, JSON.stringify(liste.slice(-20)));
+}
+
+function geschenkeAbholen(an: string): Geschenk[] {
+  let liste: Geschenk[] = [];
+  try { liste = JSON.parse(accounts.storage.getMeta(`geschenke-${an}`) ?? '[]') as Geschenk[]; } catch { liste = []; }
+  if (liste.length > 0) accounts.storage.setMeta(`geschenke-${an}`, '[]');
+  return liste;
 }
 
 async function meldeRunde(): Promise<number> {
