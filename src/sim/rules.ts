@@ -262,6 +262,12 @@ export type Ruleset = {
   // Schnellwuchs schiebt alles Laufende um `wuchsProzent` der Restzeit vor —
   // einmalig, wie die Nachbarschaftshilfe. Beides nicht handelbar.
   booster?: { xpItem: number; xpTicks: number; wuchsItem: number; wuchsProzent: number };
+  // Wetter mit Wirkung: In Fenstern von `fensterTicks` steht das Wetter fest,
+  // gezogen aus der Fensternummer — also aus dem Tick, den Server und Geraet
+  // teilen. Bei Regen bekommt, was auf einem der `plaetze` angesetzt wird,
+  // `regenSchubProzent` seiner Dauer geschenkt. Ohne dieses Feld ist das
+  // Wetter Stimmung und sonst nichts.
+  wetter?: { fensterTicks: number; regenSchubProzent: number; plaetze: readonly number[] };
   // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
   // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
   // Spielstand (siehe sim.ts) — Server und Gerät kommen ohne Absprache auf
@@ -2320,6 +2326,26 @@ export function wochenAufgabenFuer(
   return ziehAufgaben(rules.wochenaufgaben, rules.aufgabenProWoche ?? 3, woche * 104729 + 31, spielerLevel);
 }
 
+// Das Wetter eines Ticks: klar, wolkig oder Regen — festgelegt je Fenster,
+// ganzzahlig gehasht, damit Server und Geraet dasselbe sehen. Dieselbe
+// Verteilung, die der Himmel vorher nur zur Stimmung zog: 62 % klar, 23 %
+// wolkig, 15 % Regen.
+export type WetterArt = 'klar' | 'wolkig' | 'regen';
+export function wetterBei(rules: Ruleset, tick: number): WetterArt {
+  const w = rules.wetter;
+  if (!w || w.fensterTicks <= 0) return 'klar';
+  const fenster = Math.floor(tick / w.fensterTicks);
+  const h = (((fenster * 2654435761) % 100) + 100) % 100;
+  if (h < 62) return 'klar';
+  if (h < 85) return 'wolkig';
+  return 'regen';
+}
+export function wetterWechselIn(rules: Ruleset, tick: number): number {
+  const w = rules.wetter;
+  if (!w || w.fensterTicks <= 0) return 0;
+  return w.fensterTicks - (tick % w.fensterTicks);
+}
+
 function ziehAufgaben(
   topf: readonly AufgabeDef[] | undefined,
   wieViele: number,
@@ -2468,17 +2494,32 @@ const V43: Ruleset = {
   })),
 };
 
-const DEV: Ruleset = {
+// V44: Wetter mit Wirkung. Der Himmel ueber dem Hof war Stimmung — jetzt tut
+// er etwas: Wer bei Regen saet, dessen Saat bekommt ein Fuenftel der Zeit
+// geschenkt. Nur auf Feldern; Staelle und Werkstaetten kuemmert der Regen
+// nicht. Das Wetter kommt aus dem Tick, nicht aus der Geraeteuhr — Server und
+// Geraet sehen dasselbe, und niemand kann sich Regen bestellen.
+const V44: Ruleset = {
   ...V43,
+  version: 44,
+  wetter: {
+    fensterTicks: 1200,
+    regenSchubProzent: 20,
+    plaetze: V43.plots.map((p, i) => (p.id.indexOf('field-') === 0 ? i : -1)).filter((i) => i >= 0),
+  },
+};
+
+const DEV: Ruleset = {
+  ...V44,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V43.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V44.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V43.fishing!,
+    ...V44.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
@@ -2544,17 +2585,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [41, V41],
   [42, V42],
   [43, V43],
+  [44, V44],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 43;
+export const LATEST_RULESET_VERSION = 44;
 
 export const DEV_RULESET_VERSION = 1001;
 

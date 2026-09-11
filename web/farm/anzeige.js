@@ -44,6 +44,7 @@ function render() {
   renderSheet(v);
   renderEmpfang();
   renderNaechstes(v);
+  wetterUebernehmen(v);
   momentePruefen(v);
   winkeAnwenden();
   bonusKnopf();

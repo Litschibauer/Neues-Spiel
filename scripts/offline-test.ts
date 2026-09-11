@@ -1305,6 +1305,25 @@ try {
     leiste.da && leiste.text.length > 0,
     leiste.text,
   );
+  // Wetter: Was der Himmel zeigt, ist das, was wirkt — Regen am Himmel genau
+  // dann, wenn die Regenzeile unter dem Hof steht. Erzwingen laesst sich der
+  // Regen nicht (er kommt aus dem Tick), aber die beiden muessen uebereinstimmen.
+  const wetterLage = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify({
+         regenAmHimmel: document.getElementById('wetter').className.indexOf('regen') >= 0,
+         zeile: !document.getElementById('wetterzeile').hidden,
+         text: document.getElementById('wetterzeile').textContent,
+       })`,
+    ),
+  ) as { regenAmHimmel: boolean; zeile: boolean; text: string };
+  check(
+    'Der Regen am Himmel ist der Regen, der wirkt — Himmel und Regenzeile stimmen überein',
+    wetterLage.regenAmHimmel === wetterLage.zeile && (!wetterLage.zeile || /schneller/.test(wetterLage.text)),
+    wetterLage.zeile ? wetterLage.text : `kein Regen gerade (Himmel: ${wetterLage.regenAmHimmel})`,
+  );
+
   check(
     'Die Leiste liegt unter dem Hof, nicht darüber — sie verdeckt keinen Platz',
     leiste.da && !leiste.ueberlappt && leiste.imBild,

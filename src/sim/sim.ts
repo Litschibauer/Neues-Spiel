@@ -14,6 +14,7 @@ import {
   nextLevel,
   tagesAufgabenFuer,
   wochenAufgabenFuer,
+  wetterBei,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -344,9 +345,17 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
         const spend: [number, number][] = recipe.inputs.map((i) => [i.item, -i.amount]);
         next.items = addItems(s.items, spend);
       }
+      // Regen beim Ansetzen: Die Saat bekommt einen Teil ihrer Dauer
+      // geschenkt — als Startschub, wie die Nachbarschaftshilfe. Nur auf den
+      // Plaetzen, die das Regelwerk dafuer nennt (Felder).
+      let schub = 0;
+      const wetter = rules.wetter;
+      if (wetter && wetter.plaetze.includes(cmd.plot) && wetterBei(rules, s.tick) === 'regen') {
+        schub = Math.floor((recipe.durationTicks * wetter.regenSchubProzent) / 100);
+      }
       next.plots = replaceAt(s.plots, cmd.plot, {
         ...plot,
-        slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick }),
+        slots: replaceAt(plot.slots, slotIndex, { recipe: cmd.recipe, startedAt: s.tick - schub }),
       });
       return next;
     }

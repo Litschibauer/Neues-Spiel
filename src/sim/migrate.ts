@@ -339,6 +339,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['41->42', WOCHE_DAZU],
   // Ein alter Stand hat keinen laufenden Verdoppler.
   ['42->43', BOOSTER_DAZU],
+  // Wetter braucht kein Feld: Es kommt aus dem Tick.
+  ['43->44', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

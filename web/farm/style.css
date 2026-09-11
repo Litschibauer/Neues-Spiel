@@ -1224,6 +1224,12 @@
     display: flex; align-items: center; justify-content: center; gap: .4rem;
     font-size: .68rem; color: var(--muted); padding: .3rem 0; flex: none;
   }
+  /* Regen, der wirkt: eine Zeile unter dem Hof, nur solange es regnet. */
+  .wetterzeile {
+    font-size: .7rem; font-weight: 700; color: #4f7cc4; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 60vw;
+  }
+
   /* Der naechste Schritt: immer ein Grund zu bleiben, nie eine Aufforderung. */
   .naechstes {
     display: flex; align-items: center; gap: .35rem; min-width: 0;

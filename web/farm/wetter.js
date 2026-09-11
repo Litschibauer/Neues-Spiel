@@ -52,9 +52,28 @@ function himmelMalen() {
 
   var w = $('wetter');
   if (w) {
-    var art = wetterFuer(Math.floor(Date.now() / (20 * 60 * 1000)));
+    // Kennt die Sim das Wetter, gilt ihres — dann ist der Regen, den man
+    // sieht, auch der, der wirkt. Sonst wie bisher nur Stimmung.
+    var art = wetterDerSim || wetterFuer(Math.floor(Date.now() / (20 * 60 * 1000)));
     w.className = 'wetter' + (art !== 'klar' ? ' ' + art : '');
   }
+}
+
+// Vom Neuaufbau gesetzt: das Wetter aus der Sicht der Sim.
+var wetterDerSim = null;
+function wetterUebernehmen(v) {
+  var neu = v && v.wetter ? v.wetter.art : null;
+  var zeile = $('wetterzeile');
+  if (zeile) {
+    var regen = !!(v && v.wetter && v.wetter.wirkt);
+    zeile.hidden = !regen;
+    if (regen) {
+      zeile.textContent = '🌧 Regen · Saat wächst ' + v.wetter.regenSchubProzent + ' % schneller · noch ' + timeText(v.wetter.wechselIn);
+    }
+  }
+  if (neu === wetterDerSim) return;
+  wetterDerSim = neu;
+  himmelMalen();
 }
 
 himmelMalen();

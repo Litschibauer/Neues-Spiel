@@ -1,4 +1,4 @@
-import type { Ruleset } from '../sim/rules.ts';
+import type { Ruleset, WetterArt } from '../sim/rules.ts';
 import { erfolgsStand } from '../sim/sim.ts';
 import {
   levelOf,
@@ -17,6 +17,8 @@ import {
   achievementFortschritt,
   tagesAufgabenFuer,
   wochenAufgabenFuer,
+  wetterBei,
+  wetterWechselIn,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import {
@@ -305,6 +307,8 @@ export type FarmView = {
   aufgaben: TagesaufgabenView;
   // Die Wochenaufgaben — dieselbe Form, `tag` ist hier die Wochennummer.
   wochenaufgaben: TagesaufgabenView;
+  // Das Wetter der Sim — was der Himmel zeigt, ist das, was wirkt.
+  wetter: { art: WetterArt; wechselIn: number; wirkt: boolean; regenSchubProzent: number } | null;
   // Booster: Vorrat und Restlaufzeit. null, wenn das Regelwerk keine kennt.
   booster: {
     xpItem: number;
@@ -811,6 +815,14 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     erfolge: erfolgeView(state, rules),
     aufgaben: aufgabenView(state, rules),
     wochenaufgaben: wochenView(state, rules),
+    wetter: rules.wetter
+      ? {
+          art: wetterBei(rules, state.tick),
+          wechselIn: wetterWechselIn(rules, state.tick),
+          wirkt: wetterBei(rules, state.tick) === 'regen',
+          regenSchubProzent: rules.wetter.regenSchubProzent,
+        }
+      : null,
     booster: rules.booster
       ? {
           xpItem: rules.booster.xpItem,
