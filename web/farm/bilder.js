@@ -17,6 +17,7 @@ var KOERPER = {
   forge: 1.6, oven: 1.6, grill: 1.0, 'apple-tree': 1.3,
   woodlot: 1.4, workshop: 3.1, smokehouse: 4.4, kitchen: 3.1, 'sheep-': 1.3, weberei: 3.1,
   'deco-fence': 0.7, 'deco-flowers': 0.7, 'deco-bench': 0.7,
+  'deco-erntekranz': 0.7, 'deco-boje': 0.9, 'deco-marktfahne': 0.9, 'deco-laterne': 0.7,
 };
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
 var KOERPER_MOEBEL = {
@@ -200,6 +201,10 @@ function artRaumFor(p, k) {
   if (id === 'deco-fence') return bild(k, 'zaun-m', 0, k.ph - 16);
   if (id === 'deco-flowers') return bild(k, 'gras-blumen', 0, k.ph - 16);
   if (id === 'deco-bench') return bild(k, 'tisch', 0, k.ph - 16);
+  if (id === 'deco-erntekranz') return bild(k, 'kranz', 0, k.ph - 16);
+  if (id === 'deco-boje') return bild(k, 'boje', 0, k.ph - 16);
+  if (id === 'deco-marktfahne') return bild(k, 'fahne', 0, k.ph - 16);
+  if (id === 'deco-laterne') return bild(k, 'lampe', 0, k.ph - 16);
   return artFeld(k, 0, null);
 }
 

@@ -3663,7 +3663,14 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
       'Kasse am Stand blinkt',
       15_000,
     ).catch(() => {});
-    await sleep(2200);
+    // Der Moment draengt sich vor, wartet aber, bis eine laufende Meldung
+    // gelesen ist — ein paar Sekunden, nicht mehr.
+    await waitFor(
+      cdp,
+      `JSON.parse(localStorage.getItem('${MELDUNGEN}') || '[]').some(function (m) { return /^Verkauft · Weizen/.test(m.text); })`,
+      'Verkauft-Moment',
+      20_000,
+    ).catch(() => {});
     const verkauftMeldung = JSON.parse(
       await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`),
     ) as Array<{ text: string; tippbar: boolean }>;
@@ -4252,7 +4259,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
       offen: !document.getElementById('abenteuer-bg').hidden,
       titel: (document.getElementById('abenteuer-titel') || {}).textContent || '',
       unter: (document.getElementById('abenteuer-unter') || {}).textContent || '',
-      zettel: [...document.querySelectorAll('#abenteuer-liste .zettel-brett')]
+      zettel: [...document.querySelectorAll('#abenteuer-liste .zettel-brett:not(.woche):not(.fest)')]
         .map(function (z) { return z.textContent.trim().replace(/\\s+/g, ' '); }),
     };
   })()`);
@@ -4936,7 +4943,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
          var u = document.querySelector('.tagesabschluss');
          return {
            da: !!u,
-           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett:not(.woche)').length,
+           zettel: document.querySelectorAll('#abenteuer-liste .zettel-brett:not(.woche):not(.fest)').length,
            text: u ? u.textContent.trim().replace(/\\s+/g, ' ') : '',
            knopf: !!(u && u.querySelector('.ta-los')),
            abgeholt: !!(u && u.classList.contains('abgeholt')),
@@ -5038,6 +5045,59 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     /Montag/.test(woche.uhr) && /noch/.test(woche.uhr),
     woche.uhr,
   );
+
+  // Das Fest: Im Feldtest laeuft jeden Tag eines. Es haengt zwischen Tag und
+  // Woche am Brett — mit Thema, Restzeit, drei Festzetteln und der Urkunde,
+  // die Truhe und Deko verspricht.
+  const fest = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var kopf = document.querySelector('#abenteuer-liste .brett-abschnitt.fest');
+         var u = document.querySelector('#abenteuer-liste .tagesabschluss.fest');
+         var zettel = [...document.querySelectorAll('#abenteuer-liste .zettel-brett.fest')];
+         return {
+           kopf: kopf ? kopf.textContent.replace(/\\s+/g, ' ').trim() : '',
+           zettel: zettel.length,
+           staende: zettel.map(function (z) { var st = z.querySelector('.zettel-stand'); return st ? st.textContent : (z.querySelector('.zettel-los') ? 'abholbar' : 'abgeholt'); }),
+           urkunde: u ? u.textContent.replace(/\\s+/g, ' ').trim() : '',
+           abholbar: !!document.querySelector('#abenteuer-liste .zettel-los[data-fest]'),
+         };
+       })())`,
+    ),
+  ) as { kopf: string; zettel: number; staende: string[]; urkunde: string; abholbar: boolean };
+  const festStand = (await api(`/api/admin/status?account=${status.accountId}`)) as {
+    state: { festNummer?: number; serverTag?: number; festGeholt?: string[] };
+  };
+  check(
+    'Am Brett hängt das Fest: Thema, Restzeit, drei Festzettel und die Urkunde mit Festtruhe und Deko',
+    /Erntefest|Fischerfest|Markttag|Baufest/.test(fest.kopf) && /endet/.test(fest.kopf) && fest.zettel === 3 &&
+      /Festtruhe/.test(fest.urkunde) && /geschafft/.test(fest.urkunde),
+    `„${fest.kopf}" · ${fest.zettel} Zettel · ${fest.urkunde.slice(0, 80)}`,
+  );
+  check(
+    'Der Server hat das Fest zur laufenden Woche gestempelt',
+    festStand.state.festNummer === Math.floor(((festStand.state.serverTag ?? 0) + 3) / 7),
+    `Fest ${festStand.state.festNummer} zu Tag ${festStand.state.serverTag}`,
+  );
+  const festFortschritt = fest.staende.some((st) => st === 'abholbar' || st === 'abgeholt' || /^[1-9]/.test(st));
+  check(
+    'Die Festzettel zählen, was seit Festbeginn auf dem Hof passiert ist',
+    festFortschritt,
+    fest.staende.join(' | '),
+  );
+  if (fest.abholbar) {
+    await evaluate(cdp, `document.querySelector('#abenteuer-liste .zettel-los[data-fest]').click()`);
+    await sleep(500);
+    const festToast = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+    const festDanach = (await api(`/api/admin/status?account=${status.accountId}`)) as { state: { festGeholt?: string[] } };
+    await sleep(400);
+    check(
+      'Ein erfüllter Festzettel lässt sich abholen — der Server merkt es sich',
+      /Festzettel geschafft/.test(festToast) || (festDanach.state.festGeholt ?? []).length > 0,
+      `„${festToast}" · geholt: ${(festDanach.state.festGeholt ?? []).join(', ') || '—'}`,
+    );
+  }
 
   await evaluate(cdp, `document.getElementById('abenteuer-close').click()`);
   await sleep(300);
@@ -5159,7 +5219,9 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   const meldungen = JSON.parse(
     await evaluate<string>(cdp, `localStorage.getItem('${MELDUNGEN}') || '[]'`),
   ) as Array<{ text: string; tippbar: boolean }>;
-  const erfolgMeldung = meldungen.find((m) => /★ Erfolg · Stufe 3 erreichen/.test(m.text));
+  // Kommen mehrere Erfolge auf einmal, legt der Hof sie zu einer Meldung zusammen.
+  const erfolgMeldung = meldungen.find((m) => /★ Erfolg · Stufe 3 erreichen/.test(m.text)) ||
+    meldungen.find((m) => /★ \d+ Erfolge — die Belohnungen warten/.test(m.text));
   check(
     'Wer Stufe 3 erreicht, erfährt sofort, dass ein Erfolg wartet — antippbar',
     !!erfolgMeldung && erfolgMeldung.tippbar,

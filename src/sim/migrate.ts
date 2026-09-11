@@ -160,6 +160,26 @@ export const WOCHE_DAZU: MigrationStep = (state, from, to) => {
   return next;
 };
 
+// Das Fest faengt leer an; gestempelt wird es beim naechsten Kontakt, wenn
+// gerade eines laeuft.
+export const FEST_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (
+    gewachsen.festNummer !== undefined &&
+    gewachsen.festStart !== undefined &&
+    gewachsen.festGeholt !== undefined &&
+    gewachsen.festeGeschafft !== undefined
+  ) {
+    return gewachsen;
+  }
+  const next = cloneState(gewachsen);
+  next.festNummer = gewachsen.festNummer ?? 0;
+  next.festStart = gewachsen.festStart ?? [];
+  next.festGeholt = gewachsen.festGeholt ?? [];
+  next.festeGeschafft = gewachsen.festeGeschafft ?? 0;
+  return next;
+};
+
 export const BOOSTER_DAZU: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   if (gewachsen.xpDoppeltBis !== undefined) return gewachsen;
@@ -348,6 +368,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['45->46', AUFS_RASTER],
   // Meisterschaft: Sterne zählen ab jetzt — der Zustand braucht nichts Neues.
   ['46->47', AUFS_RASTER],
+  // Feste: vier Deko-Plaetze und eine Truhenart mehr, das Fest selbst faengt leer an.
+  ['47->48', FEST_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

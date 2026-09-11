@@ -2,7 +2,7 @@ import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { MailItem, Offer, State } from '../sim/state.ts';
 import { EMPTY_PLOT, addItem, cloneState, count, wocheVonTag } from '../sim/state.ts';
-import { getRuleset, helpSpeedup } from '../sim/rules.ts';
+import { festAktiv, getRuleset, helpSpeedup } from '../sim/rules.ts';
 import type { Ruleset } from '../sim/rules.ts';
 import { simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
@@ -241,6 +241,16 @@ export class Server {
       woche.wochenStart = (woche.zaehler ?? []).slice();
       woche.wochenGeholt = [];
       state = woche;
+    }
+    // Das Fest haengt am Wochentag: Laeuft heute eines und ist es noch nicht
+    // gestempelt, bekommt es Nummer, Nullpunkt und leere Abholliste. Ausserhalb
+    // der Festtage bleibt alles stehen; die Sim zaehlt dann nichts mehr dazu.
+    if (festAktiv(rules, heute) && state.festNummer !== dieseWoche) {
+      const fest = cloneState(state);
+      fest.festNummer = dieseWoche;
+      fest.festStart = (fest.zaehler ?? []).slice();
+      fest.festGeholt = [];
+      state = fest;
     }
 
     if (this.pendingXp > 0) {

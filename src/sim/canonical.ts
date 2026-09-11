@@ -107,6 +107,10 @@ export function canonicalizeCommand(c: Command): string {
       return `${c.seq}|${c.tick}|CLAIM_WEEK_TASK|${c.id}`;
     case 'CLAIM_WEEK':
       return `${c.seq}|${c.tick}|CLAIM_WEEK`;
+    case 'CLAIM_FEST_TASK':
+      return `${c.seq}|${c.tick}|CLAIM_FEST_TASK|${c.id}`;
+    case 'CLAIM_FEST':
+      return `${c.seq}|${c.tick}|CLAIM_FEST`;
     case 'USE_BOOSTER':
       return `${c.seq}|${c.tick}|USE_BOOSTER|${c.item}`;
     case 'REMOVE_PLOT':

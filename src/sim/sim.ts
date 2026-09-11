@@ -17,6 +17,9 @@ import {
   wetterBei,
   meisterFaehig,
   sterneVon,
+  festAktiv,
+  festArtIndex,
+  festAufgabenFuer,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -43,6 +46,9 @@ import {
   tagesAbgenommen,
   TAG_ABSCHLUSS,
   WOCHE_ABSCHLUSS,
+  FEST_ABSCHLUSS,
+  festFortschritt,
+  festAbgenommen,
   wocheVonTag,
   wochenAbgenommen,
   wochenFortschritt,
@@ -236,6 +242,7 @@ export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
     items: s.items,
     sterne: sterneJePlatz.reduce((a, b) => a + b, 0),
     meister: alleSterne > 0 ? sterneJePlatz.filter((n) => n >= alleSterne).length : 0,
+    feste: s.festeGeschafft ?? 0,
   };
 }
 
@@ -424,6 +431,8 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       // Eingepackte Dekoration stellt man kostenlos wieder auf.
       const eingepackt = (s.eingepackt ?? []).includes(cmd.plot);
       if (!eingepackt) {
+        // Fest-Deko gibt es nur vom Fest — nicht für Gold.
+        if (def.nurFest) throw new SimError('FEST_ONLY');
         for (const price of level.cost) {
           if (count(s, price.item) < price.amount) throw new SimError('CANT_AFFORD');
         }
@@ -618,6 +627,60 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       next.xp = s.xp + lohn.xp;
       next.wochenGeholt = (s.wochenGeholt ?? []).concat(WOCHE_ABSCHLUSS);
       if (lohn.kiste !== undefined) next.pendingBoxes = s.pendingBoxes.concat(lohn.kiste);
+      return next;
+    }
+
+    case 'CLAIM_FEST_TASK': {
+      const tag = s.serverTag ?? 0;
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+      if (!festAktiv(rules, tag)) throw new SimError('NO_FEST');
+      const woche = wocheVonTag(tag);
+      // Das Fest muss vom Server gestempelt sein — sonst gibt es keinen Nullpunkt.
+      if ((s.festNummer ?? 0) !== woche) throw new SimError('NO_FEST');
+      const diese = festAufgabenFuer(rules, woche, levelOf(rules, s.xp));
+      const auf = diese.find((a) => a.id === cmd.id);
+      if (!auf) throw new SimError('NO_SUCH_TASK');
+      if ((s.festGeholt ?? []).includes(cmd.id)) throw new SimError('ALREADY_CLAIMED');
+      if (festFortschritt(s, auf.art) < auf.menge) throw new SimError('NOT_YET_EARNED');
+
+      const next = cloneState(s);
+      if (auf.gold > 0) next.items = addItem(s.items, rules.currency, auf.gold);
+      next.xp = s.xp + auf.xp;
+      next.festGeholt = (s.festGeholt ?? []).concat(cmd.id);
+      return next;
+    }
+
+    case 'CLAIM_FEST': {
+      const f = rules.feste;
+      if (!f) throw new SimError('NO_FEST');
+      const tag = s.serverTag ?? 0;
+      if (tag <= 0) throw new SimError('NO_TASKS_YET');
+      if (!festAktiv(rules, tag)) throw new SimError('NO_FEST');
+      const woche = wocheVonTag(tag);
+      if ((s.festNummer ?? 0) !== woche) throw new SimError('NO_FEST');
+      if ((s.festGeholt ?? []).includes(FEST_ABSCHLUSS)) throw new SimError('ALREADY_CLAIMED');
+      const diese = festAufgabenFuer(rules, woche, levelOf(rules, s.xp));
+      if (diese.length === 0) throw new SimError('NO_TASKS_YET');
+      const noetig = Math.min(f.aufgabenProFest, diese.length);
+      if (festAbgenommen(s) < noetig) throw new SimError('NOT_YET_EARNED');
+      const lohn = f.abschluss;
+      if (lohn.kiste !== undefined && s.pendingBoxes.length >= MAX_PENDING_BOXES) {
+        throw new SimError('TOO_MANY_BOXES');
+      }
+
+      const next = cloneState(s);
+      if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
+      next.xp = s.xp + lohn.xp;
+      next.festGeholt = (s.festGeholt ?? []).concat(FEST_ABSCHLUSS);
+      next.festeGeschafft = (s.festeGeschafft ?? 0) + 1;
+      if (lohn.kiste !== undefined) next.pendingBoxes = s.pendingBoxes.concat(lohn.kiste);
+      // Die Fest-Deko kommt eingepackt — einmal. Wer sie schon hat (aufgestellt
+      // oder im Paket), bekommt beim naechsten Mal nur Truhe und Lohn.
+      const art = f.arten[festArtIndex(rules, woche)];
+      const deko = art?.deko;
+      if (deko !== undefined && (s.plots[deko]?.level ?? 0) <= 0 && !(s.eingepackt ?? []).includes(deko)) {
+        next.eingepackt = (s.eingepackt ?? []).concat(deko);
+      }
       return next;
     }
 

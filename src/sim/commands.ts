@@ -85,6 +85,10 @@ export type ClaimDayCommand = CommandBase & { type: 'CLAIM_DAY' };
 export type ClaimWeekTaskCommand = CommandBase & { type: 'CLAIM_WEEK_TASK'; id: string };
 export type ClaimWeekCommand = CommandBase & { type: 'CLAIM_WEEK' };
 
+// Festzettel abholen / das Fest abschliessen — nur solange das Fest laeuft.
+export type ClaimFestTaskCommand = CommandBase & { type: 'CLAIM_FEST_TASK'; id: string };
+export type ClaimFestCommand = CommandBase & { type: 'CLAIM_FEST' };
+
 // Einen Booster einsetzen — verbraucht ein Stueck der Ware.
 export type UseBoosterCommand = CommandBase & { type: 'USE_BOOSTER'; item: number };
 
@@ -143,6 +147,8 @@ export type Command =
   | ClaimDayCommand
   | ClaimWeekTaskCommand
   | ClaimWeekCommand
+  | ClaimFestTaskCommand
+  | ClaimFestCommand
   | UseBoosterCommand
   | RemovePlotCommand
   | PackPlotCommand

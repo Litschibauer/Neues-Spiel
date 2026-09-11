@@ -141,6 +141,13 @@ export type State = {
   wochenGeholt: readonly string[];
   // Bis zu welchem Tick der XP-Verdoppler laeuft; 0 heisst keiner.
   xpDoppeltBis: number;
+  // Das Fest: Nummer der Serverwoche, deren Fest gestempelt ist, Zaehlerstaende
+  // bei Festbeginn, in diesem Fest abgeholte Zettel — und wie viele Feste der
+  // Hof je abgeschlossen hat (fuer Erfolge).
+  festNummer: number;
+  festStart: readonly number[];
+  festGeholt: readonly string[];
+  festeGeschafft: number;
 };
 
 // Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
@@ -192,6 +199,24 @@ export function wochenAbgenommen(s: State): number {
   const geholt = s.wochenGeholt ?? [];
   let n = 0;
   for (const id of geholt) if (id !== WOCHE_ABSCHLUSS) n++;
+  return n;
+}
+
+// Das Fest zaehlt wie die Woche: ab dem Stand bei Festbeginn, und nur, wenn
+// das gestempelte Fest zur Serverwoche gehoert.
+export const FEST_ABSCHLUSS = 'festabschluss';
+
+export function festFortschritt(s: State, art: number): number {
+  const tag = s.serverTag ?? 0;
+  if (tag <= 0) return 0;
+  if ((s.festNummer ?? 0) !== wocheVonTag(tag)) return 0;
+  return Math.max(0, zaehlerStand(s, art) - (s.festStart?.[art] ?? 0));
+}
+
+export function festAbgenommen(s: State): number {
+  const geholt = s.festGeholt ?? [];
+  let n = 0;
+  for (const id of geholt) if (id !== FEST_ABSCHLUSS) n++;
   return n;
 }
 
@@ -316,6 +341,10 @@ export function initialState(rules: Ruleset): State {
     wochenNummer: 0,
     wochenStart: [],
     wochenGeholt: [],
+    festNummer: 0,
+    festStart: [],
+    festGeholt: [],
+    festeGeschafft: 0,
     xpDoppeltBis: 0,
   };
 }
@@ -397,6 +426,10 @@ export function normalizeState(s: State): State {
     wochenNummer: s.wochenNummer ?? 0,
     wochenStart: s.wochenStart ?? [],
     wochenGeholt: s.wochenGeholt ?? [],
+    festNummer: s.festNummer ?? 0,
+    festStart: s.festStart ?? [],
+    festGeholt: s.festGeholt ?? [],
+    festeGeschafft: s.festeGeschafft ?? 0,
     xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }
@@ -436,6 +469,10 @@ export function cloneState(s: State): State {
     wochenNummer: s.wochenNummer ?? 0,
     wochenStart: s.wochenStart ?? [],
     wochenGeholt: s.wochenGeholt ?? [],
+    festNummer: s.festNummer ?? 0,
+    festStart: s.festStart ?? [],
+    festGeholt: s.festGeholt ?? [],
+    festeGeschafft: s.festeGeschafft ?? 0,
     xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }

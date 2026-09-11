@@ -22,6 +22,7 @@ var NAMES = {
   'booster-xp': 'XP-Verdoppler', 'booster-wuchs': 'Schnellwuchs',
   wool: 'Wolle', yarn: 'Garn', sweater: 'Pullover', weberei: 'Weberei',
   'sheep-feed': 'Schaffutter',
+  'deco-erntekranz': 'Erntekranz', 'deco-boje': 'Boje', 'deco-marktfahne': 'Marktfahne', 'deco-laterne': 'Laterne',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
@@ -170,6 +171,22 @@ function naechsterWochenwechsel() {
   var woche = Math.floor((tag + 3) / 7);
   var ersterTag = (woche + 1) * 7 - 3;
   return { jetzt: serverJetzt, wechsel: ersterTag * TAG_MS };
+}
+// Das Fest: Name aus dem Regelwerk, und wann es endet (der Tag nach dem
+// letzten Festtag, 0 Uhr Serverzeit) beziehungsweise beginnt.
+var WOCHENTAGE = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+function festName(fest) {
+  var arten = rules.feste ? rules.feste.arten : [];
+  return fest && arten[fest.art] ? arten[fest.art].label : 'Fest';
+}
+function festEndeMs(fest) {
+  return (fest.tag + (fest.bis - fest.heute) + 1) * TAG_MS;
+}
+function festStartMs(fest) {
+  return (fest.tag + fest.inTagen) * TAG_MS;
+}
+function serverJetztMs() {
+  return Date.now() + (typeof clockOffsetMs === 'number' ? clockOffsetMs : 0);
 }
 // Restzeit in Tagen und Stunden — fuer alles, was laenger als einen Tag dauert.
 function tageText(seconds) {

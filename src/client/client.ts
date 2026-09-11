@@ -149,6 +149,14 @@ export class Client {
     return this.apply({ type: 'CLAIM_WEEK' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  claimFestTask(id: string): ActionResult {
+    return this.apply({ type: 'CLAIM_FEST_TASK', id } as Omit<Command, 'seq' | 'tick'>);
+  }
+
+  claimFest(): ActionResult {
+    return this.apply({ type: 'CLAIM_FEST' } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   useBooster(item: number): ActionResult {
     return this.apply({ type: 'USE_BOOSTER', item } as Omit<Command, 'seq' | 'tick'>);
   }

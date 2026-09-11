@@ -884,6 +884,16 @@
   .zettel-brett.woche.reif { background: #eef3fb; }
   .tagesabschluss.woche { background: #f2e4bd; border-color: #8a6a1c; box-shadow: 2px 3px 0 rgba(0, 0, 0, .28), inset 0 0 0 2px #f6c35a; }
   .tagesabschluss.woche.reif { background: #fff1c6; }
+  /* Das Fest: warmes Papier, orange Nadel, ein Hinweis, wenn keins laeuft. */
+  .brett-abschnitt.fest { color: #b8481a; }
+  .brett-abschnitt.fest-hinweis { color: var(--muted); font-weight: 600; }
+  .zettel-brett.fest { background: #fbe7cf; padding: .85rem .8rem .65rem; }
+  .zettel-brett.fest .zettel-kopf { font-size: 1rem; }
+  .zettel-brett.fest .zettel-nadel { background: #e8702a; }
+  .zettel-brett.fest.reif { background: #fff0dc; }
+  .tagesabschluss.fest { background: #f9dcc4; border-color: #9a4a1a; box-shadow: 2px 3px 0 rgba(0, 0, 0, .28), inset 0 0 0 2px #f2a05a; }
+  .tagesabschluss.fest.reif { background: #ffe9d2; }
+  .tagesabschluss .ta-deko { font-size: .82rem; margin: .2rem 0 .35rem; color: #6b3a12; }
 
   /* Reif: der Zettel hebt sich, abgeholt: er tritt zurueck. */
   .zettel-brett.reif { background: #fff6de; box-shadow: 3px 5px 0 rgba(0, 0, 0, .3); }

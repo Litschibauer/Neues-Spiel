@@ -124,6 +124,16 @@ function empfangSammeln(v) {
     zeilen.push({ art: 'lohn', icon: '🏆', text: 'Wochenabschluss steht bereit · Wochentruhe',
       gold: wab.gold, xp: wab.xp, wochenAbschluss: true });
   }
+  ((v.feste && v.feste.liste) || []).forEach(function (a) {
+    if (!a.erfuellt || a.eingeloest) return;
+    zeilen.push({ art: 'lohn', icon: '🎪', text: 'Festzettel · ' + a.label,
+      gold: a.gold, xp: a.xp, festAufgabe: a.id });
+  });
+  var fab = v.feste && v.feste.abschluss;
+  if (fab && fab.erfuellt && !fab.eingeloest) {
+    zeilen.push({ art: 'lohn', icon: '🎪', text: festName(v.feste) + ' geschafft · Festtruhe',
+      gold: fab.gold, xp: fab.xp, festAbschluss: true });
+  }
 
   // Der Tagesbonus kommt vom Server — ohne Verbindung steht er nicht zu.
   if (typeof bonusStatus === 'object' && bonusStatus && bonusStatus.verfuegbar && netzOk()) {
@@ -252,6 +262,14 @@ function empfangEinsammeln() {
     }
     if (z.wochenAufgabe) {
       if (client.claimWeekTask(z.wochenAufgabe).ok) { z.geholt = true; etwas = true; }
+      return;
+    }
+    if (z.festAufgabe) {
+      if (client.claimFestTask(z.festAufgabe).ok) { z.geholt = true; etwas = true; }
+      return;
+    }
+    if (z.festAbschluss) {
+      if (client.claimFest().ok) { z.geholt = true; etwas = true; }
       return;
     }
     if (!z.aufgabe) return;

@@ -355,6 +355,10 @@ function renderMoebel(v) {
   tagesOffen += wochenListe.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
   var wAb = v.wochenaufgaben && v.wochenaufgaben.abschluss;
   if (wAb && wAb.erfuellt && !wAb.eingeloest) tagesOffen += 1;
+  var festListe = (v.feste && v.feste.liste) || [];
+  tagesOffen += festListe.filter(function (e) { return e.erfuellt && !e.eingeloest; }).length;
+  var fAb = v.feste && v.feste.abschluss;
+  if (fAb && fAb.erfuellt && !fAb.eingeloest) tagesOffen += 1;
   var abBrett = $('abenteuer');
   abBrett.hidden = tages.length === 0;
   if (!abBrett.hidden) {
@@ -1040,6 +1044,10 @@ function renderAbenteuer(v) {
     }
   }
 
+  // Das Fest: zwischen Tag und Woche, weil es zwischen beiden liegt — ein
+  // paar Tage, mit eigenem Thema und eigener Deko.
+  festAbschnitt(v, box);
+
   // Die Woche: groessere Zettel auf anderem Papier, darunter die Wochenurkunde
   // mit der Truhe. Derselbe Bauplan wie beim Tag — nur ist hier alles auf
   // sieben Tage bemessen.
@@ -1109,10 +1117,13 @@ function renderAbenteuer(v) {
       var wo = btn.getBoundingClientRect();
       var gold = Number(btn.getAttribute('data-gold')) || 0;
       var woche = btn.getAttribute('data-woche') === '1';
-      var r = woche
-        ? client.claimWeekTask(btn.getAttribute('data-id'))
-        : client.claimTask(btn.getAttribute('data-id'));
-      act(woche ? 'Wochenzettel geschafft' : 'Abenteuer geschafft', r, 'stufe');
+      var fest = btn.getAttribute('data-fest') === '1';
+      var r = fest
+        ? client.claimFestTask(btn.getAttribute('data-id'))
+        : woche
+          ? client.claimWeekTask(btn.getAttribute('data-id'))
+          : client.claimTask(btn.getAttribute('data-id'));
+      act(fest ? 'Festzettel geschafft' : woche ? 'Wochenzettel geschafft' : 'Abenteuer geschafft', r, 'stufe');
       if (r.ok && gold > 0) muenzenFliegen(wo, gold);
       if (r.ok) xpAuf(wo, Number(btn.getAttribute('data-xp')) || 0);
     });
@@ -1136,6 +1147,84 @@ function renderAbenteuer(v) {
   var ww = naechsterWochenwechsel();
   var wRest = Math.max(0, Math.floor((ww.wechsel - ww.jetzt) / 1000));
   wochenUhr.innerHTML = 'Neue Wochenzettel am <b>Montag, ' + uhrzeitKurz(ww.wechsel) + '</b> · noch ' + tageText(wRest);
+}
+
+// Der Festabschnitt am Brett. Laeuft keins, steht nur da, wann das naechste
+// beginnt — ein Grund, wiederzukommen.
+function festAbschnitt(v, box) {
+  var fest = v.feste;
+  if (!fest) return;
+  var name = festName(fest);
+  var jetzt = serverJetztMs();
+  var kopf = document.createElement('div');
+  if (!fest.aktiv) {
+    var start = festStartMs(fest);
+    kopf.className = 'brett-abschnitt fest-hinweis';
+    kopf.innerHTML = '🎪 Nächstes Fest: <b>' + name + '</b> ab ' +
+      WOCHENTAGE[(fest.heute + fest.inTagen) % 7] + ' · noch ' + tageText(Math.max(0, Math.floor((start - jetzt) / 1000)));
+    box.appendChild(kopf);
+    return;
+  }
+  var ende = festEndeMs(fest);
+  kopf.className = 'brett-abschnitt fest';
+  kopf.innerHTML = '🎪 <b>' + name + '</b> · endet ' + WOCHENTAGE[fest.bis % 7] + ' · noch ' +
+    tageText(Math.max(0, Math.floor((ende - jetzt) / 1000)));
+  box.appendChild(kopf);
+
+  fest.liste.forEach(function (e, i) {
+    var zettel = document.createElement('div');
+    zettel.className = 'zettel-brett fest' + (e.eingeloest ? ' abgeholt' : e.erfuellt ? ' reif' : '');
+    zettel.style.setProperty('--dreh', (i % 2 === 0 ? -1 : 1) * (0.3 + (i % 3) * 0.25) + 'deg');
+    var lohn = (e.gold > 0 ? e.gold + ' Gold' : '') +
+      (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
+    var unten = e.eingeloest
+      ? '<span class="zettel-fertig">abgeholt ✓</span>'
+      : e.erfuellt
+        ? '<button type="button" class="zettel-los" data-fest="1" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Abholen · ' + lohn + '</button>'
+        : '<span class="zettel-balken"><i style="width:' + e.prozent + '%"></i></span>' +
+          '<span class="zettel-stand">' + e.ist + ' / ' + e.ziel + '</span>';
+    zettel.innerHTML =
+      '<span class="zettel-nadel"></span>' +
+      '<div class="zettel-kopf">' + e.label + '</div>' +
+      '<div class="zettel-lohn">' + lohn + '</div>' +
+      '<div class="zettel-unten">' + unten + '</div>';
+    box.appendChild(zettel);
+  });
+
+  var ab = fest.abschluss;
+  if (!ab) return;
+  var dekoName = ab.deko !== null ? nameOf(rules.plots[ab.deko].id) : '';
+  var urkunde = document.createElement('div');
+  urkunde.className = 'tagesabschluss fest' + (ab.eingeloest ? ' abgeholt' : ab.erfuellt ? ' reif' : '');
+  var abLohn = (ab.gold > 0 ? ab.gold + ' Gold' : '') + (ab.xp > 0 ? ' · ' + ab.xp + ' XP' : '') +
+    (ab.kiste ? ' · Festtruhe' : '') + (ab.dekoNeu ? ' · ' + dekoName : '');
+  urkunde.innerHTML =
+    '<div class="ta-kopf">' + name + ' geschafft</div>' +
+    '<div class="ta-lohn">' + abLohn + '</div>' +
+    (ab.deko !== null
+      ? '<div class="ta-deko">' + (ab.dekoNeu
+          ? 'Dazu die Deko <b>' + dekoName + '</b> — gibt es nur hier.'
+          : '<b>' + dekoName + '</b> hast du schon.') + '</div>'
+      : '') +
+    '<div class="ta-unten">' + (
+      ab.eingeloest
+        ? '<span class="ta-fertig">Fest gefeiert ✓</span>'
+        : ab.erfuellt
+          ? '<button type="button" class="ta-los">Abholen · ' + abLohn + '</button>'
+          : '<span class="ta-stand">Noch ' + (ab.noetig - ab.abgenommen) + ' von ' + ab.noetig + ' Festzetteln abnehmen</span>'
+    ) + '</div>';
+  box.appendChild(urkunde);
+  var knopf = urkunde.querySelector('.ta-los');
+  if (knopf) {
+    knopf.addEventListener('click', function () {
+      var wo = knopf.getBoundingClientRect();
+      var r = client.claimFest();
+      act(name + ' gefeiert · die Festtruhe kommt mit der Post' + (ab.dekoNeu ? ' · ' + dekoName + ' liegt im Baumenü' : ''), r, 'stufe');
+      if (r.ok && ab.gold > 0) muenzenFliegen(wo, ab.gold);
+      if (r.ok) xpAuf(wo, ab.xp);
+      if (r.ok) konfetti();
+    });
+  }
 }
 
 function zielZeile(e) {

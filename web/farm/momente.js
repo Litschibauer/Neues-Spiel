@@ -48,6 +48,12 @@ function momentePruefen(v) {
   var wab = v.wochenaufgaben && v.wochenaufgaben.abschluss;
   jetzt.wochenAbschluss = !!(wab && wab.erfuellt && !wab.eingeloest);
   jetzt.woche = (v.wochenaufgaben && v.wochenaufgaben.tag) || 0;
+  // Das Fest: seine Zettel, sein Abschluss, und ob gerade eines laeuft.
+  jetzt.fest = {};
+  ((v.feste && v.feste.liste) || []).forEach(function (a) { if (a.erfuellt && !a.eingeloest) jetzt.fest[a.id] = a; });
+  var fab = v.feste && v.feste.abschluss;
+  jetzt.festAbschluss = !!(fab && fab.erfuellt && !fab.eingeloest);
+  jetzt.festLaeuft = !!(v.feste && v.feste.aktiv) ? v.feste.woche : 0;
   (v.orders || []).forEach(function (o) { jetzt.kasse[o.id] = { sold: o.sold || 0, item: o.item }; });
   (v.chests || []).forEach(function (k) { if (k.ready) jetzt.kisten[k.id] = k; });
   // Meistersterne je Platz — ein neuer Stern ist ein Moment.
@@ -77,13 +83,13 @@ function momentePruefen(v) {
     if (o.sold <= 0 || momenteVerkauftGemeldet[id]) return;
     momenteVerkauftGemeldet[id] = true;
     moment({
-      klang: 'muenzen', winkt: 'stand', hin: 'stand', art: 'verkauft', zahl: 1, gold: o.sold,
+      klang: 'muenzen', winkt: 'stand', hin: 'stand', art: 'verkauft', eilig: true, zahl: 1, gold: o.sold,
       text: 'Verkauft · ' + itemName(o.item) + ' für ' + o.sold + ' Gold — Kasse am Stand',
     });
   });
 
   if (jetzt.wagenDa && !alt.wagenDa) {
-    moment({ klang: 'wagen', winkt: 'wagen', hin: 'brett', text: 'Der Wagen ist zurück — neue Zettel am Brett' });
+    moment({ klang: 'wagen', winkt: 'wagen', hin: 'brett', eilig: true, text: 'Der Wagen ist zurück — neue Zettel am Brett' });
   }
 
   Object.keys(jetzt.kisten).forEach(function (id) {
@@ -91,7 +97,7 @@ function momentePruefen(v) {
     var k = jetzt.kisten[id];
     momenteFunkeltBis = Date.now() + 3000;
     moment({
-      klang: 'kiste', text: 'Eine Kiste ist aufgetaucht',
+      klang: 'kiste', eilig: true, text: 'Eine Kiste ist aufgetaucht',
       hin: function () {
         if (typeof hatRaster === 'function' && hatRaster() && k.gx >= 0) {
           zentriere(k.gx, k.gy);
@@ -105,14 +111,14 @@ function momentePruefen(v) {
   });
 
   if (alt.tag > 0 && jetzt.tag !== alt.tag) {
-    moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', text: 'Neuer Tag — neue Zettel am Brett' });
+    moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', eilig: true, text: 'Neuer Tag — neue Zettel am Brett' });
   }
 
   Object.keys(jetzt.wochen).forEach(function (id) {
     if (alt.wochen && alt.wochen[id]) return;
     var a = jetzt.wochen[id];
     moment({
-      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer',
+      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer', art: 'zettel',
       text: 'Wochenzettel erfüllt · ' + a.label + ' — ' + lohnText(a) + ' am Brett',
     });
   });
@@ -126,11 +132,31 @@ function momentePruefen(v) {
     moment({ klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', text: 'Neue Woche — neue Wochenzettel am Brett' });
   }
 
+  if (jetzt.festLaeuft && jetzt.festLaeuft !== alt.festLaeuft) {
+    moment({
+      klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer',
+      text: '🎪 ' + festName(v.feste) + ' hat begonnen — Festzettel am Brett',
+    });
+  }
+  Object.keys(jetzt.fest).forEach(function (id) {
+    if (alt.fest && alt.fest[id]) return;
+    var a = jetzt.fest[id];
+    moment({
+      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer', art: 'zettel',
+      text: 'Festzettel erfüllt · ' + a.label + ' — ' + lohnText(a) + ' am Brett',
+    });
+  });
+  if (jetzt.festAbschluss && !alt.festAbschluss) {
+    moment({
+      klang: 'erfolg', winkt: 'abenteuer', hin: 'abenteuer',
+      text: '🎪 Alle Festzettel ab — ' + festName(v.feste) + ' wartet mit Truhe und Deko am Brett',
+    });
+  }
   Object.keys(jetzt.aufgaben).forEach(function (id) {
     if (alt.aufgaben[id]) return;
     var a = jetzt.aufgaben[id];
     moment({
-      klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer',
+      klang: 'zettel', winkt: 'abenteuer', hin: 'abenteuer', art: 'zettel',
       text: 'Zettel erfüllt · ' + a.label + ' — ' + lohnText(a) + ' am Brett',
     });
   });
@@ -164,7 +190,7 @@ function momentePruefen(v) {
     if (alt.erfolge[id]) return;
     var e = jetzt.erfolge[id];
     moment({
-      klang: 'erfolg', punkt: true, hin: 'ziele',
+      klang: 'erfolg', punkt: true, hin: 'ziele', art: 'erfolg',
       text: '★ Erfolg · ' + e.label + ' — ' + lohnText(e) + ' warten',
     });
   });
@@ -173,20 +199,30 @@ function momentePruefen(v) {
 // Eine Warteschlange, damit drei Momente auf einmal nicht drei Meldungen
 // übereinander sind, sondern drei nacheinander.
 function moment(m) {
-  // Verkaeufe, die noch in der Schlange stehen, werden zusammengelegt: Sechs
-  // Kaestchen sind eine Nachricht, nicht sechs — und was danach kommt
-  // (ein Geschenk etwa), wartet nicht eine halbe Minute.
-  if (m.art === 'verkauft') {
+  // Gleichartiges wird zusammengelegt, solange es noch in der Schlange steht:
+  // Sechs Kaestchen sind eine Nachricht, drei erfuellte Zettel auch, und was
+  // danach kommt (ein Geschenk etwa), wartet nicht eine halbe Minute.
+  if (m.art === 'verkauft' || m.art === 'zettel' || m.art === 'erfolg') {
     var offen = null;
-    momenteSchlange.forEach(function (x) { if (x.art === 'verkauft') offen = x; });
+    momenteSchlange.forEach(function (x) { if (x.art === m.art) offen = x; });
     if (offen !== null) {
-      offen.zahl += m.zahl;
-      offen.gold += m.gold;
-      offen.text = offen.zahl + ' Kästchen verkauft · ' + offen.gold + ' Gold — Kasse am Stand';
+      offen.zahl = (offen.zahl || 1) + (m.zahl || 1);
+      offen.gold = (offen.gold || 0) + (m.gold || 0);
+      if (m.art === 'verkauft') offen.text = offen.zahl + ' Kästchen verkauft · ' + offen.gold + ' Gold — Kasse am Stand';
+      else if (m.art === 'zettel') offen.text = offen.zahl + ' Zettel erfüllt — der Lohn wartet am Brett';
+      else offen.text = '★ ' + offen.zahl + ' Erfolge — die Belohnungen warten';
       return;
     }
   }
-  momenteSchlange.push(m);
+  // Was von aussen kommt — ein Kauf, der Wagen, eine Kiste —, drängt sich vor:
+  // Das soll man sofort erfahren, nicht hinter drei Zetteln.
+  if (m.eilig) {
+    var k = 0;
+    while (k < momenteSchlange.length && momenteSchlange[k].eilig) k++;
+    momenteSchlange.splice(k, 0, m);
+  } else {
+    momenteSchlange.push(m);
+  }
   momenteWeiter();
 }
 

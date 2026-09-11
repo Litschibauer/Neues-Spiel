@@ -22,12 +22,19 @@ import {
   meisterFaehig,
   meisterGrenzen,
   sterneVon,
+  festAktiv,
+  festArtIndex,
+  festAufgabenFuer,
+  wochentagVon,
 } from '../sim/rules.ts';
 import type { State } from '../sim/state.ts';
 import {
   EMPTY_PLOT,
   TAG_ABSCHLUSS,
   WOCHE_ABSCHLUSS,
+  FEST_ABSCHLUSS,
+  festFortschritt,
+  festAbgenommen,
   capacityOf,
   count,
   stored,
@@ -324,6 +331,8 @@ export type FarmView = {
   aufgaben: TagesaufgabenView;
   // Die Wochenaufgaben — dieselbe Form, `tag` ist hier die Wochennummer.
   wochenaufgaben: TagesaufgabenView;
+  // Das Fest — null, wenn das Regelwerk keines kennt oder der Tag noch fehlt.
+  feste: FestView | null;
   // Das Wetter der Sim — was der Himmel zeigt, ist das, was wirkt.
   wetter: { art: WetterArt; wechselIn: number; wirkt: boolean; regenSchubProzent: number } | null;
   // Booster: Vorrat und Restlaufzeit. null, wenn das Regelwerk keine kennt.
@@ -354,6 +363,34 @@ export type TagesaufgabenView = {
     erfuellt: boolean;
     eingeloest: boolean;
   } | null;
+};
+
+export type FestView = {
+  aktiv: boolean;
+  // Servertag, Wochentag heute (0 = Montag) und letzter Festtag — daraus
+  // rechnet die Oberflaeche die Restzeit.
+  tag: number;
+  heute: number;
+  bis: number;
+  // Index der Festart im Regelwerk (laufend oder als naechstes); Name und Deko
+  // holt die Oberflaeche von dort.
+  art: number;
+  woche: number;
+  liste: readonly ErfolgView[];
+  abschluss: {
+    gold: number;
+    xp: number;
+    abgenommen: number;
+    noetig: number;
+    erfuellt: boolean;
+    eingeloest: boolean;
+    kiste: boolean;
+    // Die Fest-Deko (Platzindex) und ob sie mit diesem Abschluss neu kaeme.
+    deko: number | null;
+    dekoNeu: boolean;
+  } | null;
+  // Ohne laufendes Fest: in wie vielen Tagen das naechste beginnt.
+  inTagen: number;
 };
 
 export type ErfolgView = {
@@ -776,6 +813,8 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
       const level = levelOf(rules, state.xp);
       const nötig = stufe.minPlayerLevel ?? 1;
       const packed = (state.eingepackt ?? []).includes(i);
+      // Fest-Deko steht erst im Menü, wenn sie eingepackt im Besitz ist.
+      if (def.nurFest && !packed) return [];
       return [
         {
           plot: i,
@@ -849,6 +888,7 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     erfolge: erfolgeView(state, rules),
     aufgaben: aufgabenView(state, rules),
     wochenaufgaben: wochenView(state, rules),
+    feste: festView(state, rules),
     wetter: rules.wetter
       ? {
           art: wetterBei(rules, state.tick),
@@ -970,6 +1010,65 @@ function wochenView(state: State, rules: Ruleset): TagesaufgabenView {
           eingeloest: geholt.includes(WOCHE_ABSCHLUSS),
         }
       : null,
+  };
+}
+
+function festView(state: State, rules: Ruleset): FestView | null {
+  const f = rules.feste;
+  const tag = state.serverTag ?? 0;
+  if (!f || tag <= 0 || f.arten.length === 0) return null;
+  const heute = wochentagVon(tag);
+  const woche = wocheVonTag(tag);
+
+  if (!festAktiv(rules, tag) || (state.festNummer ?? 0) !== woche) {
+    // Kein Fest (oder noch nicht gestempelt): Vorschau auf das naechste.
+    let d = 1;
+    while (d <= 7 && !f.tage.includes(wochentagVon(tag + d))) d++;
+    if (d > 7) return null;
+    const dann = wocheVonTag(tag + d);
+    return {
+      aktiv: false, tag, heute, bis: -1, art: festArtIndex(rules, dann), woche: dann,
+      liste: [], abschluss: null, inTagen: d,
+    };
+  }
+
+  let bis = heute;
+  while (bis - heute < 6 && f.tage.includes((bis + 1) % 7)) bis++;
+  const art = festArtIndex(rules, woche);
+  const geholt = state.festGeholt ?? [];
+  const liste = festAufgabenFuer(rules, woche, levelOf(rules, state.xp)).map((a) => {
+    const ist = Math.min(festFortschritt(state, a.art), a.menge);
+    return {
+      id: a.id,
+      label: a.label,
+      gruppe: 'fest',
+      gold: a.gold,
+      xp: a.xp,
+      ist,
+      ziel: a.menge,
+      erfuellt: ist >= a.menge,
+      eingeloest: geholt.includes(a.id),
+      prozent: a.menge <= 0 ? 100 : Math.min(100, Math.floor((ist * 100) / a.menge)),
+    };
+  });
+  const noetig = Math.min(f.aufgabenProFest, liste.length);
+  const abgenommen = festAbgenommen(state);
+  const deko = f.arten[art]?.deko;
+  const dekoNeu =
+    deko !== undefined && (state.plots[deko]?.level ?? 0) <= 0 && !(state.eingepackt ?? []).includes(deko);
+  return {
+    aktiv: true, tag, heute, bis, art, woche, liste, inTagen: 0,
+    abschluss: {
+      gold: f.abschluss.gold,
+      xp: f.abschluss.xp,
+      abgenommen,
+      noetig,
+      erfuellt: liste.length > 0 && abgenommen >= noetig,
+      eingeloest: geholt.includes(FEST_ABSCHLUSS),
+      kiste: f.abschluss.kiste !== undefined,
+      deko: deko === undefined ? null : deko,
+      dekoNeu,
+    },
   };
 }
 

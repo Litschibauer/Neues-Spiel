@@ -97,6 +97,9 @@ export type PlotDef = {
   baum?: BaumDef;
   // Reine Deko: kaufbar, platzierbar, abreißbar — ohne Funktion.
   deco?: boolean;
+  // Nur über ein Fest zu bekommen: nicht kaufbar, im Baumenü erst sichtbar,
+  // wenn sie eingepackt im Besitz ist.
+  nurFest?: boolean;
 };
 
 export type BaumStufe = 'setzling' | 'wachsen' | 'reif' | 'verwelkt';
@@ -162,7 +165,8 @@ export type AchievementKind =
   | 'boat' // Boot repariert
   | 'item' // so viel von einer Ware im Lager
   | 'sterne' // so viele Meistersterne über alle Gebäude
-  | 'meister'; // so viele Gebäude mit allen Sternen
+  | 'meister' // so viele Gebäude mit allen Sternen
+  | 'feste'; // so viele Feste abgeschlossen
 
 // Erfolge sind in Gruppen einsortiert; die Oberfläche zeigt sie darunter.
 export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat' | 'meister';
@@ -193,6 +197,15 @@ export type AufgabeDef = {
   // Erst ab dieser Spielerstufe ziehbar — sonst bekäme ein Anfänger Aufgaben,
   // für die ihm die Gebäude fehlen.
   minLevel?: number;
+};
+
+// Ein Fest: ein Thema mit eigenem Zetteltopf und einer Deko, die es nur hier
+// gibt (Index in plots; beim ersten Abschluss eingepackt, danach nicht mehr).
+export type FestDef = {
+  id: string;
+  label: string;
+  deko?: number;
+  aufgaben: readonly AufgabeDef[];
 };
 
 export type Ruleset = {
@@ -282,6 +295,17 @@ export type Ruleset = {
     schnellerProzent: number;
     xpProzent: number;
     extraJede: number;
+  };
+  // Feste: An den Wochentagen in `tage` (0 = Montag … 6 = Sonntag) läuft ein
+  // Fest; welches, wechselt mit der Serverwoche durch `arten`. Es hängt am
+  // Servertag wie der Tag und die Woche — für alle Höfe dasselbe Fest zur
+  // selben Zeit. Zettel und Abschluss wie beim Wochenziel, dazu eine Deko, die
+  // es nur dort gibt. Ohne dieses Feld gibt es keine Feste.
+  feste?: {
+    tage: readonly number[];
+    arten: readonly FestDef[];
+    aufgabenProFest: number;
+    abschluss: { gold: number; xp: number; kiste?: number };
   };
   // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
   // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
@@ -2346,6 +2370,31 @@ export function wochenAufgabenFuer(
 // Verteilung, die der Himmel vorher nur zur Stimmung zog: 62 % klar, 23 %
 // wolkig, 15 % Regen.
 export type WetterArt = 'klar' | 'wolkig' | 'regen';
+// Feste. Der Wochentag kommt aus dem Servertag: Tag 0 der Epoche war ein
+// Donnerstag, darum die Verschiebung um drei — dieselbe wie bei der Woche.
+export function wochentagVon(tag: number): number {
+  return (((tag + 3) % 7) + 7) % 7;
+}
+
+export function festAktiv(rules: Ruleset, tag: number): boolean {
+  const f = rules.feste;
+  return !!f && tag > 0 && f.arten.length > 0 && f.tage.includes(wochentagVon(tag));
+}
+
+// Welche Festart in dieser Serverwoche dran ist — reihum.
+export function festArtIndex(rules: Ruleset, woche: number): number {
+  const f = rules.feste;
+  if (!f || f.arten.length === 0) return -1;
+  return ((woche % f.arten.length) + f.arten.length) % f.arten.length;
+}
+
+export function festAufgabenFuer(rules: Ruleset, woche: number, spielerLevel: number): readonly AufgabeDef[] {
+  const f = rules.feste;
+  const art = festArtIndex(rules, woche);
+  if (!f || art < 0 || woche <= 0) return [];
+  return ziehAufgaben(f.arten[art]!.aufgaben, f.aufgabenProFest, woche * 7907 + 17, spielerLevel);
+}
+
 export function wetterBei(rules: Ruleset, tick: number): WetterArt {
   const w = rules.wetter;
   if (!w || w.fensterTicks <= 0) return 'klar';
@@ -2654,24 +2703,146 @@ const V47: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V48: Feste. Jedes Wochenende ein Fest mit eigenem Thema — Ernte, Fischen,
+// Markt, Bauen —, drei Festzetteln, einer Festtruhe und einer Deko, die es
+// sonst nirgends gibt. Das Fest hängt am Servertag: Alle Höfe feiern dasselbe.
+// Fest-Deko: ohne Preis, weil es sie nicht zu kaufen gibt — sie kommt
+// eingepackt vom Fest und wird dann wie jede eingepackte Deko aufgestellt.
+const festDeko = (id: string, label: string, place: PlotPlace): PlotDef => ({
+  id,
+  startLevel: 0,
+  place,
+  size: { w: 1, h: 1 },
+  deco: true,
+  nurFest: true,
+  levels: [{ label, cost: [], recipes: [], minPlayerLevel: 1 }],
+});
+const FESTTRUHE = (V47.chestKinds ?? []).length;
+const FEST_DEKO = V47.plots.length;
+const V48: Ruleset = {
   ...V47,
+  version: 48,
+  plots: [
+    ...V47.plots,
+    festDeko('deco-erntekranz', 'Erntekranz', at(66, 0, 8, 10)),
+    festDeko('deco-boje', 'Boje', at(74, 0, 8, 10)),
+    festDeko('deco-marktfahne', 'Marktfahne', at(82, 0, 8, 10)),
+    festDeko('deco-laterne', 'Laterne', at(90, 0, 8, 10)),
+  ],
+  chestKinds: [
+    ...(V47.chestKinds ?? []),
+    {
+      id: 'festtruhe',
+      label: 'Festtruhe',
+      picks: 4,
+      drops: [
+        { item: GOLD, min: 400, max: 900, weight: 20 },
+        { item: PLANK, min: 4, max: 8, weight: 14 },
+        { item: NAIL, min: 4, max: 8, weight: 14 },
+        { item: BOOSTER_XP, min: 1, max: 1, weight: 12 },
+        { item: BOOSTER_WUCHS, min: 1, max: 1, weight: 12 },
+        { item: SAW, min: 1, max: 1, weight: 6 },
+        { item: MAP, min: 1, max: 1, weight: 6 },
+        { item: MALLET, min: 1, max: 1, weight: 6 },
+        { item: STAKE, min: 1, max: 1, weight: 6 },
+        { item: APPLE, min: 4, max: 8, weight: 6 },
+      ],
+    },
+  ],
+  feste: {
+    tage: [4, 5, 6],
+    aufgabenProFest: 3,
+    abschluss: { gold: 1500, xp: 300, kiste: FESTTRUHE },
+    arten: [
+      {
+        id: 'erntefest',
+        label: 'Erntefest',
+        deko: FEST_DEKO,
+        aufgaben: [
+          { id: 'f-ernte60', label: '60 Plätze abernten', art: 0, menge: 60, gold: 700, xp: 140, gewicht: 10 },
+          { id: 'f-ernte150', label: '150 Plätze abernten', art: 0, menge: 150, gold: 1800, xp: 360, gewicht: 5, minLevel: 8 },
+          { id: 'f-saeen80', label: '80 Mal etwas ansetzen', art: 1, menge: 80, gold: 750, xp: 150, gewicht: 10 },
+          { id: 'f-verkauf40', label: '40 Waren verkaufen', art: 4, menge: 40, gold: 600, xp: 120, gewicht: 6, minLevel: 4 },
+          { id: 'f-zettel4', label: 'Vier Wagen losschicken', art: 2, menge: 4, gold: 800, xp: 160, gewicht: 6, minLevel: 3 },
+        ],
+      },
+      {
+        id: 'fischerfest',
+        label: 'Fischerfest',
+        deko: FEST_DEKO + 1,
+        aufgaben: [
+          { id: 'f-fisch12', label: 'Zwölf Fische einholen', art: 6, menge: 12, gold: 900, xp: 180, gewicht: 10, minLevel: 12 },
+          { id: 'f-fisch30', label: '30 Fische einholen', art: 6, menge: 30, gold: 2000, xp: 400, gewicht: 5, minLevel: 14 },
+          { id: 'f-verkauf50', label: '50 Waren verkaufen', art: 4, menge: 50, gold: 700, xp: 140, gewicht: 8 },
+          { id: 'f-gold2500', label: '2.500 Gold einnehmen', art: 5, menge: 2500, gold: 900, xp: 180, gewicht: 7, minLevel: 6 },
+          { id: 'f-ernte80', label: '80 Plätze abernten', art: 0, menge: 80, gold: 800, xp: 160, gewicht: 8 },
+        ],
+      },
+      {
+        id: 'markttag',
+        label: 'Markttag',
+        deko: FEST_DEKO + 2,
+        aufgaben: [
+          { id: 'f-verkauf60', label: '60 Waren verkaufen', art: 4, menge: 60, gold: 800, xp: 160, gewicht: 10, minLevel: 4 },
+          { id: 'f-gold3000', label: '3.000 Gold einnehmen', art: 5, menge: 3000, gold: 1000, xp: 200, gewicht: 8, minLevel: 6 },
+          { id: 'f-zettel5', label: 'Fünf Wagen losschicken', art: 2, menge: 5, gold: 900, xp: 180, gewicht: 8, minLevel: 3 },
+          { id: 'f-anfrage6', label: 'Sechs Anfragen erfüllen', art: 3, menge: 6, gold: 900, xp: 180, gewicht: 7, minLevel: 5 },
+          { id: 'f-ernte70', label: '70 Plätze abernten', art: 0, menge: 70, gold: 700, xp: 140, gewicht: 8 },
+        ],
+      },
+      {
+        id: 'baufest',
+        label: 'Baufest',
+        deko: FEST_DEKO + 3,
+        aufgaben: [
+          { id: 'f-bauen2', label: 'Zweimal bauen oder ausbauen', art: 8, menge: 2, gold: 900, xp: 180, gewicht: 8, minLevel: 4 },
+          { id: 'f-raeumen6', label: 'Sechs Hindernisse räumen', art: 7, menge: 6, gold: 900, xp: 180, gewicht: 8, minLevel: 7 },
+          { id: 'f-saeen100', label: '100 Mal etwas ansetzen', art: 1, menge: 100, gold: 900, xp: 180, gewicht: 8 },
+          { id: 'f-ernte90', label: '90 Plätze abernten', art: 0, menge: 90, gold: 800, xp: 160, gewicht: 8 },
+          { id: 'f-gold2000', label: '2.000 Gold einnehmen', art: 5, menge: 2000, gold: 800, xp: 160, gewicht: 6, minLevel: 6 },
+        ],
+      },
+    ],
+  },
+  achievements: [
+    ...(V47.achievements ?? []),
+    { id: 'fest1', label: 'Erstes Fest abschließen', kind: 'feste', arg: 1, gold: 600, xp: 80, group: 'hof' },
+    { id: 'fest4', label: 'Vier Feste abschließen', kind: 'feste', arg: 4, gold: 2500, xp: 300, group: 'hof' },
+    { id: 'fest12', label: 'Zwölf Feste abschließen', kind: 'feste', arg: 12, gold: 8000, xp: 900, group: 'hof' },
+  ],
+  wetter: {
+    ...V47.wetter!,
+    plaetze: V47.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V48,
+  // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
+  feste: {
+    ...V48.feste!,
+    tage: [0, 1, 2, 3, 4, 5, 6],
+    arten: V48.feste!.arten.map((a) => ({
+      ...a,
+      aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
+    })),
+  },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
   meisterschaft: { ...V47.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V47.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V48.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V47.fishing!,
+    ...V48.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V47.plots.map((p) => {
+  plots: V48.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2736,17 +2907,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [45, V45],
   [46, V46],
   [47, V47],
+  [48, V48],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 47;
+export const LATEST_RULESET_VERSION = 48;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -2957,6 +3129,7 @@ export type AchievementCtx = {
   items: readonly number[];
   sterne: number;
   meister: number;
+  feste: number;
 };
 
 // Stand und Ziel eines Erfolgs — daraus ergeben sich Fortschrittsbalken UND
@@ -3001,6 +3174,8 @@ export function achievementFortschritt(
       return { ist: ctx.sterne, ziel: ach.arg as number };
     case 'meister':
       return { ist: ctx.meister, ziel: ach.arg as number };
+    case 'feste':
+      return { ist: ctx.feste, ziel: ach.arg as number };
     default:
       return { ist: 0, ziel: 1 };
   }

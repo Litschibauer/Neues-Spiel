@@ -8,4 +8,6 @@ Lizenz: Creative Commons CC0 1.0 — frei fuer private und kommerzielle Nutzung,
 keine Namensnennung noetig. Die Dateien hier und die Warensymbole unter
 web/farm/icons/*.png sind einzelne, umbenannte Kacheln (16 x 16 px) aus
 diesen Paketen. Einige Motive (Boot, Muehlenfluegel, Teich,
-Wasser) sind im selben Stil selbst gezeichnet, siehe bilder.js.
+Wasser) sind im selben Stil selbst gezeichnet, siehe bilder.js. Ebenso die
+Kacheln schaf, wolle-korb, webstuhl, kranz, boje und fahne (eigene Pixelbilder,
+ohne fremde Vorlage).
