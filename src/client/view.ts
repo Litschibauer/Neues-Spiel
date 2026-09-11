@@ -305,6 +305,15 @@ export type FarmView = {
   aufgaben: TagesaufgabenView;
   // Die Wochenaufgaben — dieselbe Form, `tag` ist hier die Wochennummer.
   wochenaufgaben: TagesaufgabenView;
+  // Booster: Vorrat und Restlaufzeit. null, wenn das Regelwerk keine kennt.
+  booster: {
+    xpItem: number;
+    wuchsItem: number;
+    xpVorrat: number;
+    wuchsVorrat: number;
+    xpRest: number;
+    xpAktiv: boolean;
+  } | null;
 };
 
 // Ein Erfolg mit allem, was die Oberfläche zum Zeichnen braucht: Fortschritt,
@@ -802,6 +811,16 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     erfolge: erfolgeView(state, rules),
     aufgaben: aufgabenView(state, rules),
     wochenaufgaben: wochenView(state, rules),
+    booster: rules.booster
+      ? {
+          xpItem: rules.booster.xpItem,
+          wuchsItem: rules.booster.wuchsItem,
+          xpVorrat: count(state, rules.booster.xpItem),
+          wuchsVorrat: count(state, rules.booster.wuchsItem),
+          xpRest: Math.max(0, (state.xpDoppeltBis ?? 0) - state.tick),
+          xpAktiv: (state.xpDoppeltBis ?? 0) > state.tick,
+        }
+      : null,
   };
 }
 

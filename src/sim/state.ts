@@ -136,6 +136,8 @@ export type State = {
   wochenNummer: number;
   wochenStart: readonly number[];
   wochenGeholt: readonly string[];
+  // Bis zu welchem Tick der XP-Verdoppler laeuft; 0 heisst keiner.
+  xpDoppeltBis: number;
 };
 
 // Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
@@ -311,6 +313,7 @@ export function initialState(rules: Ruleset): State {
     wochenNummer: 0,
     wochenStart: [],
     wochenGeholt: [],
+    xpDoppeltBis: 0,
   };
 }
 
@@ -391,6 +394,7 @@ export function normalizeState(s: State): State {
     wochenNummer: s.wochenNummer ?? 0,
     wochenStart: s.wochenStart ?? [],
     wochenGeholt: s.wochenGeholt ?? [],
+    xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }
 
@@ -429,6 +433,7 @@ export function cloneState(s: State): State {
     wochenNummer: s.wochenNummer ?? 0,
     wochenStart: s.wochenStart ?? [],
     wochenGeholt: s.wochenGeholt ?? [],
+    xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }
 

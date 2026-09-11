@@ -3583,6 +3583,137 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     );
   }
 
+  console.log('\n9k. Booster — eine Belohnung, die das Spielen selbst verändert');
+
+  // Beide Booster per Post schicken und einsammeln — wie ein Fund, nur sicher.
+  await api(`/api/admin/grant?account=${status.accountId}&item=booster-xp&amount=1`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=booster-wuchs&amount=1`, 'POST');
+  // Der Nachbar hat unseren Weizen gekauft — ohne Saat gibt es nichts zu
+  // beschleunigen. Ein Sack Weizen kommt mit derselben Post.
+  await api(`/api/admin/grant?account=${status.accountId}&item=wheat&amount=12`, 'POST');
+  await api(`/api/admin/grant?account=${status.accountId}&item=corn&amount=6`, 'POST');
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Booster in der Post', 15_000);
+  await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+  await sleep(600);
+  const boosterKarten = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify([...document.querySelectorAll('#booster .booster-karte')].map(function (k) {
+         return { text: k.textContent.trim().replace(/\\s+/g, ' '), bild: !!k.querySelector('img.ic'),
+                  knopf: (k.querySelector('.go') || {}).textContent || '', gesperrt: !!(k.querySelector('.go') || {}).disabled };
+       }))`,
+    ),
+  ) as Array<{ text: string; bild: boolean; knopf: string; gesperrt: boolean }>;
+  check(
+    'Booster liegen im Lager als Karten mit Bild, Vorrat und „Einsetzen"',
+    boosterKarten.length === 2 && boosterKarten.every((k) => k.bild && /Einsetzen/.test(k.knopf)),
+    boosterKarten.map((k) => k.text.slice(0, 40)).join(' | '),
+  );
+
+  // Der XP-Verdoppler: einsetzen, dann ernten — die Ernte muss doppelt zaehlen.
+  const xpVorBooster = await evaluate<string>(cdp, `document.getElementById('xp').textContent`);
+  await evaluate(cdp, `(function () {
+    var k = [...document.querySelectorAll('#booster .booster-karte')].find(function (x) { return /Verdoppler/.test(x.textContent); });
+    if (k) k.querySelector('.go').click();
+  })()`);
+  await sleep(500);
+  const xpZeile = await evaluate<string>(cdp, `document.getElementById('xp').textContent`);
+  check(
+    'Eingesetzt sagt der Kopf: 2× — mit Restzeit',
+    /2×/.test(xpZeile) && /noch/.test(xpZeile),
+    `${xpVorBooster} → ${xpZeile}`,
+  );
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(200);
+
+  // Die Probe aufs Exempel am Serverstand: ein Weizenfeld ansetzen, reif
+  // werden lassen, ernten — die XP muessen genau das Doppelte des Rezepts sein.
+  type PlotStand = { slots: Array<{ recipe: number; startedAt: number }> };
+  const serverStand = async () =>
+    ((await api(`/api/admin/status?account=${status.accountId}`)) as {
+      state: { xp: number; tick: number; plots: PlotStand[] };
+    }).state;
+  const weizenXp = getRuleset(1001).recipes[0]!.xp;
+  await warteAufFreiesFeld(cdp);
+  const boosterGesaet = await plantSomething(cdp);
+  check('Für die XP-Probe lässt sich ein Feld ansetzen', boosterGesaet, boosterGesaet ? 'angesetzt' : 'kein freies Feld');
+  if (boosterGesaet) {
+    // Im Dev-Regelwerk reift Weizen in Sekunden — kurz warten reicht.
+    await sleep(6000);
+    const vor = await serverStand();
+    const weizenPlaetze = vor.plots
+      .map((pl, idx) => (pl.slots.some((sl) => sl.recipe === 0) ? idx : -1))
+      .filter((idx) => idx >= 0);
+    const geerntet = await evaluate<number>(cdp, `(function () {
+      var reif = [...document.querySelectorAll('#plots .plot.ripe')].find(function (t) {
+        return ${JSON.stringify(weizenPlaetze)}.indexOf(Number(t.getAttribute('data-platz'))) >= 0;
+      });
+      if (!reif) return -1;
+      reif.click();
+      return Number(reif.getAttribute('data-platz'));
+    })()`);
+    await sleep(2500);
+    const nach = await serverStand();
+    check(
+      'Mit laufendem Verdoppler bringt die Ernte genau doppelte XP — und der Server rechnet genauso',
+      geerntet >= 0 && nach.xp - vor.xp === 2 * weizenXp,
+      `+${nach.xp - vor.xp} XP beim Server (Rezept: ${weizenXp}, Platz ${geerntet})`,
+    );
+  }
+
+  // Der Schnellwuchs braucht etwas, das laenger laeuft als der Weg zum Knopf:
+  // Mais. Ansetzen, warten, bis der Server den Start kennt, dann einsetzen —
+  // beim Server muss der Start jedes laufenden Fachs nach hinten geruckt sein.
+  await warteAufFreiesFeld(cdp);
+  const maisGesaet = await evaluate<boolean>(cdp, `(function () {
+    var frei = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+      var al = p.getAttribute('aria-label') || '';
+      return /^Feld [0-9]/.test(al) && !p.classList.contains('ripe') && !p.querySelector('.bar');
+    });
+    if (!frei) return false;
+    frei.click();
+    var opt = [...document.querySelectorAll('#pick-list .opt')].find(function (o) {
+      return !o.disabled && /Mais/.test(o.textContent);
+    });
+    if (!opt) { document.getElementById('pick-close').click(); return false; }
+    opt.click();
+    return true;
+  })()`);
+  let laufende: Array<{ pi: number; si: number; startedAt: number }> = [];
+  for (let w = 0; w < 12 && laufende.length === 0; w++) {
+    await sleep(250);
+    const st = await serverStand();
+    laufende = st.plots.flatMap((pl, pi) => pl.slots.map((sl, si) => ({ pi, si, startedAt: sl.startedAt, recipe: sl.recipe })))
+      .filter((x) => x.recipe === 3)
+      .map((x) => ({ pi: x.pi, si: x.si, startedAt: x.startedAt }));
+  }
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await sleep(150);
+  const wuchsGing = await evaluate<string>(cdp, `(function () {
+    var k = [...document.querySelectorAll('#booster .booster-karte')].find(function (x) { return /Schnellwuchs/.test(x.textContent); });
+    if (!k) return 'keine Karte';
+    var b = k.querySelector('.go');
+    if (b.disabled) return 'Knopf gesperrt: ' + k.textContent.replace(/\\s+/g, ' ').slice(0, 60);
+    b.click();
+    return 'geklickt';
+  })()`);
+  await sleep(300);
+  const wuchsMeldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
+  await sleep(2200);
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  const laufendNach = await serverStand();
+  const geschoben = laufende.filter((x) => {
+    const sl = laufendNach.plots[x.pi]?.slots[x.si];
+    return !!sl && sl.startedAt < x.startedAt;
+  }).length;
+  check(
+    'Der Schnellwuchs rückt das laufende Maisfeld vor — der Server hat den Start zurückgesetzt',
+    maisGesaet && wuchsGing === 'geklickt' && laufende.length > 0 && geschoben > 0,
+    `Mais gesät ${maisGesaet} · ${wuchsGing} · ${geschoben} von ${laufende.length} vorgerückt · „${wuchsMeldung}"`,
+  );
+
   console.log('\n9w. Bergbau: Mine bauen, graben, Erze ernten');
   await api(`/api/admin/xp?account=${status.accountId}&amount=16000`, 'POST');
   await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=60`, 'POST');

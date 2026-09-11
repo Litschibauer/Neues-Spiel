@@ -257,6 +257,11 @@ export type Ruleset = {
   wochenaufgaben?: readonly AufgabeDef[];
   aufgabenProWoche?: number;
   wochenAbschluss?: { gold: number; xp: number; kiste?: number };
+  // Booster: zwei Waren, die man einsetzt statt verkauft. Der XP-Verdoppler
+  // verdoppelt `xpTicks` lang alles, was ein Befehl an XP bringt; der
+  // Schnellwuchs schiebt alles Laufende um `wuchsProzent` der Restzeit vor —
+  // einmalig, wie die Nachbarschaftshilfe. Beides nicht handelbar.
+  booster?: { xpItem: number; xpTicks: number; wuchsItem: number; wuchsProzent: number };
   // Fundstücke beim Abernten: Jede `jede`-te Ernte legt etwas aus `tabelle`
   // obendrauf, gewichtet gezogen. Gezogen wird deterministisch aus dem
   // Spielstand (siehe sim.ts) — Server und Gerät kommen ohne Absprache auf
@@ -2429,17 +2434,51 @@ const V42: Ruleset = {
   wochenAbschluss: { gold: 2500, xp: 400, kiste: WOCHENTRUHE },
 };
 
-const DEV: Ruleset = {
+// V43: Booster. Gold und Waren kann man sich erarbeiten — was fehlte, war eine
+// Belohnung, die das Spielen selbst veraendert. Der XP-Verdoppler macht die
+// naechste halbe Stunde doppelt wertvoll, der Schnellwuchs schiebt alles, was
+// gerade laeuft, um die Haelfte der Restzeit vor. Beide kommen als Fund oder
+// aus Kisten, selten, und lassen sich weder kaufen noch verkaufen.
+const BOOSTER_XP = 40;
+const BOOSTER_WUCHS = 41;
+const V43: Ruleset = {
   ...V42,
+  version: 43,
+  items: [
+    ...V42.items,
+    { id: 'booster-xp', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+    { id: 'booster-wuchs', storable: false, npcPrice: 0, npcBuyPrice: 0 },
+  ],
+  booster: { xpItem: BOOSTER_XP, xpTicks: 1800, wuchsItem: BOOSTER_WUCHS, wuchsProzent: 50 },
+  fundstuecke: {
+    jede: V42.fundstuecke!.jede,
+    tabelle: [
+      ...V42.fundstuecke!.tabelle,
+      { item: BOOSTER_XP, amount: 1, weight: 3 },
+      { item: BOOSTER_WUCHS, amount: 1, weight: 3 },
+    ],
+  },
+  chestKinds: (V42.chestKinds ?? []).map((k) => ({
+    ...k,
+    drops: [
+      ...k.drops,
+      { item: BOOSTER_XP, min: 1, max: 1, weight: 3 },
+      { item: BOOSTER_WUCHS, min: 1, max: 1, weight: 3 },
+    ],
+  })),
+};
+
+const DEV: Ruleset = {
+  ...V43,
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V42.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V43.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V42.fishing!,
+    ...V43.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
@@ -2504,17 +2543,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [40, V40],
   [41, V41],
   [42, V42],
+  [43, V43],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 42;
+export const LATEST_RULESET_VERSION = 43;
 
 export const DEV_RULESET_VERSION = 1001;
 

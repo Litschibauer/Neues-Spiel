@@ -288,7 +288,21 @@ function zaehleBefehl(vorher: State, nachher: State, cmd: Command, rules: Rulese
 
 export function simulate(state: State, cmd: Command, rules: Ruleset): State {
   const s = advanceTo(state, cmd.tick, rules);
-  return zaehleBefehl(s, simulateRoh(s, cmd, rules), cmd, rules);
+  return verdoppleXp(s, zaehleBefehl(s, simulateRoh(s, cmd, rules), cmd, rules), rules);
+}
+
+// Der XP-Verdoppler wirkt an genau einer Stelle: auf alles, was ein Befehl an
+// XP gebracht hat. So muss keine der vielen Stellen, die XP gutschreiben,
+// davon wissen — und keine kann ihn vergessen.
+function verdoppleXp(vorher: State, nachher: State, rules: Ruleset): State {
+  if (!rules.booster) return nachher;
+  const bis = vorher.xpDoppeltBis ?? 0;
+  if (bis <= vorher.tick) return nachher;
+  const dazu = nachher.xp - vorher.xp;
+  if (dazu <= 0) return nachher;
+  const raus = cloneState(nachher);
+  raus.xp = nachher.xp + dazu;
+  return raus;
 }
 
 function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
@@ -563,6 +577,43 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       next.xp = s.xp + lohn.xp;
       next.wochenGeholt = (s.wochenGeholt ?? []).concat(WOCHE_ABSCHLUSS);
       if (lohn.kiste !== undefined) next.pendingBoxes = s.pendingBoxes.concat(lohn.kiste);
+      return next;
+    }
+
+    case 'USE_BOOSTER': {
+      const b = rules.booster;
+      if (!b) throw new SimError('NO_BOOSTER');
+      if (cmd.item !== b.xpItem && cmd.item !== b.wuchsItem) throw new SimError('NOT_A_BOOSTER');
+      if (count(s, cmd.item) < 1) throw new SimError('NOT_ENOUGH_ITEMS');
+
+      const next = cloneState(s);
+      if (cmd.item === b.xpItem) {
+        // Laeuft schon einer, haengt der neue hinten dran — nichts verfaellt.
+        const ab = Math.max(s.tick, s.xpDoppeltBis ?? 0);
+        next.xpDoppeltBis = ab + b.xpTicks;
+      } else {
+        // Alles, was in einem Fach laeuft, rueckt um einen Teil seiner Restzeit
+        // vor — derselbe Griff wie bei der Nachbarschaftshilfe. Baeume und
+        // Reusen haben eigene Uhren und bleiben aussen vor. Laeuft nichts,
+        // bleibt der Booster in der Hand statt zu verpuffen.
+        let geschoben = 0;
+        next.plots = s.plots.map((plot) => {
+          if (plot.slots.length === 0) return plot;
+          const slots = plot.slots.map((slot) => {
+            if (slot.recipe === EMPTY_PLOT) return slot;
+            const dauer = rules.recipes[slot.recipe]?.durationTicks ?? 0;
+            const rest = dauer - (s.tick - slot.startedAt);
+            if (rest <= 0) return slot;
+            const schub = Math.floor((rest * b.wuchsProzent) / 100);
+            if (schub <= 0) return slot;
+            geschoben++;
+            return { ...slot, startedAt: slot.startedAt - schub };
+          });
+          return { ...plot, slots };
+        });
+        if (geschoben === 0) throw new SimError('NOTHING_GROWING');
+      }
+      next.items = addItem(next.items, cmd.item, -1);
       return next;
     }
 

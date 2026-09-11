@@ -184,9 +184,11 @@ test('nur noch Endprodukte enden im Verkauf', () => {
   // Das sind die gewollten Endpunkte: Spitzenwaren und der Wohlstandsbarren.
   const erlaubt = new Set(['gold-bar', 'smoked-fish', 'farm-platter', 'cream-cake']);
   const offen: string[] = [];
+  // Booster werden eingesetzt, nicht verarbeitet — auch das ist ein Ende.
+  const eingesetzt = new Set(V.booster ? [V.booster.xpItem, V.booster.wuchsItem] : []);
   V.items.forEach((it, i) => {
     if (i === V.currency || i === V.fishing?.bait) return;
-    if (eingang.has(i) || kosten.has(i) || werkzeug.has(i)) return;
+    if (eingang.has(i) || kosten.has(i) || werkzeug.has(i) || eingesetzt.has(i)) return;
     if (!erlaubt.has(it.id)) offen.push(it.id);
   });
   assert.deepEqual(offen, [], `Sackgassen: ${offen.join(', ')}`);

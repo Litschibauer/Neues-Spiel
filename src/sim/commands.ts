@@ -85,6 +85,9 @@ export type ClaimDayCommand = CommandBase & { type: 'CLAIM_DAY' };
 export type ClaimWeekTaskCommand = CommandBase & { type: 'CLAIM_WEEK_TASK'; id: string };
 export type ClaimWeekCommand = CommandBase & { type: 'CLAIM_WEEK' };
 
+// Einen Booster einsetzen — verbraucht ein Stueck der Ware.
+export type UseBoosterCommand = CommandBase & { type: 'USE_BOOSTER'; item: number };
+
 // Ein gebautes Bauwerk abreißen — gibt die Hälfte des Gold-Einsatzes zurück.
 export type RemovePlotCommand = CommandBase & { type: 'REMOVE_PLOT'; plot: number };
 
@@ -140,6 +143,7 @@ export type Command =
   | ClaimDayCommand
   | ClaimWeekTaskCommand
   | ClaimWeekCommand
+  | UseBoosterCommand
   | RemovePlotCommand
   | PackPlotCommand
   | CastLineCommand

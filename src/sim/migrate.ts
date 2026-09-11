@@ -159,6 +159,14 @@ export const WOCHE_DAZU: MigrationStep = (state, from, to) => {
   return next;
 };
 
+export const BOOSTER_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (gewachsen.xpDoppeltBis !== undefined) return gewachsen;
+  const next = cloneState(gewachsen);
+  next.xpDoppeltBis = 0;
+  return next;
+};
+
 export const ZAEHLER_DAZU: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   const vollstaendig =
@@ -329,6 +337,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   // werden aus dem Stand selbst gezogen.
   ['40->41', AUFS_RASTER],
   ['41->42', WOCHE_DAZU],
+  // Ein alter Stand hat keinen laufenden Verdoppler.
+  ['42->43', BOOSTER_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

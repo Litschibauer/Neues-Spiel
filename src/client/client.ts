@@ -149,6 +149,10 @@ export class Client {
     return this.apply({ type: 'CLAIM_WEEK' } as Omit<Command, 'seq' | 'tick'>);
   }
 
+  useBooster(item: number): ActionResult {
+    return this.apply({ type: 'USE_BOOSTER', item } as Omit<Command, 'seq' | 'tick'>);
+  }
+
   removePlot(plot: number): ActionResult {
     return this.apply({ type: 'REMOVE_PLOT', plot } as Omit<Command, 'seq' | 'tick'>);
   }

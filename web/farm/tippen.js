@@ -1165,3 +1165,34 @@ function tapBuy(i) {
   act(level.label + ' gekauft', gekauft);
   if (gekauft.ok) bauMoment(i);
 }
+
+// — Booster einsetzen ———————————————————————————————————————————————
+function boosterEinsetzen(item) {
+  if (!isActive) return;
+  var v = NS.farmView(client.preview(), rules, navigator.onLine);
+  var b = v.booster;
+  if (!b) return;
+  var xp = item === b.xpItem;
+  var res = client.useBooster(item);
+  act(xp ? '2× XP · die nächste halbe Stunde zählt doppelt'
+         : 'Schnellwuchs · alles Laufende ist um die Hälfte weiter', res, 'stufe');
+  if (!res.ok) return;
+  if (xp) {
+    var ring = document.querySelector('.ring');
+    if (ring) zielHuepft(ring);
+    konfetti();
+  } else {
+    // Jeder Platz, der vorgerueckt ist, meldet sich kurz.
+    v.plots.forEach(function (p) {
+      if (!p.busy || p.done || p.baum) return;
+      var kachel = document.querySelector('#plots .plot[data-platz="' + p.index + '"]');
+      if (kachel) {
+        kachel.classList.add('zeigt');
+        setTimeout(function () { kachel.classList.remove('zeigt'); }, 2600);
+      }
+      var wo = platzKasten(p.index);
+      if (wo && wo.width) funken(wo, 'ware');
+    });
+  }
+  if (navigator.vibrate) { try { navigator.vibrate([0, 30, 40, 30]); } catch (e) {} }
+}

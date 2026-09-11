@@ -31,6 +31,7 @@ function render() {
   renderMail(v);
   renderMarket(v);
   renderVorrat(v);
+  renderBooster(v);
   if (view === 'pfad') renderPfad(v);
 
   var typing = document.activeElement
@@ -63,9 +64,13 @@ function renderPurse(v) {
     'stroke-dashoffset',
     String(Math.round(107 * (1 - Math.max(0, Math.min(1, pct))))),
   );
-  $('xp').textContent = v.xp.atMax
+  var doppelt = !!(v.booster && v.booster.xpAktiv);
+  $('xp').textContent = (v.xp.atMax
     ? v.xp.total + ' XP · Höchststufe'
-    : v.xp.into + ' / ' + v.xp.span + ' XP';
+    : v.xp.into + ' / ' + v.xp.span + ' XP') +
+    (doppelt ? ' · 2× noch ' + timeText(v.booster.xpRest) : '');
+  var ringEl = document.querySelector('.ring');
+  if (ringEl) ringEl.classList.toggle('doppelt', doppelt);
 
   $('silo-num').textContent = v.silo.used + '/' + v.silo.capacity;
   $('silo-fill').style.width = Math.min(100, Math.round((v.silo.used * 100) / v.silo.capacity)) + '%';
@@ -1673,4 +1678,41 @@ function naechstesHin() {
     kachel.classList.add('zeigt');
     setTimeout(function () { kachel.classList.remove('zeigt'); }, 2600);
   }
+}
+
+// — Booster ————————————————————————————————————————————————————————————
+// Sie liegen im Lager wie Werkzeug, aber man setzt sie ein statt sie zu
+// verbrauchen: eine Karte je Sorte, mit Vorrat und einem Knopf.
+function renderBooster(v) {
+  var box = $('booster');
+  if (!box) return;
+  box.textContent = '';
+  var b = v.booster;
+  if (!b || (b.xpVorrat === 0 && b.wuchsVorrat === 0 && !b.xpAktiv)) return;
+
+  var laeuft = v.plots.some(function (p) { return p.busy && !p.done && p.remaining > 0 && !p.baum; });
+  [
+    { item: b.xpItem, vorrat: b.xpVorrat, was: 'Verdoppelt 30 Minuten lang alle XP',
+      stand: b.xpAktiv ? 'läuft · noch ' + timeText(b.xpRest) : '', geht: b.xpVorrat > 0 },
+    { item: b.wuchsItem, vorrat: b.wuchsVorrat, was: 'Alles, was gerade läuft, rückt um die Hälfte vor',
+      stand: laeuft ? '' : 'nichts läuft gerade', geht: b.wuchsVorrat > 0 && laeuft },
+  ].forEach(function (e) {
+    if (e.vorrat === 0 && !e.stand) return;
+    var karte = document.createElement('div');
+    karte.className = 'card booster-karte' + (e.stand && /läuft ·/.test(e.stand) ? ' aktiv' : '');
+    karte.innerHTML =
+      '<div class="body">' +
+        '<div class="top">' + itemIcon(e.item) + nameOf(rules.items[e.item].id) +
+          (e.vorrat > 0 ? ' <span class="menge">×' + e.vorrat + '</span>' : '') + '</div>' +
+        '<div class="sub">' + e.was + (e.stand ? ' · <b>' + e.stand + '</b>' : '') + '</div>' +
+      '</div>';
+    var knopf = document.createElement('button');
+    knopf.type = 'button';
+    knopf.className = 'go';
+    knopf.disabled = !e.geht;
+    knopf.textContent = e.vorrat > 0 ? 'Einsetzen' : 'keiner da';
+    knopf.addEventListener('click', function () { boosterEinsetzen(e.item); });
+    karte.appendChild(knopf);
+    box.appendChild(karte);
+  });
 }

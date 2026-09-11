@@ -19,6 +19,7 @@ var NAMES = {
   'wood': 'Holz', 'smoked-fish': 'Räucherfisch',
   'woodlot': 'Waldstück', 'workshop': 'Werkstatt', 'smokehouse': 'Räucherei',
   'kitchen': 'Hofküche', 'farm-platter': 'Bauernbrettl', 'cream-cake': 'Sahnetorte',
+  'booster-xp': 'XP-Verdoppler', 'booster-wuchs': 'Schnellwuchs',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
