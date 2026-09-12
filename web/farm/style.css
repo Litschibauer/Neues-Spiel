@@ -1110,6 +1110,13 @@
   .chip .n { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; }
   .chip[disabled] { opacity: .45; }
   .chip:not([disabled]) { cursor: pointer; }
+  /* Zum ersten Mal im Regal: eine kleine Marke, bis das Lager einmal zu war. */
+  .chip.neu { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft, rgba(212, 160, 23, .25)); }
+  .chip.neu::after {
+    content: 'neu'; font-size: .58rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); margin-left: .1rem;
+  }
+  .chips .leer { width: 100%; margin: .2rem 0; color: var(--muted); font-size: .82rem; }
 
   /* Lösch-Panel direkt im Lager. */
   .loesch {

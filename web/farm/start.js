@@ -102,6 +102,8 @@ function attempt(force) {
 }
 
 function show(next) {
+  // Wer das Lager zumacht, hat seine neuen Waren gesehen.
+  if (view === 'lager' && next !== 'lager' && typeof lagerGesehenMerken === 'function') lagerGesehenMerken();
   view = next;
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();

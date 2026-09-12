@@ -288,13 +288,13 @@ function moebelSvg(id, zustand, artId) {
 // Belegt: 0-2 Nachbarn, 4-6 Brett, 8-10 Lager, 12-14 Stand, 16-19 Wagen,
 // 21-22 Kiste, 24-26 Abenteuerbrett.
 var MOEBEL_ORTE = {
-  nachbarn: [0, -2.5, 3, 2],
-  brett: [4, -2.5, 3, 2],
-  lagerhaus: [8, -2.5, 3, 2],
-  stand: [12, -2.5, 3, 2],
-  wagen: [16, -2.5, 4, 2],
-  kiste: [21, -2.5, 2, 2],
-  abenteuer: [24, -2.5, 3, 3],
+  nachbarn: [0, -2.4, 3, 2],
+  brett: [4, -2.4, 3, 2],
+  lagerhaus: [8, -2.4, 3, 2],
+  stand: [12, -2.4, 3, 2],
+  wagen: [16, -2.4, 4, 2],
+  kiste: [21, -2.4, 2, 2],
+  abenteuer: [24, -2.4, 3, 3],
   boot: [0, 10, 6, 3],
 };
 
@@ -1254,21 +1254,43 @@ function zielZeile(e) {
   return row;
 }
 
+// Das Lager zeigt nur, was da ist. Was auf null faellt, verschwindet wieder —
+// so bleibt das Regal uebersichtlich, und jede Ware, die zum ersten Mal
+// auftaucht, ist eine kleine Entdeckung: Sie traegt eine „neu"-Marke, bis man
+// das Lager einmal zugemacht hat.
+var LAGER_GESEHEN = 'ns-lager-gesehen';
+var lagerGesehen = (function () {
+  try { return JSON.parse(localStorage.getItem(LAGER_GESEHEN) || '{}') || {}; } catch (e) { return {}; }
+})();
+var lagerGezeigt = [];
+
+function lagerGesehenMerken() {
+  var neu = false;
+  lagerGezeigt.forEach(function (id) { if (!lagerGesehen[id]) { lagerGesehen[id] = 1; neu = true; } });
+  if (!neu) return;
+  try { localStorage.setItem(LAGER_GESEHEN, JSON.stringify(lagerGesehen)); } catch (e) {}
+}
+
 function renderVorrat(v) {
   var chips = $('stock');
   chips.textContent = '';
+  lagerGezeigt = [];
   v.stock.forEach(function (entry) {
     if (entry.item === v.currency.item) return;
+    if (entry.amount <= 0) return;
+    lagerGezeigt.push(entry.id);
     var chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = 'chip';
-    chip.disabled = entry.amount === 0;
+    chip.className = 'chip' + (lagerGesehen[entry.id] ? '' : ' neu');
     chip.title = 'Zum endgültigen Löschen tippen';
     chip.innerHTML = iconTag(entry.id) + '<span>' + nameOf(entry.id) +
       '</span><span class="n">' + entry.amount + '</span>';
     chip.addEventListener('click', function () { loeschDialog(entry); });
     chips.appendChild(chip);
   });
+  if (lagerGezeigt.length === 0) {
+    chips.innerHTML = '<p class="leer">Noch nichts im Regal — was du erntest und herstellst, liegt dann hier.</p>';
+  }
 }
 
 // Ware endgültig aus dem Lager löschen — ohne Gegenwert. In-App-Panel direkt

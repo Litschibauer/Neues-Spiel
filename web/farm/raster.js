@@ -1,4 +1,8 @@
-var BAND = 3;
+// Das Band ueber dem Raster: Weg und Moebel. Vier Zeilen, damit die Koerper
+// der Moebel (bis 1,6 Zellen ueber ihrem Standplatz) auch dann ganz im Bild
+// sind, wenn die Kamera oben anschlaegt — am breiten Bildschirm ist das der
+// Normalfall.
+var BAND = 4;
 
 // Zweite Dimension: der Angelsee hat ein EIGENES Raster. Umschalten über das
 // Boot. Rein clientseitig — der Sim kennt nur den einen Hof-Zustand.
