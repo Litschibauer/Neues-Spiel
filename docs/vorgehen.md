@@ -133,6 +133,11 @@ bleiben draußen. Optionale Felder bedingt anhängen
   versetzter Schatten (`--druck`), kleine Radien, Knöpfe sinken beim Drücken.
   Keine Pillen, keine weichen Schatten, nichts, das nach Standard-UI aussieht.
   Neue Sprites sind eigene Pixelkunst (`web/farm/sprites/LIZENZ.txt`).
+- **Klänge sind Aufnahmen, keine Oszillatoren.** Gemeinfreie Geräusche
+  (Kenney, Juhani Junkala) werden mit `scripts/klaenge-mischen.py` zu
+  `web/farm/klaenge/*.wav` gemischt (mono, 22 kHz) und beim Bauen eingebettet.
+  Ein neuer Klang: Rezept im Skript, Zeile in `klaenge/LIZENZ.txt`, Name in
+  `KLAENGE` in `klang.js`. Nichts Synthetisches — das klang „nach Computer".
 - Keine Monetarisierung, kein Pay-to-win, keine Werbung.
 - Desktop-Seite und App bleiben getrennt: Der Kern hat keine Abhängigkeiten,
   `ios-app/` hat sein eigenes `package.json`.
@@ -178,7 +183,10 @@ web/farm/        Die Oberfläche: page.html (Markup), style.css, *.js Module
   konto.js         Hof sichern, Wiederherstellung, Löschen, Rückmeldung, Fehler
   momente.js       Meldungen mit Warteschlange
   texte.js         alle Namen und Texte (auch von der Werkbank benutzt)
+  klang.js         Klänge abspielen (Aufnahmen, Tonhöhe je Erntekette)
   icons/ sprites/  Bilder, beim Bauen als Data-URI eingebettet
+  klaenge/         die Klänge als WAV (CC0-Quellen, LIZENZ.txt), ebenso eingebettet;
+                   gemischt von scripts/klaenge-mischen.py
 web/admin.template.html   die Werkbank (/admin)
 web/impressum.template.html   Impressum & Datenschutz (/impressum)
 web/sw.template.js        Service Worker (Hülle offline, /api nie)

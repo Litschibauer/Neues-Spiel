@@ -27,6 +27,7 @@ function tonBereit() {
   meister = audio.createGain();
   meister.gain.value = sfxFaktor();
   meister.connect(audio.destination);
+  klaengeEntpacken();
   return audio;
 }
 
@@ -38,134 +39,71 @@ function sfxSetzen(p) {
   if (sfxProz > 0) klang('tipp');
 }
 
-function stimme(form, von, nach, dauer, laut, ab) {
-  var o = audio.createOscillator();
-  var g = audio.createGain();
-  var t = audio.currentTime + (ab || 0);
+// — Die Klänge selbst ——————————————————————————————————————————————————
+// Keine Oszillatoren mehr: Die Klänge sind aufgenommene, gemeinfreie Geräusche
+// (Münzen in der Hand, Bretter, Gras, ein Riegel) und ein paar 8-Bit-Jingles —
+// siehe klaenge/LIZENZ.txt. Sie stecken als WAV-Data-URIs in der Seite
+// (KLAENGE_DATEN) und werden beim ersten Antippen entpackt, damit auch der
+// erste Ton ohne Netz kommt.
+var klangPuffer = {};
+var klangEntpackt = false;
 
-  o.type = form;
-  o.frequency.setValueAtTime(von, t);
-  if (nach !== von) o.frequency.exponentialRampToValueAtTime(nach, t + dauer);
-
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(laut, t + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dauer);
-
-  o.connect(g);
-  g.connect(meister);
-  o.start(t);
-  o.stop(t + dauer + 0.02);
+function bytesAus(dataUri) {
+  var b64 = dataUri.slice(dataUri.indexOf(',') + 1);
+  var bin = atob(b64);
+  var out = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
 }
 
-function rauschen(dauer, laut, farbe) {
-  var rahmen = Math.floor(audio.sampleRate * dauer);
-  var puffer = audio.createBuffer(1, rahmen, audio.sampleRate);
-  var daten = puffer.getChannelData(0);
-  for (var i = 0; i < rahmen; i++) {
-    daten[i] = (Math.random() * 2 - 1) * (1 - i / rahmen);
-  }
-  var quelle = audio.createBufferSource();
-  quelle.buffer = puffer;
-
-  var filter = audio.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.value = farbe;
-  filter.Q.value = 0.8;
-
-  var g = audio.createGain();
-  g.gain.value = laut;
-
-  quelle.connect(filter);
-  filter.connect(g);
-  g.connect(meister);
-  quelle.start(audio.currentTime);
+function klaengeEntpacken() {
+  if (klangEntpackt || !audio || typeof KLAENGE_DATEN !== 'object') return;
+  klangEntpackt = true;
+  Object.keys(KLAENGE_DATEN).forEach(function (name) {
+    try {
+      // Die Rückruf-Form, weil Safari die Promise-Form lange nicht kannte.
+      audio.decodeAudioData(bytesAus(KLAENGE_DATEN[name]), function (buf) {
+        klangPuffer[name] = buf;
+      }, function () {});
+    } catch (e) {}
+  });
 }
 
+// Spielt einen entpackten Klang: `rate` verschiebt die Tonhöhe (1 = wie
+// aufgenommen), `laut` skaliert, `ab` verzögert in Sekunden.
+function spiele(name, rate, laut, ab) {
+  var buf = klangPuffer[name];
+  if (!buf) return false;
+  var q = audio.createBufferSource();
+  q.buffer = buf;
+  q.playbackRate.value = rate || 1;
+  var g = audio.createGain();
+  g.gain.value = laut == null ? 1 : laut;
+  q.connect(g);
+  g.connect(meister);
+  q.start(audio.currentTime + (ab || 0));
+  return true;
+}
+
+// Welche Lautstärke ein Klang im Verhältnis zu den anderen hat. Wer hier
+// fehlt, spielt mit 1 — und wer keinen Klang hat, bekommt den Tipp.
 var KLAENGE = {
-  tipp: function () { stimme('sine', 620, 700, 0.06, 0.18); },
-
-  saat: function () {
-    rauschen(0.16, 0.5, 900);
-    stimme('sine', 300, 480, 0.12, 0.16);
-  },
-
-  ernte: function () {
-    stimme('triangle', 520, 780, 0.1, 0.3);
-    stimme('triangle', 780, 1040, 0.12, 0.22, 0.07);
-  },
-
-  muenzen: function () {
-    stimme('square', 1180, 1180, 0.05, 0.12);
-    stimme('square', 1560, 1560, 0.06, 0.12, 0.05);
-    stimme('square', 1980, 1980, 0.09, 0.1, 0.1);
-  },
-
-  kauf: function () {
-    stimme('sine', 880, 660, 0.09, 0.24);
-    stimme('sine', 440, 330, 0.14, 0.16, 0.05);
-  },
-
-  kiste: function () {
-    rauschen(0.22, 0.35, 1600);
-    stimme('triangle', 400, 900, 0.18, 0.24, 0.04);
-    stimme('triangle', 900, 1400, 0.22, 0.2, 0.14);
-  },
-
-  wagen: function () {
-    stimme('sawtooth', 160, 90, 0.5, 0.14);
-    rauschen(0.4, 0.18, 420);
-  },
-
-  tier: function () {
-    stimme('triangle', 700, 900, 0.08, 0.2);
-    stimme('triangle', 900, 640, 0.12, 0.18, 0.08);
-  },
-
-  stufe: function () {
-    stimme('triangle', 523, 523, 0.12, 0.26);
-    stimme('triangle', 659, 659, 0.12, 0.26, 0.1);
-    stimme('triangle', 784, 784, 0.22, 0.3, 0.2);
-  },
-
-  fehler: function () { stimme('sawtooth', 220, 150, 0.16, 0.16); },
-
-  // Fundstueck: eine kleine Fanfare, heller als die Ernte und kuerzer als der
-  // Stufenaufstieg. Sie soll den Kopf heben, ohne den Zug zu unterbrechen.
-  fund: function () {
-    stimme('triangle', 784, 784, 0.09, 0.24);
-    stimme('triangle', 1046, 1046, 0.09, 0.26, 0.07);
-    stimme('triangle', 1318, 1568, 0.2, 0.3, 0.14);
-  },
-
-  // Die Kiste geht auf: erst das Knarzen des Deckels, dann Glitzer.
-  truhe: function () {
-    stimme('sawtooth', 120, 95, 0.2, 0.12);
-    rauschen(0.12, 0.08, 900);
-    stimme('triangle', 880, 880, 0.08, 0.2, 0.24);
-    stimme('triangle', 1108, 1108, 0.08, 0.22, 0.32);
-    stimme('triangle', 1318, 1760, 0.28, 0.28, 0.4);
-  },
-
-  // Ein Erfolg wird faellig: drei steigende Toene, feierlich, aber kurz.
-  erfolg: function () {
-    stimme('triangle', 659, 659, 0.1, 0.24);
-    stimme('triangle', 880, 880, 0.1, 0.24, 0.1);
-    stimme('triangle', 1318, 1318, 0.28, 0.28, 0.2);
-  },
-
-  // Ein Zettel kippt ueber die Ziellinie: ein heller Doppelklang.
-  zettel: function () {
-    stimme('triangle', 988, 988, 0.07, 0.22);
-    stimme('triangle', 1318, 1318, 0.16, 0.26, 0.09);
-  },
-
-  // Bauen: drei Hammerschlaege, Holz auf Holz, dann Staub.
-  bau: function () {
-    stimme('square', 190, 150, 0.05, 0.18);
-    stimme('square', 200, 150, 0.05, 0.18, 0.14);
-    stimme('square', 210, 160, 0.06, 0.2, 0.28);
-    rauschen(0.22, 0.1, 700);
-  },
+  tipp: 0.7,
+  bestaetigt: 0.9,
+  fehler: 0.8,
+  saat: 0.8,
+  ernte: 0.9,
+  muenzen: 1,
+  kauf: 0.9,
+  kiste: 0.9,
+  truhe: 1,
+  wagen: 0.9,
+  tier: 0.9,
+  stufe: 1,
+  erfolg: 1,
+  zettel: 0.9,
+  fund: 1,
+  bau: 0.9,
 };
 
 // XP: die Zahl steigt am Ort auf, und ein Funke fliegt zum Ring oben, der
@@ -269,8 +207,9 @@ function klang(name) {
   if (sfxProz <= 0 || document.hidden) return;
   var ctx = tonBereit();
   if (!ctx || ctx.state !== 'running') return;
-  var mach = KLAENGE[name] || KLAENGE.tipp;
-  try { mach(); } catch (e) {}
+  klaengeEntpacken();
+  var wahl = klangPuffer[name] ? name : 'tipp';
+  try { spiele(wahl, 1, KLAENGE[wahl] == null ? 1 : KLAENGE[wahl]); } catch (e) {}
 }
 
 // Ernten im Zug: Mit jedem Platz steigt der Ton eine Halbtonstufe, gedeckelt,
@@ -280,15 +219,13 @@ function ernteKlang(stufe) {
   if (sfxProz <= 0 || document.hidden) return;
   var ctx = tonBereit();
   if (!ctx || ctx.state !== 'running') return;
+  klaengeEntpacken();
   var f = Math.pow(1.0595, Math.min(stufe, 12));
-  try {
-    stimme('triangle', 520 * f, 780 * f, 0.09, 0.26);
-    stimme('triangle', 780 * f, 1040 * f, 0.1, 0.18, 0.06);
-  } catch (e) {}
+  try { spiele('ernte', f, KLAENGE.ernte); } catch (e) {}
 }
 
 document.addEventListener('pointerdown', function weck() {
-  tonBereit();
+  if (tonBereit()) klaengeEntpacken();
   document.removeEventListener('pointerdown', weck);
 }, { once: true });
 

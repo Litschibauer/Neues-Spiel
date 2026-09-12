@@ -194,6 +194,20 @@ export function buildSchrift(): string {
   ].join('\n');
 }
 
+// Die Klänge: kleine WAV-Dateien (mono, 22 kHz) als Data-URI, damit sie ohne
+// zweite Anfrage und ohne Netz da sind. Woher sie stammen: klaenge/LIZENZ.txt.
+export function buildKlaenge(): string {
+  const dir = join(ROOT, 'web', 'farm', 'klaenge');
+  if (!existsSync(dir)) return 'var KLAENGE_DATEN = {};';
+  const eintraege: string[] = [];
+  for (const datei of readdirSync(dir).sort()) {
+    if (!datei.endsWith('.wav')) continue;
+    const daten = readFileSync(join(dir, datei)).toString('base64');
+    eintraege.push(`  ${JSON.stringify(datei.slice(0, -4))}: 'data:audio/wav;base64,${daten}'`);
+  }
+  return `var KLAENGE_DATEN = {\n${eintraege.join(',\n')}\n};`;
+}
+
 function buildBilder(ordner: string, variable: string): string {
   const dir = join(ROOT, 'web', 'farm', ordner);
   if (!existsSync(dir)) return `var ${variable} = {};`;
@@ -240,7 +254,8 @@ function buildPageWithBundle(name: string): string {
     .replace('<!--SCHRIFT-->', () => buildSchrift())
     .replace('<!--STAND-->', () => ermittleStand(ROOT, process.env.NEUES_SPIEL_VERSION))
     .replace('<!--ICONS-->', () => buildIcons())
-    .replace('<!--SPRITES-->', () => buildSprites());
+    .replace('<!--SPRITES-->', () => buildSprites())
+    .replace('<!--KLAENGE-->', () => buildKlaenge());
 }
 
 // Impressum und Datenschutz: eine eigene, kleine Seite im Stil des Spiels —

@@ -1507,6 +1507,11 @@ try {
        return { chips: chips.length, mitBild: bilder.length, geladen: geladen.length };
      })()`,
   );
+  const klaengeDrin = await evaluate<number>(
+    cdp,
+    `(function () { var n = 0; [...document.scripts].forEach(function (s) { n += (s.textContent.match(/data:audio\\/wav;base64,/g) || []).length; }); return n; })()`,
+  );
+  check('Die Klänge stecken als Aufnahmen in der Seite — offline sofort da', klaengeDrin >= 16, `${klaengeDrin} Klänge`);
   check(
     'Jede Ware hat ein Bild, und die Bilder stecken in der Seite',
     bilder.chips > 0 && bilder.mitBild === bilder.chips && bilder.geladen === bilder.chips,
@@ -5596,6 +5601,10 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   check('Abmelden fragt erst nach — am Knopf selbst, ohne Systemfenster', nochDa);
   await evaluate(cdp, `document.getElementById('forget').click()`);
   await waitFor(cdp, `document.getElementById('gate') && !document.getElementById('gate').hidden`, 'Tor nach dem Abmelden', 15_000);
+  // Die Seite hat gerade neu geladen — ihr einen Moment geben, damit kein
+  // spätes Neuladen (Service Worker) die Beobachter und Eingaben wegwischt.
+  await sleep(1500);
+  const torGeboren = await evaluate<number>(cdp, `performance.timeOrigin`);
   await evaluate(cdp, `(function () {
     window.__dialoge = 0;
     ['confirm', 'prompt', 'alert'].forEach(function (n) { window[n] = function () { window.__dialoge++; return null; }; });
@@ -5608,7 +5617,8 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await evaluate(cdp, `document.getElementById('wieder-los').click()`);
   await waitFor(cdp, `(window.__toasts || []).some(function (t) { return /stimmen nicht|Versuche|erreichbar/.test(t); })`, 'Ablehnung', 8_000).catch(() => {});
   const abgelehnt = await evaluate<string>(cdp, `(window.__toasts || []).join(' / ')`);
-  check('Ein falsches Wort wird abgelehnt', /stimmen nicht/.test(abgelehnt), abgelehnt || 'keine Meldung');
+  const torJetzt = await evaluate<number>(cdp, `performance.timeOrigin`);
+  check('Ein falsches Wort wird abgelehnt', /stimmen nicht/.test(abgelehnt), abgelehnt || (torJetzt !== torGeboren ? 'keine Meldung — die Seite hat zwischendurch neu geladen' : 'keine Meldung'));
   await evaluate(cdp, `document.getElementById('wieder-wort').value = 'Apfelbaum am Hof'; document.getElementById('wieder-los').click()`);
   await waitFor(cdp, `!document.getElementById('keygate').hidden`, 'neuer Schlüssel wird gezeigt', 10_000);
   const neuerSchluessel = await evaluate<string>(cdp, `document.getElementById('keyvalue').textContent`);
