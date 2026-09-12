@@ -1,4 +1,5 @@
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join } from 'node:path';
 import { DEV_RULESET_VERSION, LATEST_RULESET_VERSION, RULESETS } from '../sim/rules.ts';
 
 export type Env = 'dev' | 'prod';
@@ -57,6 +58,38 @@ function envFromArgv(argv: readonly string[]): string | undefined {
 function toBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === '') return fallback;
   return value !== '0' && value.toLowerCase() !== 'false';
+}
+
+// Welcher Stand läuft? Erst die Umgebungsvariable, sonst liest der Server
+// selbst in `.git` nach — ohne git-Binary, nur Dateien: HEAD → Zweig → Hash.
+// So sagt /health auch dann die Wahrheit, wenn der Dienst nichts gesetzt hat.
+export function ermittleStand(root: string, gesetzt?: string): string {
+  const ausUmgebung = gesetzt?.trim();
+  if (ausUmgebung && ausUmgebung !== 'unbekannt') return ausUmgebung;
+  try {
+    let gitDir = join(root, '.git');
+    if (existsSync(gitDir) && !existsSync(join(gitDir, 'HEAD'))) {
+      // Ein Worktree: .git ist eine Datei mit „gitdir: …“.
+      const zeile = readFileSync(gitDir, 'utf8').trim();
+      const m = /^gitdir:\s*(.+)$/.exec(zeile);
+      if (!m) return 'unbekannt';
+      gitDir = isAbsolute(m[1]!) ? m[1]! : join(root, m[1]!);
+    }
+    const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+    const ref = /^ref:\s*(.+)$/.exec(head);
+    if (!ref) return head.slice(0, 7);
+    const refDatei = join(gitDir, ref[1]!);
+    if (existsSync(refDatei)) return readFileSync(refDatei, 'utf8').trim().slice(0, 7);
+    const packed = join(gitDir, 'packed-refs');
+    if (existsSync(packed)) {
+      for (const z of readFileSync(packed, 'utf8').split('\n')) {
+        const [hash, name] = z.trim().split(/\s+/);
+        if (name === ref[1] && hash) return hash.slice(0, 7);
+      }
+    }
+  } catch {
+  }
+  return 'unbekannt';
 }
 
 export function resolveConfig(vars: Vars, argv: readonly string[], root: string): Config {
@@ -138,7 +171,7 @@ export function resolveConfig(vars: Vars, argv: readonly string[], root: string)
     adminEnabled,
     tls,
     behindProxy,
-    version: vars.NEUES_SPIEL_VERSION?.trim() || 'unbekannt',
+    version: ermittleStand(root, vars.NEUES_SPIEL_VERSION),
   };
 }
 

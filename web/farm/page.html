@@ -6,6 +6,27 @@
 <meta name="theme-color" content="#2f7d5d">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="stand" content="<!--STAND-->">
+<script>
+// Fehlerwache — ganz vorn, damit sie auch sieht, was beim Laden schiefgeht.
+// Sie merkt sich nur; verschickt wird später aus dem Spiel heraus (konto.js).
+(function () {
+  var puffer = [];
+  window.__nsFehler = puffer;
+  function merke(text, ort, stapel) {
+    if (puffer.length >= 20) return;
+    puffer.push({ text: String(text || 'Fehler').slice(0, 500), ort: String(ort || '').slice(0, 300), stapel: String(stapel || '').slice(0, 4000), t: Date.now() });
+    if (typeof window.__nsFehlerNeu === 'function') window.__nsFehlerNeu();
+  }
+  window.addEventListener('error', function (e) {
+    merke(e.message, (e.filename || location.pathname) + ':' + (e.lineno || 0) + ':' + (e.colno || 0), e.error && e.error.stack);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    merke((r && r.message) || String(r), location.pathname, r && r.stack);
+  });
+})();
+</script>
 <style>
 <!--SCHRIFT-->
 <!--INCLUDE:farm/style.css-->
@@ -22,7 +43,18 @@
   <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
          placeholder="hof_XXXXXX-XXXXXX-XXXXXX-XXXXXX">
   <button class="ghost" id="connect">Weiterspielen</button>
-  <p class="tiny"><a href="/feldtest">Feldtest-Ansicht</a></p>
+  <button type="button" class="link" id="wieder-auf">Schlüssel verloren? Hof zurückholen</button>
+  <div id="wieder" hidden>
+    <hr>
+    <p>Hofcode und Wiederherstellungswort eingeben:</p>
+    <input id="wieder-code" type="text" inputmode="latin" autocapitalize="characters" autocomplete="off"
+           maxlength="6" placeholder="Hofcode, z. B. K7QD3M" aria-label="Hofcode">
+    <input id="wieder-wort" type="password" autocomplete="off" placeholder="Wiederherstellungswort"
+           aria-label="Wiederherstellungswort">
+    <button class="ghost" id="wieder-los">Hof zurückholen</button>
+    <p class="tiny">Das Wort legst du im Spiel fest: Zahnrad → Hof sichern. Ohne Wort gibt es keinen Weg zurück.</p>
+  </div>
+  <p class="tiny"><a href="/feldtest">Feldtest-Ansicht</a> · <a href="/impressum">Impressum &amp; Datenschutz</a></p>
 </div>
 
 <div class="gate" id="keygate" hidden>
@@ -328,14 +360,81 @@
         </div>
         <span class="go">▶</span>
       </button>
+      <h2>Hof &amp; Betreiber</h2>
+      <button class="card" id="sicherung-auf">
+        <div class="body">
+          <div class="top">Hof sichern</div>
+          <div class="sub">Schlüssel, Wiederherstellungswort, Hof löschen</div>
+        </div>
+        <span class="go">🔑</span>
+      </button>
+      <button class="card" id="rueckmeldung-auf">
+        <div class="body">
+          <div class="top">Rückmeldung geben</div>
+          <div class="sub">Fehler, Idee oder Lob an den Betreiber</div>
+        </div>
+        <span class="go">✉️</span>
+      </button>
       <button class="card" id="forget">
         <div class="body">
           <div class="top">Von diesem Gerät abmelden</div>
-          <div class="sub">Schlüssel und lokaler Stand werden gelöscht</div>
+          <div class="sub">Schlüssel und lokaler Stand werden hier gelöscht</div>
         </div>
       </button>
-      <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a></p>
+      <p class="tiny"><a href="/feldtest">Feldtest-Ansicht mit Protokoll</a> · <a href="/impressum">Impressum &amp; Datenschutz</a> · <span id="stand-anzeige"></span></p>
       <button class="sheet-close" id="rest-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="sicherung-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sicherung-titel">
+      <h3 id="sicherung-titel">Hof sichern</h3>
+      <div id="sicherung-code" class="note">Dein Hofcode kommt mit der Verbindung.</div>
+      <h2>Dein Schlüssel</h2>
+      <div class="card">
+        <div class="body">
+          <div class="top">Schlüssel</div>
+          <code id="sicherung-key" class="schluessel verdeckt">••••••••••••••••••••••••</code>
+          <div class="sub">Öffnet den Hof auf jedem Gerät. Wer ihn hat, hat den Hof — gib ihn nicht weiter.</div>
+        </div>
+      </div>
+      <div class="knopfreihe">
+        <button type="button" class="ghost" id="key-zeigen">Anzeigen</button>
+        <button type="button" class="ghost" id="key-kopieren">Kopieren</button>
+      </div>
+      <h2>Wiederherstellungswort</h2>
+      <p class="sub" id="wort-stand">Noch keins gesetzt.</p>
+      <div class="eingabe">
+        <input id="wort-neu" type="password" autocomplete="new-password" maxlength="64"
+               placeholder="mindestens 8 Zeichen" aria-label="Wiederherstellungswort">
+        <button type="button" id="wort-setzen">Festlegen</button>
+      </div>
+      <p class="tiny">Damit holst du deinen Hof mit dem Hofcode zurück, wenn der Schlüssel weg ist. Nur du kennst es — auch der Betreiber nicht.</p>
+      <h2>Hof löschen</h2>
+      <div class="eingabe">
+        <input id="loeschen-code" type="text" inputmode="latin" autocapitalize="characters" autocomplete="off"
+               maxlength="6" placeholder="Zur Bestätigung: Hofcode" aria-label="Hofcode zur Bestätigung">
+        <button type="button" class="gefahr" id="loeschen-los">Löschen</button>
+      </div>
+      <p class="tiny">Endgültig und sofort: Hof, Waren, Nachbarn und Angebote sind dann weg.</p>
+      <button class="sheet-close" id="sicherung-close">Schließen</button>
+    </div>
+  </div>
+
+  <div class="sheet-bg" id="rueckmeldung-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rueckmeldung-titel">
+      <h3 id="rueckmeldung-titel">Rückmeldung</h3>
+      <div class="pick-art" id="rueck-arten">
+        <button type="button" data-art="fehler" class="an">🐞 Fehler</button>
+        <button type="button" data-art="idee">💡 Idee</button>
+        <button type="button" data-art="lob">💚 Lob</button>
+        <button type="button" data-art="sonstiges">✉️ Sonstiges</button>
+      </div>
+      <textarea id="rueck-text" maxlength="2000" rows="5"
+                placeholder="Was ist passiert? Was wünschst du dir?"></textarea>
+      <p class="tiny" id="rueck-meta">Mitgeschickt werden Hofcode, Spielstand-Version und Gerätetyp — sonst nichts.</p>
+      <button type="button" class="primär" id="rueck-senden">Abschicken</button>
+      <button class="sheet-close" id="rueckmeldung-close">Schließen</button>
     </div>
   </div>
 
@@ -448,6 +547,8 @@
   <!--INCLUDE:farm/angeln.js-->
 
   <!--INCLUDE:farm/melden.js-->
+
+  <!--INCLUDE:farm/konto.js-->
 
   <!--INCLUDE:farm/tippen.js-->
 

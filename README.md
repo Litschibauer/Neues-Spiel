@@ -10,6 +10,10 @@ ungewöhnlichen Kern-Feature:
 Wie das technisch funktioniert (deterministische Simulation, Command-Log, Sync-Flow,
 Zeit-Autorität) steht in **[docs/architecture.md](docs/architecture.md)**.
 
+**Wer hier weiterarbeitet — Mensch oder KI — liest zuerst
+[docs/vorgehen.md](docs/vorgehen.md):** die Regeln, die nicht brechen dürfen,
+der Ablauf einer Änderung von der Idee bis zum Push, und wie alles geprüft wird.
+
 Ein ehrlicher Stresstest — wo das Konzept brechen kann und wie man das abfängt — steht in
 **[docs/risks.md](docs/risks.md)**.
 
@@ -22,7 +26,7 @@ git clone https://github.com/Litschibauer/Neues-Spiel.git
 cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
-npm test        # 207 Tests, sollte grün sein
+npm test        # alle Tests, muss grün sein
 npm run dev     # Spiel auf http://localhost:8788
 ```
 
@@ -46,7 +50,7 @@ läuft nach.
 **Handel zu zweit:** Zweiten Hof in einem privaten Fenster anlegen, dort unter
 *Lager* etwas anbieten, im ersten Hof unter *Markt* kaufen.
 
-Automatisiert prüft beides `npm run offlinetest` (echter Chromium, 31 Prüfungen).
+Automatisiert prüft beides `npm run offlinetest` (echter Chromium, ein paar hundert Prüfungen).
 Ob die Maschine die Spielerzahl trägt: `npm run bench:scale -- 4000 30`.
 
 Auf einem Server statt lokal — TLS, systemd-Units, Sicherungen, Umgebungen:
@@ -62,7 +66,7 @@ Plattform-Beweis. Dazu ein Verbindungsmodell ohne Offline-Modus, das den
 klassischen Zug-im-Tunnel-Fall nachweislich nahtlos übersteht.
 
 ```bash
-npm test    # 207 Tests, keine Dependencies, kein Build (Node >= 22.6)
+npm test    # keine Dependencies, kein Build (Node >= 22.6)
 ```
 
 Was bewiesen ist, was nicht, die gemessenen Lastzahlen und die vier echten Bugs, die dabei
@@ -132,8 +136,9 @@ getrennt.
 die App startet ohne Netz, und ein Neuladen im Funkloch kostet nichts.
 
 **Und es gibt Accounts** — bewusst so einfach wie möglich: ein Hof ist ein
-120-Bit-Schlüssel, den der Server einmal ausgibt. Kein Passwort, keine E-Mail. Der
-Preis steht offen dabei: Schlüssel weg heißt Hof weg.
+120-Bit-Schlüssel, den der Server einmal ausgibt. Kein Passwort, keine E-Mail.
+Der Weg zurück, wenn der Schlüssel weg ist: ein selbst gewähltes
+Wiederherstellungswort plus Hofcode (siehe `docs/deploy.md`).
 
 Noch kein fertiges Spiel: kein Orderbuch, keine Nachbarn, kein TLS, keine richtige
 Oberfläche.

@@ -5524,6 +5524,108 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     zettelMeldung ? zettelMeldung.text : zettelGeschafft ? 'kein Zettel gemeldet' : 'im Lauf kippte kein Zettel',
   );
 
+  console.log('\n9z3. Der Weg zurück — Hof sichern, Rückmeldung, Fehlerbericht, Impressum');
+
+  // Kein Systemfenster, nirgends: Wer confirm/prompt/alert aufruft, fliegt auf.
+  await evaluate(cdp, `(function () {
+    window.__dialoge = 0;
+    ['confirm', 'prompt', 'alert'].forEach(function (n) { window[n] = function () { window.__dialoge++; return null; }; });
+  })()`);
+  const alterSchluessel = await evaluate<string>(cdp, `localStorage.getItem('ns-token') || ''`);
+  const levelVorher = await evaluate<number>(cdp, `(function () { var NS = globalThis.NeuesSpiel; var raw = localStorage.getItem(NS.storageKeyFor(location.origin)); var c = NS.restoreClient(JSON.parse(raw)).client; return NS.farmView(c.preview(), NS.getRuleset(c.baseSnapshot.rulesetVersion), true).level; })()`);
+
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(300);
+  const standZeile = await evaluate<string>(cdp, `document.getElementById('stand-anzeige').textContent`);
+  check('Die Einstellungen nennen den Stand der Seite', /^Stand [0-9a-f]{7}$/.test(standZeile), standZeile);
+  await evaluate(cdp, `document.getElementById('sicherung-auf').click()`);
+  await waitFor(cdp, `/Hofcode: [A-Z0-9]{6}/.test(document.getElementById('sicherung-code').textContent)`, 'Hofcode im Blatt', 8_000).catch(() => {});
+  const hofCode = (/Hofcode: ([A-Z0-9]{6})/.exec(await evaluate<string>(cdp, `document.getElementById('sicherung-code').textContent`)) || [])[1] ?? '';
+  check('Das Blatt „Hof sichern" zeigt den Hofcode', /^[A-Z0-9]{6}$/.test(hofCode), hofCode || 'keiner');
+  const verdeckt = await evaluate<string>(cdp, `document.getElementById('sicherung-key').textContent`);
+  await evaluate(cdp, `document.getElementById('key-zeigen').click()`);
+  const gezeigt = await evaluate<string>(cdp, `document.getElementById('sicherung-key').textContent`);
+  check('Der Schlüssel ist erst verdeckt und lässt sich anzeigen', !/hof_/.test(verdeckt) && gezeigt === alterSchluessel, gezeigt.slice(0, 10) + '…');
+  await evaluate(cdp, `document.getElementById('wort-neu').value = 'Apfelbaum am Hof'; document.getElementById('wort-setzen').click()`);
+  await waitFor(cdp, `/Ein Wort ist gesetzt/.test(document.getElementById('wort-stand').textContent)`, 'Wort gesetzt', 8_000).catch(() => {});
+  const wortStand = await evaluate<string>(cdp, `document.getElementById('wort-stand').textContent`);
+  check('Ein Wiederherstellungswort lässt sich setzen', /Ein Wort ist gesetzt/.test(wortStand), wortStand);
+  await evaluate(cdp, `document.getElementById('sicherung-close').click()`);
+  await sleep(200);
+
+  // Rückmeldung: aus dem Spiel heraus, landet mit Hofcode in der Werkbank.
+  await evaluate(cdp, `document.getElementById('rueckmeldung-auf').click()`);
+  await sleep(200);
+  await evaluate(cdp, `(function () {
+    [...document.querySelectorAll('#rueck-arten button')].find(function (b) { return b.getAttribute('data-art') === 'idee'; }).click();
+    document.getElementById('rueck-text').value = 'Die Kühe schauen traurig, wenn es regnet.';
+    document.getElementById('rueck-senden').click();
+  })()`);
+  await waitFor(cdp, `/Danke/.test(document.getElementById('toast').textContent)`, 'Danke-Meldung', 8_000).catch(() => {});
+  const posteingang = (await api('/api/admin/rueckmeldungen')) as { rueckmeldungen: Array<{ code: string; art: string; text: string; version: string }> };
+  const meineRueck = posteingang.rueckmeldungen.find((r) => /traurig/.test(r.text));
+  check(
+    'Die Rückmeldung liegt in der Werkbank — mit Hofcode, Art und Stand',
+    !!meineRueck && meineRueck.code === hofCode && meineRueck.art === 'idee' && /^[0-9a-f]{7}$/.test(meineRueck.version),
+    meineRueck ? `${meineRueck.code} · ${meineRueck.art} · Stand ${meineRueck.version}` : 'nicht angekommen',
+  );
+
+  // Fehlerbericht: ein Fehler im Spiel meldet sich von selbst beim Server.
+  await evaluate(cdp, `setTimeout(function () { throw new Error('Probefehler aus dem Browsertest'); }, 0)`);
+  let fehlerListe: Array<{ text: string; konto: string; ort: string; anzahl: number }> = [];
+  for (let i = 0; i < 24; i++) {
+    await sleep(500);
+    fehlerListe = ((await api('/api/admin/fehler')) as { fehler: typeof fehlerListe }).fehler;
+    if (fehlerListe.some((f) => /Probefehler/.test(f.text))) break;
+  }
+  const probe = fehlerListe.find((f) => /Probefehler/.test(f.text));
+  check(
+    'Ein Fehler im Spiel kommt als Bericht beim Server an — mit Hof und Stelle',
+    !!probe && probe.konto === status.accountId && probe.ort.length > 0,
+    probe ? `${probe.text} @ ${probe.ort}` : `nicht gemeldet (${fehlerListe.length} Berichte)`,
+  );
+
+  const impressum = await fetch(`http://127.0.0.1:${PORT}/impressum`).then((r) => r.text());
+  const rechtLink = await evaluate<boolean>(cdp, `!!document.querySelector('#rest-bg a[href="/impressum"]') && !!document.querySelector('#gate a[href="/impressum"]')`);
+  check('Impressum und Datenschutz sind erreichbar und aus Tor und Einstellungen verlinkt', /<h2>Impressum<\/h2>/.test(impressum) && /Datenschutz/.test(impressum) && rechtLink);
+
+  // Abmelden in zwei Schritten — dann der Weg zurück über Hofcode und Wort.
+  await evaluate(cdp, `document.getElementById('forget').click()`);
+  await sleep(150);
+  const nochDa = await evaluate<boolean>(cdp, `!!localStorage.getItem('ns-token') && document.getElementById('forget').classList.contains('sicher')`);
+  check('Abmelden fragt erst nach — am Knopf selbst, ohne Systemfenster', nochDa);
+  await evaluate(cdp, `document.getElementById('forget').click()`);
+  await waitFor(cdp, `document.getElementById('gate') && !document.getElementById('gate').hidden`, 'Tor nach dem Abmelden', 15_000);
+  await evaluate(cdp, `(function () {
+    window.__dialoge = 0;
+    ['confirm', 'prompt', 'alert'].forEach(function (n) { window[n] = function () { window.__dialoge++; return null; }; });
+    document.getElementById('wieder-auf').click();
+    document.getElementById('wieder-code').value = ${JSON.stringify(hofCode.toLowerCase())};
+    document.getElementById('wieder-wort').value = 'falsches Wort!';
+  })()`);
+  // Die Meldung mitschneiden, statt sie im richtigen Moment ablesen zu wollen.
+  await evaluate(cdp, `(function () { window.__toasts = []; var el = document.getElementById('toast'); new MutationObserver(function () { if (el.textContent) window.__toasts.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true }); })()`);
+  await evaluate(cdp, `document.getElementById('wieder-los').click()`);
+  await waitFor(cdp, `(window.__toasts || []).some(function (t) { return /stimmen nicht|Versuche|erreichbar/.test(t); })`, 'Ablehnung', 8_000).catch(() => {});
+  const abgelehnt = await evaluate<string>(cdp, `(window.__toasts || []).join(' / ')`);
+  check('Ein falsches Wort wird abgelehnt', /stimmen nicht/.test(abgelehnt), abgelehnt || 'keine Meldung');
+  await evaluate(cdp, `document.getElementById('wieder-wort').value = 'Apfelbaum am Hof'; document.getElementById('wieder-los').click()`);
+  await waitFor(cdp, `!document.getElementById('keygate').hidden`, 'neuer Schlüssel wird gezeigt', 10_000);
+  const neuerSchluessel = await evaluate<string>(cdp, `document.getElementById('keyvalue').textContent`);
+  check('Mit Hofcode und Wort gibt es einen neuen Schlüssel — der alte ist es nicht', /^hof_/.test(neuerSchluessel) && neuerSchluessel !== alterSchluessel);
+  await evaluate(cdp, `document.getElementById('keydone').click()`);
+  await waitFor(cdp, `!document.getElementById('shell').hidden && document.querySelectorAll('#plots .plot').length > 0`, 'Hof nach der Rückkehr', 15_000);
+  const levelNachher = await evaluate<number>(cdp, `(function () { var NS = globalThis.NeuesSpiel; var raw = localStorage.getItem(NS.storageKeyFor(location.origin)); var c = NS.restoreClient(JSON.parse(raw)).client; return NS.farmView(c.preview(), NS.getRuleset(c.baseSnapshot.rulesetVersion), true).level; })()`);
+  await evaluate(cdp, `document.getElementById('zahnrad').click(); document.getElementById('sicherung-auf').click()`);
+  await waitFor(cdp, `/Hofcode: [A-Z0-9]{6}/.test(document.getElementById('sicherung-code').textContent)`, 'Hofcode nach der Rückkehr', 8_000).catch(() => {});
+  const codeNachher = (/Hofcode: ([A-Z0-9]{6})/.exec(await evaluate<string>(cdp, `document.getElementById('sicherung-code').textContent`)) || [])[1] ?? '';
+  await evaluate(cdp, `document.getElementById('sicherung-close').click(); document.getElementById('rest-close').click()`);
+  check('Es ist derselbe Hof — Stufe und Hofcode stimmen', levelNachher === levelVorher && codeNachher === hofCode, `Stufe ${levelVorher} → ${levelNachher} · ${hofCode} → ${codeNachher || '?'}`);
+  const alterTot = await fetch(`http://127.0.0.1:${PORT}/api/state?deviceId=x`, { headers: { authorization: `Bearer ${alterSchluessel}` } });
+  check('Der alte Schlüssel öffnet den Hof nicht mehr', alterTot.status === 401, `HTTP ${alterTot.status}`);
+  check('Kein Systemfenster im ganzen Ablauf', (await evaluate<number>(cdp, `window.__dialoge || 0`)) === 0);
+  await evaluate(cdp, `(function(){ var s=document.getElementById('tut-skip'); if (s && !document.getElementById('tut-bg').hidden) s.click(); })()`);
+
   console.log('\n10. Eine neue Version erreicht den Browser');
 
   const shellBefore = await evaluate<string>(cdp, `caches.keys().then(function (k) { return k.join(','); })`);
@@ -5593,6 +5695,26 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     );
     await new Promise<void>((resolve) => rebuilt.once('exit', () => resolve()));
   }
+
+  console.log('\n11. Der Hof geht — auf eigenen Wunsch, endgültig');
+  await waitFor(cdp, `!document.getElementById('shell').hidden`, 'Hof nach dem Versionswechsel', 20_000).catch(() => {});
+  await evaluate(cdp, `(function(){ var s=document.getElementById('tut-skip'); if (s && !document.getElementById('tut-bg').hidden) s.click(); })()`);
+  const hoefeVorher = ((await api('/api/admin/accounts')) as { count: number }).count;
+  const letzterSchluessel = await evaluate<string>(cdp, `localStorage.getItem('ns-token') || ''`);
+  await evaluate(cdp, `document.getElementById('zahnrad').click(); document.getElementById('sicherung-auf').click()`);
+  await waitFor(cdp, `/Hofcode: [A-Z0-9]{6}/.test(document.getElementById('sicherung-code').textContent)`, 'Hofcode', 8_000).catch(() => {});
+  const codeZumLoeschen = (/Hofcode: ([A-Z0-9]{6})/.exec(await evaluate<string>(cdp, `document.getElementById('sicherung-code').textContent`)) || [])[1] ?? '';
+  await evaluate(cdp, `document.getElementById('loeschen-code').value = 'XXXXXX'; document.getElementById('loeschen-los').click()`);
+  await sleep(200);
+  check('Ein falscher Hofcode löscht nichts', /stimmt nicht/.test(await evaluate<string>(cdp, `document.getElementById('toast').textContent`)));
+  await evaluate(cdp, `document.getElementById('loeschen-code').value = ${JSON.stringify(codeZumLoeschen)}; document.getElementById('loeschen-los').click()`);
+  await sleep(200);
+  check('Der richtige Code fragt erst nach — am Knopf', await evaluate<boolean>(cdp, `document.getElementById('loeschen-los').classList.contains('sicher')`));
+  await evaluate(cdp, `document.getElementById('loeschen-los').click()`);
+  await waitFor(cdp, `document.getElementById('gate') && !document.getElementById('gate').hidden`, 'Tor nach dem Löschen', 15_000);
+  const hoefeNachher = ((await api('/api/admin/accounts')) as { count: number }).count;
+  const totNachLoeschen = await fetch(`http://127.0.0.1:${PORT}/api/state?deviceId=x`, { headers: { authorization: `Bearer ${letzterSchluessel}` } });
+  check('Der Hof ist weg: einer weniger auf dem Server, der Schlüssel öffnet nichts', hoefeNachher === hoefeVorher - 1 && totNachLoeschen.status === 401, `${hoefeVorher} → ${hoefeNachher}, HTTP ${totNachLoeschen.status}`);
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);

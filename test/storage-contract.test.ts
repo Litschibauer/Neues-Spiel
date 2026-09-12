@@ -105,6 +105,64 @@ for (const backend of BACKENDS) {
     assert.equal(store.listAccounts()[0]!.lastSeenMs, T0 + 500);
   });
 
+  suite('das Wiederherstellungswort reist als Hash mit dem Konto', (store, ctx) => {
+    store.putFarms([{ account: { ...account('a1'), recoveryHash: 's1$aa$bb' }, game: game(1) }]);
+    store.putFarms([{ account: account('a2'), game: game(1) }]);
+    const wieder = ctx.reopen();
+    const a1 = wieder.listAccounts().find((a) => a.id === 'a1');
+    const a2 = wieder.listAccounts().find((a) => a.id === 'a2');
+    assert.equal(a1?.recoveryHash, 's1$aa$bb');
+    assert.equal(a2?.recoveryHash ?? null, null);
+  });
+
+  suite('Löschen nimmt Konto, Angebote, Abrechnungen und Push-Abos mit', (store) => {
+    store.putFarms([{ account: account('a1'), game: game(1) }, { account: account('a2'), game: game(2) }]);
+    store.putOffers([offer(1, 'a1'), offer(2, 'a2')], []);
+    store.claimOffer(2, 'a1', T0);
+    store.putPushAbo({ endpoint: 'e1', konto: 'a1', art: 'web', p256dh: 'p', auth: 'a', seitMs: T0, zuletztMs: 0 });
+    store.putPushAbo({ endpoint: 'e2', konto: 'a2', art: 'web', p256dh: 'p', auth: 'a', seitMs: T0, zuletztMs: 0 });
+    store.putRueckmeldung({ konto: 'a1', code: 'ABC', art: 'idee', text: 'mehr Kühe', version: 'v', huelle: 'h', regelwerk: 1, geraet: 'g', zeitMs: T0 });
+
+    assert.equal(store.deleteAccount('a1'), true);
+    assert.equal(store.deleteAccount('a1'), false);
+    assert.equal(store.loadFarm('a1'), null);
+    assert.deepEqual(store.listAccounts().map((a) => a.id), ['a2']);
+    assert.equal(store.loadBook().some((o) => o.sellerId === 'a1'), false, 'Angebote des Hofs sind weg');
+    assert.deepEqual(store.listPushAbos().map((a) => a.endpoint), ['e2']);
+    assert.equal(store.listRueckmeldungen(10, false).length, 0, 'Rückmeldungen des Hofs sind weg');
+    assert.equal(store.takeSettlements('a2').length, 1, 'a2 bekommt sein Gold aus a1s Kauf trotzdem');
+  });
+
+  suite('Rückmeldungen: neueste zuerst, erledigte ausblendbar', (store) => {
+    const r = (t: string, zeit: number) => ({ konto: 'a1', code: 'ABC', art: 'fehler' as const, text: t, version: 'v1', huelle: 'h1', regelwerk: 51, geraet: 'iPhone', zeitMs: zeit });
+    const eins = store.putRueckmeldung(r('eins', T0));
+    store.putRueckmeldung(r('zwei', T0 + 5));
+    assert.deepEqual(store.listRueckmeldungen(10, true).map((x) => x.text), ['zwei', 'eins']);
+    assert.ok(store.erledigeRueckmeldung(eins, true));
+    assert.deepEqual(store.listRueckmeldungen(10, true).map((x) => x.text), ['zwei']);
+    assert.deepEqual(store.listRueckmeldungen(10, false).map((x) => [x.text, x.erledigt]), [['zwei', false], ['eins', true]]);
+    assert.equal(store.erledigeRueckmeldung(999, true), false);
+    const z = store.listRueckmeldungen(1, false)[0]!;
+    assert.equal(z.regelwerk, 51);
+    assert.equal(z.geraet, 'iPhone');
+  });
+
+  suite('Fehlerberichte: derselbe Fehler wird gezählt, nicht gestapelt', (store) => {
+    const f = (t: string, zeit: number, konto = '') => ({ schluessel: 'k-' + t, konto, text: t, stapel: 'at x', ort: '/', version: 'v1', huelle: 'h1', regelwerk: 51, geraet: 'g', zuletztMs: zeit });
+    store.putFehler(f('boom', T0));
+    store.putFehler(f('boom', T0 + 10, 'a1'));
+    store.putFehler(f('peng', T0 + 5));
+    const liste = store.listFehler(10);
+    assert.deepEqual(liste.map((x) => [x.text, x.anzahl]), [['boom', 2], ['peng', 1]]);
+    assert.equal(liste[0]!.zuerstMs, T0);
+    assert.equal(liste[0]!.zuletztMs, T0 + 10);
+    assert.equal(liste[0]!.konto, 'a1', 'ein später bekanntes Konto wird nachgetragen');
+    assert.equal(store.dropFehler(liste[1]!.id), 1);
+    assert.equal(store.listFehler(10).length, 1);
+    assert.equal(store.dropFehler('alle'), 1);
+    assert.equal(store.listFehler(10).length, 0);
+  });
+
   suite('DER KERNPUNKT: zwei Käufer, ein Angebot — genau einer gewinnt', (store) => {
     store.putOffers([offer(1, 'anna')], []);
 

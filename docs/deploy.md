@@ -12,7 +12,7 @@ Es gibt **zwei Umgebungen**, und sie teilen sich nichts:
 | Lauscht auf | `0.0.0.0` — im LAN erreichbar | `127.0.0.1` — **nur lokal** |
 | Spielstand | `data/dev/save.json` | `data/prod/save.json` |
 | Token | `data/dev/token` | `data/prod/token` |
-| Regelwerk | v1001 — Sekundenuhren | v23 — echte Zeiten |
+| Regelwerk | v1001 — Sekundenuhren | das neueste (`LATEST_RULESET_VERSION`) — echte Zeiten |
 | Werkbank `/admin` | an | **aus** |
 
 Beide können gleichzeitig laufen. Genau dafür sind sie da: An einer neuen Version
@@ -107,14 +107,20 @@ hof_YNP7T9-4K21C1-SC9WZY-9GKGBC
 Er wird **genau einmal** angezeigt, direkt nach dem Anlegen. Danach kennt der
 Server nur noch seinen Hash — auch der Betreiber kann ihn nicht nachschlagen.
 
-> ⚠️ **Schlüssel weg heißt Hof weg.** Es gibt kein Passwort und keine E-Mail,
-> über die sich etwas wiederherstellen ließe. Das ist die bewusste Vereinfachung
-> für den Anfang; vor einer echten Spielerschaft braucht es einen zweiten Weg
-> zurück in den Account.
+> **Der Weg zurück:** Im Spiel unter *Zahnrad → Hof sichern* legt der Spieler
+> ein **Wiederherstellungswort** fest (8–64 Zeichen, nur als scrypt-Hash auf dem
+> Server). Ist der Schlüssel weg, holt er den Hof am Tor mit **Hofcode + Wort**
+> zurück und bekommt dabei einen *neuen* Schlüssel; der alte verfällt (ein
+> verlorenes Gerät bleibt draußen). Ohne gesetztes Wort gibt es keinen Weg zurück
+> — auch nicht über den Betreiber. Fünf Fehlversuche je Hofcode und Stunde,
+> zwanzig je Herkunft.
+>
+> Ebenfalls dort: den Schlüssel anzeigen und kopieren, und **den Hof endgültig
+> löschen** (mit dem eigenen Hofcode als Bestätigung — Konto, Angebote,
+> Nachbarn, Push-Abos und Rückmeldungen gehen mit).
 
-Höfe liegen als je eine Datei unter `data/<umgebung>/accounts/`. Ein Backup ist
-damit ein `cp -r` — und weil dort nur Hashes stehen, öffnet ein kopiertes
-Verzeichnis keine fremden Höfe.
+Höfe liegen in einer SQLite-Datei (siehe unten) — dort stehen nur Hashes, ein
+kopiertes Verzeichnis öffnet also keine fremden Höfe.
 
 ### Das Admin-Token
 
@@ -239,11 +245,44 @@ Ehrlich, damit es nicht überrascht:
   — dann wird aus der Datei ein Dienst.
 - **`synchronous = NORMAL`.** Bei einem *Stromausfall* können die letzten
   Sekundenbruchteile fehlen. Bei einem Absturz oder `kill` nicht.
-- **Kein Rate-Limit auf `/api/sync`.** Ein entschlossener Angreifer kann fluten.
-- **Backups macht niemand automatisch.** Ein `cron` mit `.backup` ist zehn
-  Minuten Arbeit und fehlt.
+- **Die Bremsen sind einfach.** `/api/sync` erlaubt 240 Abgleiche je Konto und
+  Minute (`NEUES_SPIEL_SYNC_PER_MIN`), danach `429` mit `retry-after`. Das hält
+  ein Skript auf, keinen verteilten Angriff — dafür gehört Cloudflare oder ein
+  ähnlicher Schild davor.
+- **Backups liegen auf derselben Platte.** Der Timer sichert täglich (siehe
+  *Sicherungen*), außer Haus kopiert sie niemand.
 
 ### Welcher Stand läuft gerade?
+
+`/health` nennt unter `version` den Commit. Der Server liest ihn selbst aus
+`.git` (HEAD → Zweig → Hash), ohne git-Binary; `NEUES_SPIEL_VERSION` überstimmt
+das. Dieselbe Kennung steckt beim Bauen in der Seite (`<meta name="stand">`),
+steht in den Einstellungen des Spiels und reist mit jeder Rückmeldung und
+jedem Fehlerbericht mit — so weiß man bei einer Meldung, welcher Stand lief.
+
+### Briefkasten: Rückmeldungen und Fehlerberichte
+
+Zwei Wege vom Spieler zum Betreiber, beide in der Werkbank unter *Briefkasten*:
+
+- **Rückmeldung** (*Zahnrad → Rückmeldung geben*): Art (Fehler, Idee, Lob,
+  Sonstiges) und Text; mitgeschickt werden Hofcode, Stand, Regelwerk und die
+  grobe Geräteart. Ohne Netz wartet sie im Gerät und geht später raus. Zehn je
+  Konto und Stunde.
+- **Fehlerbericht**: Wirft die Seite einen Fehler (`error`,
+  `unhandledrejection`), sammelt eine Wache im Kopf der Seite ihn ein und schickt
+  ihn gebündelt an `/api/fehler` — Text, Stelle, Stapel, Stand, Gerät, und mit
+  Schlüssel auch den Hof. Netzfehler („Failed to fetch") bleiben draußen.
+  Gleiche Fehler werden gezählt statt gestapelt. Dreißig je Herkunft und Stunde.
+
+Beides liegt in der Datenbank (`rueckmeldungen`, `fehler`); *erledigt* und
+*weg* gibt es als Knöpfe in der Werkbank.
+
+### Impressum und Datenschutz
+
+`/impressum` (auch `/datenschutz`) liefert `dist/impressum.html` aus
+`web/impressum.template.html` — im Stil des Spiels, mit **Platzhaltern** für
+Name, Anschrift, Kontakt und Hoster. Vor dem ersten fremden Spieler ausfüllen.
+Verlinkt vom Tor und aus den Einstellungen.
 
 `/health` braucht kein Token und sagt es:
 
@@ -811,15 +850,15 @@ Environment=NEUES_SPIEL_BEHIND_PROXY=1
 
 Ehrlich vorweg, damit es nicht im Betrieb auffällt:
 
-1. **Kein Weg zurück zu einem verlorenen Hof.** Der Schlüssel im Browser *ist*
-   das Konto. Wer den Browserspeicher löscht oder das Gerät wechselt, ohne den
-   Schlüssel notiert zu haben, hat den Hof verloren — und du kannst ihm nicht
-   helfen. Im privaten Test verschmerzbar, öffentlich der erste Support-Fall.
-2. **Kein Rate-Limit auf `/api/sync`.** Wer den Endpunkt flutet, bringt den
-   einen Prozess ins Schwitzen. Cloudflare davor federt das ab, ein offener
-   Port mit Caddy nicht.
-3. **Backups macht niemand automatisch.** Vor dem ersten öffentlichen Tag ein
-   `cron` mit `npm run backup` einrichten — sonst hängt alles an einer Datei.
+1. **Der Weg zurück hängt am Wiederherstellungswort.** Wer keins setzt und
+   den Schlüssel verliert, hat den Hof verloren — und du kannst ihm nicht helfen,
+   weil der Server nur Hashes kennt. Das Spiel weist beim Sichern darauf hin;
+   mehr geht ohne E-Mail nicht.
+2. **Die Sync-Bremse ist je Konto, nicht je Netz.** Wer viele Konten anlegt
+   (20 je Herkunft und Stunde) und alle flutet, bringt den einen Prozess ins
+   Schwitzen. Cloudflare davor federt das ab, ein offener Port mit Caddy nicht.
+3. **Backups liegen auf derselben Platte.** Der Timer sichert täglich; ein
+   `rsync` auf eine zweite Maschine fehlt.
 
 ## Von unterwegs erreichbar machen
 
@@ -1066,12 +1105,13 @@ Vorher `localStorage.getItem('ns-token')` in der Konsole abfragen und aufheben.
 
 Er ist ein **Feldtest-Werkzeug**, kein Produktionsserver:
 
-- **Keine Wiederherstellung.** Schlüssel weg heißt Hof weg — es gibt kein
-  Passwort und keine E-Mail, über die etwas zurückzuholen wäre.
-- **Keine automatischen Backups.** Die Datenbank trägt ein paar tausend
-  Spieler, aber niemand sichert sie.
-- TLS gibt es (siehe oben), aber **kein Rate-Limit außer beim Anlegen** und keine
-  Metriken. Ein entschlossener Angreifer kann `/api/sync` fluten.
+- **Wiederherstellung nur mit Wort.** Wer kein Wiederherstellungswort gesetzt
+  hat, kommt ohne Schlüssel nicht zurück — der Server kennt nur Hashes.
+- **Backups auf derselben Platte.** Der Timer sichert täglich, aber nicht außer
+  Haus.
+- TLS gibt es (siehe oben) und einfache **Bremsen** (Anlegen, Sync je Konto,
+  Wiederherstellung, Rückmeldungen, Fehlerberichte), aber keine Metriken außer
+  `/health` und dem Werkbank-Protokoll.
 - Snapshot-Signatur (§9) fehlt — der Server hält ohnehin seine eigene Kopie.
 
 ## Umgebungsvariablen

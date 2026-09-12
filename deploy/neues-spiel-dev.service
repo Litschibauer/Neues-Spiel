@@ -22,9 +22,9 @@ WorkingDirectory=/opt/neues-spiel
 # markiert und würden sonst bei jedem Start zwei Absätze ins Journal schreiben.
 ExecStart=/usr/bin/node --experimental-strip-types --no-warnings=ExperimentalWarning src/server/http.ts --env=dev
 
-# Damit /health verrät, welcher Stand läuft. Beim Ausrollen mitsetzen:
-#   sed -i "s/^Environment=NEUES_SPIEL_VERSION=.*/Environment=NEUES_SPIEL_VERSION=$(git rev-parse --short HEAD)/" …
-Environment=NEUES_SPIEL_VERSION=unbekannt
+# /health verrät, welcher Stand läuft: Der Server liest den Commit selbst aus
+# .git (HEAD → Zweig → Hash). Nur setzen, wenn kein .git im Verzeichnis liegt:
+# Environment=NEUES_SPIEL_VERSION=abc1234
 
 Restart=always
 RestartSec=5

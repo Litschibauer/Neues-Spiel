@@ -56,6 +56,8 @@
   button.danger { border-color: var(--bad); color: var(--bad); }
   button.klein { padding: .3rem .5rem; font-size: .68rem; }
   button:disabled { opacity: .4; }
+  .log.post .erledigt { opacity: .45; }
+  .log.post span:nth-child(4) { white-space: pre-wrap; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   input, select {
@@ -300,6 +302,14 @@
         <h2>Verlauf hier</h2>
         <div class="log" id="log"></div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Briefkasten <span id="post-zahl" class="marke"></span></h2>
+      <p class="hint">Rückmeldungen der Spieler und Fehlerberichte der Geräte — mit Hofcode, Stand und Gerät, damit man nachstellen kann.
+        <label><input type="checkbox" id="post-alle"> auch Erledigtes</label>
+        <button class="klein" id="fehler-leeren">Fehlerliste leeren</button></p>
+      <div class="log post" id="post"></div>
     </div>
 
     <div class="card">
@@ -723,6 +733,66 @@
       .catch(function (e) { log('Push: ' + e.message, 'bad'); });
   });
 
+  // — Briefkasten ————————————————————————————————————————————————————————
+  function ladePost() {
+    var alle = $('post-alle').checked ? '?alle=1' : '';
+    return Promise.all([api('/api/admin/rueckmeldungen' + alle), api('/api/admin/fehler')]).then(function (r) {
+      var rueck = r[0].rueckmeldungen, fehler = r[1].fehler;
+      var box = $('post');
+      box.textContent = '';
+      $('post-zahl').textContent = (rueck.length ? rueck.length + ' Rückmeldung(en)' : '') + (fehler.length ? (rueck.length ? ' · ' : '') + fehler.length + ' Fehler' : '');
+      if (!rueck.length && !fehler.length) { box.innerHTML = '<p class="hint">Nichts im Kasten.</p>'; return; }
+      var hofName = function (id, code) {
+        var h = null; hoefe.forEach(function (x) { if (x.id === id) h = x; });
+        return h ? (h.name || h.id) + (code ? ' (' + code + ')' : '') : (code || id || 'unbekannt');
+      };
+      rueck.forEach(function (z) {
+        var row = document.createElement('div');
+        row.className = z.erledigt ? 'erledigt' : '';
+        var t = document.createElement('time');
+        t.textContent = new Date(z.zeitMs).toLocaleString('de-DE');
+        var art = document.createElement('span');
+        art.className = 'art' + (z.art === 'fehler' ? ' bad' : '');
+        art.textContent = z.art;
+        var wer = document.createElement('span');
+        wer.className = 'wer';
+        wer.textContent = hofName(z.konto, z.code);
+        var text = document.createElement('span');
+        text.textContent = z.text + '  — Stand ' + z.version + ' · v' + z.regelwerk + ' · ' + z.geraet;
+        var knopf = document.createElement('button');
+        knopf.className = 'klein';
+        knopf.textContent = z.erledigt ? 'wieder öffnen' : 'erledigt';
+        knopf.addEventListener('click', function () {
+          api('/api/admin/rueckmeldungen?id=' + z.id + '&erledigt=' + (z.erledigt ? '0' : '1'), 'POST').then(ladePost);
+        });
+        row.appendChild(t); row.appendChild(art); row.appendChild(wer); row.appendChild(text); row.appendChild(knopf);
+        box.appendChild(row);
+      });
+      fehler.forEach(function (f) {
+        var row = document.createElement('div');
+        var t = document.createElement('time');
+        t.textContent = new Date(f.zuletztMs).toLocaleString('de-DE');
+        var art = document.createElement('span');
+        art.className = 'art bad';
+        art.textContent = f.anzahl > 1 ? f.anzahl + '× Fehler' : 'Fehler';
+        var wer = document.createElement('span');
+        wer.className = 'wer';
+        wer.textContent = f.konto ? hofName(f.konto, '') : 'ohne Hof';
+        var text = document.createElement('span');
+        text.textContent = f.text + ' @ ' + f.ort + '  — Stand ' + f.version + ' · v' + f.regelwerk + ' · ' + f.geraet;
+        text.title = f.stapel;
+        var knopf = document.createElement('button');
+        knopf.className = 'klein';
+        knopf.textContent = 'weg';
+        knopf.addEventListener('click', function () { api('/api/admin/fehler?id=' + f.id, 'POST').then(ladePost); });
+        row.appendChild(t); row.appendChild(art); row.appendChild(wer); row.appendChild(text); row.appendChild(knopf);
+        box.appendChild(row);
+      });
+    }).catch(function () {});
+  }
+  $('post-alle').addEventListener('change', ladePost);
+  $('fehler-leeren').addEventListener('click', function () { api('/api/admin/fehler?id=alle', 'POST').then(ladePost); });
+
   // — Server-Protokoll ——————————————————————————————————————————————————
   function ladeProtokoll() {
     var q = gewaehlt ? '?konto=' + encodeURIComponent(gewaehlt.id) : '';
@@ -789,6 +859,8 @@
       timer.hoefe = setInterval(function () { ladeHoefe(true); }, 10000);
       timer.sicht = setInterval(function () { if (gewaehlt && !document.hidden) ladeSicht(); }, 4000);
       timer.protokoll = setInterval(function () { if (!document.hidden) ladeProtokoll(); }, 5000);
+      timer.post = setInterval(function () { if (!document.hidden) ladePost(); }, 15000);
+      ladePost();
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message);

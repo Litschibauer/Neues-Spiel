@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteStorage } from './storage.ts';
@@ -180,6 +180,60 @@ export class AccountStore {
     return batch.length;
   }
 
+  // Wiederherstellungswort setzen oder ändern. Speichert sofort.
+  setzeWort(id: string, wort: string): boolean {
+    const account = this.byId.get(id);
+    if (!account) return false;
+    const neu: AccountRecord = { ...account, recoveryHash: hashWort(wort) };
+    this.byId.set(id, neu);
+    const game = this.load(id);
+    if (game) {
+      const { version, account: _a, ...blob } = game;
+      this.store.putFarms([{ account: neu, game: blob }]);
+      this.dirty.delete(id);
+    }
+    return true;
+  }
+
+  hatWort(id: string): boolean {
+    return !!this.byId.get(id)?.recoveryHash;
+  }
+
+  // Prüft das Wort und gibt einen frischen Schlüssel aus; der alte verfällt.
+  stelleWieder(id: string, wort: string): { account: AccountRecord; key: string } | null {
+    const account = this.byId.get(id);
+    if (!account || !pruefeWort(wort, account.recoveryHash)) return null;
+    return this.neuerSchluessel(id);
+  }
+
+  neuerSchluessel(id: string): { account: AccountRecord; key: string } | null {
+    const account = this.byId.get(id);
+    if (!account) return null;
+    let key = generateKey();
+    while (this.byKeyHash.has(hashKey(key))) key = generateKey();
+    this.byKeyHash.delete(account.keyHash);
+    const neu: AccountRecord = { ...account, keyHash: hashKey(key) };
+    this.byId.set(id, neu);
+    this.byKeyHash.set(neu.keyHash, id);
+    const game = this.load(id);
+    if (game) {
+      const { version, account: _a, ...blob } = game;
+      this.store.putFarms([{ account: neu, game: blob }]);
+      this.dirty.delete(id);
+    }
+    return { account: neu, key };
+  }
+
+  // Der Hof geht endgültig. Freundschaften räumt das Sozial-Modul ab.
+  loesche(id: string): boolean {
+    const account = this.byId.get(id);
+    if (!account) return false;
+    this.byId.delete(id);
+    this.byKeyHash.delete(account.keyHash);
+    this.dirty.delete(id);
+    return this.store.deleteAccount(id);
+  }
+
   adopt(account: AccountRecord, game: GameBlob): void {
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);
@@ -194,6 +248,80 @@ export class AccountStore {
 
 export function keyHashOf(key: string): string {
   return hashKey(key);
+}
+
+// — Das Wiederherstellungswort ———————————————————————————————————————
+// Der Schlüssel ist 120 Bit Zufall und wird einmal gezeigt. Wer ihn verliert,
+// kommt mit Hofcode + Wiederherstellungswort zurück — und bekommt dabei einen
+// neuen Schlüssel; der alte gilt ab da nicht mehr (ein verlorenes Gerät bleibt
+// draußen). Das Wort liegt nur als scrypt-Hash mit eigenem Salz in der Datenbank.
+export const WORT_MIN = 8;
+export const WORT_MAX = 64;
+
+export function saubereWort(roh: string): string | null {
+  const wort = String(roh ?? '').normalize('NFC').trim();
+  if (wort.length < WORT_MIN || wort.length > WORT_MAX) return null;
+  return wort;
+}
+
+export function hashWort(wort: string): string {
+  const salz = randomBytes(16);
+  const hash = scryptSync(wort, salz, 32, { N: 16384, r: 8, p: 1 });
+  return `s1$${salz.toString('hex')}$${hash.toString('hex')}`;
+}
+
+export function pruefeWort(wort: string, gespeichert: string | null | undefined): boolean {
+  if (!gespeichert) return false;
+  const [art, salzHex, hashHex] = gespeichert.split('$');
+  if (art !== 's1' || !salzHex || !hashHex) return false;
+  const erwartet = Buffer.from(hashHex, 'hex');
+  const ist = scryptSync(wort, Buffer.from(salzHex, 'hex'), erwartet.length, { N: 16384, r: 8, p: 1 });
+  return ist.length === erwartet.length && timingSafeEqual(ist, erwartet);
+}
+
+// — Die Bremse ————————————————————————————————————————————————————————
+// Ein Zähler je Schlüssel (Konto, Herkunft, …) über ein gleitendes Fenster.
+// Sie merkt sich nur Zeitstempel und vergisst Schlüssel, die lange still sind.
+export class Bremse {
+  private readonly treffer = new Map<string, number[]>();
+  private readonly max: number;
+  private readonly fensterMs: number;
+  private zuletztGeputzt = 0;
+
+  constructor(max: number, fensterMs: number) {
+    this.max = max;
+    this.fensterMs = fensterMs;
+  }
+
+  // Zählt den Versuch und sagt, ob er noch erlaubt war. `warteMs` sagt dem
+  // Anrufer, wann es frühestens wieder geht.
+  zaehle(schluessel: string, nowMs: number): { ok: true } | { ok: false; warteMs: number } {
+    this.putzen(nowMs);
+    const seit = nowMs - this.fensterMs;
+    const jung = (this.treffer.get(schluessel) ?? []).filter((t) => t > seit);
+    if (jung.length >= this.max) {
+      this.treffer.set(schluessel, jung);
+      return { ok: false, warteMs: Math.max(1, jung[0]! + this.fensterMs - nowMs) };
+    }
+    jung.push(nowMs);
+    this.treffer.set(schluessel, jung);
+    return { ok: true };
+  }
+
+  // Ein gelungener Versuch hebt die Sperre für diesen Schlüssel auf — nützlich
+  // dort, wo nur Fehlschläge zählen sollen.
+  vergiss(schluessel: string): void {
+    this.treffer.delete(schluessel);
+  }
+
+  private putzen(nowMs: number): void {
+    if (nowMs - this.zuletztGeputzt < this.fensterMs) return;
+    this.zuletztGeputzt = nowMs;
+    const seit = nowMs - this.fensterMs;
+    for (const [k, zeiten] of this.treffer) {
+      if (zeiten.every((t) => t <= seit)) this.treffer.delete(k);
+    }
+  }
 }
 
 export class CreateLimiter {

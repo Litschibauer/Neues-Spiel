@@ -109,7 +109,7 @@ function show(next) {
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
   // „besuch" hat kein Blatt: Der fremde Hof steht im Hof selbst.
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -120,8 +120,8 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
-  var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung'].forEach(function (name) {
+  var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste' || name === 'sicherung' || name === 'rueckmeldung') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
     if (e.target === $(name + '-bg')) show(zurueck);
@@ -372,9 +372,7 @@ $('create').addEventListener('click', function () {
     });
 });
 $('keycopy').addEventListener('click', function () {
-  var text = $('keyvalue').textContent;
-  if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('Kopiert'); });
-  else window.prompt('Schlüssel kopieren:', text);
+  inZwischenablage($('keyvalue').textContent, $('keyvalue'));
 });
 $('keydone').addEventListener('click', function () {
   start(pendingStart.snapshot, pendingStart.serverTime, pendingStart.accountId);
@@ -408,11 +406,24 @@ $('takeover').addEventListener('click', function () {
   setLease(true, null);
   toast('Übernahme gilt ab der nächsten Aktion');
 });
+// Abmelden in zwei Schritten — derselbe Griff wie beim Abreißen: Der Knopf
+// fragt selbst nach, kein Systemfenster.
 $('forget').addEventListener('click', function () {
-  if (!confirm('Schlüssel und lokalen Stand von diesem Gerät löschen?\n\nOhne notierten Schlüssel ist der Hof damit weg.')) return;
-  localStorage.removeItem('ns-token');
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-  location.reload();
+  var karte = $('forget');
+  if (!karte.dataset.sicher) {
+    karte.dataset.sicher = '1';
+    karte.classList.add('sicher');
+    karte.querySelector('.top').textContent = 'Sicher? Nochmal tippen zum Abmelden';
+    karte.querySelector('.sub').textContent = 'Ohne notierten Schlüssel oder Wiederherstellungswort ist der Hof danach weg';
+    setTimeout(function () {
+      karte.dataset.sicher = '';
+      karte.classList.remove('sicher');
+      karte.querySelector('.top').textContent = 'Von diesem Gerät abmelden';
+      karte.querySelector('.sub').textContent = 'Schlüssel und lokaler Stand werden hier gelöscht';
+    }, 4000);
+    return;
+  }
+  vergissGeraet();
 });
 
 // — Kurze Einführung für neue Höfe —————————————————————————————————————

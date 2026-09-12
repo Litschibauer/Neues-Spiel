@@ -21,7 +21,7 @@ import { migrateState } from '../sim/migrate.ts';
 import type { State } from '../sim/state.ts';
 import { LATEST_RULESET_VERSION, RULESETS, getRuleset, levelOf } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isLoopback, isSecureTransport, resolveConfig } from './config.ts';
-import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
+import { AccountStore, Bremse, CreateLimiter, keyHashOf, saubereWort, WORT_MAX, WORT_MIN } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 import { SqliteStorage } from './storage.ts';
 import { NAME_MAX, Sozial, saubererName, tagVon } from './sozial.ts';
@@ -83,6 +83,16 @@ const TOKEN = resolveToken();
 
 const accounts = new AccountStore(CONFIG.dbPath, join(dirname(SAVE_PATH), 'accounts'));
 const econstats = new EconStats(join(dirname(SAVE_PATH), 'econstats.json'));
+// Bremsen. Der Sync je Konto: Ein Mensch schafft ein paar Abgleiche je
+// Sekunde, ein Skript tausend — dazwischen liegt die Grenze. Wiederherstellung
+// je Hofcode UND je Herkunft, weil der Hofcode halb öffentlich ist (Nachbarn
+// kennen ihn). Rückmeldungen je Konto, Fehlerberichte je Herkunft.
+const SYNC_BREMSE = new Bremse(Number(process.env.NEUES_SPIEL_SYNC_PER_MIN ?? 240), 60_000);
+const WIEDER_BREMSE_HOF = new Bremse(5, 3_600_000);
+const WIEDER_BREMSE_HERKUNFT = new Bremse(20, 3_600_000);
+const RUECK_BREMSE = new Bremse(10, 3_600_000);
+const FEHLER_BREMSE = new Bremse(30, 3_600_000);
+
 const limiter = new CreateLimiter(
   Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
   Number(process.env.NEUES_SPIEL_MAX_ACCOUNTS ?? 5000),
@@ -480,6 +490,21 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+// JSON-Rumpf lesen; bei Überlänge oder Unsinn null statt einer Ausnahme.
+async function leseJson<T>(req: IncomingMessage, limitBytes: number): Promise<T | null> {
+  try {
+    const roh = await readBody(req, limitBytes);
+    const wert = JSON.parse(roh) as unknown;
+    return wert && typeof wert === 'object' ? (wert as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function kuerze(wert: unknown, max: number): string {
+  return String(wert ?? '').trim().slice(0, max);
+}
+
 function readBody(req: IncomingMessage, limitBytes: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -513,6 +538,7 @@ function loadPage(name: string): string | null {
 const farmPage = loadPage('farm.html');
 const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
+const rechtPage = loadPage('impressum.html');
 
 // App-/PWA-Icon. Bevorzugt web/icon.png (schönes Master-Bild fürs Spiel & die
 // spätere iOS-App), sonst das mitgelieferte SVG als Fallback. Beide werden unter
@@ -639,6 +665,24 @@ const MANIFEST = JSON.stringify({
 const ADMIN_ENABLED = CONFIG.adminEnabled;
 
 function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
+  // Die Briefkästen hängen an keinem Hof.
+  if (url.pathname === '/api/admin/rueckmeldungen') {
+    if (req.method === 'POST') {
+      const id = Number(url.searchParams.get('id'));
+      const erledigt = url.searchParams.get('erledigt') !== '0';
+      return json(res, 200, { ok: accounts.storage.erledigeRueckmeldung(id, erledigt) });
+    }
+    const alle = url.searchParams.get('alle') === '1';
+    return json(res, 200, { rueckmeldungen: accounts.storage.listRueckmeldungen(200, !alle) });
+  }
+  if (url.pathname === '/api/admin/fehler') {
+    if (req.method === 'POST') {
+      const id = url.searchParams.get('id') ?? '';
+      return json(res, 200, { weg: accounts.storage.dropFehler(id === 'alle' ? 'alle' : Number(id)) });
+    }
+    return json(res, 200, { fehler: accounts.storage.listFehler(200) });
+  }
+
   if (url.pathname === '/api/admin/accounts') {
     return json(res, 200, {
       count: accounts.count,
@@ -672,6 +716,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
           },
           alarme: cached ? cached.divergenceAlerts.length : 0,
           wanderungsfehler: cached ? cached.migrationFailures.length : 0,
+          wort: accounts.hatWort(a.id),
         };
       }),
     });
@@ -1095,6 +1140,12 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return res.end(MANIFEST);
   }
 
+  if ((url.pathname === '/impressum' || url.pathname === '/datenschutz') && req.method === 'GET') {
+    if (!rechtPage) return json(res, 500, { error: 'Seite fehlt — `npm run build`.' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(rechtPage);
+  }
+
   if (url.pathname === '/admin' && req.method === 'GET') {
     if (!ADMIN_ENABLED) return json(res, 403, { error: 'ADMIN_DISABLED' });
     if (!adminPage) return json(res, 500, { error: 'Seite fehlt — `npm run build`.' });
@@ -1142,9 +1193,147 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       return handleAdmin(url, req, res);
     }
 
+    // Der Weg zurück in den Hof: Hofcode + Wiederherstellungswort ergeben einen
+    // frischen Schlüssel. Ohne Anmeldung — der Schlüssel ist ja gerade weg.
+    if (url.pathname === '/api/wiederherstellen' && req.method === 'POST') {
+      const herkunft = WIEDER_BREMSE_HERKUNFT.zaehle(originOf(req), Date.now());
+      if (!herkunft.ok) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS', warteMs: herkunft.warteMs });
+      const body = await leseJson<{ code?: string; wort?: string }>(req, 4 * 1024);
+      if (!body) return json(res, 400, { error: 'BAD_REQUEST' });
+      const code = String(body.code ?? '').trim().toUpperCase();
+      const wort = saubereWort(String(body.wort ?? ''));
+      if (!code || !wort) return json(res, 400, { error: 'BAD_REQUEST' });
+      const proHof = WIEDER_BREMSE_HOF.zaehle(code, Date.now());
+      if (!proHof.ok) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS', warteMs: proHof.warteMs });
+      const karte = sozial.perCode(code);
+      const neu = karte ? accounts.stelleWieder(karte.id, wort) : null;
+      if (!karte || !neu) {
+        notiere('konto', karte?.id ?? '-', `Wiederherstellung abgelehnt für ${code}`);
+        return json(res, 401, { error: 'WRONG_WORD' });
+      }
+      WIEDER_BREMSE_HOF.vergiss(code);
+      const game = gameFor(neu.account);
+      // Das alte Gerät ist ab jetzt draußen — das neue darf sofort spielen.
+      game.activeDevice = null;
+      settle(neu.account, game);
+      game.receiveExternal();
+      persist(neu.account, game);
+      events.closeFor(neu.account.id);
+      notiere('konto', neu.account.id, 'Hof wiederhergestellt — neuer Schlüssel ausgegeben');
+      console.log(`[konto] ${neu.account.id}: wiederhergestellt über ${code}`);
+      return json(res, 200, {
+        key: neu.key,
+        accountId: neu.account.id,
+        snapshot: game.snapshot,
+        serverTime: Date.now(),
+        isActiveDevice: true,
+        activeSince: null,
+      });
+    }
+
+    // Fehlerberichte vom Gerät. Ohne Zwang zur Anmeldung, denn gerade beim
+    // Anmelden geht am meisten schief; mit Schlüssel hängt der Hof mit dran.
+    if (url.pathname === '/api/fehler' && req.method === 'POST') {
+      const bremse = FEHLER_BREMSE.zaehle(originOf(req), Date.now());
+      if (!bremse.ok) return json(res, 429, { error: 'TOO_MANY_REPORTS', warteMs: bremse.warteMs });
+      const body = await leseJson<{
+        meldungen?: Array<{ text?: string; stapel?: string; ort?: string }>;
+        version?: string;
+        huelle?: string;
+        regelwerk?: number;
+        geraet?: string;
+      }>(req, 64 * 1024);
+      if (!body || !Array.isArray(body.meldungen)) return json(res, 400, { error: 'BAD_REQUEST' });
+      const konto = accounts.resolve(bearer(req))?.id ?? '';
+      let angenommen = 0;
+      for (const m of body.meldungen.slice(0, 10)) {
+        const text = kuerze(m?.text, 500);
+        if (!text) continue;
+        const ort = kuerze(m?.ort, 300);
+        accounts.storage.putFehler({
+          schluessel: createHash('sha256').update(`${text}\n${ort}`).digest('hex').slice(0, 24),
+          konto,
+          text,
+          stapel: kuerze(m?.stapel, 4000),
+          ort,
+          version: kuerze(body.version, 80),
+          huelle: kuerze(body.huelle, 80),
+          regelwerk: Number.isInteger(body.regelwerk) ? Number(body.regelwerk) : 0,
+          geraet: kuerze(body.geraet, 200),
+          zuletztMs: Date.now(),
+        });
+        angenommen++;
+      }
+      if (angenommen > 0) console.log(`[fehler] ${angenommen} Bericht(e) von ${konto || originOf(req)}`);
+      return json(res, 200, { ok: true, angenommen });
+    }
+
     const account = accounts.resolve(bearer(req));
     if (!account) return json(res, 401, { error: 'UNAUTHORIZED' });
     const game = gameFor(account);
+
+    // Wiederherstellungswort ansehen (nur ob eins da ist) oder setzen.
+    if (url.pathname === '/api/wiederherstellung') {
+      if (req.method === 'POST') {
+        const body = await leseJson<{ wort?: string }>(req, 4 * 1024);
+        const wort = body ? saubereWort(String(body.wort ?? '')) : null;
+        if (!wort) return json(res, 400, { error: 'BAD_WORD', min: WORT_MIN, max: WORT_MAX });
+        accounts.setzeWort(account.id, wort);
+        notiere('konto', account.id, 'Wiederherstellungswort gesetzt');
+        return json(res, 200, { ok: true, gesetzt: true });
+      }
+      return json(res, 200, { gesetzt: accounts.hatWort(account.id), min: WORT_MIN, max: WORT_MAX });
+    }
+
+    // Der Hof geht endgültig. Zur Sicherheit muss der eigene Hofcode mit.
+    if (url.pathname === '/api/konto' && req.method === 'DELETE') {
+      const body = await leseJson<{ code?: string }>(req, 4 * 1024);
+      const karte = sozial.karte(account.id);
+      const code = String(body?.code ?? '').trim().toUpperCase();
+      if (!karte || !code || code !== karte.code) return json(res, 400, { error: 'CODE_MISMATCH' });
+      events.closeFor(account.id);
+      live.delete(account.id);
+      market.forget(account.id);
+      sozial.vergissHof(account.id);
+      accounts.loesche(account.id);
+      events.broadcast('market', account.id);
+      notiere('konto', account.id, `Hof ${karte.code} auf Wunsch gelöscht`);
+      console.log(`[konto] ${account.id}: gelöscht (${accounts.count} übrig)`);
+      return json(res, 200, { ok: true });
+    }
+
+    // Eine Rückmeldung an den Betreiber — mit dem, was man zum Nachstellen braucht.
+    if (url.pathname === '/api/rueckmeldung' && req.method === 'POST') {
+      const bremse = RUECK_BREMSE.zaehle(account.id, Date.now());
+      if (!bremse.ok) return json(res, 429, { error: 'TOO_MANY_REPORTS', warteMs: bremse.warteMs });
+      const body = await leseJson<{
+        art?: string;
+        text?: string;
+        version?: string;
+        huelle?: string;
+        regelwerk?: number;
+        geraet?: string;
+      }>(req, 16 * 1024);
+      const art = String(body?.art ?? '');
+      const text = kuerze(body?.text, 2000);
+      if (!body || !['fehler', 'idee', 'lob', 'sonstiges'].includes(art) || text.length < 3) {
+        return json(res, 400, { error: 'BAD_REQUEST' });
+      }
+      const id = accounts.storage.putRueckmeldung({
+        konto: account.id,
+        code: sozial.karte(account.id)?.code ?? '',
+        art: art as 'fehler' | 'idee' | 'lob' | 'sonstiges',
+        text,
+        version: kuerze(body.version, 80),
+        huelle: kuerze(body.huelle, 80),
+        regelwerk: Number.isInteger(body.regelwerk) ? Number(body.regelwerk) : game.snapshot.rulesetVersion,
+        geraet: kuerze(body.geraet, 200),
+        zeitMs: Date.now(),
+      });
+      notiere('post', account.id, `Rückmeldung (${art}): ${text.slice(0, 80)}`);
+      console.log(`[post] Rückmeldung #${id} von ${account.id} (${art})`);
+      return json(res, 200, { ok: true, id });
+    }
 
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const deviceId = url.searchParams.get('deviceId') ?? undefined;
@@ -1445,6 +1634,12 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         body = await readBody(req, 512 * 1024);
       } catch {
         return json(res, 413, { error: 'PAYLOAD_TOO_LARGE' });
+      }
+      const bremse = SYNC_BREMSE.zaehle(account.id, Date.now());
+      if (!bremse.ok) {
+        rejections.set('TOO_FAST', (rejections.get('TOO_FAST') ?? 0) + 1);
+        res.setHeader('retry-after', String(Math.ceil(bremse.warteMs / 1000)));
+        return json(res, 429, { error: 'TOO_FAST', warteMs: bremse.warteMs });
       }
 
       let parsed: SyncRequest;

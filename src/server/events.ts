@@ -97,6 +97,11 @@ export class EventHub {
     for (const id of [...this.subs.keys()]) this.drop(id);
   }
 
+  // Alle Leitungen eines Kontos kappen — etwa, wenn der Hof gelöscht wird.
+  closeFor(accountId: string): void {
+    for (const id of [...(this.byAccount.get(accountId) ?? [])]) this.drop(id);
+  }
+
   private queue(id: number, kind: NudgeKind): void {
     this.subs.get(id)?.pending.add(kind);
   }

@@ -11,6 +11,41 @@ export type AccountRecord = {
   keyHash: string;
   createdAt: number;
   lastSeenMs: number;
+  // scrypt-Hash des Wiederherstellungsworts; null, solange keins gesetzt ist.
+  recoveryHash?: string | null;
+};
+
+// Was ein Spieler dem Betreiber schreibt — mit dem, was man zum Nachstellen braucht.
+export type Rueckmeldung = {
+  id: number;
+  konto: string;
+  code: string;
+  art: 'fehler' | 'idee' | 'lob' | 'sonstiges';
+  text: string;
+  version: string;
+  huelle: string;
+  regelwerk: number;
+  geraet: string;
+  zeitMs: number;
+  erledigt: boolean;
+};
+
+// Ein Fehler, den ein Gerät gemeldet hat. Gleiche Fehler (gleicher Schlüssel)
+// werden gezählt statt gestapelt.
+export type Fehlerbericht = {
+  id: number;
+  schluessel: string;
+  konto: string;
+  text: string;
+  stapel: string;
+  ort: string;
+  version: string;
+  huelle: string;
+  regelwerk: number;
+  geraet: string;
+  zuerstMs: number;
+  zuletztMs: number;
+  anzahl: number;
 };
 
 export type GameBlob = {
@@ -82,6 +117,18 @@ export interface Storage {
   putPushAbo(abo: PushAbo): void;
   dropPushAbo(endpoint: string): void;
 
+  // Ein Hof geht endgültig: Konto, Markt und Push-Abos. Freundschaften
+  // räumt das Sozial-Modul auf derselben Datenbank ab.
+  deleteAccount(id: string): boolean;
+
+  // Briefkästen für Rückmeldungen und Fehlerberichte.
+  putRueckmeldung(r: Omit<Rueckmeldung, 'id' | 'erledigt'>): number;
+  listRueckmeldungen(limit: number, nurOffene: boolean): Rueckmeldung[];
+  erledigeRueckmeldung(id: number, erledigt: boolean): boolean;
+  putFehler(f: Omit<Fehlerbericht, 'id' | 'anzahl' | 'zuerstMs'>): void;
+  listFehler(limit: number): Fehlerbericht[];
+  dropFehler(id: number | 'alle'): number;
+
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
   close(): void;
@@ -103,13 +150,14 @@ export class SqliteStorage implements Storage {
   listAccounts(): AccountRecord[] {
     return (
       this.db
-        .prepare('select id, key_hash, created_at, last_seen_ms from accounts')
-        .all() as Array<Record<string, string | number>>
+        .prepare('select id, key_hash, created_at, last_seen_ms, recovery_hash from accounts')
+        .all() as Array<Record<string, string | number | null>>
     ).map((r) => ({
       id: String(r.id),
       keyHash: String(r.key_hash),
       createdAt: Number(r.created_at),
       lastSeenMs: Number(r.last_seen_ms),
+      recoveryHash: r.recovery_hash == null ? null : String(r.recovery_hash),
     }));
   }
 
@@ -124,11 +172,12 @@ export class SqliteStorage implements Storage {
     if (entries.length === 0) return;
     transaction(this.db, () => {
       const put = this.db.prepare(
-        `insert into accounts (id, key_hash, created_at, last_seen_ms, game)
-         values (?, ?, ?, ?, ?)
+        `insert into accounts (id, key_hash, created_at, last_seen_ms, recovery_hash, game)
+         values (?, ?, ?, ?, ?, ?)
          on conflict(id) do update set
            key_hash = excluded.key_hash,
            last_seen_ms = excluded.last_seen_ms,
+           recovery_hash = excluded.recovery_hash,
            game = excluded.game`,
       );
       for (const { account, game } of entries) {
@@ -137,6 +186,7 @@ export class SqliteStorage implements Storage {
           account.keyHash,
           account.createdAt,
           account.lastSeenMs,
+          account.recoveryHash ?? null,
           JSON.stringify(game),
         );
       }
@@ -281,6 +331,104 @@ export class SqliteStorage implements Storage {
     this.db.prepare('delete from push_abos where endpoint = ?').run(endpoint);
   }
 
+  deleteAccount(id: string): boolean {
+    let weg = false;
+    transaction(this.db, () => {
+      const res = this.db.prepare('delete from accounts where id = ?').run(id);
+      weg = Number(res.changes ?? 0) > 0;
+      this.db.prepare('delete from market_offers where seller = ?').run(id);
+      this.db.prepare('delete from market_settlements where seller = ?').run(id);
+      this.db.prepare('delete from push_abos where konto = ?').run(id);
+      this.db.prepare('delete from rueckmeldungen where konto = ?').run(id);
+      this.db.prepare(`update fehler set konto = '' where konto = ?`).run(id);
+    });
+    return weg;
+  }
+
+  putRueckmeldung(r: Omit<Rueckmeldung, 'id' | 'erledigt'>): number {
+    const res = this.db
+      .prepare(
+        `insert into rueckmeldungen (konto, code, art, text, version, huelle, regelwerk, geraet, zeit_ms)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(r.konto, r.code, r.art, r.text, r.version, r.huelle, r.regelwerk, r.geraet, r.zeitMs);
+    return Number(res.lastInsertRowid);
+  }
+
+  listRueckmeldungen(limit: number, nurOffene: boolean): Rueckmeldung[] {
+    const rows = this.db
+      .prepare(
+        `select * from rueckmeldungen ${nurOffene ? 'where erledigt = 0' : ''}
+         order by zeit_ms desc, id desc limit ?`,
+      )
+      .all(limit) as Array<Record<string, string | number>>;
+    return rows.map((r) => ({
+      id: Number(r.id),
+      konto: String(r.konto),
+      code: String(r.code),
+      art: String(r.art) as Rueckmeldung['art'],
+      text: String(r.text),
+      version: String(r.version),
+      huelle: String(r.huelle),
+      regelwerk: Number(r.regelwerk),
+      geraet: String(r.geraet),
+      zeitMs: Number(r.zeit_ms),
+      erledigt: Number(r.erledigt) === 1,
+    }));
+  }
+
+  erledigeRueckmeldung(id: number, erledigt: boolean): boolean {
+    const res = this.db
+      .prepare('update rueckmeldungen set erledigt = ? where id = ?')
+      .run(erledigt ? 1 : 0, id);
+    return Number(res.changes ?? 0) > 0;
+  }
+
+  putFehler(f: Omit<Fehlerbericht, 'id' | 'anzahl' | 'zuerstMs'>): void {
+    this.db
+      .prepare(
+        `insert into fehler (schluessel, konto, text, stapel, ort, version, huelle, regelwerk, geraet, zuerst_ms, zuletzt_ms, anzahl)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+         on conflict(schluessel) do update set
+           anzahl = anzahl + 1,
+           zuletzt_ms = excluded.zuletzt_ms,
+           konto = case when excluded.konto = '' then konto else excluded.konto end,
+           version = case when excluded.version = '' then version else excluded.version end,
+           huelle = case when excluded.huelle = '' then huelle else excluded.huelle end,
+           regelwerk = case when excluded.regelwerk = 0 then regelwerk else excluded.regelwerk end`,
+      )
+      .run(f.schluessel, f.konto, f.text, f.stapel, f.ort, f.version, f.huelle, f.regelwerk, f.geraet, f.zuletztMs, f.zuletztMs);
+  }
+
+  listFehler(limit: number): Fehlerbericht[] {
+    const rows = this.db
+      .prepare('select * from fehler order by zuletzt_ms desc, id desc limit ?')
+      .all(limit) as Array<Record<string, string | number>>;
+    return rows.map((r) => ({
+      id: Number(r.id),
+      schluessel: String(r.schluessel),
+      konto: String(r.konto),
+      text: String(r.text),
+      stapel: String(r.stapel),
+      ort: String(r.ort),
+      version: String(r.version),
+      huelle: String(r.huelle),
+      regelwerk: Number(r.regelwerk),
+      geraet: String(r.geraet),
+      zuerstMs: Number(r.zuerst_ms),
+      zuletztMs: Number(r.zuletzt_ms),
+      anzahl: Number(r.anzahl),
+    }));
+  }
+
+  dropFehler(id: number | 'alle'): number {
+    const res =
+      id === 'alle'
+        ? this.db.prepare('delete from fehler').run()
+        : this.db.prepare('delete from fehler where id = ?').run(id);
+    return Number(res.changes ?? 0);
+  }
+
   getMeta(key: string): string | null {
     return readMeta(this.db, key);
   }
@@ -380,6 +528,73 @@ export class MemoryStorage implements Storage {
 
   dropPushAbo(endpoint: string): void {
     this.pushAbos.delete(endpoint);
+  }
+
+  deleteAccount(id: string): boolean {
+    const weg = this.accounts.delete(id);
+    this.owners.delete(id);
+    this.forgetSeller(id);
+    for (const [ep, abo] of [...this.pushAbos]) if (abo.konto === id) this.pushAbos.delete(ep);
+    this.rueckmeldungen = this.rueckmeldungen.filter((r) => r.konto !== id);
+    for (const f of this.fehler.values()) if (f.konto === id) f.konto = '';
+    return weg;
+  }
+
+  private rueckmeldungen: Rueckmeldung[] = [];
+  private naechsteRueckmeldung = 1;
+  private readonly fehler = new Map<string, Fehlerbericht>();
+  private naechsterFehler = 1;
+
+  putRueckmeldung(r: Omit<Rueckmeldung, 'id' | 'erledigt'>): number {
+    const id = this.naechsteRueckmeldung++;
+    this.rueckmeldungen.push({ ...r, id, erledigt: false });
+    return id;
+  }
+
+  listRueckmeldungen(limit: number, nurOffene: boolean): Rueckmeldung[] {
+    return this.rueckmeldungen
+      .filter((r) => !nurOffene || !r.erledigt)
+      .sort((a, b) => b.zeitMs - a.zeitMs || b.id - a.id)
+      .slice(0, limit)
+      .map((r) => ({ ...r }));
+  }
+
+  erledigeRueckmeldung(id: number, erledigt: boolean): boolean {
+    const r = this.rueckmeldungen.find((x) => x.id === id);
+    if (!r) return false;
+    r.erledigt = erledigt;
+    return true;
+  }
+
+  putFehler(f: Omit<Fehlerbericht, 'id' | 'anzahl' | 'zuerstMs'>): void {
+    const alt = this.fehler.get(f.schluessel);
+    if (alt) {
+      alt.anzahl++;
+      alt.zuletztMs = f.zuletztMs;
+      if (f.konto) alt.konto = f.konto;
+      if (f.version) alt.version = f.version;
+      if (f.huelle) alt.huelle = f.huelle;
+      if (f.regelwerk) alt.regelwerk = f.regelwerk;
+      return;
+    }
+    this.fehler.set(f.schluessel, { ...f, id: this.naechsterFehler++, anzahl: 1, zuerstMs: f.zuletztMs });
+  }
+
+  listFehler(limit: number): Fehlerbericht[] {
+    return [...this.fehler.values()]
+      .sort((a, b) => b.zuletztMs - a.zuletztMs || b.id - a.id)
+      .slice(0, limit)
+      .map((f) => ({ ...f }));
+  }
+
+  dropFehler(id: number | 'alle'): number {
+    if (id === 'alle') {
+      const n = this.fehler.size;
+      this.fehler.clear();
+      return n;
+    }
+    for (const [k, f] of this.fehler) if (f.id === id) { this.fehler.delete(k); return 1; }
+    return 0;
   }
 
   getMeta(key: string): string | null {

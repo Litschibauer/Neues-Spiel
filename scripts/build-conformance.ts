@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { ermittleStand } from '../src/server/config.ts';
 import { join } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
 
@@ -237,8 +238,17 @@ function buildPageWithBundle(name: string): string {
   return template
     .replace('<!--BUNDLE-->', () => buildClientBundle())
     .replace('<!--SCHRIFT-->', () => buildSchrift())
+    .replace('<!--STAND-->', () => ermittleStand(ROOT, process.env.NEUES_SPIEL_VERSION))
     .replace('<!--ICONS-->', () => buildIcons())
     .replace('<!--SPRITES-->', () => buildSprites());
+}
+
+// Impressum und Datenschutz: eine eigene, kleine Seite im Stil des Spiels —
+// dieselbe Schrift, dieselben Farben, aber ohne das Spiel selbst.
+export function buildRechtPage(): string {
+  return resolveIncludes(readFileSync(join(ROOT, 'web', 'impressum.template.html'), 'utf8'))
+    .replace('<!--SCHRIFT-->', () => buildSchrift())
+    .replace('<!--STAND-->', () => ermittleStand(ROOT, process.env.NEUES_SPIEL_VERSION));
 }
 
 export function buildAdminPage(): string {
@@ -265,10 +275,14 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const admin = buildAdminPage();
   writeFileSync(join(outDir, 'admin.html'), admin);
 
+  const recht = buildRechtPage();
+  writeFileSync(join(outDir, 'impressum.html'), recht);
+
   console.log(
     `Prüfstand ${(page.length / 1024).toFixed(1)} kB → dist/conformance.html\n` +
       `Spiel      ${(farm.length / 1024).toFixed(1)} kB → dist/farm.html\n` +
       `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html\n` +
-      `Werkbank   ${(admin.length / 1024).toFixed(1)} kB → dist/admin.html`,
+      `Werkbank   ${(admin.length / 1024).toFixed(1)} kB → dist/admin.html\n` +
+      `Impressum  ${(recht.length / 1024).toFixed(1)} kB → dist/impressum.html`,
   );
 }

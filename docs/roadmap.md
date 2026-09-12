@@ -181,9 +181,9 @@ Sichert ab: dass das Offline-Versprechen aus Phase 0 auch mit sozialen Features 
 
 Der Rest des jetzigen Servers ist ein Werkzeug, kein Produkt:
 
-- **Kontowiederherstellung.** Der offene Punkt aus den Accounts oben.
-- **Datenbank** statt JSON-Datei; Command-Log hinter alten Snapshots abschneiden.
-- **TLS** und Rate-Limits pro Konto (R4).
+- ~~**Kontowiederherstellung.**~~ Erledigt (Wiederherstellungswort + Hofcode).
+- ~~**Datenbank**~~ statt JSON-Datei: erledigt (SQLite über `node:sqlite`).
+- ~~**TLS** und Rate-Limits pro Konto (R4).~~ Erledigt: TLS vor dem Server, Sync-Bremse je Konto.
 - **Snapshot-Signatur** (§9).
 - **Monitoring**, das Divergenz-Alarme sichtbar macht — sie sind das Frühwarnsystem für R1,
   und ohne Auswertung nutzlos.
@@ -303,8 +303,8 @@ Schritt wäre, nicht der erste — steht in [`skalierung.md`](skalierung.md).
 3. **Sicherungen außer Haus.** Die tägliche Sicherung läuft (`deploy/`, geprüft
    und bei laufendem Server), liegt aber auf derselben Platte. Ein `rsync` auf
    eine zweite Maschine ist der Rest.
-4. **Account-Wiederherstellung.** Schlüssel weg heißt Hof weg. Vor der ersten
-   echten Spielerschaft muss das gelöst sein — bewusst, mit einem zweiten Faktor,
-   nicht nebenbei.
+4. ~~**Account-Wiederherstellung.**~~ Erledigt: Wiederherstellungswort
+   (scrypt-Hash) plus Hofcode ergeben einen neuen Schlüssel, der alte verfällt.
+   Dazu Hof löschen, Sync-Bremse, Rückmeldungen, Fehlerberichte, Impressum.
 5. **M9, aufgeschobener Zufall.** Nur noch der Fall, in dem Vorwissen ein Cheat
    wäre: Überraschungskisten.

@@ -1,0 +1,205 @@
+<title>Impressum & Datenschutz — Hof</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" href="/icon.png">
+<meta name="theme-color" content="#2f7d5d">
+<style>
+<!--SCHRIFT-->
+  :root {
+    --ground: #f7f4ee; --surface: #ffffff; --sunk: #efeae0; --line: #e2dbcd;
+    --ink: #2b2521; --muted: #7d7266; --accent: #2f7d5d; --accent-soft: #e4f0ea;
+    --gold: #b8811f; --gold-soft: #f8efd9; --warn: #a8622a; --warn-soft: #f8ebe0;
+    --meadow: #a8c98a; --meadow-dark: #8fb372; --path: #d8c9a6;
+    --kante: #3b2b3c; --druck: rgba(59, 43, 60, .3);
+    --pixel: 'Pixelify Sans', 'Segoe UI', system-ui, sans-serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #16130f; --surface: #211d18; --sunk: #2b2620; --line: #38312a;
+      --ink: #f0ebe3; --muted: #a49889; --accent: #4fb083; --accent-soft: #163024;
+      --gold: #e0b055; --gold-soft: #2e2617; --warn: #d3915c; --warn-soft: #2f2318;
+      --meadow: #3c5138; --meadow-dark: #33472f; --path: #574c39;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body {
+    font: 15px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    padding-block: 0 3rem; padding-inline: 0;
+  }
+  /* Die Wiese oben: derselbe Pixelrand wie am Hof, nur als Kopf. */
+  .wiese {
+    background:
+      linear-gradient(var(--meadow), var(--meadow)) 0 0 / 100% 100% no-repeat,
+      var(--meadow);
+    background-image:
+      linear-gradient(90deg, transparent 0 8px, var(--meadow-dark) 8px 10px, transparent 10px 16px),
+      linear-gradient(transparent 0 8px, var(--meadow-dark) 8px 10px, transparent 10px 16px);
+    background-size: 16px 16px;
+    border-bottom: 4px solid var(--kante);
+    padding: 1.4rem 1rem 1rem; text-align: center;
+  }
+  .wiese h1 {
+    font-family: var(--pixel); font-weight: 700; margin: 0; font-size: 1.6rem;
+    color: #fff; text-shadow: 2px 2px 0 var(--kante); letter-spacing: .02em;
+  }
+  .wiese p { margin: .3rem 0 0; color: #fff; text-shadow: 1px 1px 0 var(--kante); font-size: .9rem; }
+  .weg {
+    height: 12px; border-bottom: 3px solid var(--kante);
+    background: repeating-linear-gradient(90deg, var(--path) 0 12px, var(--sunk) 12px 14px);
+  }
+  main { max-width: 42rem; margin: 0 auto; padding: 1.2rem 1rem 0; }
+  .schild {
+    background: var(--surface); border: 3px solid var(--kante); border-radius: 8px;
+    box-shadow: 0 5px 0 var(--druck); padding: 1rem 1.1rem 1.1rem; margin: 0 0 1.1rem;
+  }
+  .schild h2 {
+    font-family: var(--pixel); font-size: 1.15rem; margin: 0 0 .5rem; letter-spacing: .02em;
+  }
+  .schild h3 { font-size: .95rem; margin: 1rem 0 .3rem; }
+  .schild p, .schild li { margin: 0 0 .6rem; }
+  .schild ul { padding-left: 1.2rem; margin: 0 0 .6rem; }
+  .platzhalter {
+    display: inline-block; background: var(--gold-soft); color: var(--gold);
+    border: 2px dashed var(--gold); border-radius: 6px; padding: 0 .35rem;
+    font-family: var(--pixel); font-weight: 700; white-space: nowrap;
+  }
+  .hinweis {
+    background: var(--warn-soft); color: var(--warn); border: 2px solid var(--warn);
+    border-radius: 6px; padding: .6rem .8rem; font-size: .85rem; margin: 0 0 1.1rem;
+  }
+  .knopf {
+    display: inline-block; font-family: var(--pixel); font-weight: 700; text-decoration: none;
+    background: var(--accent); color: #fff; border: 2px solid var(--kante); border-radius: 6px;
+    padding: .55rem 1rem; box-shadow: 0 3px 0 var(--druck); margin-top: .4rem;
+  }
+  .knopf:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+  nav { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.1rem; }
+  nav a {
+    font-family: var(--pixel); font-weight: 700; font-size: .85rem; text-decoration: none;
+    color: var(--ink); background: var(--surface); border: 2px solid var(--kante); border-radius: 6px;
+    padding: .35rem .7rem; box-shadow: 0 3px 0 var(--druck);
+  }
+  .fuss { color: var(--muted); font-size: .78rem; text-align: center; margin-top: 1.5rem; }
+  .fuss a { color: inherit; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--sunk); padding: 0 .25rem; border-radius: 4px; }
+</style>
+
+<header class="wiese">
+  <h1>Impressum &amp; Datenschutz</h1>
+  <p>Wer den Hof betreibt — und was der Server über dich weiß.</p>
+</header>
+<div class="weg"></div>
+
+<main>
+  <nav>
+    <a href="/">← Zurück zum Hof</a>
+    <a href="#impressum">Impressum</a>
+    <a href="#datenschutz">Datenschutz</a>
+  </nav>
+
+  <div class="hinweis">
+    Die Felder mit gestricheltem Rand sind Platzhalter. Sie werden vom Betreiber ausgefüllt,
+    bevor das Spiel an Fremde geht — in <code>web/impressum.template.html</code>.
+  </div>
+
+  <section class="schild" id="impressum">
+    <h2>Impressum</h2>
+    <p>Angaben gemäß § 5 DDG (Digitale-Dienste-Gesetz).</p>
+    <p>
+      <span class="platzhalter">VORNAME NACHNAME</span><br>
+      <span class="platzhalter">STRASSE HAUSNUMMER</span><br>
+      <span class="platzhalter">PLZ ORT</span><br>
+      <span class="platzhalter">LAND</span>
+    </p>
+    <h3>Kontakt</h3>
+    <p>
+      E-Mail: <span class="platzhalter">POST@BEISPIEL.DE</span><br>
+      Telefon: <span class="platzhalter">+49 000 0000000</span> (nur, wenn gewünscht)
+    </p>
+    <h3>Verantwortlich für den Inhalt</h3>
+    <p><span class="platzhalter">VORNAME NACHNAME</span>, Anschrift wie oben.</p>
+    <h3>Das Spiel</h3>
+    <p>
+      Ein Farmspiel als Webseite und als App. Es ist ein privates Projekt in der
+      Erprobung, kostenlos, ohne Käufe im Spiel und ohne Werbung.
+    </p>
+  </section>
+
+  <section class="schild" id="datenschutz">
+    <h2>Datenschutz</h2>
+    <p>
+      Kurz gesagt: Der Server kennt weder deinen Namen noch deine E-Mail-Adresse.
+      Es gibt kein Konto mit Anmeldung, nur einen zufälligen Schlüssel — und der
+      liegt beim Server nur als Prüfsumme.
+    </p>
+
+    <h3>Verantwortlicher</h3>
+    <p><span class="platzhalter">VORNAME NACHNAME</span>, Anschrift und Kontakt wie im Impressum.</p>
+
+    <h3>Was gespeichert wird</h3>
+    <ul>
+      <li><b>Dein Spielstand</b>: der Hof, seine Waren, dein Fortschritt, der Hofname, den du wählst, und die Nachbarn, mit denen du dich verbindest.</li>
+      <li><b>Dein Schlüssel</b>: nur als Prüfsumme. Aus ihr lässt sich der Schlüssel nicht zurückrechnen.</li>
+      <li><b>Dein Wiederherstellungswort</b>, falls du eins setzt: ebenfalls nur als gesalzener Hash.</li>
+      <li><b>Technisches</b>: Zeitpunkt des letzten Abgleichs, eine zufällige Gerätekennung, Version des Spiels. Bei einem Fehler im Spiel: die Fehlermeldung, die Stelle im Programm und die grobe Geräteart (etwa „iOS · Browser“) — keine Kennnummer des Geräts.</li>
+      <li><b>Deine Rückmeldungen</b>, wenn du welche schreibst: der Text, dein Hofcode und die Version, damit der Betreiber nachvollziehen kann, was passiert ist.</li>
+      <li><b>Benachrichtigungen</b>, nur wenn du sie einschaltest: die Adresse, an die der Browser oder Apple sie zustellt. Ausschalten löscht sie.</li>
+    </ul>
+
+    <h3>Was nicht gespeichert wird</h3>
+    <ul>
+      <li>Kein Name, keine E-Mail, keine Telefonnummer, kein Geburtsdatum.</li>
+      <li>Keine Werbe-Kennungen, keine Tracker, keine Cookies von Dritten.</li>
+      <li>IP-Adressen werden nicht dauerhaft gespeichert. Sie dienen nur im Moment der Anfrage dazu, Missbrauch zu bremsen (etwa zu viele neue Höfe von derselben Adresse).</li>
+    </ul>
+
+    <h3>Auf deinem Gerät</h3>
+    <p>
+      Der Spielstand liegt auch auf deinem Gerät (im Browser-Speicher), damit du ohne
+      Netz weiterspielen kannst. Dazu Einstellungen wie Lautstärke. „Von diesem Gerät
+      abmelden“ im Spiel löscht das alles wieder.
+    </p>
+
+    <h3>Rechtsgrundlage und Zweck</h3>
+    <p>
+      Die Daten sind nötig, um das Spiel zu betreiben, das du nutzen möchtest
+      (Art. 6 Abs. 1 lit. b DSGVO). Fehlerberichte und die Missbrauchsbremse
+      dienen dem sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).
+    </p>
+
+    <h3>Wo die Daten liegen</h3>
+    <p>
+      Auf einem Server bei <span class="platzhalter">ANBIETER, ORT/LAND</span>. Die
+      Verbindung ist verschlüsselt (HTTPS). Es werden keine Daten an Dritte
+      weitergegeben. Für Benachrichtigungen auf dem iPhone geht die Nachricht über
+      Apples Push-Dienst; ihr Inhalt ist dabei verschlüsselt.
+    </p>
+
+    <h3>Wie lange</h3>
+    <p>
+      Solange dein Hof besteht. Du kannst ihn jederzeit selbst löschen: im Spiel
+      unter Zahnrad → Hof sichern → Hof löschen. Dann sind Hof, Waren, Nachbarn,
+      Angebote und Rückmeldungen sofort und endgültig weg. Sicherungskopien des
+      Servers werden nach <span class="platzhalter">14 TAGEN</span> überschrieben.
+    </p>
+
+    <h3>Deine Rechte</h3>
+    <p>
+      Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und
+      Widerspruch (Art. 15–21 DSGVO) — schreib an die Adresse im Impressum und nenne
+      deinen Hofcode. Beschwerden nimmt die Datenschutzaufsicht deines Bundeslandes
+      entgegen.
+    </p>
+
+    <h3>Kinder</h3>
+    <p>
+      Das Spiel fragt kein Alter ab und speichert keine Angaben zur Person. Ein
+      Hof ist an kein Kind und keinen Erwachsenen gebunden, sondern an einen Schlüssel.
+    </p>
+
+    <a class="knopf" href="/">Zurück zum Hof</a>
+  </section>
+
+  <p class="fuss">Stand der Seite: <!--STAND--> · <a href="/">Hof</a></p>
+</main>

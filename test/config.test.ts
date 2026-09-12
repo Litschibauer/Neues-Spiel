@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   ConfigError,
   describeConfig,
+  ermittleStand,
   isSecureTransport,
   resolveConfig,
 } from '../src/server/config.ts';
@@ -170,4 +174,29 @@ test('das Startprotokoll verrät, was läuft — sonst rät man beim Deployen', 
 
   assert.match(text, /spiel\.db/);
   assert.doesNotMatch(text, /save\.json/);
+});
+
+test('der Stand kommt aus .git, wenn ihn niemand setzt — HEAD, Zweig, packed-refs', () => {
+  const root = mkdtempSync(join(tmpdir(), 'ns-stand-'));
+  try {
+    assert.equal(ermittleStand(root), 'unbekannt', 'ohne .git bleibt es ehrlich');
+    assert.equal(ermittleStand(root, 'abc1234'), 'abc1234', 'die Variable gewinnt');
+    assert.equal(ermittleStand(root, 'unbekannt'), 'unbekannt');
+
+    mkdirSync(join(root, '.git', 'refs', 'heads'), { recursive: true });
+    writeFileSync(join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    writeFileSync(join(root, '.git', 'refs', 'heads', 'main'), 'deadbeefcafe0000\n');
+    assert.equal(ermittleStand(root), 'deadbee');
+
+    rmSync(join(root, '.git', 'refs', 'heads', 'main'));
+    writeFileSync(join(root, '.git', 'packed-refs'), '# pack-refs\n0123456789abcdef refs/heads/main\n');
+    assert.equal(ermittleStand(root), '0123456', 'gepackte Referenzen zählen auch');
+
+    writeFileSync(join(root, '.git', 'HEAD'), 'fedcba9876543210\n');
+    assert.equal(ermittleStand(root), 'fedcba9', 'abgekoppelter Kopf');
+
+    assert.equal(resolveConfig({}, ['--env=dev'], root).version, 'fedcba9');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

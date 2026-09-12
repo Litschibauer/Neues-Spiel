@@ -115,6 +115,47 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
     // 'web' = Browser über Web-Push, 'ios' = native App über APNs.
     db.exec(`alter table push_abos add column art text not null default 'web';`);
   },
+
+  (db) => {
+    // Der Weg zurück in den Hof: ein selbst gewähltes Wiederherstellungswort,
+    // gespeichert nur als scrypt-Hash. Dazu zwei Briefkästen — Rückmeldungen
+    // der Spieler und Fehlerberichte der Geräte —, die die Werkbank liest.
+    db.exec(`
+      alter table accounts add column recovery_hash text;
+
+      create table rueckmeldungen (
+        id        integer primary key autoincrement,
+        konto     text not null,
+        code      text not null default '',
+        art       text not null,
+        text      text not null,
+        version   text not null default '',
+        huelle    text not null default '',
+        regelwerk integer not null default 0,
+        geraet    text not null default '',
+        zeit_ms   integer not null,
+        erledigt  integer not null default 0
+      );
+      create index rueckmeldungen_zeit on rueckmeldungen (zeit_ms);
+
+      create table fehler (
+        id         integer primary key autoincrement,
+        schluessel text not null unique,
+        konto      text not null default '',
+        text       text not null,
+        stapel     text not null default '',
+        ort        text not null default '',
+        version    text not null default '',
+        huelle     text not null default '',
+        regelwerk  integer not null default 0,
+        geraet     text not null default '',
+        zuerst_ms  integer not null,
+        zuletzt_ms integer not null,
+        anzahl     integer not null default 1
+      );
+      create index fehler_zuletzt on fehler (zuletzt_ms);
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

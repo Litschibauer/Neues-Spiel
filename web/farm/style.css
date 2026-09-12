@@ -1827,3 +1827,48 @@
     .card:active, .kaestchen:active, .abfahrt:active, .chip:active { transform: none; }
     .sheet-close:active, .primär:active, .zahnrad:active, .go:active { transform: none; }
   }
+
+  /* — Hof sichern, Rückmeldung, Wiederherstellung ——————————————————————— */
+  #wieder { display: flex; flex-direction: column; gap: .6rem; }
+  .gate .link {
+    background: none; border: 0; padding: .2rem; color: var(--muted);
+    font-size: .8rem; text-decoration: underline; cursor: pointer; width: 100%;
+  }
+  .schluessel {
+    display: block; font-family: var(--num); font-size: .95rem; letter-spacing: .04em;
+    word-break: break-all; margin: .35rem 0; padding: .55rem .5rem;
+    background: var(--sunk); border: 2px solid var(--kante); border-radius: 6px;
+    user-select: all; color: var(--ink);
+  }
+  .schluessel.verdeckt { letter-spacing: .12em; color: var(--muted); user-select: none; }
+  .knopfreihe { display: flex; gap: .5rem; margin: -.3rem 0 .6rem; }
+  .knopfreihe > * { flex: 1; }
+  .knopfreihe .ghost {
+    border: 2px solid var(--kante); border-radius: 6px; background: var(--surface); color: var(--ink);
+    padding: .55rem; font-family: var(--pixel); font-weight: 700; font-size: .8rem;
+    box-shadow: 0 3px 0 var(--druck);
+  }
+  .knopfreihe .ghost:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+  .sheet .sub { margin: 0 0 .5rem; color: var(--muted); font-size: .82rem; }
+  .eingabe button.gefahr { background: var(--bad); color: #fff; }
+  .eingabe button.gefahr.sicher { animation: gefahrPuls .6s ease-in-out infinite alternate; }
+  @keyframes gefahrPuls { from { filter: brightness(1); } to { filter: brightness(1.25); } }
+  .card.sicher { border-color: var(--bad); }
+  .card.sicher .top { color: var(--bad); }
+  .pick-art { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .6rem; }
+  .pick-art button {
+    flex: 1 1 40%; padding: .55rem .4rem; font-size: .8rem; font-weight: 700;
+    border: 2px solid var(--kante); border-radius: 6px; background: var(--surface); color: var(--ink);
+    box-shadow: 0 3px 0 var(--druck); font-family: var(--pixel);
+  }
+  .pick-art button.an { background: var(--accent); color: var(--on-accent); }
+  .pick-art button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+  .sheet textarea {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 6rem;
+    font: inherit; font-size: .9rem; padding: .6rem .7rem; color: var(--ink);
+    background: var(--surface); border: 2px solid var(--kante); border-radius: 6px;
+  }
+  .sheet textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #rueck-senden { width: 100%; margin: .6rem 0 .4rem; padding: .7rem; font-size: .9rem; }
+  #rueck-senden[disabled] { opacity: .45; }
+  @media (prefers-reduced-motion: reduce) { .eingabe button.gefahr.sicher { animation: none; } }
