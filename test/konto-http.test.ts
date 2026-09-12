@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildRechtPage } from '../scripts/build-conformance.ts';
 
 // Der Weg zurück in den Hof, das Löschen, die Briefkästen und die Bremsen —
 // gegen den echten HTTP-Server, so wie ein Gerät ihn sieht. Läuft ohne
@@ -29,6 +30,13 @@ function zaehleHoefe(dbPfad: string): number {
 }
 
 test('Konto über HTTP: Wort, Wiederherstellung, Bremsen, Briefkästen, Löschen', async (t) => {
+  // Die Impressum-Seite kommt aus dist/ — auf einem frischen Checkout (CI)
+  // gibt es das noch nicht. Nur diese eine Seite bauen, nicht den ganzen Prüfstand.
+  const rechtSeite = join(ROOT, 'dist', 'impressum.html');
+  if (!existsSync(rechtSeite)) {
+    mkdirSync(join(ROOT, 'dist'), { recursive: true });
+    writeFileSync(rechtSeite, buildRechtPage());
+  }
   const dir = mkdtempSync(join(tmpdir(), 'ns-konto-http-'));
   const server = spawn('node', ['--experimental-strip-types', '--no-warnings=ExperimentalWarning', 'src/server/http.ts', '--env=dev'], {
     cwd: ROOT,
