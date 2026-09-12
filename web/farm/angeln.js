@@ -10,6 +10,13 @@
 // Tippen aufs Hof-Boot: heil → rüber zum See, kaputt → Reparatur-Menü.
 function bootTap() {
   if (!isActive) return;
+  if (besuchAktiv()) {
+    // Sein Boot, sein See — nur zum Schauen.
+    var b = besuchSicht();
+    if (b && b.angeln && b.angeln.boot && b.angeln.boot.repariert) wechselZone(true);
+    else toast('Sein Boot ist noch kaputt', true);
+    return;
+  }
   var v = NS.farmView(client.preview(), rules, navigator.onLine);
   var a = v.angeln;
   if (!a) { toast('Hier gibt es keinen See', true); return; }
@@ -73,7 +80,7 @@ function zeichneBootSheet(v) {
 // Die Angelstellen sind kleine Inseln (siehe artSeeRaum 'spot'), am Strand oben
 // links das Strandhaus (Köder herstellen), rechts der Steg zurück zum Hof.
 function renderSeeWelt(v) {
-  ['brett', 'lagerhaus', 'stand', 'nachbarn', 'wagen', 'kiste', 'boot'].forEach(function (id) {
+  ['brett', 'lagerhaus', 'stand', 'nachbarn', 'abenteuer', 'wagen', 'kiste', 'boot'].forEach(function (id) {
     var e = $(id); if (e) e.hidden = true;
   });
   ['hindernisse', 'erweiterungen', 'kisten'].forEach(function (id) {
@@ -161,6 +168,7 @@ function renderSeeWelt(v) {
 
 function seeObjTap(o, tile) {
   if (o.tap === 'zurueck') { wechselZone(false); return; }
+  if (besuchAktiv()) { toast('Nur zum Schauen — das sind seine Reusen'); return; }
   if (o.tap === 'angeln') { stelleTap(o.stelle, tile); return; }
   if (o.tap === 'haus') { oeffneKoeder(); return; }
 }
@@ -172,6 +180,10 @@ function seeHudMalen(v) {
   if (!hud) return;
   hud.hidden = false;
   var a = v.angeln;
+  if (besuchAktiv()) {
+    $('see-hud-info').innerHTML = 'Zu Besuch am See von <b>' + (besuchDaten ? besuchDaten.name : '…') + '</b> · 🎣 ' + (a ? a.gefangen : 0) + ' Fänge';
+    return;
+  }
   $('see-hud-info').innerHTML =
     iconTag('bait') + ' <b>' + (a ? a.bait : 0) + '</b> Köder · 🎣 ' + (a ? a.gefangen : 0) + ' Fänge';
 }

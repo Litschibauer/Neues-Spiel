@@ -3215,15 +3215,15 @@ try {
        var karte = document.querySelector('#zeitung .card.anzeige');
        if (!karte) return 'keine Anzeige';
        karte.click();
-       return document.getElementById('besuch-bg').hidden ? 'nichts passiert' : 'unterwegs';
+       return document.getElementById('besuch-leiste').hidden ? 'nichts passiert' : 'unterwegs';
      })()`,
   );
-  await sleep(1200);
+  await sleep(1500);
   const beimNachbarn = await evaluate<string>(
     cdp,
     `(function () {
-       document.getElementById('besuch-stand-knopf').click();
-       return document.getElementById('besuch-titel').textContent + '|' +
+       document.getElementById('stand').click();
+       return document.getElementById('fremdstand-titel').textContent + '|' +
          document.querySelectorAll('#besuch-stand .kaestchen').length;
      })()`,
   );
@@ -3235,7 +3235,7 @@ try {
 
   await evaluate(cdp, `document.getElementById('fremdstand-close').click()`);
   await sleep(200);
-  await evaluate(cdp, `document.getElementById('besuch-close').click()`);
+  await evaluate(cdp, `document.getElementById('besuch-zurueck').click()`);
   await sleep(200);
   await evaluate(cdp, `document.getElementById('stand-close').click()`);
   await sleep(200);
@@ -3363,38 +3363,60 @@ try {
   ]);
   check('Der Nachbar pflanzt kurz vor dem Besuch etwas Langsames', gesaet.ok, gesaet.reason ?? gesaet.kind);
 
+  const eigenePlaetze = await evaluate<string>(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].map(function (p) { return p.getAttribute('data-platz'); }).join(',')`,
+  );
   await evaluate(cdp, `document.querySelector('#freundeliste .nachbar .go').click()`);
-  await sleep(1200);
+  await sleep(1500);
   const besuchBild = await evaluate<{
     titel: string;
     plots: number;
+    plaetze: string;
     boden: boolean;
     hindernisse: number;
     standKnopf: boolean;
     offen: boolean;
+    blatt: boolean;
+    eigeneMoebel: boolean;
+    bauen: boolean;
+    fremd: boolean;
   }>(
     cdp,
     `(function () {
+       var hof = document.getElementById('hof');
+       var hammer = document.getElementById('bauen');
        return {
-         titel: document.getElementById('besuch-titel').textContent,
-         plots: document.querySelectorAll('#besuch-plots .plot').length,
-         boden: document.getElementById('besuch-scene').childElementCount > 0,
-         hindernisse: document.querySelectorAll('#besuch-hindernisse .hindernis').length,
-         standKnopf: !document.getElementById('besuch-stand-knopf').disabled,
-         offen: !document.getElementById('besuch-bg').hidden,
+         titel: document.getElementById('besuch-name').textContent,
+         plots: document.querySelectorAll('#plots .plot').length,
+         plaetze: [...document.querySelectorAll('#plots .plot')].map(function (p) { return p.getAttribute('data-platz'); }).join(','),
+         boden: document.getElementById('scene').childElementCount > 0,
+         hindernisse: document.querySelectorAll('#hindernisse .hindernis').length,
+         standKnopf: !document.getElementById('stand').hidden && !document.getElementById('stand').disabled &&
+           /Sein Stand/.test(document.getElementById('stand').getAttribute('aria-label') || ''),
+         offen: !document.getElementById('besuch-leiste').hidden,
+         blatt: [...document.querySelectorAll('.sheet-bg')].every(function (b) { return b.hidden; }),
+         eigeneMoebel: !document.getElementById('lagerhaus').hidden || !document.getElementById('brett').hidden,
+         bauen: hammer.offsetParent !== null,
+         fremd: hof.classList.contains('besuch'),
        };
      })()`,
   );
   check(
-    'Man steht auf seinem ganzen Hof — Landschaft, Hindernisse, Gebäude',
-    besuchBild.offen && besuchBild.titel === 'Bens Bauernhof' && besuchBild.plots > 0 &&
-      besuchBild.boden && besuchBild.hindernisse > 0,
-    JSON.stringify(besuchBild),
+    'Der Besuch zeigt seinen ganzen Hof im Hof selbst — kein Blatt, kein Vorschaubild: Landschaft, Hindernisse, Gebäude',
+    besuchBild.offen && besuchBild.blatt && besuchBild.fremd && besuchBild.titel === 'Bens Bauernhof' && besuchBild.plots > 0 &&
+      besuchBild.boden && besuchBild.hindernisse > 0 && besuchBild.plaetze !== eigenePlaetze,
+    `Leiste ${besuchBild.offen} · Blätter zu ${besuchBild.blatt} · ${besuchBild.plots} Plätze (eigene: ${eigenePlaetze.split(',').length}) · Hindernisse ${besuchBild.hindernisse}`,
   );
+  // Fuer den Blick von aussen: ein Bild des Besuchs, wenn ein Ordner genannt ist.
+  if (process.env.NS_FOTOS) {
+    const foto = (await cdp.send('Page.captureScreenshot', { format: 'png' })) as { data: string };
+    (await import('node:fs')).writeFileSync(join(process.env.NS_FOTOS, 'besuch.png'), Buffer.from(foto.data, 'base64'));
+  }
   check(
-    'Sein Stand steht auf dem Hof und will angetippt werden',
-    besuchBild.standKnopf,
-    `Stand tippbar: ${besuchBild.standKnopf}`,
+    'Zu Besuch weichen die eigenen Möbel und der Bauhammer — sein Stand steht da und will angetippt werden',
+    besuchBild.standKnopf && !besuchBild.eigeneMoebel && !besuchBild.bauen,
+    `Stand ${besuchBild.standKnopf} · eigene Möbel ${besuchBild.eigeneMoebel} · Hammer ${besuchBild.bauen}`,
   );
 
   const helferVorher = Number(await evaluate<string>(cdp, `document.getElementById('xp').textContent`)
@@ -3415,10 +3437,10 @@ try {
   const geholfen = await evaluate<string>(
     cdp,
     `(function () {
-       var kachel = [...document.querySelectorAll('#besuch-plots .plot')]
+       var kachel = [...document.querySelectorAll('#plots .plot.hilfe')]
          .find(function (p) { return !p.disabled; });
        if (!kachel) return 'nichts zu tun: ' +
-         [...document.querySelectorAll('#besuch-plots .plot')]
+         [...document.querySelectorAll('#plots .plot')]
            .map(function (p) { return p.getAttribute('aria-label'); }).join(' / ');
        kachel.click();
        return 'getippt';
@@ -3428,7 +3450,7 @@ try {
   const nachHilfe = await evaluate<string>(
     cdp,
     `document.getElementById('toast').textContent + '|' +
-     (document.querySelector('#besuch-kopf .hilfen') || { ariaLabel: 'keine' }).ariaLabel`,
+     (document.getElementById('besuch-hilfen') || { ariaLabel: 'keine' }).ariaLabel`,
   );
   check(
     'Helfen gibt XP und zählt herunter, wie oft es heute noch geht',
@@ -3444,7 +3466,7 @@ try {
     `${helferVorher} → ${heuteDrin.state.xp} XP`,
   );
 
-  await evaluate(cdp, `document.getElementById('besuch-stand-knopf').click()`);
+  await evaluate(cdp, `document.getElementById('stand').click()`);
   await sleep(400);
   const standVorKauf = await evaluate<number>(
     cdp,
@@ -3475,13 +3497,47 @@ try {
   await sleep(300);
   const zurueckAufHof = await evaluate<boolean>(
     cdp,
-    `!document.getElementById('besuch-bg').hidden
+    `!document.getElementById('besuch-leiste').hidden
        && document.getElementById('fremdstand-bg').hidden`,
   );
   check('Nach dem Kauf steht man wieder auf seinem Hof', zurueckAufHof);
 
-  await evaluate(cdp, `document.getElementById('besuch-close').click()`);
-  await sleep(200);
+  // Nur zum Schauen: Wischen erntet nichts, gesperrtes Land ist stumm.
+  const nurSchauen = await evaluate<{ sperren: number; stumm: number; hilfeFrei: number }>(
+    cdp,
+    `(function () {
+       var sperren = [...document.querySelectorAll('#erweiterungen .feld-sperre')];
+       return {
+         sperren: sperren.length,
+         stumm: sperren.filter(function (b) { return b.disabled; }).length,
+         hilfeFrei: [...document.querySelectorAll('#plots .plot')].filter(function (p) { return !p.disabled && !p.classList.contains('hilfe'); }).length,
+       };
+     })()`,
+  );
+  check(
+    'Auf dem fremden Hof ist alles nur zum Schauen: gesperrtes Land stumm, antippbar nur, wo man helfen kann',
+    nurSchauen.sperren === nurSchauen.stumm,
+    `${nurSchauen.stumm} von ${nurSchauen.sperren} Sperren stumm · ${nurSchauen.hilfeFrei} andere antippbar`,
+  );
+
+  await evaluate(cdp, `document.getElementById('besuch-zurueck').click()`);
+  await sleep(700);
+  const wiederDaheim = await evaluate<{ leiste: boolean; plaetze: string; moebel: boolean; fremd: boolean }>(
+    cdp,
+    `(function () {
+       return {
+         leiste: document.getElementById('besuch-leiste').hidden,
+         plaetze: [...document.querySelectorAll('#plots .plot')].map(function (p) { return p.getAttribute('data-platz'); }).join(','),
+         moebel: !document.getElementById('lagerhaus').hidden && !document.getElementById('brett').hidden,
+         fremd: document.getElementById('hof').classList.contains('besuch'),
+       };
+     })()`,
+  );
+  check(
+    'Zurück heißt zurück: der eigene Hof mit eigenen Plätzen und Möbeln',
+    wiederDaheim.leiste && wiederDaheim.moebel && !wiederDaheim.fremd && wiederDaheim.plaetze === eigenePlaetze,
+    `Leiste zu ${wiederDaheim.leiste} · Möbel ${wiederDaheim.moebel} · Plätze gleich ${wiederDaheim.plaetze === eigenePlaetze}`,
+  );
 
   await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
   await cdp.send('Network.emulateNetworkConditions', {
@@ -3516,7 +3572,7 @@ try {
     cdp,
     `JSON.stringify({
        freunde: !document.getElementById('freunde-bg').hidden,
-       besuch: !document.getElementById('besuch-bg').hidden,
+       besuch: !document.getElementById('besuch-leiste').hidden,
        meldung: document.getElementById('toast').textContent,
      })`,
   );

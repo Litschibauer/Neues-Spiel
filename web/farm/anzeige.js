@@ -13,20 +13,26 @@ function render() {
   renderAbenteuer(v);
   renderHofinfo(v);
 
+  // Zu Besuch zeigt der Hof den Nachbarn — mit dessen Sicht, nicht der eigenen.
+  // Menüs, Geldbeutel und Lager bleiben die eigenen.
+  var hofV = besuchAktiv() ? besuchSicht() : v;
+  hofSicht = hofV;
+  $('hof').classList.toggle('besuch', besuchAktiv());
+  if (!hofV) return;
+
   // Angel-Dimension: eigenes Raster, eigene Objekte — die Hof-Renderer bleiben aus.
   if (typeof seeAktiv !== 'undefined' && seeAktiv) {
-    renderPlots(v);
-    seeHudMalen(v);
+    renderPlots(hofV);
+    seeHudMalen(hofV);
     renderSheet(v); // Strandhaus-Menü (Köder) frisch halten
     return;
   }
 
-  renderPlots(v);
-  renderTruck(v);
-  renderMoebel(v);
-  renderHindernisse(v);
-  renderErweiterungen(v);
-  renderKisten(v);
+  renderPlots(hofV);
+  if (besuchAktiv()) { $('kisten').textContent = ''; besuchMoebel(hofV); }
+  else { renderTruck(v); renderMoebel(v); renderKisten(v); }
+  renderHindernisse(hofV);
+  renderErweiterungen(hofV);
   renderRequests(v);
   renderMail(v);
   renderMarket(v);
@@ -44,7 +50,7 @@ function render() {
   renderSheet(v);
   renderEmpfang();
   renderNaechstes(v);
-  wetterUebernehmen(v);
+  wetterUebernehmen(hofV);
   momentePruefen(v);
   winkeAnwenden();
   bonusKnopf();
@@ -184,6 +190,11 @@ function renderPlots(v) {
     tile.disabled = (p.stall || p.capacity > 1 || p.baum)
       ? false
       : (p.tap === 'none' && !p.busy ? p.blocked !== 'inputs' : false);
+    if (besuchAktiv()) {
+      // Fremder Hof: nur Laufendes ist antippbar — zum Helfen.
+      tile.disabled = !p.busy;
+      tile.classList.toggle('hilfe', p.busy && besuchHilfenOffen() > 0);
+    }
     tile.style.left = ort.left + '%';
     tile.style.top = ort.top + '%';
     tile.style.width = ort.width + '%';
@@ -242,6 +253,7 @@ function renderPlots(v) {
 
     tile.addEventListener('click', function () {
       if (Date.now() - klickSchlucken < 400) return;
+      if (besuchAktiv()) { besuchTap(p); return; }
       tapPlot(p.index);
     });
     tile.addEventListener('pointerdown', function (e) { ziehStart(e, p.index, tile); });
@@ -393,7 +405,7 @@ function renderHindernisse(v) {
   var box = $('hindernisse');
   if (!hatRaster()) { box.textContent = ''; hindernisStand = null; return; }
 
-  var stand = raster().w + 'x' + raster().h + '|' + v.obstacles.map(function (h) {
+  var stand = (besuchAktiv() ? 'b|' : '') + raster().w + 'x' + raster().h + '|' + v.obstacles.map(function (h) {
     return h.index + (h.removable ? 'r' : '') + (h.locked ? 'l' : '');
   }).join(',');
   if (stand === hindernisStand) return;
@@ -426,6 +438,7 @@ function renderHindernisse(v) {
     } else {
       knopf.addEventListener('click', function () { tippeHindernis(h); });
     }
+    if (besuchAktiv()) knopf.disabled = true;
     box.appendChild(knopf);
   });
 }
@@ -461,7 +474,7 @@ function renderErweiterungen(v) {
   if (!box) return;
   if (!hatRaster()) { box.textContent = ''; sperrStand = null; return; }
 
-  var stand = raster().w + 'x' + raster().h + '|' + (v.expansions || []).map(function (e) {
+  var stand = (besuchAktiv() ? 'b|' : '') + raster().w + 'x' + raster().h + '|' + (v.expansions || []).map(function (e) {
     return e.id + (e.unlocked ? 'u' : '') + (e.reachedLevel ? 'r' : '') + (e.affordable ? 'a' : '');
   }).join(',');
   if (stand === sperrStand) return;
@@ -493,7 +506,8 @@ function renderErweiterungen(v) {
         : '<b>ab Stufe ' + e.minLevel + '</b>') + '</span>';
     }
     knopf.setAttribute('aria-label', 'Neues Land, ab Stufe ' + e.minLevel);
-    knopf.addEventListener('click', function () { oeffneErweiterung(e.id); });
+    if (besuchAktiv()) knopf.disabled = true;
+    else knopf.addEventListener('click', function () { oeffneErweiterung(e.id); });
     box.appendChild(knopf);
   });
 }
@@ -1780,6 +1794,7 @@ function restVon(p) {
 var naechstesZiel = null;
 
 function renderNaechstes(v) {
+  if (besuchAktiv()) { $('naechstes').hidden = true; return; }
   var knopf = $('naechstes');
   if (!knopf) return;
   var schritt = view === 'farm' ? naechsterSchritt(v) : null;

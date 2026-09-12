@@ -214,10 +214,32 @@ function freundHinzu() {
     .catch(function () { toast('Diesen Code kennt niemand', true); });
 }
 
+// — Besuch: der fremde Hof in voller Groesse ——————————————————————————————
+// Kein Vorschaubild mehr: Der Hof des Nachbarn steht im Hof selbst, mit
+// Kamera, Zoom und Landschaft wie daheim. Man kann sich umsehen, bei Laufendem
+// helfen, an seinem Stand kaufen und — wenn sein Boot faehrt — an seinen See.
+// Alles andere ist nur zum Schauen: keine Ernte, keine Saat, kein Bauen.
+var hofSicht = null; // die Sicht, die der Hof gerade zeigt — eigen oder Besuch
+
+function besuchAktiv() { return besuchCode !== null; }
+
+// Der Hof muss von Grund auf neu gemalt werden, wenn ein anderer Hof drankommt.
+function hofNeuAufbauen() {
+  kamera.gesetzt = false;
+  var sc = $('scene');
+  if (sc) sc.dataset.stand = '';
+  hindernisStand = null;
+  sperrStand = null;
+}
+
 function besuche(code) {
   besuchCode = code;
+  besuchDaten = null;
   client.besuch = code;
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) wechselZone(false);
+  hofNeuAufbauen();
   show('besuch');
+  besuchLeisteMalen();
   besuchHolen();
   attempt(true);
   if (besuchTimer) clearInterval(besuchTimer);
@@ -225,26 +247,37 @@ function besuche(code) {
 }
 
 function besuchEnde() {
+  if (besuchCode === null && besuchDaten === null) return;
   besuchCode = null;
   besuchDaten = null;
   client.besuch = null;
   if (besuchTimer) { clearInterval(besuchTimer); besuchTimer = null; }
+  if (typeof seeAktiv !== 'undefined' && seeAktiv) seeAktiv = false;
+  hofNeuAufbauen();
+  besuchLeisteMalen();
 }
 
 function besuchHolen() {
   if (!besuchCode || document.hidden) return;
-  api('/api/besuch?code=' + encodeURIComponent(besuchCode))
+  var code = besuchCode;
+  api('/api/besuch?code=' + encodeURIComponent(code))
     .then(function (d) {
-      besuchDaten = d;
-      try {
-        zeichneBesuch();
-      } catch (e) {
-        $('besuch-kopf').innerHTML = '<p class="empty">Fehler beim Zeichnen: ' + e.message + '</p>';
+      if (besuchCode !== code) return;
+      if (d.rulesetVersion !== rules.version) {
+        toast('Dieser Hof läuft auf einer neueren Fassung — bitte das Spiel aktualisieren', true);
+        show('farm');
+        return;
       }
+      var erster = besuchDaten === null;
+      besuchDaten = d;
+      besuchLeisteMalen();
+      if (erster) hofNeuAufbauen();
+      render();
     })
     .catch(function () {
       if (netzWache()) return;
-      $('besuch-kopf').innerHTML = '<p class="empty">Der Hof ist gerade nicht erreichbar.</p>';
+      toast('Der Hof ist gerade nicht erreichbar', true);
+      show('farm');
     });
 }
 
@@ -254,236 +287,106 @@ function fremdeUhr() {
   return besuchDaten.tick + Math.max(0, vergangen);
 }
 
-function fremdeRegeln() {
-  return NS.getRuleset(besuchDaten.rulesetVersion);
+// Die Sicht auf den fremden Hof — dieselbe Rechnung wie fuer den eigenen, nur
+// mit seiner Uhr.
+function besuchSicht() {
+  if (!besuchDaten || !besuchDaten.zustand) return null;
+  var zustand = Object.assign({}, besuchDaten.zustand, { tick: fremdeUhr() });
+  return NS.farmView(zustand, rules, true);
 }
 
-function zeichneBesuch() {
-  if (!besuchDaten) return;
+function besuchHilfenOffen() {
+  if (!besuchDaten) return 0;
+  return Math.max(0, besuchDaten.proTag - besuchDaten.heute);
+}
+
+function besuchLeisteMalen() {
+  var leiste = $('besuch-leiste');
+  if (!leiste) return;
+  leiste.hidden = !besuchAktiv();
+  if (!besuchAktiv()) return;
   var d = besuchDaten;
-  $('besuch-titel').textContent = d.name;
-
-  zeichneFremdeFarm(d);
-  zeichneBesuchKopf(d);
-  if (view === 'fremdstand') zeichneFremdenStand(d);
-}
-
-function zeichneFremdeFarm(d) {
-  var regeln = fremdeRegeln();
-  var jetzt = fremdeUhr();
-
-  var szene = $('besuch-scene');
-  if (szene.dataset.stand !== 'gemalt') {
-    szene.innerHTML = artBodenPixel(false);
-    szene.dataset.stand = 'gemalt';
+  $('besuch-name').textContent = d ? d.name : 'Zu Besuch';
+  var offen = besuchHilfenOffen();
+  $('besuch-sub').textContent = !d ? 'lädt …'
+    : d.code + ' · ' + (offen > 0 ? 'tippe auf etwas, das gerade läuft' : 'heute schon ' + d.proTag + '-mal geholfen');
+  var punkte = $('besuch-hilfen');
+  punkte.textContent = '';
+  var proTag = d ? d.proTag : 0;
+  punkte.setAttribute('aria-label', offen + ' von ' + proTag + ' Hilfen offen');
+  for (var i = 0; i < proTag; i++) {
+    var pt = document.createElement('i');
+    if (i >= offen) pt.className = 'weg';
+    punkte.appendChild(pt);
   }
-
-  zeichneFremdeHindernisse(d, regeln);
-
-  var box = $('besuch-plots');
-  box.textContent = '';
-
-  var sichtbar = [];
-  d.plots.forEach(function (p, i) {
-    if (p.level <= 0 || p.gx < 0) return;
-    sichtbar.push({ index: i, p: p, ort: plotKasten(i, { gx: p.gx, gy: p.gy }) });
-  });
-  sichtbar.sort(function (a, b) { return a.ort.tiefe - b.ort.tiefe; });
-
-  sichtbar.forEach(function (eintrag) {
-    var i = eintrag.index;
-    var p = eintrag.p;
-    var ort = eintrag.ort;
-    var groesse = regeln.plots[i].size || { w: 1, h: 1 };
-    var koerper = koerperFuer(regeln.plots[i].id, groesse.w, groesse.h);
-    ort.top -= koerper.hoch * zellH();
-    ort.height += koerper.hoch * zellH();
-
-    var laeuft = null;
-    var fertig = 0;
-    p.slots.forEach(function (s, j) {
-      if (s.recipe < 0) return;
-      var dauer = regeln.recipes[s.recipe].durationTicks;
-      var rest = dauer - (jetzt - s.startedAt);
-      if (rest <= 0) { fertig++; return; }
-      if (!laeuft || rest < laeuft.rest) laeuft = { slot: j, rest: rest, dauer: dauer };
-    });
-
-    var helfbar = !!laeuft && d.heute < d.proTag;
-
-    var kachel = document.createElement('button');
-    kachel.className = 'plot' + (fertig > 0 ? ' ripe' : '') + (helfbar ? ' hilfe' : '');
-    kachel.dataset.platz = String(i);
-    kachel.style.left = ort.left + '%';
-    kachel.style.top = ort.top + '%';
-    kachel.style.width = ort.width + '%';
-    kachel.style.height = ort.height + '%';
-    kachel.style.zIndex = String(1 + Math.round(ort.tiefe * 2));
-    kachel.disabled = !helfbar;
-
-    var art = document.createElement('div');
-    art.innerHTML =
-      '<svg class="art" viewBox="0 0 100 ' + koerper.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
-      fremdeKunst(regeln, i, p, laeuft, fertig, koerper) + '</svg>';
-    kachel.appendChild(art.firstChild);
-
-    if (laeuft) {
-      var bar = document.createElement('div');
-      bar.className = 'bar';
-      var fill = document.createElement('i');
-      fill.style.width = Math.round((1 - laeuft.rest / laeuft.dauer) * 100) + '%';
-      bar.appendChild(fill);
-      kachel.appendChild(bar);
-    }
-
-    // Nur laufende oder fertige Plätze beschriften — sonst überladen Labels
-    // wie „nichts zu tun" den fremden Hof.
-    if (laeuft || fertig > 0) {
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      var name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = fremdName(regeln, i);
-      var status = document.createElement('div');
-      status.className = 'status';
-      status.textContent = laeuft
-        ? (helfbar ? 'noch ' + timeText(laeuft.rest) + ' · helfen' : 'noch ' + timeText(laeuft.rest))
-        : 'fertig';
-      meta.appendChild(name);
-      meta.appendChild(status);
-      kachel.appendChild(meta);
-    }
-
-    if (helfbar) {
-      kachel.addEventListener('click', function () { hilf(i, laeuft.slot); });
-    }
-    box.appendChild(kachel);
-  });
-
-  zeichneFremdenStandKnopf(d);
-}
-
-function fremdeKunst(regeln, i, p, laeuft, fertig, koerper) {
-  return artRaumFor({
-    id: regeln.plots[i].id,
-    size: regeln.plots[i].size || { w: 1, h: 1 },
-    busy: !!laeuft,
-    done: fertig > 0,
-    progress: laeuft ? 1 - laeuft.rest / laeuft.dauer : 0,
-    producing: null,
-    capacity: p.slots.length,
-    stall: regeln.plots[i].animal ? { animals: p.tiere } : null,
-    baum: p.baum || null,
-  }, koerper);
-}
-
-function fremdName(regeln, i) {
-  var id = regeln.plots[i].id;
-  if (id.indexOf('field-') === 0) return 'Feld ' + id.slice(6);
-  if (id.indexOf('coop-') === 0) return 'Hühnerstall';
-  if (id.indexOf('pasture-') === 0) return 'Kuhweide';
-  if (id.indexOf('apple-tree') === 0) return 'Apfelbaum';
-  return nameOf(id);
-}
-
-// Liegt ein Hindernis in noch gesperrtem Land des fremden Hofs? Dann nicht
-// zeichnen — sonst wirkt der Besuch mit dem vielen Bewuchs überladen.
-function fremdVerborgen(regeln, h, expandiert) {
-  var exps = regeln.expansions || [];
-  for (var k = 0; k < exps.length; k++) {
-    var e = exps[k];
-    if (expandiert.indexOf(e.id) >= 0) continue;
-    if (h.gx < e.gx + e.w && e.gx < h.gx + h.w && h.gy < e.gy + e.h && e.gy < h.gy + h.h) return true;
+  var knopf = $('besuch-nachbar');
+  knopf.hidden = !d;
+  if (d) {
+    knopf.className = d.stand === 'freund' ? 'an' : '';
+    knopf.textContent = d.stand === 'freund' ? 'Nachbar'
+      : d.stand === 'gefragt' ? 'gefragt'
+      : d.stand === 'wartet' ? 'Annehmen'
+      : 'Anfragen';
   }
-  return false;
 }
 
-function zeichneFremdeHindernisse(d, regeln) {
-  var box = $('besuch-hindernisse');
-  box.textContent = '';
-  if (!regeln.grid || !regeln.obstacles) return;
+function besuchNachbarschaft() {
+  var d = besuchDaten;
+  if (!d) return;
+  var weg = d.stand === 'freund' || d.stand === 'gefragt';
+  api('/api/freunde?code=' + encodeURIComponent(d.code), { method: weg ? 'DELETE' : 'POST' })
+    .then(function (a) {
+      toast(weg ? 'Nachbarschaft beendet'
+        : a && a.stand === 'freund' ? 'Ihr seid jetzt Nachbarn'
+        : 'Anfrage geschickt — er muss zustimmen');
+      besuchHolen();
+      freundeLaden();
+    })
+    .catch(function () { toast('Ging nicht', true); });
+}
 
-  var geraeumt = d.clearedObstacles || [];
-  var expandiert = d.expandiert || [];
-  regeln.obstacles.forEach(function (h, index) {
-    if (geraeumt.indexOf(index) >= 0) return;
-    if (fremdVerborgen(regeln, h, expandiert)) return;
-    var kasten = hindernisKasten({ gx: h.gx, gy: h.gy, w: h.w, h: h.h, kind: h.kind });
-    var m = koerperHindernis(h.kind, h.w, h.h);
-    var ding = document.createElement('div');
-    ding.className = 'moebel hindernis';
-    ding.style.left = kasten.left + '%';
-    ding.style.top = (kasten.top - m.hoch * zellH()) + '%';
-    ding.style.width = kasten.width + '%';
-    ding.style.height = (kasten.height + m.hoch * zellH()) + '%';
-    ding.style.zIndex = String(1 + Math.round(kasten.tiefe * 2));
-    ding.innerHTML =
-      '<svg class="art" viewBox="0 0 100 ' + m.vh + '" preserveAspectRatio="none" aria-hidden="true">' +
-      artHindernisRaum(h.kind, m, index) + '</svg>';
-    box.appendChild(ding);
+// Ein Tipp auf einen fremden Platz: Laeuft dort etwas und ist noch Hilfe
+// uebrig, hilft man. Sonst gibt es nur ein Wort.
+function besuchTap(p) {
+  if (!besuchDaten) return;
+  var laufend = null;
+  p.slots.forEach(function (s) {
+    if (s.busy && (!laufend || s.remaining < laufend.remaining)) laufend = s;
   });
+  if (!laufend) { toast('Hier läuft gerade nichts — nur zum Schauen'); return; }
+  if (besuchHilfenOffen() <= 0) { toast('Heute schon ' + besuchDaten.proTag + '-mal geholfen', true); return; }
+  hilf(p.index, laufend.index);
 }
 
-function zeichneFremdenStandKnopf(d) {
-  var knopf = $('besuch-stand-knopf');
-  var offen = d.stand.filter(function (o) { return o.verkauft <= 0; });
-  moebel(knopf, {}, 'Sein Stand', offen.length, 'stand');
-  knopf.disabled = offen.length === 0;
-  knopf.onclick = function () {
-    zeichneFremdenStand(besuchDaten);
-    show('fremdstand');
-  };
-}
-
-function zeichneBesuchKopf(d) {
-  var box = $('besuch-kopf');
-  box.textContent = '';
-
-  var offen = Math.max(0, d.proTag - d.heute);
-  var leiste = document.createElement('div');
-  leiste.className = 'besuch-leiste';
-
-  var body = document.createElement('div');
-  body.className = 'body';
-  body.innerHTML =
-    '<div class="top">' + d.name + '</div>' +
-    '<div class="sub">' + d.code + ' · ' + (offen > 0
-      ? 'tippe auf etwas, das gerade läuft'
-      : 'heute schon dreimal geholfen') + '</div>';
-  leiste.appendChild(body);
-
-  var punkte = document.createElement('div');
-  punkte.className = 'hilfen';
-  punkte.setAttribute('aria-label', offen + ' von ' + d.proTag + ' Hilfen offen');
-  for (var i = 0; i < d.proTag; i++) {
-    var p = document.createElement('i');
-    if (i >= offen) p.className = 'weg';
-    punkte.appendChild(p);
+// Die Moebel zu Besuch: die eigenen weichen, sein Stand und sein Boot bleiben.
+function besuchMoebel(v) {
+  ['brett', 'lagerhaus', 'nachbarn', 'abenteuer', 'wagen', 'kiste'].forEach(function (id) {
+    var e = $(id); if (e) e.hidden = true;
+  });
+  var offen = besuchDaten ? besuchDaten.angebote.filter(function (o) { return o.verkauft <= 0; }) : [];
+  var stand = $('stand');
+  stand.hidden = false;
+  moebel(stand, {}, 'Sein Stand', offen.length, 'stand');
+  setzeMoebel('stand');
+  var boot = $('boot');
+  if (boot) {
+    var heil = !!(v.angeln && v.angeln.boot && v.angeln.boot.repariert && hatRaster());
+    boot.hidden = !heil;
+    if (heil) {
+      boot.classList.remove('kaputt');
+      boot.innerHTML = moebelSvg('boot', { heil: true });
+      boot.setAttribute('aria-label', 'Zu seinem Angelsee');
+      setzeMoebel('boot');
+    }
   }
-  leiste.appendChild(punkte);
+}
 
-  var merken = document.createElement('button');
-  merken.type = 'button';
-  if (d.stand === 'freund') merken.className = 'an';
-  merken.textContent = d.stand === 'freund' ? 'Nachbar'
-    : d.stand === 'gefragt' ? 'gefragt'
-    : d.stand === 'wartet' ? 'Annehmen'
-    : 'Anfragen';
-  merken.addEventListener('click', function () {
-    var weg = d.stand === 'freund' || d.stand === 'gefragt';
-    api('/api/freunde?code=' + encodeURIComponent(d.code), { method: weg ? 'DELETE' : 'POST' })
-      .then(function (a) {
-        toast(weg ? 'Nachbarschaft beendet'
-          : a && a.stand === 'freund' ? 'Ihr seid jetzt Nachbarn'
-          : 'Anfrage geschickt — er muss zustimmen');
-        besuchHolen();
-        freundeLaden();
-      })
-      .catch(function () { toast('Ging nicht', true); });
-  });
-  leiste.appendChild(merken);
-
-  box.appendChild(leiste);
+function fremdenStandOeffnen() {
+  if (!besuchDaten) return;
+  var offen = besuchDaten.angebote.filter(function (o) { return o.verkauft <= 0; });
+  if (offen.length === 0) { toast('Sein Stand ist leer'); return; }
+  zeichneFremdenStand(besuchDaten);
+  show('fremdstand');
 }
 
 function hilf(plot, slot) {
@@ -495,7 +398,10 @@ function hilf(plot, slot) {
       besuchDaten = d.besuch;
       toast('Geholfen · +' + d.xp + ' XP');
       klang('stufe');
-      zeichneBesuch();
+      var kachel = document.querySelector('#plots .plot[data-platz="' + plot + '"]');
+      if (kachel && typeof funken === 'function') funken(kachel.getBoundingClientRect(), 'fund');
+      besuchLeisteMalen();
+      render();
       attempt(true);
     })
     .catch(function () {
@@ -514,7 +420,7 @@ function zeichneFremdenStand(d) {
   var kaufbar = {};
   meine.offers.forEach(function (o) { kaufbar[o.item + ':' + o.amount + ':' + o.price] = o; });
 
-  var frei = d.stand.filter(function (o) { return o.verkauft <= 0; });
+  var frei = d.angebote.filter(function (o) { return o.verkauft <= 0; });
   if (frei.length === 0) {
     box.innerHTML = '<p class="empty">Der Stand ist leer.</p>';
     return;

@@ -108,7 +108,8 @@ function show(next) {
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
+  // „besuch" hat kein Blatt: Der fremde Hof steht im Hof selbst.
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -119,7 +120,7 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'besuch', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -175,10 +176,14 @@ $('loesch-alle').addEventListener('click', function () { if (loeschState) { loes
 $('loesch-ab').addEventListener('click', loeschZu);
 $('loesch-ok').addEventListener('click', loeschAusfuehren);
 $('stand').addEventListener('click', function () {
+  // Zu Besuch ist es sein Stand — dort wird gekauft, nicht verkauft.
+  if (besuchAktiv()) { fremdenStandOeffnen(); return; }
   client.neueZeitung = true;
   show('stand');
   attempt(true);
 });
+$('besuch-zurueck').addEventListener('click', function () { show('farm'); });
+$('besuch-nachbar').addEventListener('click', function () { besuchNachbarschaft(); });
 $('zahnrad').addEventListener('click', function () { show('rest'); });
 $('pfad-auf').addEventListener('click', function () { show('pfad'); });
 $('bonus-auf').addEventListener('click', function () { oeffneBonus(); });

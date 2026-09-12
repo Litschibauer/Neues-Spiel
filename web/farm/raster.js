@@ -22,7 +22,7 @@ function wechselZone(zuSee) {
   if (seeAktiv === !!zuSee) return;
   seeAktiv = !!zuSee;
   // Beim ersten Besuch erklärt sich der See selbst.
-  if (seeAktiv && typeof featureTutorial === 'function') featureTutorial('see');
+  if (seeAktiv && typeof featureTutorial === 'function' && !(typeof besuchAktiv === 'function' && besuchAktiv())) featureTutorial('see');
   kamera.gesetzt = false; // Kamera neu aufs andere Raster einpassen
   var sc = $('scene');
   if (sc) sc.dataset.stand = ''; // Szene wird beim nächsten render() neu gemalt
@@ -250,16 +250,18 @@ function istQuer() {
 // Mitte des eigenen Hofs: Dort soll die Kamera starten, nicht in der Ecke des
 // riesigen Rasters, von dem das meiste gesperrt ist.
 function hofGebiet() {
-  var plots = (typeof client !== 'undefined' && client && client.preview)
-    ? client.preview().plots
-    : [];
+  // Der Hof, der gerade gezeigt wird — zu Besuch der fremde.
+  var plots = (typeof hofSicht !== 'undefined' && hofSicht)
+    ? hofSicht.plots
+    : (typeof client !== 'undefined' && client && client.preview) ? client.preview().plots : [];
   var minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9, n = 0;
   for (var i = 0; i < plots.length; i++) {
     var p = plots[i];
     // Nur GEBAUTES zaehlt. Die feste Mine steht schon platziert im fernen
     // Sperrland — sie wuerde das Gebiet sonst ueber den halben Hof aufziehen.
     if (!p || p.gx < 0 || p.level <= 0) continue;
-    var g = (rules.plots[i] && rules.plots[i].size) || { w: 1, h: 1 };
+    var idx = p.index !== undefined ? p.index : i;
+    var g = p.size || (rules.plots[idx] && rules.plots[idx].size) || { w: 1, h: 1 };
     if (p.gx < minX) minX = p.gx;
     if (p.gy < minY) minY = p.gy;
     if (p.gx + g.w > maxX) maxX = p.gx + g.w;

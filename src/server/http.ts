@@ -17,6 +17,7 @@ import type { Eingriff, SyncRequest } from './server.ts';
 import { farmView } from '../client/view.ts';
 import { load, save } from './store.ts';
 import { initialState, normalizeState, count } from '../sim/state.ts';
+import { migrateState } from '../sim/migrate.ts';
 import type { State } from '../sim/state.ts';
 import { LATEST_RULESET_VERSION, RULESETS, getRuleset, levelOf } from '../sim/rules.ts';
 import { ConfigError, describeConfig, isLoopback, isSecureTransport, resolveConfig } from './config.ts';
@@ -224,34 +225,43 @@ function hofZeile(karte: HofKarte, wer: string) {
   };
 }
 
-function besuchsBild(karte: HofKarte, wer: string) {
+// Der Hof eines anderen, so wie der Besucher ihn sehen darf: der ganze
+// Spielstand ohne Lager und Post, auf die Fassung des Besuchers gewandert, damit
+// dessen Spiel ihn mit denselben Regeln zeichnen kann wie den eigenen Hof.
+function besuchsBild(karte: HofKarte, wer: string, meineVersion: number) {
   const spiel = gameFor(zielKonto(karte.id));
   spiel.receiveExternal();
-  const rules = getRuleset(spiel.snapshot.rulesetVersion);
+  let state: State = spiel.snapshot.state;
+  let version = spiel.snapshot.rulesetVersion;
+  if (meineVersion > version) {
+    try {
+      state = migrateState(state, version, meineVersion);
+      version = meineVersion;
+    } catch {
+      // bleibt bei seiner Fassung — der Besucher sieht dann, dass es nicht passt
+    }
+  }
+  const oeffentlich: State = {
+    ...state,
+    items: state.items.map(() => 0),
+    mail: [],
+    offers: [],
+  };
 
   return {
     ...hofZeile(karte, wer),
-    rulesetVersion: spiel.snapshot.rulesetVersion,
-    tick: spiel.snapshot.state.tick,
+    rulesetVersion: version,
+    tick: state.tick,
     serverTs: spiel.snapshot.serverTs,
-    xp: spiel.snapshot.state.xp,
-    plots: spiel.snapshot.state.plots.map((p) => ({
-      level: p.level,
-      gx: p.gx,
-      gy: p.gy,
-      tiere: p.tiere.length,
-      slots: p.slots.map((x) => ({ recipe: x.recipe, startedAt: x.startedAt })),
-    })),
-    clearedObstacles: spiel.snapshot.state.clearedObstacles,
-    expandiert: spiel.snapshot.state.expandiert ?? [],
-    stand: spiel.snapshot.state.orders.map((o) => ({
+    xp: state.xp,
+    zustand: oeffentlich,
+    angebote: state.orders.map((o) => ({
       id: o.id,
       item: o.item,
       amount: o.amount,
       price: o.price,
       verkauft: o.verkauft,
     })),
-    grid: rules.grid ? { w: rules.grid.w, h: rules.grid.h } : null,
   };
 }
 
@@ -1278,7 +1288,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const code = (url.searchParams.get('code') ?? '').trim().toUpperCase();
       const ziel = sozial.perCode(code);
       if (!ziel || ziel.id === account.id) return json(res, 404, { error: 'NO_SUCH_FARM' });
-      return json(res, 200, besuchsBild(ziel, account.id));
+      return json(res, 200, besuchsBild(ziel, account.id, game.snapshot.rulesetVersion));
     }
 
     // Ein Geschenk an einen Nachbarn: Ware verlaesst diesen Hof und landet in
@@ -1370,7 +1380,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         xp: lohn,
         heute: sozial.hilfenHeute(account.id, ziel.id, jetzt),
         proTag,
-        besuch: besuchsBild(ziel, account.id),
+        besuch: besuchsBild(ziel, account.id, game.snapshot.rulesetVersion),
       });
     }
 

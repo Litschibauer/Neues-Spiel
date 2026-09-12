@@ -554,6 +554,8 @@ function schwenkEnde() {
 
 function ziehStart(e, plot, tile) {
   if (!isActive || setzePlot >= 0) return;
+  // Zu Besuch wird weder geerntet noch gesaet noch verschoben — nur geschaut.
+  if (besuchAktiv()) return;
   if (e.button !== undefined && e.button !== 0) return;
   // Merken, wo der Finger aufgesetzt hat. Bewegt er sich gleich weiter und lag
   // er auf etwas Erntereifem, wird daraus ein Erntezug. Das steht vor den

@@ -102,6 +102,15 @@
     </div>
 
     <section class="view" id="view-farm">
+      <div class="besuch-leiste" id="besuch-leiste" hidden>
+        <div class="body">
+          <div class="top" id="besuch-name">Zu Besuch</div>
+          <div class="sub" id="besuch-sub">lädt …</div>
+        </div>
+        <div class="hilfen" id="besuch-hilfen" aria-label="Hilfen"></div>
+        <button type="button" id="besuch-nachbar">Anfragen</button>
+        <button type="button" class="zurueck" id="besuch-zurueck">Zurück</button>
+      </div>
       <div class="hof" id="hof">
         <div class="welt" id="welt">
           <svg class="scene" id="scene" viewBox="0 0 100 100" preserveAspectRatio="none"
@@ -221,21 +230,6 @@
       </div>
       <div id="freundeliste"></div>
       <button class="sheet-close" id="freunde-close">Schließen</button>
-    </div>
-  </div>
-
-  <div class="sheet-bg" id="besuch-bg" hidden>
-    <div class="sheet gross" role="dialog" aria-modal="true" aria-labelledby="besuch-titel">
-      <h3 id="besuch-titel">Zu Besuch</h3>
-      <div class="hof" id="besuch-hof">
-        <svg class="scene" id="besuch-scene" viewBox="0 0 100 100" preserveAspectRatio="none"
-             aria-hidden="true"></svg>
-        <div id="besuch-hindernisse"></div>
-        <div id="besuch-plots"></div>
-        <button class="moebel" id="besuch-stand-knopf"></button>
-      </div>
-      <div id="besuch-kopf"></div>
-      <button class="sheet-close" id="besuch-close">Zurück</button>
     </div>
   </div>
 
