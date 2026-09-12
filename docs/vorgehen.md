@@ -22,7 +22,10 @@ Abhängigkeiten: Der Kern läuft mit Node ≥ 22.6 und sonst nichts.
 
 Es gibt **einen** Branch, auf dem gearbeitet wird:
 `claude/live-service-game-concept-m4ymol`. Der Server zieht ihn alle zwei
-Minuten selbst (`scripts/auto-deploy.sh`). Ein Push ist also ein Deploy.
+Minuten selbst (`scripts/auto-deploy.sh`), **lässt aber vorher `npm test`
+laufen** — ein roter Stand kommt nicht auf den Server. Dieselbe Prüfung zeigt
+GitHub als Ampel am Commit (`.github/workflows/pruefung.yml`). Ein grüner
+Push ist also ein Deploy; ein roter bleibt liegen, bis der nächste kommt.
 
 ---
 
@@ -479,6 +482,5 @@ echter Datenbank. Zahlen in `deploy.md`.
 ## 10. Was offen ist
 
 Steht in [roadmap.md](roadmap.md) und am Ende von [deploy.md](deploy.md)
-(„Drei Lücken"). Kurz: Sicherungen außer Haus, ein CI-Lauf vor dem
-Auto-Deploy, mehr Ketten (Bienen, Tomaten, Kartoffeln, Ziegen), Besucher,
-Haustiere, eine Geschichte.
+(„Drei Lücken"). Kurz: Sicherungen außer Haus, mehr Ketten (Bienen, Tomaten,
+Kartoffeln, Ziegen), Besucher, Haustiere, eine Geschichte.

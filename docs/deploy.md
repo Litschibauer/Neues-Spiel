@@ -492,10 +492,24 @@ journalctl -u neues-spiel-prod -f
 ## Auto-Deploy (optional): bei jedem Push von selbst aktualisieren
 
 Ein Timer prüft alle zwei Minuten, ob der aktuelle Branch auf `origin` neuer
-ist, und fährt dann `git reset --hard origin/<branch>` → `npm run build` →
-`systemctl restart neues-spiel-prod`. Ohne neue Commits passiert nichts. `data/`
-ist gitignored, die Spielstände bleiben also unberührt. Schlägt der Build fehl,
-bricht das Skript **vor** dem Neustart ab — der laufende Dienst bleibt stehen.
+ist, und fährt dann `git reset --hard origin/<branch>` → **`npm test`** →
+`npm run build` → `systemctl restart neues-spiel-prod`. Ohne neue Commits
+passiert nichts. `data/` ist gitignored, die Spielstände bleiben also unberührt.
+
+**Der Riegel:** Fällt `npm test` durch, wird nicht neu gestartet. Das Skript
+setzt den Checkout auf den alten Stand zurück, der laufende Dienst bleibt
+unberührt, und der abgelehnte Commit wird in `data/deploy-abgelehnt` gemerkt,
+damit er nicht alle zwei Minuten neu geprüft wird. Der nächste Commit bekommt
+wieder seine Chance. Die Ausgabe der Prüfung liegt in
+`data/deploy-pruefung.log`; das Journal zeigt den Auszug:
+
+```bash
+journalctl -u neues-spiel-deploy.service -n 30 --no-pager
+```
+
+Dieselbe Prüfung läuft auch auf GitHub (`.github/workflows/pruefung.yml`) als
+Ampel am Commit — sie schützt den Server nicht, sie zeigt nur früher an.
+Schlägt der Build fehl, bricht das Skript ebenfalls **vor** dem Neustart ab.
 
 Einmalig einrichten (Pfade ggf. anpassen, hier `/home/Neues-Spiel`):
 

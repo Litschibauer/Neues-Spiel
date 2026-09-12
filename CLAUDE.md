@@ -6,7 +6,8 @@ einer Änderung und alle Prüfungen.
 
 Das Wichtigste in Kürze:
 
-- Branch: `claude/live-service-game-concept-m4ymol`. Ein Push ist ein Deploy.
+- Branch: `claude/live-service-game-concept-m4ymol`. Ein grüner Push ist ein
+  Deploy: Der Server lässt vor dem Wechsel `npm test` laufen.
 - `src/sim/` ist rein, ganzzahlig, deterministisch. Regelwerke nur anhängen,
   nie ändern. Neues Regelwerk → Dev-Regelwerk 1001 neu aufsetzen → Migration
   → `npm run golden` und alte Vektoren vergleichen.

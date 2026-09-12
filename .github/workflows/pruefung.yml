@@ -1,0 +1,25 @@
+# Die Ampel auf GitHub: Bei jedem Push laufen die Unit-Tests und der Build.
+# Rot heißt: Dieser Stand kommt auch über das Auto-Deploy nicht auf den Server,
+# denn dort läuft dieselbe Prüfung noch einmal, bevor der Dienst wechselt.
+# Die Browsersuite (Chromium, ~12 Minuten) bleibt absichtlich draußen — sie ist
+# Pflicht für den, der pusht, nicht für jeden Commit auf GitHub.
+name: Prüfung
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Unit-Tests und Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit-Tests
+        run: npm test
+      - name: Build
+        run: npm run build
