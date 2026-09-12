@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Eingriff } from './server.ts';
 import type { Command } from '../sim/commands.ts';
 import type { MailItem } from '../sim/state.ts';
 import type { Snapshot } from './server.ts';
@@ -19,6 +20,10 @@ export type GameBlob = {
   pendingDeliveries: MailItem[];
   targetRulesetVersion: number;
   nextRequestId: number;
+  // Was noch aussteht, bis der Hof wieder abgleicht — ueberlebt einen Neustart.
+  pendingXp?: number;
+  pendingAbzuege?: Array<{ item: number; amount: number }>;
+  eingriffe?: Eingriff[];
 };
 
 // Ein Gerät, das Benachrichtigungen empfangen möchte.

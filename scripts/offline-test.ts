@@ -511,6 +511,7 @@ const browser = spawn(
 );
 
 let cdp: Cdp | null = null;
+let browserCdp: Cdp | null = null;
 let failed = false;
 
 try {
@@ -542,7 +543,7 @@ try {
   }
   if (!wsUrl) throw new Error('Chromium hat den Debug-Port nicht geöffnet');
 
-  const browserCdp = await Cdp.connect(wsUrl);
+  browserCdp = await Cdp.connect(wsUrl);
   const target = (await browserCdp.send('Target.createTarget', { url: 'about:blank' })) as {
     targetId: string;
   };
@@ -4680,6 +4681,128 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     sternGemeldet && meisterDanach.moment.some((m) => /schneller/.test(m)),
     meisterDanach.moment.join(' | ') || 'kein Moment im Mitschnitt (90 s gewartet)',
   );
+
+  console.log('\n9w. Werkbank — Eingriffe, die den Abgleich achten');
+  const wb_schlange = () => evaluate<number>(
+    cdp!,
+    `(function () { try { return JSON.parse(localStorage.getItem(globalThis.NeuesSpiel.storageKeyFor(location.origin))).queue.length; } catch (e) { return -1; } })()`,
+  );
+  const wb_hofStand = async () => (await api(`/api/admin/sicht?account=${status.accountId}`)) as {
+    sicht: { silo: { level: number; capacity: number }; mail: { entries: unknown[] }; plots: Array<{ done: boolean }> };
+    technik: { eingriffe: unknown[]; pendingDeliveries: unknown[]; seq: number };
+  };
+  // Netz weg — der Spieler saet, der Befehl bleibt in der Schlange.
+  await cdp.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
+  await sleep(300);
+  const werkGesaet = await evaluate<number>(cdp, plantAll);
+  await sleep(300);
+  const offlineSchlange = await wb_schlange();
+  check(
+    'Im Funkloch bleibt die Saat als Befehl in der Schlange liegen',
+    werkGesaet > 0 && offlineSchlange > 0,
+    `${werkGesaet} gesät · ${offlineSchlange} in der Schlange`,
+  );
+  // Derweil greift die Werkbank ein — dreimal.
+  const werkSeit = Date.now();
+  const wb_vorEingriff = await wb_hofStand();
+  const wb_e1 = (await api(`/api/admin/eingriff?account=${status.accountId}&art=alles-fertig`, 'POST')) as { ok: boolean };
+  const wb_e2 = (await api(`/api/admin/eingriff?account=${status.accountId}&art=kiste-schicken&kind=0`, 'POST')) as { ok: boolean };
+  const wb_e3 = (await api(`/api/admin/eingriff?account=${status.accountId}&art=lager-ausbauen&stufen=1`, 'POST')) as { ok: boolean; offen: number };
+  const wb_wartend = await wb_hofStand();
+  check(
+    'Die Werkbank überschreibt nichts: Eingriffe warten auf den nächsten Abgleich des Hofs',
+    wb_e1.ok && wb_e2.ok && wb_e3.ok && wb_e3.offen === 3 && wb_wartend.technik.eingriffe.length === 3 &&
+      wb_wartend.sicht.silo.level === wb_vorEingriff.sicht.silo.level,
+    `${wb_wartend.technik.eingriffe.length} Eingriffe warten · Lagerstufe noch ${wb_wartend.sicht.silo.level}`,
+  );
+  const wb_postVorher = wb_wartend.sicht.mail.entries.length + wb_wartend.technik.pendingDeliveries.length;
+  // Netz zurueck: erst die Saat des Spielers, dann die Eingriffe obendrauf.
+  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await waitFor(
+    cdp,
+    `JSON.parse(localStorage.getItem(globalThis.NeuesSpiel.storageKeyFor(location.origin))).queue.length === 0`,
+    'Schlange geleert',
+    20_000,
+  ).catch(() => {});
+  await sleep(1000);
+  const wb_danach = await wb_hofStand();
+  const werkProtokoll = (await api(`/api/admin/protokoll?konto=${status.accountId}&limit=40`)) as {
+    zeilen: Array<{ art: string; text: string; t: number }>;
+  };
+  const wb_abgelehnt = werkProtokoll.zeilen.filter((z) => z.art === 'wb_abgelehnt' && z.t >= werkSeit);
+  check(
+    'Nach dem Abgleich ist die Saat des Spielers angenommen — kein Befehl wb_abgelehnt, Schlange leer',
+    wb_danach.technik.seq > wb_wartend.technik.seq && wb_abgelehnt.length === 0 && (await wb_schlange()) === 0,
+    `seq ${wb_wartend.technik.seq} → ${wb_danach.technik.seq} · wb_abgelehnt: ${wb_abgelehnt.map((z) => z.text).join(' | ') || 'nichts'}`,
+  );
+  const wb_postNachher = wb_danach.sicht.mail.entries.length + wb_danach.technik.pendingDeliveries.length;
+  check(
+    '… und die Eingriffe sind obendrauf angewendet: Lager ausgebaut, Kiste in der Post, nichts wartet mehr',
+    wb_danach.technik.eingriffe.length === 0 && wb_danach.sicht.silo.level === wb_vorEingriff.sicht.silo.level + 1 && wb_postNachher > wb_postVorher,
+    `Lagerstufe ${wb_vorEingriff.sicht.silo.level} → ${wb_danach.sicht.silo.level} · Post ${wb_postVorher} → ${wb_postNachher} · ${wb_danach.technik.eingriffe.length} offen`,
+  );
+  check(
+    'Das Server-Protokoll hält jeden Eingriff fest',
+    ['Alles fertig gestellt', 'geschickt', 'Lager +1'].every((t) => werkProtokoll.zeilen.some((z) => z.art === 'werkbank' && z.text.indexOf(t) >= 0)),
+    werkProtokoll.zeilen.filter((z) => z.art === 'werkbank').slice(0, 4).map((z) => z.text).join(' | '),
+  );
+
+  // Die Werkbank-Seite selbst, in einem zweiten Fenster: Hof waehlen, Tabs,
+  // ein Knopf — und der landet als Eingriff beim Server.
+  const werkZiel = (await browserCdp!.send('Target.createTarget', { url: 'about:blank' })) as { targetId: string };
+  const werk = await Cdp.connect(`ws://127.0.0.1:9333/devtools/page/${werkZiel.targetId}`);
+  await werk.send('Page.enable');
+  await werk.send('Runtime.enable');
+  await werk.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/admin` });
+  await sleep(900);
+  await evaluate(werk, `localStorage.setItem('ns-admin-token', ${JSON.stringify(ADMIN_TOKEN)})`);
+  await werk.send('Page.reload');
+  await sleep(1200);
+  await waitFor(werk, `document.querySelectorAll('.hofzeile').length > 0`, 'Werkbank zeigt Höfe', 10_000).catch(() => {});
+  const wb_konten = (await api('/api/admin/accounts')) as { accounts: Array<{ id: string; code: string | null; zuhoerer: number }> };
+  const wb_eigenes = wb_konten.accounts.find((k) => k.id === status.accountId);
+  await evaluate(
+    werk,
+    `(function () { var b = [...document.querySelectorAll('.hofzeile')].find(function (x) { return x.textContent.indexOf(${JSON.stringify(wb_eigenes?.code ?? '')}) >= 0; }); if (b) b.click(); })()`,
+  );
+  await waitFor(werk, `/Stufe/.test(document.getElementById('kopf').textContent)`, 'Hof in der Werkbank', 10_000).catch(() => {});
+  const werkSicht = JSON.parse(
+    await evaluate<string>(
+      werk,
+      `JSON.stringify({
+         kopf: document.getElementById('kopf').textContent.replace(/\\s+/g, ' '),
+         zeilen: document.querySelectorAll('#tab-inhalt tbody tr').length,
+         online: !!document.querySelector('.hofzeile.an .punkt.online'),
+       })`,
+    ),
+  ) as { kopf: string; zeilen: number; online: boolean };
+  check(
+    'Die Werkbank zeigt den Hof: Stufe, Gold, Gerät und die Plätze — und sieht, dass er online ist',
+    /Stufe \d+/.test(werkSicht.kopf) && /Gold/.test(werkSicht.kopf) && werkSicht.zeilen >= 5 && werkSicht.online && (wb_eigenes?.zuhoerer ?? 0) > 0,
+    `${werkSicht.zeilen} Plätze · online ${werkSicht.online} (Zuhörer ${wb_eigenes?.zuhoerer ?? '?'}) · ${werkSicht.kopf.slice(0, 90)}`,
+  );
+  await evaluate(werk, `document.querySelector('#tabs [data-tab="brett"]').click()`);
+  await sleep(300);
+  const werkBrett = await evaluate<string>(werk, `document.getElementById('tab-inhalt').textContent.replace(/\\s+/g, ' ')`);
+  check(
+    'Der Brett-Tab zeigt Tag, Woche, Fest, Erfolge und den Wagen',
+    /Heute/.test(werkBrett) && /Diese Woche/.test(werkBrett) && /Fest/.test(werkBrett) && /Erfolge/.test(werkBrett) && /Wagen/.test(werkBrett),
+    werkBrett.slice(0, 120),
+  );
+  await evaluate(
+    werk,
+    `[...document.querySelectorAll('[data-eingriff]')].find(function (b) { return b.getAttribute('data-eingriff') === 'wagen-zurueck'; }).click()`,
+  );
+  await waitFor(werk, `/Wagen zurückrufen/.test(document.getElementById('log').textContent)`, 'Verlauf in der Werkbank', 8_000).catch(() => {});
+  await sleep(1500);
+  const werkProtokoll2 = (await api(`/api/admin/protokoll?konto=${status.accountId}&limit=10`)) as { zeilen: Array<{ art: string; text: string }> };
+  check(
+    'Ein Knopf in der Werkbank wird zum Eingriff — und steht sofort im Server-Protokoll',
+    werkProtokoll2.zeilen.some((z) => z.art === 'werkbank' && /Wagen zurückgerufen/.test(z.text)),
+    werkProtokoll2.zeilen.slice(0, 3).map((z) => z.art + ': ' + z.text).join(' | '),
+  );
+  await browserCdp!.send('Target.closeTarget', { targetId: werkZiel.targetId }).catch(() => {});
 
   console.log('\n9y. Tagesbonus');
   await waitFor(

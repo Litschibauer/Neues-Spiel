@@ -13,7 +13,8 @@ import {
 import { join, dirname } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
-import type { SyncRequest } from './server.ts';
+import type { Eingriff, SyncRequest } from './server.ts';
+import { farmView } from '../client/view.ts';
 import { load, save } from './store.ts';
 import { initialState, normalizeState, count } from '../sim/state.ts';
 import type { State } from '../sim/state.ts';
@@ -22,7 +23,7 @@ import { ConfigError, describeConfig, isLoopback, isSecureTransport, resolveConf
 import { AccountStore, CreateLimiter, keyHashOf } from './accounts.ts';
 import type { AccountRecord } from './accounts.ts';
 import { SqliteStorage } from './storage.ts';
-import { NAME_MAX, Sozial, tagVon } from './sozial.ts';
+import { NAME_MAX, Sozial, saubererName, tagVon } from './sozial.ts';
 import type { HofKarte } from './sozial.ts';
 import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
@@ -262,6 +263,9 @@ function snapshotOf(game: Server) {
     pendingDeliveries: game.pendingDeliveries,
     targetRulesetVersion: game.targetRulesetVersion,
     nextRequestId: game.nextRequestId,
+    pendingXp: game.pendingXp,
+    pendingAbzuege: game.pendingAbzuege,
+    eingriffe: game.eingriffe,
   };
 }
 
@@ -284,6 +288,9 @@ function gameFor(account: AccountRecord): Server {
     game.trimLog();
     game.pendingDeliveries = file.pendingDeliveries;
     game.nextRequestId = file.nextRequestId ?? 1;
+    game.pendingXp = file.pendingXp ?? 0;
+    game.pendingAbzuege = file.pendingAbzuege ?? [];
+    game.eingriffe = file.eingriffe ?? [];
     game.stockRequests();
   }
   wireMarket(account.id, game);
@@ -322,6 +329,50 @@ function publish(accountId: string, game: Server): void {
 }
 
 const rejections = new Map<string, number>();
+
+// Das Protokoll der Werkbank: was der Server an einem Hof bemerkt hat
+// (abgelehnte Abgleiche, Divergenzen, Geraetewechsel) und was die Werkbank
+// getan hat. Ein Ringpuffer im Speicher — fuer den Blick von eben, nicht als
+// Archiv.
+type ProtokollZeile = { t: number; konto: string | null; art: string; text: string };
+const protokoll: ProtokollZeile[] = [];
+function notiere(art: string, konto: string | null, text: string): void {
+  protokoll.push({ t: Date.now(), konto, art, text });
+  if (protokoll.length > 400) protokoll.splice(0, protokoll.length - 400);
+}
+
+function resolvePlot(rules: ReturnType<typeof getRuleset>, name: string | null): number | null {
+  if (name === null || name === '') return null;
+  const n = Number(name);
+  if (Number.isInteger(n)) return rules.plots[n] ? n : null;
+  const i = rules.plots.findIndex((p) => p.id === name);
+  return i >= 0 ? i : null;
+}
+
+function katalogVon(rules: ReturnType<typeof getRuleset>) {
+  return {
+    version: rules.version,
+    items: rules.items.map((i) => ({ id: i.id, storable: i.storable, npcPrice: i.npcPrice })),
+    plots: rules.plots.map((p) => ({
+      id: p.id,
+      deco: !!p.deco,
+      animal: !!p.animal,
+      baum: !!p.baum,
+      nurFest: !!p.nurFest,
+      fixed: !!p.fixed,
+      levels: p.levels.map((l) => ({ label: l.label })),
+    })),
+    recipes: rules.recipes.map((r) => ({ id: r.id })),
+    chestKinds: (rules.chestKinds ?? []).map((k) => ({ id: k.id, label: k.label })),
+    expansions: (rules.expansions ?? []).map((e) => ({ id: e.id })),
+    obstacles: (rules.obstacles ?? []).map((o, i) => ({ index: i, kind: o.kind })),
+    feste: rules.feste ? { arten: rules.feste.arten.map((a) => ({ id: a.id, label: a.label })) } : null,
+    siloLevels: (rules.siloLevels ?? []).length,
+    booster: !!rules.booster,
+    currency: rules.currency,
+    versionen: [...RULESETS.keys()].sort((x, y) => x - y),
+  };
+}
 
 function noteTruncation(result: { ok: boolean; reason?: string }, sent: number, id: string): void {
   const reason = result.reason;
@@ -581,18 +632,46 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
   if (url.pathname === '/api/admin/accounts') {
     return json(res, 200, {
       count: accounts.count,
+      serverTime: Date.now(),
       accounts: accounts.list().map((a) => {
         const karte = sozial.karte(a.id);
+        const cached = live.get(a.id);
+        const blob = cached ? null : accounts.load(a.id);
+        const snap = cached ? cached.snapshot : blob?.snapshot ?? null;
+        const rules = snap ? getRuleset(snap.rulesetVersion) : null;
         return {
           id: a.id,
           name: karte?.name ?? null,
           code: karte?.code ?? null,
           createdAt: a.createdAt,
           lastSeenMs: a.lastSeenMs,
-          seq: live.get(a.id)?.snapshot.seq ?? null,
+          seq: snap?.seq ?? null,
+          level: snap && rules ? levelOf(rules, snap.state.xp) : null,
+          gold: snap && rules ? snap.state.items[rules.currency] ?? 0 : null,
+          rulesetVersion: snap?.rulesetVersion ?? null,
+          targetRulesetVersion: cached ? cached.targetRulesetVersion : blob?.targetRulesetVersion ?? null,
+          // Online heisst: Das Geraet haelt gerade die Ereignisleitung offen.
+          zuhoerer: events.countFor(a.id),
+          lastSyncMs: cached?.activeDevice?.lastSyncMs ?? null,
+          geraet: cached?.activeDevice?.id ?? null,
+          offen: {
+            post: cached ? cached.pendingDeliveries.length : (blob?.pendingDeliveries ?? []).length,
+            xp: cached ? cached.pendingXp : blob?.pendingXp ?? 0,
+            abzuege: cached ? cached.pendingAbzuege.length : (blob?.pendingAbzuege ?? []).length,
+            eingriffe: cached ? cached.eingriffe.length : (blob?.eingriffe ?? []).length,
+          },
+          alarme: cached ? cached.divergenceAlerts.length : 0,
+          wanderungsfehler: cached ? cached.migrationFailures.length : 0,
         };
       }),
     });
+  }
+
+  if (url.pathname === '/api/admin/protokoll') {
+    const konto = url.searchParams.get('konto');
+    const limit = Math.max(1, Math.min(300, Number(url.searchParams.get('limit') ?? '120') || 120));
+    const zeilen = (konto ? protokoll.filter((z) => z.konto === konto) : protokoll).slice(-limit).reverse();
+    return json(res, 200, { zeilen, serverTime: Date.now() });
   }
 
   if (url.pathname === '/api/admin/stats') {
@@ -680,7 +759,150 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     });
   }
 
+  if (url.pathname === '/api/admin/sicht') {
+    const rules = getRuleset(game.snapshot.rulesetVersion);
+    const st = game.snapshot.state;
+    const karte = sozial.karte(target.id);
+    return json(res, 200, {
+      accountId: target.id,
+      serverTime: Date.now(),
+      sicht: farmView(st, rules, true),
+      katalog: katalogVon(rules),
+      technik: {
+        name: karte?.name ?? null,
+        code: karte?.code ?? null,
+        createdAt: target.createdAt,
+        lastSeenMs: target.lastSeenMs,
+        seq: game.snapshot.seq,
+        tick: st.tick,
+        serverTs: game.snapshot.serverTs,
+        rulesetVersion: game.snapshot.rulesetVersion,
+        targetRulesetVersion: game.targetRulesetVersion,
+        activeDevice: game.activeDevice,
+        zuhoerer: events.countFor(target.id),
+        pendingDeliveries: game.pendingDeliveries.map((m) => ({ item: m.item, amount: m.amount })),
+        pendingXp: game.pendingXp,
+        pendingAbzuege: game.pendingAbzuege,
+        eingriffe: game.eingriffe,
+        divergenceAlerts: game.divergenceAlerts,
+        migrationFailures: game.migrationFailures,
+        appliedLog: game.appliedLog.length,
+        logStartSeq: game.logStartSeq,
+        xp: st.xp,
+        gold: st.items[rules.currency] ?? 0,
+        level: levelOf(rules, st.xp),
+        serverTag: st.serverTag,
+        freunde: sozial.freunde(target.id).map((f) => ({ id: f.id, name: f.name, code: f.code })),
+      },
+    });
+  }
+
   if (req.method !== 'POST') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+
+  if (url.pathname === '/api/admin/eingriff') {
+    const rules = getRuleset(game.snapshot.rulesetVersion);
+    const p = url.searchParams;
+    const art = p.get('art') ?? '';
+    const zahl = (k: string, sonst: number) => {
+      const n = Number(p.get(k) ?? String(sonst));
+      return Number.isInteger(n) ? n : NaN;
+    };
+    let e: Eingriff | null = null;
+    let text = '';
+    if (art === 'wagen-zurueck') { e = { art }; text = 'Wagen zurückgerufen'; }
+    else if (art === 'zettel-neu') { e = { art }; text = 'Zettel neu ausgelegt'; }
+    else if (art === 'kiste-auf-hof') { e = { art }; text = 'Kiste auf den Hof gelegt'; }
+    else if (art === 'alles-fertig') { e = { art }; text = 'Alles fertig gestellt'; }
+    else if (art === 'boot-reparieren') { e = { art }; text = 'Boot repariert'; }
+    else if (art === 'kiste-schicken') {
+      const name = p.get('kind') ?? '';
+      const n = Number(name);
+      const kind = Number.isInteger(n) ? n : (rules.chestKinds ?? []).findIndex((k) => k.id === name);
+      const def = (rules.chestKinds ?? [])[kind];
+      if (def) { e = { art, kind }; text = `${def.label} geschickt`; }
+    } else if (art === 'lager-ausbauen') {
+      const stufen = zahl('stufen', 1);
+      if (stufen >= 1 && stufen <= 10) { e = { art, stufen }; text = `Lager +${stufen}`; }
+    } else if (art === 'tier-schenken' || art === 'bau-schenken') {
+      const plot = resolvePlot(rules, p.get('plot'));
+      if (plot !== null) {
+        const def = rules.plots[plot]!;
+        const stand = game.snapshot.state.plots[plot]!;
+        if (art === 'tier-schenken' && def.animal && stand.level > 0) { e = { art, plot }; text = `Tier geschenkt: ${def.id}`; }
+        if (art === 'bau-schenken' && stand.level <= 0 && !def.fixed) { e = { art, plot }; text = `Bau geschenkt: ${def.id}`; }
+      }
+    } else if (art === 'land-freimachen') {
+      const id = p.get('id') ?? '';
+      if ((rules.expansions ?? []).some((x) => x.id === id)) { e = { art, id }; text = `Land freigemacht: ${id}`; }
+    } else if (art === 'hindernis-raeumen') {
+      const index = zahl('index', -1);
+      if (rules.obstacles?.[index]) { e = { art, index }; text = `Hindernis geräumt: ${index}`; }
+    } else if (art === 'booster') {
+      const minuten = zahl('minuten', 30);
+      if (rules.booster && minuten >= 1 && minuten <= 1440) { e = { art, ticks: minuten * 60 }; text = `XP-Verdoppler ${minuten} min`; }
+    } else if (art === 'stufe') {
+      const level = zahl('level', 0);
+      if (level >= 2 && level <= 200) { e = { art, level }; text = `Stufe ${level}`; }
+    }
+    if (!e) return json(res, 400, { error: 'BAD_EINGRIFF' });
+    game.eingreifen(e);
+    persist(target, game);
+    events.nudge(target.id, 'farm');
+    notiere('werkbank', target.id, text);
+    console.log(`[admin] ${target.id}: Eingriff ${text}`);
+    return json(res, 200, { ok: true, offen: game.eingriffe.length });
+  }
+
+  if (url.pathname === '/api/admin/abzug') {
+    const name = url.searchParams.get('item') ?? '';
+    const amount = Number(url.searchParams.get('amount') ?? '0');
+    const item = resolveItem(game, name);
+    if (item === null || !Number.isInteger(amount) || amount <= 0) return json(res, 400, { error: 'BAD_ABZUG' });
+    game.nimmAb(item, amount);
+    persist(target, game);
+    events.nudge(target.id, 'farm');
+    notiere('werkbank', target.id, `${amount}× ${name} abgezogen (wenn vorhanden)`);
+    console.log(`[admin] ${target.id}: −${amount} ${name}`);
+    return json(res, 200, { ok: true, offen: game.pendingAbzuege.length });
+  }
+
+  if (url.pathname === '/api/admin/geraet-frei') {
+    const vorher = game.activeDevice?.id ?? null;
+    game.activeDevice = null;
+    persist(target, game);
+    notiere('werkbank', target.id, `Gerät freigegeben (${vorher ?? 'keins'})`);
+    return json(res, 200, { ok: true });
+  }
+
+  if (url.pathname === '/api/admin/alarme-loeschen') {
+    const n = game.divergenceAlerts.length + game.migrationFailures.length;
+    game.divergenceAlerts = [];
+    game.migrationFailures = [];
+    notiere('werkbank', target.id, `${n} Alarme gelöscht`);
+    return json(res, 200, { ok: true });
+  }
+
+  if (url.pathname === '/api/admin/name') {
+    const name = saubererName(url.searchParams.get('name') ?? '');
+    if (name === null || !sozial.benenne(target.id, name)) return json(res, 400, { error: 'BAD_NAME' });
+    events.nudge(target.id, 'sozial');
+    notiere('werkbank', target.id, `Umbenannt in „${name}"`);
+    return json(res, 200, { ok: true, name });
+  }
+
+  if (url.pathname === '/api/admin/freundschaft') {
+    const mit = (url.searchParams.get('mit') ?? '').trim();
+    const andere = sozial.perCode(mit.toUpperCase())?.id ?? (accounts.get(mit) ? mit : null);
+    if (!andere || andere === target.id) return json(res, 400, { error: 'NO_SUCH_ACCOUNT' });
+    const now = Date.now();
+    sozial.frage(target.id, andere, now);
+    const stand = sozial.frage(andere, target.id, now);
+    if (stand !== 'freund') return json(res, 400, { error: 'NOT_FRIENDS' });
+    events.nudge(target.id, 'sozial');
+    events.nudge(andere, 'sozial');
+    notiere('werkbank', target.id, `Freundschaft gestiftet mit ${andere}`);
+    return json(res, 200, { ok: true, mit: andere });
+  }
 
   if (url.pathname === '/api/admin/time') {
     const seconds = Number(url.searchParams.get('seconds') ?? '0');
@@ -690,6 +912,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     game.grantTime(seconds);
     persist(target, game);
     events.nudge(target.id, 'farm');
+    notiere('werkbank', target.id, `${seconds} s Zeit gutgeschrieben`);
     console.log(`[admin] ${target.id}: ${seconds}s Zeit gutgeschrieben`);
     return json(res, 200, { ok: true, serverTs: game.snapshot.serverTs });
   }
@@ -704,6 +927,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     game.deliver({ item, amount, arrivedAt: Date.now() });
     persist(target, game);
     events.nudge(target.id, 'farm');
+    notiere('werkbank', target.id, `${amount}× ${name} ins Postfach`);
     console.log(`[admin] ${target.id}: ${amount} ${name} ins Postfach`);
     return json(res, 200, { ok: true, queued: game.pendingDeliveries.length });
   }
@@ -714,6 +938,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     game.grantXp(amount);
     persist(target, game);
     events.nudge(target.id, 'farm');
+    notiere('werkbank', target.id, `+${amount} XP`);
     console.log(`[admin] ${target.id}: +${amount} XP`);
     return json(res, 200, { ok: true });
   }
@@ -726,6 +951,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     }
     game.targetRulesetVersion = version;
     persist(target, game);
+    notiere('werkbank', target.id, `Zielversion v${version}`);
     console.log(`[admin] ${target.id}: Zielversion v${version} — greift beim nächsten Sync`);
     return json(res, 200, { ok: true, targetRulesetVersion: version });
   }
@@ -737,6 +963,7 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     game.stockRequests();
     game.stockOffers();
     persist(target, game);
+    notiere('werkbank', target.id, 'Spielstand zurückgesetzt');
     console.log(`[admin] ${target.id}: Spielstand zurückgesetzt`);
     return json(res, 200, { ok: true });
   }
@@ -1229,8 +1456,26 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const gast = typeof parsed.besuch === 'string' ? sozial.perCode(parsed.besuch) : null;
       game.besuch = gast && gast.id !== account.id ? gast.id : null;
 
+      const geraetVorher = game.activeDevice?.id ?? null;
+      const alarmeVorher = game.divergenceAlerts.length;
+      const wanderungVorher = game.migrationFailures.length;
       const result = game.sync(parsed, Date.now());
       if (result.ok) econstats.addDiscarded(game.lastSyncDiscarded);
+      if (!result.ok) {
+        notiere('abgelehnt', account.id, `${result.reason} · ${parsed.commands.length} Befehle vom Gerät ${parsed.deviceId ?? '?'}`);
+      }
+      if (game.divergenceAlerts.length > alarmeVorher) {
+        const a = game.divergenceAlerts[game.divergenceAlerts.length - 1]!;
+        notiere('divergenz', account.id, `Gerät und Server rechnen verschieden ab seq ${a.seq} (${a.clientHash} ≠ ${a.serverHash})`);
+      }
+      if (game.migrationFailures.length > wanderungVorher) {
+        const m = game.migrationFailures[game.migrationFailures.length - 1]!;
+        notiere('wanderung', account.id, `v${m.fromVersion} → v${m.toVersion} gescheitert: ${m.message}`);
+      }
+      const geraetNachher = game.activeDevice?.id ?? null;
+      if (geraetVorher && geraetNachher && geraetVorher !== geraetNachher) {
+        notiere('geraet', account.id, `Übernahme: ${geraetVorher} → ${geraetNachher}`);
+      }
 
       publish(account.id, game);
       persist(account, game);

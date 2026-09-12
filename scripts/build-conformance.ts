@@ -242,7 +242,8 @@ function buildPageWithBundle(name: string): string {
 }
 
 export function buildAdminPage(): string {
-  return readFileSync(join(ROOT, 'web', 'admin.template.html'), 'utf8');
+  // Die Werkbank leiht sich die Namen des Spiels (texte.js) per INCLUDE.
+  return resolveIncludes(readFileSync(join(ROOT, 'web', 'admin.template.html'), 'utf8'));
 }
 
 if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {

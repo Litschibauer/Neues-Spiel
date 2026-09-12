@@ -1,10 +1,10 @@
-<title>Hof-Verwaltung</title>
+<title>Werkbank</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
     --ground: #f5f3ee; --surface: #ffffff; --surface-2: #ece8df; --line: #d9d3c6;
     --ink: #1c1813; --muted: #6d6455; --accent: #8a5a12;
-    --ok: #2c6e49; --bad: #a83246; --sel: #f2e6cf;
+    --ok: #2c6e49; --bad: #a83246; --warn: #a86a12; --sel: #f2e6cf;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
@@ -12,8 +12,13 @@
     :root:not([data-theme="light"]) {
       --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
       --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
-      --ok: #79cfa2; --bad: #e88a99; --sel: #35301f;
+      --ok: #79cfa2; --bad: #e88a99; --warn: #e6b45a; --sel: #35301f;
     }
+  }
+  :root[data-theme="dark"] {
+    --ground: #17140f; --surface: #211d16; --surface-2: #2b251b; --line: #3d3527;
+    --ink: #efe9dd; --muted: #a2977f; --accent: #d8a648;
+    --ok: #79cfa2; --bad: #e88a99; --warn: #e6b45a; --sel: #35301f;
   }
 
   * { box-sizing: border-box; }
@@ -21,19 +26,23 @@
     margin: 0; background: var(--ground); color: var(--ink);
     font-family: var(--sans); line-height: 1.5; -webkit-text-size-adjust: 100%;
   }
-  .wrap { max-width: 44rem; margin: 0 auto; padding: 1.25rem 1rem 3rem;
+  .wrap { max-width: 60rem; margin: 0 auto; padding-block: 1.25rem 3rem; padding-inline: 1rem;
           display: flex; flex-direction: column; gap: 1.1rem; }
   [hidden] { display: none !important; }
 
   h1 { font-family: var(--mono); font-size: 1.1rem; font-weight: 600; margin: 0; }
   h2 { font-family: var(--mono); font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
        color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
+  h3 { font-family: var(--mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+       color: var(--accent); font-weight: 600; margin: .8rem 0 .35rem; }
 
   .banner {
     border: 1px dashed var(--accent); border-radius: 4px; padding: .6rem .8rem;
     color: var(--accent); font-size: .82rem; font-family: var(--mono);
   }
   .card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: .85rem .9rem; }
+  .zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  @media (max-width: 52rem) { .zwei { grid-template-columns: 1fr; } }
 
   .row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
   label { font-family: var(--mono); font-size: .7rem; color: var(--muted); }
@@ -45,18 +54,20 @@
   }
   button.primary { background: var(--accent); color: var(--surface); }
   button.danger { border-color: var(--bad); color: var(--bad); }
+  button.klein { padding: .3rem .5rem; font-size: .68rem; }
   button:disabled { opacity: .4; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   input, select {
     font-family: var(--mono); font-size: .85rem; padding: .5rem .6rem;
     border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); color: var(--ink);
+    max-width: 100%;
   }
   input.wide { width: 100%; }
-  input.zahl { width: 7rem; }
+  input.zahl { width: 6.5rem; }
   select { min-width: 9rem; }
 
-  .hofliste { display: flex; flex-direction: column; gap: .3rem; max-height: 17rem; overflow-y: auto; }
+  .hofliste { display: flex; flex-direction: column; gap: .3rem; max-height: 22rem; overflow-y: auto; }
   .hofzeile {
     text-align: left; width: 100%; border: 1px solid var(--line); border-radius: 3px;
     background: var(--surface-2); color: var(--ink); padding: .5rem .6rem; cursor: pointer;
@@ -65,24 +76,52 @@
   .hofzeile.an { border-color: var(--accent); background: var(--sel); }
   .hofzeile .name { font-weight: 600; }
   .hofzeile .code { font-family: var(--mono); color: var(--muted); font-size: .72rem; }
-  .hofzeile .meta { font-family: var(--mono); color: var(--muted); font-size: .66rem; flex: none; }
+  .hofzeile .meta { font-family: var(--mono); color: var(--muted); font-size: .66rem; flex: none; text-align: right; }
+  .punkt { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .35rem;
+           background: var(--line); vertical-align: middle; }
+  .punkt.online { background: var(--ok); }
+  .punkt.aktiv { background: var(--warn); }
+  .marke { font-family: var(--mono); font-size: .62rem; padding: .05rem .35rem; border-radius: 3px;
+           border: 1px solid var(--line); color: var(--muted); margin-left: .25rem; }
+  .marke.warn { border-color: var(--warn); color: var(--warn); }
+  .marke.bad { border-color: var(--bad); color: var(--bad); }
+  .marke.ok { border-color: var(--ok); color: var(--ok); }
 
   .zeile { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; margin-bottom: .55rem; }
-  .zeile > label { min-width: 3.2rem; }
+  .zeile > label { min-width: 3.6rem; }
+  /* Ein Satz aus Beschriftung, Eingabe und Knopf bleibt beim Umbruch zusammen. */
+  .satz { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: nowrap; }
+  .satz > label { min-width: 0; }
 
-  .kopf { font-family: var(--mono); font-size: .8rem; margin-bottom: .7rem; }
+  .kopf { font-family: var(--mono); font-size: .8rem; margin-bottom: .7rem; line-height: 1.7; }
   .kopf b { color: var(--accent); }
   .kopf .g { color: var(--muted); }
 
+  .tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .6rem; }
+  .tabs button { border-color: var(--line); color: var(--muted); }
+  .tabs button.an { border-color: var(--accent); color: var(--accent); background: var(--sel); }
+
+  table { border-collapse: collapse; width: 100%; font-size: .78rem; }
+  th, td { text-align: left; padding: .28rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--mono); font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.z { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tabelle { overflow-x: auto; }
+  .gut { color: var(--ok); } .schlecht { color: var(--bad); } .warnung { color: var(--warn); }
+
   .log { font-family: var(--mono); font-size: .68rem; display: flex; flex-direction: column;
-         gap: .2rem; max-height: 12rem; overflow-y: auto; }
+         gap: .2rem; max-height: 16rem; overflow-y: auto; }
   .log div { display: flex; gap: .5rem; }
   .log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
   .log .good { color: var(--ok); }
   .log .bad { color: var(--bad); }
+  .log .art { flex: none; min-width: 5.2rem; color: var(--accent); }
+  .log .wer { flex: none; color: var(--muted); }
 
   .hint { color: var(--muted); font-size: .78rem; margin: .5rem 0 0; }
   a { color: var(--accent); }
+  details summary { cursor: pointer; font-family: var(--mono); font-size: .72rem; color: var(--muted); }
+  pre { font-family: var(--mono); font-size: .66rem; white-space: pre-wrap; word-break: break-all;
+        background: var(--surface-2); padding: .5rem; border-radius: 3px; max-height: 24rem; overflow: auto; }
 
   .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .5rem; }
   .stat { border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2);
@@ -94,11 +133,11 @@
 </style>
 
 <div class="wrap">
-  <h1>Hof-Verwaltung</h1>
+  <h1>Werkbank</h1>
   <div class="banner">
-    Nur mit deinem Server-Schlüssel. Alles greift <strong>serverseitig</strong> —
-    Waren und Gold landen im <strong>Postfach</strong> des Hofs, XP wird beim
-    nächsten Sync gutgeschrieben.
+    Nur mit deinem Server-Schlüssel. Jeder Eingriff greift <strong>serverseitig beim nächsten
+    Abgleich</strong> — nach dem, was der Spieler offline getan hat. Ein Hof mit Verbindung
+    übernimmt ihn in Sekunden; ein Hof ohne Verbindung, sobald er wieder da ist.
   </div>
 
   <div class="card" id="setup">
@@ -118,6 +157,7 @@
         <div class="stat"><span class="statwert" id="s-goldrate">—</span><span class="statname">Gold / min (netto)</span></div>
         <div class="stat"><span class="statwert" id="s-itemrate">—</span><span class="statname">Waren / min (netto)</span></div>
         <div class="stat"><span class="statwert" id="s-hoefe">—</span><span class="statname">Höfe · XP gesamt</span></div>
+        <div class="stat"><span class="statwert" id="s-online">—</span><span class="statname">Online · aktiv · offen</span></div>
       </div>
     </div>
 
@@ -128,72 +168,144 @@
         <button id="neuladen">Neu laden</button>
       </div>
       <div class="hofliste" id="hofliste"></div>
+      <p class="hint">● online: hält die Ereignisleitung offen · ● aktiv: Abgleich in den letzten zwei Minuten · Marken: was auf den nächsten Abgleich wartet.</p>
+    </div>
+
+    <div class="card" id="hof" hidden>
+      <div class="kopf" id="kopf"></div>
+      <div class="tabs" id="tabs">
+        <button data-tab="hof" class="an">Hof</button>
+        <button data-tab="lager">Lager</button>
+        <button data-tab="brett">Brett</button>
+        <button data-tab="sozial">Sozial</button>
+        <button data-tab="technik">Technik</button>
+      </div>
+      <div id="tab-inhalt" class="tabelle"></div>
     </div>
 
     <div class="card" id="aktionen" hidden>
-      <div class="kopf" id="kopf"></div>
+      <h2>Eingriffe</h2>
 
+      <h3>Geben</h3>
       <div class="zeile">
-        <label>Gold</label>
-        <input id="goldbetrag" class="zahl" type="number" min="1" value="1000">
-        <button class="primary" id="goldgeben">Gold geben</button>
+        <span class="satz"><label>Gold</label>
+          <input id="goldbetrag" class="zahl" type="number" min="1" value="1000">
+          <button class="primary" id="goldgeben">Gold geben</button></span>
+        <span class="satz"><label>XP</label>
+          <input id="xpbetrag" class="zahl" type="number" min="1" value="500">
+          <button class="primary" id="xpgeben">XP geben</button></span>
+        <span class="satz"><label>Stufe</label>
+          <input id="stufe" class="zahl" type="number" min="2" max="200" value="10">
+          <button class="primary" id="stufesetzen">Stufe setzen</button></span>
+      </div>
+      <div class="zeile">
+        <span class="satz"><label>Ware</label>
+          <select id="warenwahl"></select>
+          <input id="warenmenge" class="zahl" type="number" min="1" value="10">
+          <button class="primary" id="warengeben">Geben</button>
+          <button class="danger" id="warenabziehen">Abziehen</button></span>
+      </div>
+      <div class="zeile">
+        <span class="satz"><label>Kiste</label>
+          <select id="kistenwahl"></select>
+          <button class="primary" id="kisteschicken">Kiste schicken</button></span>
+        <span class="satz"><label>Booster</label>
+          <input id="boosterminuten" class="zahl" type="number" min="1" max="1440" value="30">
+          <button class="primary" id="boosterstarten">XP-Verdoppler starten</button></span>
       </div>
 
+      <h3>Hof</h3>
       <div class="zeile">
-        <label>XP</label>
-        <input id="xpbetrag" class="zahl" type="number" min="1" value="500">
-        <button class="primary" id="xpgeben">XP geben</button>
+        <button data-eingriff="alles-fertig">Alles fertig stellen</button>
+        <button data-eingriff="wagen-zurueck">Wagen zurückrufen</button>
+        <button data-eingriff="zettel-neu">Zettel neu auslegen</button>
+        <button data-eingriff="kiste-auf-hof">Kiste auf den Hof</button>
+        <button data-eingriff="lager-ausbauen">Lager +1</button>
+        <button data-eingriff="boot-reparieren">Boot reparieren</button>
+      </div>
+      <div class="zeile">
+        <span class="satz"><label>Stall</label>
+          <select id="stallwahl"></select>
+          <button id="tierschenken">Tier schenken</button></span>
+        <span class="satz"><label>Bau</label>
+          <select id="bauwahl"></select>
+          <button id="bauschenken">Bau schenken</button></span>
+      </div>
+      <div class="zeile">
+        <span class="satz"><label>Land</label>
+          <select id="landwahl"></select>
+          <button id="landfrei">Freimachen</button></span>
+        <span class="satz"><label>Hindernis</label>
+          <select id="hinderniswahl"></select>
+          <button id="hindernisweg">Räumen</button></span>
       </div>
 
+      <h3>Zeit</h3>
       <div class="zeile">
-        <label>Ware</label>
-        <select id="warenwahl"></select>
-        <input id="warenmenge" class="zahl" type="number" min="1" value="10">
-        <button class="primary" id="warengeben">Geben</button>
-      </div>
-
-      <div class="zeile">
-        <label>Zeit</label>
         <button data-time="600">+10 min</button>
         <button data-time="3600">+1 h</button>
         <button data-time="43200">+12 h</button>
+        <button data-time="86400">+1 Tag</button>
       </div>
 
+      <h3>Konto</h3>
+      <div class="zeile">
+        <span class="satz"><label>Name</label>
+          <input id="hofname" maxlength="24" placeholder="Neuer Hofname">
+          <button id="umbenennen">Umbenennen</button></span>
+        <span class="satz"><label>Freund</label>
+          <input id="freundcode" maxlength="24" placeholder="Hof-Code oder ID" style="width:9rem">
+          <button id="befreunden">Freundschaft stiften</button></span>
+      </div>
+      <div class="zeile">
+        <button id="geraetfrei">Gerät freigeben</button>
+        <button id="alarmeweg">Alarme löschen</button>
+        <span class="satz"><label>Regelwerk</label>
+          <select id="versionwahl"></select>
+          <button id="versionsetzen">Ziel setzen</button></span>
+      </div>
       <div class="zeile" style="margin-bottom:0">
-        <label>Reset</label>
         <button class="danger" id="reset">Spielstand löschen</button>
       </div>
-
       <p class="hint">
-        Gold und Waren muss der Spieler danach im Spiel aus dem Postfach abholen.
-        XP wirkt beim nächsten automatischen Sync.
+        Gold, Waren und Kisten landen im Postfach. Stufe, Booster, Bauten und alles unter „Hof"
+        wendet der Server beim nächsten Abgleich an — offline Getanes zählt zuerst. Was dann nicht
+        mehr passt (voller Stall, schon gebaut), fällt still weg.
       </p>
     </div>
 
-    <div class="card">
-      <h2>Benachrichtigung senden</h2>
-      <div class="zeile">
-        <label>Titel</label>
-        <input id="pushtitel" class="wide" maxlength="80" placeholder="Neues auf dem Hof">
+    <div class="zwei">
+      <div class="card">
+        <h2>Benachrichtigung senden</h2>
+        <div class="zeile">
+          <label>Titel</label>
+          <input id="pushtitel" class="wide" maxlength="80" placeholder="Neues auf dem Hof">
+        </div>
+        <div class="zeile">
+          <label>Text</label>
+          <input id="pushtext" class="wide" maxlength="240" placeholder="Ab heute gibt es den Angelsee!">
+        </div>
+        <div class="zeile" style="margin-bottom:0">
+          <label>An</label>
+          <select id="pushziel">
+            <option value="alle">Alle Höfe mit Benachrichtigungen</option>
+            <option value="gewaehlt">Nur den ausgewählten Hof</option>
+          </select>
+          <button class="primary" id="pushsenden">Senden</button>
+        </div>
+        <p class="hint" id="pushstand">Erreichbar: —</p>
       </div>
-      <div class="zeile">
-        <label>Text</label>
-        <input id="pushtext" class="wide" maxlength="240" placeholder="Ab heute gibt es den Angelsee!">
+
+      <div class="card">
+        <h2>Verlauf hier</h2>
+        <div class="log" id="log"></div>
       </div>
-      <div class="zeile" style="margin-bottom:0">
-        <label>An</label>
-        <select id="pushziel">
-          <option value="alle">Alle Höfe mit Benachrichtigungen</option>
-          <option value="gewaehlt">Nur den ausgewählten Hof</option>
-        </select>
-        <button class="primary" id="pushsenden">Senden</button>
-      </div>
-      <p class="hint" id="pushstand">Erreichbar: —</p>
     </div>
 
     <div class="card">
-      <h2>Protokoll</h2>
-      <div class="log" id="log"></div>
+      <h2>Server-Protokoll <span id="protokoll-filter" class="marke"></span></h2>
+      <div class="log" id="sprotokoll"></div>
+      <p class="hint">Abgelehnte Abgleiche, Divergenzen, Gerätewechsel, Regelwerks-Wanderungen und alles, was die Werkbank getan hat — die letzten Minuten aus dem Speicher des Servers.</p>
     </div>
 
     <p class="hint">Zum Spiel: <a href="/">Hof</a></p>
@@ -204,23 +316,33 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
+  // Die Namen des Spiels — texte.js liest sie aus `rules`; hier steht dafür
+  // der Katalog des gewählten Hofs, in derselben Form.
+  var rules = null;
+  <!--INCLUDE:farm/texte.js-->
+
   // Eigener Schlüssel! NICHT 'ns-token' — den benutzt das Spiel für den
   // Hof-Token. Würden beide sich denselben Schlüssel teilen, überschreiben
-  // Admin-Schlüssel und Hof-Token einander: das Admin-Panel macht den offenen
-  // Hof offline, und ein neuer Hof macht das Admin-Panel „vergesslich".
+  // Admin-Schlüssel und Hof-Token einander.
   var ADMIN_KEY = 'ns-admin-token';
   var token = localStorage.getItem(ADMIN_KEY) || '';
   var hoefe = [];
   var gewaehlt = null;
+  var sicht = null, katalog = null, technik = null;
+  var tab = 'hof';
+  var timer = { stats: null, hoefe: null, sicht: null, protokoll: null };
 
-  var NAMEN = {
-    gold: 'Gold', wheat: 'Weizen', feed: 'Futter', eggs: 'Eier', corn: 'Mais',
-    milk: 'Milch', cream: 'Sahne', butter: 'Butter', cheese: 'Käse',
-    'cow-feed': 'Kuhfutter', plank: 'Bretter', nail: 'Nägel', saw: 'Säge',
-    shovel: 'Schaufel', pickaxe: 'Spitzhacke', map: 'Landkarte',
-    mallet: 'Bauhammer', stake: 'Steckpfahl'
-  };
-  function nameVon(id) { return (NAMEN[id] || id) + ' (' + id + ')'; }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function zahl(n) { return (n || 0).toLocaleString('de-DE'); }
+  function name(id) { return rules ? nameOf(id) : id; }
+  function platzName(i) { return rules ? plotName(i) : '#' + i; }
+  function stapel(liste) {
+    return (liste || []).map(function (x) { return x.amount + '× ' + name(rules.items[x.item].id); }).join(', ') || '—';
+  }
 
   function log(msg, kind) {
     var row = document.createElement('div');
@@ -232,7 +354,7 @@
     row.appendChild(t); row.appendChild(s);
     var box = $('log');
     box.insertBefore(row, box.firstChild);
-    while (box.childElementCount > 40) box.removeChild(box.lastChild);
+    while (box.childElementCount > 60) box.removeChild(box.lastChild);
   }
 
   function api(path, method) {
@@ -248,7 +370,327 @@
     });
   }
 
-  // Wie viele Geräte hören gerade zu?
+  // — Höfe ————————————————————————————————————————————————————————————
+  function vorZeit(ms) {
+    if (!ms) return 'nie';
+    var s = Math.floor((Date.now() - ms) / 1000);
+    if (s < 60) return 'gerade';
+    if (s < 3600) return Math.floor(s / 60) + ' min';
+    if (s < 86400) return Math.floor(s / 3600) + ' h';
+    return Math.floor(s / 86400) + ' d';
+  }
+  function verbindung(h) {
+    if (h.zuhoerer > 0) return 'online';
+    if (h.lastSyncMs && Date.now() - h.lastSyncMs < 120000) return 'aktiv';
+    return 'aus';
+  }
+  function passt(h, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    return (h.name || '').toLowerCase().indexOf(q) >= 0
+      || (h.code || '').toLowerCase().indexOf(q) >= 0
+      || h.id.toLowerCase().indexOf(q) >= 0;
+  }
+  function marken(h) {
+    var m = '';
+    var o = h.offen || {};
+    var wartet = (o.post || 0) + (o.eingriffe || 0) + (o.abzuege || 0) + (o.xp > 0 ? 1 : 0);
+    if (wartet > 0) m += '<span class="marke warn">' + wartet + ' wartet</span>';
+    if (h.alarme > 0) m += '<span class="marke bad">' + h.alarme + ' Divergenz</span>';
+    if (h.wanderungsfehler > 0) m += '<span class="marke bad">Wanderung</span>';
+    if (h.rulesetVersion != null && h.targetRulesetVersion != null && h.rulesetVersion !== h.targetRulesetVersion) {
+      m += '<span class="marke">v' + h.rulesetVersion + '→' + h.targetRulesetVersion + '</span>';
+    }
+    return m;
+  }
+  function zeichneListe() {
+    var q = $('suche').value.trim();
+    var box = $('hofliste');
+    box.textContent = '';
+    var sichtbar = hoefe.filter(function (h) { return passt(h, q); });
+    if (sichtbar.length === 0) { box.innerHTML = '<p class="hint">Keine Höfe.</p>'; return; }
+    sichtbar.forEach(function (h) {
+      var b = document.createElement('button');
+      b.className = 'hofzeile' + (gewaehlt && gewaehlt.id === h.id ? ' an' : '');
+      var v = verbindung(h);
+      b.innerHTML =
+        '<span><span class="punkt ' + v + '"></span><span class="name">' + esc(h.name || 'Hof') + '</span> ' +
+        '<span class="code">' + esc(h.code || '—') + '</span>' + marken(h) + '</span>' +
+        '<span class="meta">Stufe ' + (h.level == null ? '—' : h.level) + ' · ' + zahl(h.gold) + ' Gold<br>' +
+        (v === 'online' ? 'online' : v === 'aktiv' ? 'aktiv ' + vorZeit(h.lastSyncMs) : 'gesehen ' + vorZeit(h.lastSeenMs)) +
+        ' · seq ' + (h.seq == null ? '—' : h.seq) + '</span>';
+      b.addEventListener('click', function () { waehle(h); });
+      box.appendChild(b);
+    });
+  }
+  function ladeHoefe(leise) {
+    return api('/api/admin/accounts').then(function (d) {
+      hoefe = d.accounts || [];
+      hoefe.sort(function (a, b) {
+        var va = verbindung(a) === 'online' ? 2 : verbindung(a) === 'aktiv' ? 1 : 0;
+        var vb = verbindung(b) === 'online' ? 2 : verbindung(b) === 'aktiv' ? 1 : 0;
+        if (va !== vb) return vb - va;
+        return (b.lastSeenMs || 0) - (a.lastSeenMs || 0);
+      });
+      if (gewaehlt) {
+        var frisch = null;
+        hoefe.forEach(function (h) { if (h.id === gewaehlt.id) frisch = h; });
+        if (frisch) gewaehlt = frisch;
+      }
+      zeichneListe();
+      var online = 0, aktiv = 0, offen = 0;
+      hoefe.forEach(function (h) {
+        var v = verbindung(h);
+        if (v === 'online') online++; else if (v === 'aktiv') aktiv++;
+        var o = h.offen || {};
+        offen += (o.post || 0) + (o.eingriffe || 0) + (o.abzuege || 0) + (o.xp > 0 ? 1 : 0);
+      });
+      $('s-online').textContent = online + ' · ' + aktiv + ' · ' + offen;
+      if (!leise) log(d.count + ' Höfe geladen', 'good');
+    });
+  }
+
+  // — Der gewählte Hof: Sicht, Katalog, Technik ——————————————————————————
+  function waehle(h) {
+    gewaehlt = h;
+    zeichneListe();
+    $('hof').hidden = false;
+    $('aktionen').hidden = false;
+    $('protokoll-filter').textContent = 'nur ' + (h.name || h.id);
+    ladeSicht();
+    ladeProtokoll();
+  }
+
+  function ladeSicht() {
+    if (!gewaehlt) return Promise.resolve();
+    var id = gewaehlt.id;
+    return api('/api/admin/sicht?account=' + encodeURIComponent(id)).then(function (d) {
+      if (!gewaehlt || gewaehlt.id !== id) return;
+      sicht = d.sicht; katalog = d.katalog; technik = d.technik;
+      rules = katalog;
+      zeichneKopf();
+      zeichneTab();
+      fuelleAuswahlen();
+    }).catch(function (e) { log('Sicht: ' + e.message, 'bad'); });
+  }
+
+  function zeichneKopf() {
+    var t = technik, s = sicht;
+    var v = gewaehlt ? verbindung(gewaehlt) : 'aus';
+    var geraet = t.activeDevice ? t.activeDevice.id + ' · Abgleich ' + vorZeit(t.activeDevice.lastSyncMs) : 'kein Gerät';
+    var offen = [];
+    if (t.pendingDeliveries.length) offen.push(t.pendingDeliveries.length + ' Post');
+    if (t.pendingXp > 0) offen.push(t.pendingXp + ' XP');
+    if (t.pendingAbzuege.length) offen.push(t.pendingAbzuege.length + ' Abzüge');
+    if (t.eingriffe.length) offen.push(t.eingriffe.length + ' Eingriffe');
+    $('kopf').innerHTML =
+      '<span class="punkt ' + v + '"></span><b>' + esc(t.name || 'Hof') + '</b> <span class="g">' + esc(t.code || '') + ' · ' + esc(gewaehlt.id) + '</span><br>' +
+      'Stufe <b>' + t.level + '</b> (' + zahl(t.xp) + ' XP) · Gold <b>' + zahl(t.gold) + '</b> · Lager ' + s.silo.used + ' / ' + s.silo.capacity +
+      ' · Postfach ' + s.mail.entries.length + ' / ' + s.mail.capacity + '<br>' +
+      '<span class="g">Regelwerk v' + t.rulesetVersion + (t.targetRulesetVersion !== t.rulesetVersion ? ' → v' + t.targetRulesetVersion : '') +
+      ' · seq ' + t.seq + ' · Tick ' + zahl(t.tick) + ' · ' + esc(geraet) + ' · Zuhörer ' + t.zuhoerer + '</span>' +
+      (offen.length ? '<br><span class="warnung">Wartet auf den nächsten Abgleich: ' + offen.join(', ') + '</span>' : '') +
+      (t.divergenceAlerts.length ? '<br><span class="schlecht">' + t.divergenceAlerts.length + ' Divergenz-Alarm(e)</span>' : '') +
+      (t.migrationFailures.length ? '<br><span class="schlecht">' + t.migrationFailures.length + ' gescheiterte Wanderung(en)</span>' : '');
+  }
+
+  function tabelle(kopf, zeilen) {
+    return '<table><thead><tr>' + kopf.map(function (k) { return '<th>' + k + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      zeilen.map(function (z) { return '<tr>' + z.map(function (c, i) { return '<td' + (i > 0 ? ' class="z"' : '') + '>' + c + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table>';
+  }
+
+  function plotStand(p) {
+    if (p.deco) return 'Deko';
+    if (p.baum) return p.baum.stufe + (p.baum.stufe === 'wachsen' || p.baum.stufe === 'setzling' ? ' · reif in ' + timeText(p.baum.reifIn) : '') + ' · ' + p.baum.geerntet + '/' + p.baum.ernten + ' Ernten';
+    var fertig = 0, laeuft = 0, leer = 0, rest = Infinity;
+    p.slots.forEach(function (s) {
+      if (s.done) fertig++; else if (s.busy) { laeuft++; rest = Math.min(rest, s.remaining); } else leer++;
+    });
+    var teile = [];
+    if (fertig) teile.push('<span class="gut">' + fertig + ' fertig</span>');
+    if (laeuft) teile.push(laeuft + ' läuft' + (isFinite(rest) ? ' · noch ' + timeText(rest) : ''));
+    if (leer) teile.push(leer + ' leer');
+    if (p.stall) teile.push(p.stall.animals + '/' + p.stall.places + ' Tiere');
+    return teile.join(' · ') || '—';
+  }
+
+  function zeichneTab() {
+    var s = sicht, t = technik, box = $('tab-inhalt');
+    if (!s) return;
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('an', b.getAttribute('data-tab') === tab); });
+    var html = '';
+    if (tab === 'hof') {
+      var steht = s.plots.filter(function (p) { return p.level > 0; });
+      html += tabelle(['Platz', 'Stufe', 'Stand', 'Sterne'], steht.map(function (p) {
+        return [esc(platzName(p.index)), String(p.level), plotStand(p), p.meister ? sterneText(p.meister.sterne, p.meister.maxSterne) + ' ' + p.meister.punkte : ''];
+      }));
+      var frei = s.expansions.filter(function (e) { return e.unlocked; }).length;
+      var geraeumt = katalog.obstacles.length - s.obstacles.length;
+      html += '<p class="hint">Land: ' + frei + ' von ' + s.expansions.length + ' freigemacht · Hindernisse: ' + geraeumt + ' von ' + katalog.obstacles.length + ' geräumt' +
+        ' · Kisten auf dem Hof: ' + s.chests.filter(function (k) { return k.ready; }).length + ' offen, ' + s.openBoxes + ' unterwegs' +
+        (s.angeln ? ' · Boot ' + (s.angeln.boot && s.angeln.boot.repariert ? 'repariert' : 'kaputt') + ' · ' + s.angeln.gefangen + ' Fische' : '') +
+        (s.wetter ? ' · Wetter ' + s.wetter.art + ' (' + timeText(s.wetter.wechselIn) + ')' : '') +
+        (s.booster ? ' · XP-Verdoppler ' + (s.booster.xpAktiv ? 'läuft noch ' + timeText(s.booster.xpRest) : 'aus') + ' · Vorrat ' + s.booster.xpVorrat + '/' + s.booster.wuchsVorrat : '') + '</p>';
+    } else if (tab === 'lager') {
+      var voll = s.stock.filter(function (x) { return x.amount > 0; });
+      html += '<p class="hint">Lager ' + s.silo.used + ' / ' + s.silo.capacity + (s.silo.full ? ' — <span class="schlecht">voll</span>' : '') + ' · Stufe ' + s.silo.level + '</p>';
+      html += tabelle(['Ware', 'Menge', 'NPC-Preis'], voll.map(function (x) { return [esc(name(x.id)), zahl(x.amount), String(x.npcPrice)]; }));
+      html += '<h3>Postfach</h3>' + (s.mail.entries.length ? tabelle(['Ware', 'Menge'], s.mail.entries.map(function (m) { return [esc(name(rules.items[m.item].id)), zahl(m.amount)]; })) : '<p class="hint">leer</p>');
+      if (t.pendingDeliveries.length) html += '<h3>Unterwegs (wartet auf Abgleich oder Platz im Postfach)</h3>' + tabelle(['Ware', 'Menge'], t.pendingDeliveries.map(function (m) { return [esc(name(rules.items[m.item].id)), zahl(m.amount)]; }));
+      if (t.pendingAbzuege.length) html += '<h3>Abzüge (wenn vorhanden)</h3>' + tabelle(['Ware', 'Menge'], t.pendingAbzuege.map(function (m) { return [esc(name(rules.items[m.item].id)), zahl(m.amount)]; }));
+    } else if (tab === 'brett') {
+      var z = function (liste) {
+        return liste.map(function (a) {
+          return [esc(a.label), a.ist + ' / ' + a.ziel, a.eingeloest ? '<span class="gut">abgeholt</span>' : a.erfuellt ? '<span class="warnung">abholbar</span>' : a.prozent + ' %', a.gold + ' Gold · ' + a.xp + ' XP'];
+        });
+      };
+      html += '<h3>Heute (Tag ' + s.aufgaben.tag + ')</h3>' + (s.aufgaben.liste.length ? tabelle(['Zettel', 'Stand', '', 'Lohn'], z(s.aufgaben.liste)) : '<p class="hint">noch kein Servertag</p>');
+      html += '<h3>Diese Woche (' + s.wochenaufgaben.tag + ')</h3>' + (s.wochenaufgaben.liste.length ? tabelle(['Zettel', 'Stand', '', 'Lohn'], z(s.wochenaufgaben.liste)) : '<p class="hint">—</p>');
+      if (s.feste) {
+        html += '<h3>Fest: ' + esc(festName(s.feste)) + (s.feste.aktiv ? ' (läuft)' : ' — beginnt in ' + s.feste.inTagen + ' Tag(en)') + '</h3>';
+        if (s.feste.aktiv) html += tabelle(['Zettel', 'Stand', '', 'Lohn'], z(s.feste.liste));
+      }
+      var faellig = s.erfolge.filter(function (e) { return e.erfuellt && !e.eingeloest; });
+      html += '<h3>Erfolge</h3><p class="hint">' + s.erfolge.filter(function (e) { return e.eingeloest; }).length + ' eingelöst · ' + faellig.length + ' abholbar' + (faellig.length ? ': ' + faellig.map(function (e) { return esc(e.label); }).join(', ') : '') + '</p>';
+      html += '<h3>Wagen &amp; Zettel</h3><p class="hint">Wagen ' + (s.truck.enabled ? (s.truck.here ? 'da' : 'unterwegs · zurück in ' + timeText(s.truck.backIn)) : 'aus') + '</p>';
+      html += tabelle(['Zettel', 'Will', 'Gibt'], s.requests.map(function (r) { return ['#' + r.id + (r.deliverable ? ' <span class="gut">lieferbar</span>' : ''), stapel(r.wants), stapel(r.reward) + ' · ' + r.xp + ' XP']; }));
+      html += '<h3>Stand</h3>' + (s.orders.length ? tabelle(['Ware', 'Menge', 'Preis', 'Kasse'], s.orders.map(function (o) { return [esc(name(rules.items[o.item].id)), String(o.amount), String(o.price), o.sold ? '<span class="gut">' + o.sold + ' Gold</span>' : '—']; })) : '<p class="hint">nichts ausgelegt</p>');
+    } else if (tab === 'sozial') {
+      html += '<p class="hint">Name <b>' + esc(t.name || '—') + '</b> · Code <b>' + esc(t.code || '—') + '</b> · angelegt ' + new Date(t.createdAt).toLocaleString('de-DE') + '</p>';
+      html += '<h3>Freunde (' + t.freunde.length + ')</h3>' + (t.freunde.length ? tabelle(['Hof', 'Code', 'ID'], t.freunde.map(function (f) { return [esc(f.name), esc(f.code), esc(f.id)]; })) : '<p class="hint">keine</p>');
+    } else if (tab === 'technik') {
+      html += tabelle(['Wert', ''], [
+        ['seq', String(t.seq)], ['Tick', zahl(t.tick)], ['serverTs', new Date(t.serverTs).toLocaleString('de-DE')],
+        ['Servertag', String(t.serverTag)], ['Regelwerk', 'v' + t.rulesetVersion + ' → Ziel v' + t.targetRulesetVersion],
+        ['Gerät', t.activeDevice ? esc(t.activeDevice.id) + ' · letzter Abgleich ' + new Date(t.activeDevice.lastSyncMs).toLocaleTimeString('de-DE') : 'keins'],
+        ['Zuhörer (SSE)', String(t.zuhoerer)], ['Befehlsfenster', t.appliedLog + ' ab seq ' + t.logStartSeq],
+        ['zuletzt gesehen', vorZeit(t.lastSeenMs)],
+      ]);
+      html += '<h3>Wartet auf Abgleich</h3>' + (t.eingriffe.length || t.pendingXp || t.pendingAbzuege.length || t.pendingDeliveries.length
+        ? '<pre>' + esc(JSON.stringify({ eingriffe: t.eingriffe, xp: t.pendingXp, abzuege: t.pendingAbzuege, post: t.pendingDeliveries }, null, 1)) + '</pre>'
+        : '<p class="hint">nichts</p>');
+      html += '<h3>Alarme</h3>' + (t.divergenceAlerts.length || t.migrationFailures.length
+        ? '<pre>' + esc(JSON.stringify({ divergenz: t.divergenceAlerts, wanderung: t.migrationFailures }, null, 1)) + '</pre>'
+        : '<p class="hint">keine</p>');
+      html += '<details><summary>Roh-Spielstand (JSON)</summary><pre id="roh">…</pre></details>';
+    }
+    box.innerHTML = html;
+    var det = box.querySelector('details');
+    if (det) det.addEventListener('toggle', function () {
+      if (!det.open) return;
+      api('/api/admin/status?account=' + encodeURIComponent(gewaehlt.id)).then(function (st) {
+        $('roh').textContent = JSON.stringify(st.state, null, 1);
+      }).catch(function (e) { $('roh').textContent = e.message; });
+    });
+  }
+
+  function fuelle(sel, eintraege) {
+    var vorher = sel.value;
+    sel.innerHTML = '';
+    eintraege.forEach(function (e) {
+      var o = document.createElement('option');
+      o.value = e.value; o.textContent = e.text;
+      sel.appendChild(o);
+    });
+    if (vorher && eintraege.some(function (e) { return e.value === vorher; })) sel.value = vorher;
+    sel.disabled = eintraege.length === 0;
+  }
+  function fuelleAuswahlen() {
+    fuelle($('warenwahl'), katalog.items.filter(function (i) { return i.storable || i.id === 'gold'; }).map(function (i) { return { value: i.id, text: name(i.id) }; }));
+    fuelle($('kistenwahl'), katalog.chestKinds.map(function (k, i) { return { value: String(i), text: k.label }; }));
+    fuelle($('stallwahl'), sicht.plots.filter(function (p) { return p.level > 0 && katalog.plots[p.index].animal; }).map(function (p) {
+      return { value: String(p.index), text: platzName(p.index) + (p.stall ? ' (' + p.stall.animals + '/' + p.stall.places + ')' : '') };
+    }));
+    fuelle($('bauwahl'), sicht.plots.filter(function (p) { return p.level <= 0 && !katalog.plots[p.index].fixed; }).map(function (p) {
+      return { value: String(p.index), text: platzName(p.index) + (katalog.plots[p.index].deco ? ' (Deko)' : '') };
+    }));
+    fuelle($('landwahl'), sicht.expansions.filter(function (e) { return !e.unlocked; }).map(function (e) { return { value: e.id, text: e.id + ' (ab Stufe ' + e.minLevel + ')' }; }));
+    fuelle($('hinderniswahl'), sicht.obstacles.map(function (o) { return { value: String(o.index), text: '#' + o.index + ' ' + o.kind + (o.locked ? ' (gesperrtes Land)' : '') }; }));
+    fuelle($('versionwahl'), katalog.versionen.filter(function (v) { return v >= technik.rulesetVersion; }).map(function (v) { return { value: String(v), text: 'v' + v + (v === technik.targetRulesetVersion ? ' (Ziel)' : '') }; }));
+  }
+
+  document.querySelectorAll('#tabs button').forEach(function (b) {
+    b.addEventListener('click', function () { tab = b.getAttribute('data-tab'); zeichneTab(); });
+  });
+
+  // — Eingriffe ———————————————————————————————————————————————————————————
+  function tun(pfad, label) {
+    if (!gewaehlt) return;
+    var sep = pfad.indexOf('?') >= 0 ? '&' : '?';
+    api(pfad + sep + 'account=' + encodeURIComponent(gewaehlt.id), 'POST')
+      .then(function (d) {
+        log(label + ' → ' + (gewaehlt.name || gewaehlt.id) + (d && d.offen ? ' · wartet auf Abgleich' : ''), 'good');
+        setTimeout(function () { ladeSicht(); ladeHoefe(true); ladeProtokoll(); }, 700);
+      })
+      .catch(function (e) { log(label + ' — ' + e.message, 'bad'); });
+  }
+  function eingriff(art, params, label) {
+    var q = '/api/admin/eingriff?art=' + encodeURIComponent(art);
+    Object.keys(params || {}).forEach(function (k) { q += '&' + k + '=' + encodeURIComponent(params[k]); });
+    tun(q, label);
+  }
+  function n(id, min) { return Math.max(min || 1, Math.floor(Number($(id).value) || 0)); }
+
+  $('goldgeben').addEventListener('click', function () { tun('/api/admin/grant?item=gold&amount=' + n('goldbetrag'), n('goldbetrag') + ' Gold'); });
+  $('xpgeben').addEventListener('click', function () { tun('/api/admin/xp?amount=' + n('xpbetrag'), n('xpbetrag') + ' XP'); });
+  $('stufesetzen').addEventListener('click', function () { eingriff('stufe', { level: n('stufe', 2) }, 'Stufe ' + n('stufe', 2)); });
+  $('warengeben').addEventListener('click', function () {
+    var id = $('warenwahl').value; if (!id) return;
+    tun('/api/admin/grant?item=' + encodeURIComponent(id) + '&amount=' + n('warenmenge'), n('warenmenge') + '× ' + name(id));
+  });
+  $('warenabziehen').addEventListener('click', function () {
+    var id = $('warenwahl').value; if (!id) return;
+    tun('/api/admin/abzug?item=' + encodeURIComponent(id) + '&amount=' + n('warenmenge'), '−' + n('warenmenge') + '× ' + name(id));
+  });
+  $('kisteschicken').addEventListener('click', function () {
+    var k = $('kistenwahl').value; if (k === '') return;
+    eingriff('kiste-schicken', { kind: k }, $('kistenwahl').selectedOptions[0].textContent + ' geschickt');
+  });
+  $('boosterstarten').addEventListener('click', function () { eingriff('booster', { minuten: n('boosterminuten') }, 'XP-Verdoppler ' + n('boosterminuten') + ' min'); });
+  document.querySelectorAll('[data-eingriff]').forEach(function (b) {
+    b.addEventListener('click', function () { eingriff(b.getAttribute('data-eingriff'), {}, b.textContent.trim()); });
+  });
+  $('tierschenken').addEventListener('click', function () {
+    var p = $('stallwahl').value; if (p === '') return;
+    eingriff('tier-schenken', { plot: p }, 'Tier für ' + platzName(Number(p)));
+  });
+  $('bauschenken').addEventListener('click', function () {
+    var p = $('bauwahl').value; if (p === '') return;
+    eingriff('bau-schenken', { plot: p }, platzName(Number(p)) + ' geschenkt');
+  });
+  $('landfrei').addEventListener('click', function () {
+    var id = $('landwahl').value; if (!id) return;
+    eingriff('land-freimachen', { id: id }, 'Land ' + id + ' freigemacht');
+  });
+  $('hindernisweg').addEventListener('click', function () {
+    var i = $('hinderniswahl').value; if (i === '') return;
+    eingriff('hindernis-raeumen', { index: i }, 'Hindernis #' + i + ' geräumt');
+  });
+  document.querySelectorAll('[data-time]').forEach(function (b) {
+    b.addEventListener('click', function () { tun('/api/admin/time?seconds=' + b.getAttribute('data-time'), b.textContent.trim() + ' Zeit'); });
+  });
+  $('umbenennen').addEventListener('click', function () {
+    var nm = $('hofname').value.trim(); if (!nm) return;
+    tun('/api/admin/name?name=' + encodeURIComponent(nm), 'Umbenannt in „' + nm + '"');
+  });
+  $('befreunden').addEventListener('click', function () {
+    var c = $('freundcode').value.trim(); if (!c) return;
+    tun('/api/admin/freundschaft?mit=' + encodeURIComponent(c), 'Freundschaft mit ' + c);
+  });
+  $('geraetfrei').addEventListener('click', function () { tun('/api/admin/geraet-frei', 'Gerät freigegeben'); });
+  $('alarmeweg').addEventListener('click', function () { tun('/api/admin/alarme-loeschen', 'Alarme gelöscht'); });
+  $('versionsetzen').addEventListener('click', function () {
+    var v = $('versionwahl').value; if (!v) return;
+    tun('/api/admin/ruleset?version=' + v, 'Regelwerk-Ziel v' + v);
+  });
+  $('reset').addEventListener('click', function () {
+    if (!gewaehlt) return;
+    if (!confirm('Spielstand von „' + (gewaehlt.name || gewaehlt.id) + '" löschen? Unwiderruflich.')) return;
+    tun('/api/admin/reset', 'Spielstand gelöscht');
+  });
+
+  // — Push ————————————————————————————————————————————————————————————————
   function pushStand() {
     api('/api/admin/push/stand')
       .then(function (d) {
@@ -259,7 +701,6 @@
       })
       .catch(function (e) { $('pushstand').textContent = 'Erreichbar: ' + e.message; });
   }
-
   $('pushsenden').addEventListener('click', function () {
     var titel = $('pushtitel').value.trim();
     var text = $('pushtext').value.trim();
@@ -282,94 +723,38 @@
       .catch(function (e) { log('Push: ' + e.message, 'bad'); });
   });
 
-  function vorZeit(ms) {
-    if (!ms) return 'nie';
-    var s = Math.floor((Date.now() - ms) / 1000);
-    if (s < 60) return 'gerade';
-    if (s < 3600) return Math.floor(s / 60) + ' min';
-    if (s < 86400) return Math.floor(s / 3600) + ' h';
-    return Math.floor(s / 86400) + ' d';
+  // — Server-Protokoll ——————————————————————————————————————————————————
+  function ladeProtokoll() {
+    var q = gewaehlt ? '?konto=' + encodeURIComponent(gewaehlt.id) : '';
+    return api('/api/admin/protokoll' + q).then(function (d) {
+      var box = $('sprotokoll');
+      box.textContent = '';
+      if (!d.zeilen.length) { box.innerHTML = '<p class="hint">Noch nichts notiert.</p>'; return; }
+      d.zeilen.forEach(function (z) {
+        var row = document.createElement('div');
+        var t = document.createElement('time');
+        t.textContent = new Date(z.t).toTimeString().slice(0, 8);
+        var art = document.createElement('span');
+        art.className = 'art' + (z.art === 'abgelehnt' || z.art === 'divergenz' || z.art === 'wanderung' ? ' bad' : '');
+        art.textContent = z.art;
+        var wer = document.createElement('span');
+        wer.className = 'wer';
+        var h = null; hoefe.forEach(function (x) { if (x.id === z.konto) h = x; });
+        wer.textContent = h ? (h.name || h.id) : (z.konto || '');
+        var s = document.createElement('span');
+        s.textContent = z.text;
+        row.appendChild(t); row.appendChild(art); row.appendChild(wer); row.appendChild(s);
+        box.appendChild(row);
+      });
+    }).catch(function () {});
   }
 
-  function passt(h, q) {
-    if (!q) return true;
-    q = q.toLowerCase();
-    return (h.name || '').toLowerCase().indexOf(q) >= 0
-      || (h.code || '').toLowerCase().indexOf(q) >= 0
-      || h.id.toLowerCase().indexOf(q) >= 0;
-  }
-
-  function zeichneListe() {
-    var q = $('suche').value.trim();
-    var box = $('hofliste');
-    box.textContent = '';
-    var sichtbar = hoefe.filter(function (h) { return passt(h, q); });
-    if (sichtbar.length === 0) { box.innerHTML = '<p class="hint">Keine Höfe.</p>'; return; }
-    sichtbar.forEach(function (h) {
-      var b = document.createElement('button');
-      b.className = 'hofzeile' + (gewaehlt && gewaehlt.id === h.id ? ' an' : '');
-      b.innerHTML =
-        '<span><span class="name">' + (h.name || 'Hof') + '</span> ' +
-        '<span class="code">' + (h.code || '—') + '</span></span>' +
-        '<span class="meta">seq ' + (h.seq == null ? '—' : h.seq) +
-        ' · ' + vorZeit(h.lastSeenMs) + '</span>';
-      b.addEventListener('click', function () { waehle(h); });
-      box.appendChild(b);
-    });
-  }
-
-  function ladeHoefe() {
-    return api('/api/admin/accounts').then(function (d) {
-      hoefe = d.accounts || [];
-      hoefe.sort(function (a, b) { return (b.lastSeenMs || 0) - (a.lastSeenMs || 0); });
-      zeichneListe();
-      log(d.count + ' Höfe geladen', 'good');
-    });
-  }
-
-  function fuelleWaren(itemIds) {
-    var sel = $('warenwahl');
-    var vorher = sel.value;
-    sel.innerHTML = '';
-    (itemIds || []).forEach(function (id) {
-      var o = document.createElement('option');
-      o.value = id;
-      o.textContent = nameVon(id);
-      sel.appendChild(o);
-    });
-    if (vorher) sel.value = vorher;
-  }
-
-  function waehle(h) {
-    gewaehlt = h;
-    zeichneListe();
-    $('aktionen').hidden = false;
-    api('/api/admin/status?account=' + encodeURIComponent(h.id)).then(function (s) {
-      fuelleWaren(s.itemIds);
-      var gold = (s.state.items || [])[0] || 0;
-      $('kopf').innerHTML =
-        '<b>' + (h.name || 'Hof') + '</b> <span class="g">' + (h.code || '') + '</span><br>' +
-        '<span class="g">' + h.id + '</span><br>' +
-        'Gold ' + gold + ' · XP ' + (s.state.xp || 0) + ' · Regelwerk v' + s.rulesetVersion +
-        ' · Postfach ' + s.state.mail.length;
-    }).catch(function (e) { log('Status: ' + e.message, 'bad'); });
-  }
-
-  function tun(pfad, label) {
-    if (!gewaehlt) return;
-    var sep = pfad.indexOf('?') >= 0 ? '&' : '?';
-    api(pfad + sep + 'account=' + encodeURIComponent(gewaehlt.id), 'POST')
-      .then(function () { log(label + ' → ' + (gewaehlt.name || gewaehlt.id), 'good'); waehle(gewaehlt); })
-      .catch(function (e) { log(label + ' — ' + e.message, 'bad'); });
-  }
-
-  function zahl(n) { return (n || 0).toLocaleString('de-DE'); }
+  // — Economy ————————————————————————————————————————————————————————————
   function rate(r) {
     var v = Math.round(r * 10) / 10;
     return (v >= 0 ? '+' : '') + v.toLocaleString('de-DE');
   }
   var letzteStats = null;
-  var statTimer = null;
   function ladeStats() {
     return api('/api/admin/stats').then(function (s) {
       $('s-gold').textContent = zahl(s.goldTotal);
@@ -398,8 +783,12 @@
       $('panel').hidden = false;
       ladeStats();
       pushStand();
-      if (statTimer) clearInterval(statTimer);
-      statTimer = setInterval(ladeStats, 3000);
+      ladeProtokoll();
+      Object.keys(timer).forEach(function (k) { if (timer[k]) clearInterval(timer[k]); });
+      timer.stats = setInterval(ladeStats, 3000);
+      timer.hoefe = setInterval(function () { ladeHoefe(true); }, 10000);
+      timer.sicht = setInterval(function () { if (gewaehlt && !document.hidden) ladeSicht(); }, 4000);
+      timer.protokoll = setInterval(function () { if (!document.hidden) ladeProtokoll(); }, 5000);
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message);
@@ -410,31 +799,6 @@
   $('token').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
   $('neuladen').addEventListener('click', function () { ladeHoefe().catch(function (e) { log(e.message, 'bad'); }); });
   $('suche').addEventListener('input', zeichneListe);
-
-  $('goldgeben').addEventListener('click', function () {
-    var n = Math.max(1, Math.floor(Number($('goldbetrag').value) || 0));
-    tun('/api/admin/grant?item=gold&amount=' + n, n + ' Gold');
-  });
-  $('xpgeben').addEventListener('click', function () {
-    var n = Math.max(1, Math.floor(Number($('xpbetrag').value) || 0));
-    tun('/api/admin/xp?amount=' + n, n + ' XP');
-  });
-  $('warengeben').addEventListener('click', function () {
-    var id = $('warenwahl').value;
-    var n = Math.max(1, Math.floor(Number($('warenmenge').value) || 0));
-    if (!id) return;
-    tun('/api/admin/grant?item=' + encodeURIComponent(id) + '&amount=' + n, n + '× ' + (NAMEN[id] || id));
-  });
-  document.querySelectorAll('[data-time]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      tun('/api/admin/time?seconds=' + b.getAttribute('data-time'), b.textContent.trim() + ' Zeit');
-    });
-  });
-  $('reset').addEventListener('click', function () {
-    if (!gewaehlt) return;
-    if (!confirm('Spielstand von „' + (gewaehlt.name || gewaehlt.id) + '" löschen? Unwiderruflich.')) return;
-    tun('/api/admin/reset', 'Spielstand gelöscht');
-  });
 
   if (token) { $('token').value = token; connect(); }
 })();

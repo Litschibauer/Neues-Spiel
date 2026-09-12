@@ -2,9 +2,9 @@ import type { Command } from '../sim/commands.ts';
 import { SimError } from '../sim/commands.ts';
 import type { MailItem, Offer, State } from '../sim/state.ts';
 import { EMPTY_PLOT, addItem, cloneState, count, wocheVonTag } from '../sim/state.ts';
-import { festAktiv, getRuleset, helpSpeedup } from '../sim/rules.ts';
+import { baumStufe, festAktiv, getRuleset, helpSpeedup, levelOf, nextLevelAt, slotsAt } from '../sim/rules.ts';
 import type { Ruleset } from '../sim/rules.ts';
-import { simulate } from '../sim/sim.ts';
+import { MAX_PENDING_BOXES, simulate } from '../sim/sim.ts';
 import { migrateState, MigrationError } from '../sim/migrate.ts';
 import { canonicalizeCommand, hashState } from '../sim/hash.ts';
 import { tagVon } from './sozial.ts';
@@ -14,6 +14,38 @@ import { rollChest, topUpChests } from './chests.ts';
 export const TICK_MS = 1000;
 
 export const LOG_WINDOW = 200;
+
+// Eingriffe der Werkbank. Sie stehen an, bis der Hof das naechste Mal
+// abgleicht, und greifen dann NACH dem Nachspielen der Spielerbefehle: Was der
+// Spieler offline getan hat, zaehlt zuerst, der Eingriff kommt obendrauf.
+// Jeder prueft selbst, ob er noch passt — passt er nicht mehr, faellt er
+// stillschweigend weg. So laufen Geraet und Server nie auseinander: Das Geraet
+// uebernimmt den Stand, den der Server zurueckgibt.
+export type Eingriff =
+  | { art: 'wagen-zurueck' }
+  | { art: 'zettel-neu' }
+  | { art: 'kiste-schicken'; kind: number }
+  | { art: 'kiste-auf-hof' }
+  | { art: 'lager-ausbauen'; stufen: number }
+  | { art: 'alles-fertig' }
+  | { art: 'tier-schenken'; plot: number }
+  | { art: 'bau-schenken'; plot: number }
+  | { art: 'land-freimachen'; id: string }
+  | { art: 'hindernis-raeumen'; index: number }
+  | { art: 'boot-reparieren' }
+  | { art: 'booster'; ticks: number }
+  | { art: 'stufe'; level: number };
+
+// So viel XP braucht es mindestens fuer diese Stufe.
+export function xpFuerStufe(rules: Ruleset, level: number): number {
+  let xp = 0;
+  for (let i = 0; i < 500 && levelOf(rules, xp) < level; i++) {
+    const naechste = nextLevelAt(rules, xp);
+    if (naechste === null) break;
+    xp = naechste;
+  }
+  return xp;
+}
 
 export type Snapshot = {
   state: State;
@@ -102,6 +134,138 @@ export class Server {
     this.soldSinceLastSync = true;
   }
 
+  eingriffe: Eingriff[] = [];
+
+  eingreifen(e: Eingriff): void {
+    this.eingriffe.push(e);
+    this.soldSinceLastSync = true;
+  }
+
+  // Ein Eingriff auf den Stand — oder derselbe Stand, wenn er nicht mehr passt.
+  private wendeAn(state: State, rules: Ruleset, e: Eingriff): State {
+    const tick = state.tick;
+    switch (e.art) {
+      case 'wagen-zurueck': {
+        if (state.truck.awayUntil <= tick) return state;
+        const next = cloneState(state);
+        next.truck = { loaded: state.truck.loaded, awayUntil: tick };
+        return next;
+      }
+      case 'zettel-neu': {
+        // Leeren — aufgefuellt wird gleich danach an derselben Stelle wie sonst.
+        if (state.requests.length === 0) return state;
+        const next = cloneState(state);
+        next.requests = [];
+        return next;
+      }
+      case 'kiste-schicken': {
+        if (!rules.chestKinds?.[e.kind]) return state;
+        if (state.pendingBoxes.length >= MAX_PENDING_BOXES) return state;
+        const next = cloneState(state);
+        next.pendingBoxes = state.pendingBoxes.concat(e.kind);
+        return next;
+      }
+      case 'kiste-auf-hof': {
+        if (state.chestReadyAt <= tick) return state;
+        const next = cloneState(state);
+        next.chestReadyAt = tick;
+        return next;
+      }
+      case 'lager-ausbauen': {
+        const stufen = rules.siloLevels ?? [];
+        const ziel = Math.min(stufen.length - 1, state.siloLevel + e.stufen);
+        if (ziel <= state.siloLevel) return state;
+        const next = cloneState(state);
+        next.siloLevel = ziel;
+        return next;
+      }
+      case 'alles-fertig': {
+        let geaendert = false;
+        const plots = state.plots.map((p, i) => {
+          const def = rules.plots[i];
+          if (!def || p.level <= 0) return p;
+          let q = p;
+          const slots = p.slots.map((x) => {
+            if (x.recipe === EMPTY_PLOT) return x;
+            const dauer = rules.recipes[x.recipe]?.durationTicks ?? 0;
+            if (tick - x.startedAt >= dauer) return x;
+            geaendert = true;
+            return { ...x, startedAt: tick - dauer };
+          });
+          if (slots.some((x, k) => x !== p.slots[k])) q = { ...q, slots };
+          if (def.baum && p.baum) {
+            const stufe = baumStufe(def.baum, p.baum.reifSeit, p.baum.geerntet, tick);
+            if (stufe === 'setzling' || stufe === 'wachsen') {
+              geaendert = true;
+              q = { ...q, baum: { ...p.baum, reifSeit: tick - def.baum.reifeTicks } };
+            }
+          }
+          return q;
+        });
+        if (!geaendert) return state;
+        const next = cloneState(state);
+        next.plots = plots;
+        return next;
+      }
+      case 'tier-schenken': {
+        const def = rules.plots[e.plot];
+        const plot = state.plots[e.plot];
+        if (!def?.animal || !plot || plot.level <= 0) return state;
+        if (plot.tiere.length >= slotsAt(rules, e.plot, plot.level)) return state;
+        const next = cloneState(state);
+        // Ausgewachsen geschenkt: geboren, bevor die Wachszeit begann.
+        next.plots = state.plots.map((p, i) =>
+          i === e.plot ? { ...p, tiere: p.tiere.concat(tick - def.animal!.growTicks) } : p,
+        );
+        return next;
+      }
+      case 'bau-schenken': {
+        const def = rules.plots[e.plot];
+        const plot = state.plots[e.plot];
+        if (!def || !plot || plot.level > 0 || !def.levels[0]) return state;
+        if ((state.eingepackt ?? []).includes(e.plot)) return state;
+        const next = cloneState(state);
+        next.eingepackt = (state.eingepackt ?? []).concat(e.plot);
+        return next;
+      }
+      case 'land-freimachen': {
+        if (!(rules.expansions ?? []).some((x) => x.id === e.id)) return state;
+        if ((state.expandiert ?? []).includes(e.id)) return state;
+        const next = cloneState(state);
+        next.expandiert = (state.expandiert ?? []).concat(e.id);
+        return next;
+      }
+      case 'hindernis-raeumen': {
+        if (!rules.obstacles?.[e.index]) return state;
+        if (state.clearedObstacles.includes(e.index)) return state;
+        const next = cloneState(state);
+        next.clearedObstacles = state.clearedObstacles.concat(e.index);
+        return next;
+      }
+      case 'boot-reparieren': {
+        if (state.bootRepariert) return state;
+        const next = cloneState(state);
+        next.bootRepariert = true;
+        return next;
+      }
+      case 'booster': {
+        if (!rules.booster || e.ticks <= 0) return state;
+        const next = cloneState(state);
+        next.xpDoppeltBis = Math.max(tick, state.xpDoppeltBis ?? 0) + e.ticks;
+        return next;
+      }
+      case 'stufe': {
+        const xp = xpFuerStufe(rules, e.level);
+        if (xp <= state.xp) return state;
+        const next = cloneState(state);
+        next.xp = xp;
+        return next;
+      }
+      default:
+        return state;
+    }
+  }
+
   helfen(plot: number, slot: number): { ok: false } | { ok: true; ticks: number } {
     const rules = getRuleset(this.snapshot.rulesetVersion);
     const state = this.snapshot.state;
@@ -166,6 +330,9 @@ export class Server {
     this.appliedLog = [];
     this.logStartSeq = 1;
     this.pendingDeliveries = [];
+    this.pendingXp = 0;
+    this.pendingAbzuege = [];
+    this.eingriffe = [];
     this.activeDevice = null;
     this.divergenceAlerts = [];
     this.migrationFailures = [];
@@ -268,6 +435,14 @@ export class Server {
       }
       this.pendingAbzuege = [];
       state = abgezogen;
+    }
+
+    // Eingriffe der Werkbank — nach den Spielerbefehlen, vor dem Auffuellen
+    // von Kisten und Zetteln, damit „Kiste schicken" und „Zettel neu" noch in
+    // diesem Abgleich zu Ende kommen.
+    if (this.eingriffe.length > 0) {
+      for (const e of this.eingriffe) state = this.wendeAn(state, rules, e);
+      this.eingriffe = [];
     }
 
     if (state.pendingBoxes.length > 0) {
