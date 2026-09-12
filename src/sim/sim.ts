@@ -243,6 +243,10 @@ export function erfolgsStand(s: State, rules: Ruleset): AchievementCtx {
     sterne: sterneJePlatz.reduce((a, b) => a + b, 0),
     meister: alleSterne > 0 ? sterneJePlatz.filter((n) => n >= alleSterne).length : 0,
     feste: s.festeGeschafft ?? 0,
+    zaehler: s.zaehler ?? [],
+    tiere: s.plots.reduce((n, p) => n + (p.tiere?.length ?? 0), 0),
+    tage: s.tageGeschafft ?? 0,
+    wochen: s.wochenGeschafft ?? 0,
   };
 }
 
@@ -264,7 +268,11 @@ function zaehleBefehl(vorher: State, nachher: State, cmd: Command, rules: Rulese
       stapel.push([ZAEHLER.ZETTEL, 1]);
       break;
     case 'FILL_REQUEST':
-      stapel.push([ZAEHLER.ANFRAGEN, 1]);
+      // Alter Weg — zaehlt weiter auf Platz 3, damit alte Staende stimmen.
+      stapel.push([ZAEHLER.KISTEN, 1]);
+      break;
+    case 'OPEN_CHEST':
+      if (rules.kistenZaehlen) stapel.push([ZAEHLER.KISTEN, 1]);
       break;
     case 'SELL_NPC':
       stapel.push([ZAEHLER.VERKAUFT, cmd.amount]);
@@ -586,6 +594,7 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
       next.xp = s.xp + lohn.xp;
       next.tagGeholt = (s.tagGeholt ?? []).concat(TAG_ABSCHLUSS);
+      next.tageGeschafft = (s.tageGeschafft ?? 0) + 1;
       return next;
     }
 
@@ -626,6 +635,7 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (lohn.gold > 0) next.items = addItem(s.items, rules.currency, lohn.gold);
       next.xp = s.xp + lohn.xp;
       next.wochenGeholt = (s.wochenGeholt ?? []).concat(WOCHE_ABSCHLUSS);
+      next.wochenGeschafft = (s.wochenGeschafft ?? 0) + 1;
       if (lohn.kiste !== undefined) next.pendingBoxes = s.pendingBoxes.concat(lohn.kiste);
       return next;
     }

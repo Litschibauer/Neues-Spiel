@@ -148,6 +148,9 @@ export type State = {
   festStart: readonly number[];
   festGeholt: readonly string[];
   festeGeschafft: number;
+  // Wie viele Tage und Wochen der Hof je abgeschlossen hat (fuer Erfolge).
+  tageGeschafft: number;
+  wochenGeschafft: number;
 };
 
 // Reihenfolge ist Vertrag: Diese Indizes liegen in jedem Spielstand.
@@ -155,7 +158,9 @@ export const ZAEHLER = {
   ERNTEN: 0,
   STARTEN: 1,
   ZETTEL: 2,
-  ANFRAGEN: 3,
+  // Platz 3 zaehlte einst erfuellte Anfragen (FILL_REQUEST); seit Brett und
+  // Wagen gibt es den Weg nicht mehr. Ab Regelwerk 49 zaehlt er geoeffnete Kisten.
+  KISTEN: 3,
   VERKAUFT: 4,
   GOLD: 5,
   FISCHE: 6,
@@ -345,6 +350,8 @@ export function initialState(rules: Ruleset): State {
     festStart: [],
     festGeholt: [],
     festeGeschafft: 0,
+    tageGeschafft: 0,
+    wochenGeschafft: 0,
     xpDoppeltBis: 0,
   };
 }
@@ -430,6 +437,8 @@ export function normalizeState(s: State): State {
     festStart: s.festStart ?? [],
     festGeholt: s.festGeholt ?? [],
     festeGeschafft: s.festeGeschafft ?? 0,
+    tageGeschafft: s.tageGeschafft ?? 0,
+    wochenGeschafft: s.wochenGeschafft ?? 0,
     xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }
@@ -473,6 +482,8 @@ export function cloneState(s: State): State {
     festStart: s.festStart ?? [],
     festGeholt: s.festGeholt ?? [],
     festeGeschafft: s.festeGeschafft ?? 0,
+    tageGeschafft: s.tageGeschafft ?? 0,
+    wochenGeschafft: s.wochenGeschafft ?? 0,
     xpDoppeltBis: s.xpDoppeltBis ?? 0,
   };
 }

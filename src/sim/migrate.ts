@@ -180,6 +180,16 @@ export const FEST_DAZU: MigrationStep = (state, from, to) => {
   return next;
 };
 
+// Zaehlung der Abschluesse: faengt bei null an — was vorher war, war vorher.
+export const ZAEHLUNG_DAZU: MigrationStep = (state, from, to) => {
+  const gewachsen = AUFS_RASTER(state, from, to);
+  if (gewachsen.tageGeschafft !== undefined && gewachsen.wochenGeschafft !== undefined) return gewachsen;
+  const next = cloneState(gewachsen);
+  next.tageGeschafft = gewachsen.tageGeschafft ?? 0;
+  next.wochenGeschafft = gewachsen.wochenGeschafft ?? 0;
+  return next;
+};
+
 export const BOOSTER_DAZU: MigrationStep = (state, from, to) => {
   const gewachsen = AUFS_RASTER(state, from, to);
   if (gewachsen.xpDoppeltBis !== undefined) return gewachsen;
@@ -370,6 +380,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['46->47', AUFS_RASTER],
   // Feste: vier Deko-Plaetze und eine Truhenart mehr, das Fest selbst faengt leer an.
   ['47->48', FEST_DAZU],
+  // Mehr Erfolge; die Sim zaehlt ab jetzt Tages- und Wochenabschluesse.
+  ['48->49', ZAEHLUNG_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

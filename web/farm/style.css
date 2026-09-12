@@ -1152,6 +1152,10 @@
   .ziel-kopf-zahl { font-size: .95rem; color: var(--muted); }
   .ziel-kopf-zahl b { font-size: 1.25rem; color: var(--text); font-weight: 750; }
   .ziel-kopf-hinweis { font-size: .74rem; color: var(--gold); font-weight: 650; }
+  .ziel-erledigt { margin: .15rem 0 .5rem; }
+  .ziel-erledigt > summary { cursor: pointer; font-size: .74rem; color: var(--muted); font-weight: 650; padding: .3rem .2rem; list-style: none; }
+  .ziel-erledigt > summary::before { content: '▸ '; }
+  .ziel-erledigt[open] > summary::before { content: '▾ '; }
 
   /* Gruppenüberschrift mit eigenem Zähler. */
   .ziel-gruppe {

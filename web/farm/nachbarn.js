@@ -272,6 +272,7 @@ function besuchHolen() {
       besuchDaten = d;
       besuchLeisteMalen();
       if (erster) hofNeuAufbauen();
+      if (view === 'fremdstand') zeichneFremdenStand(d);
       render();
     })
     .catch(function () {

@@ -166,10 +166,15 @@ export type AchievementKind =
   | 'item' // so viel von einer Ware im Lager
   | 'sterne' // so viele Meistersterne über alle Gebäude
   | 'meister' // so viele Gebäude mit allen Sternen
-  | 'feste'; // so viele Feste abgeschlossen
+  | 'feste' // so viele Feste abgeschlossen
+  | 'zaehler' // Lebenszeit-Zähler (arg = Index in ZAEHLER) hat `menge` erreicht
+  | 'tiere' // so viele Tiere in Ställen und auf Weiden
+  | 'plotPrefixCount' // so viele Bauwerke mit diesem Namensanfang stehen
+  | 'tage' // so viele Tagesabschlüsse
+  | 'wochen'; // so viele Wochenabschlüsse
 
 // Erfolge sind in Gruppen einsortiert; die Oberfläche zeigt sie darunter.
-export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat' | 'meister';
+export type AchievementGroup = 'hof' | 'wohlstand' | 'land' | 'see' | 'vorrat' | 'meister' | 'fleiss' | 'handel' | 'treue';
 
 export type AchievementDef = {
   id: string;
@@ -179,6 +184,9 @@ export type AchievementDef = {
   gold: number;
   xp: number;
   group?: AchievementGroup;
+  // Reihe: Erfolge derselben Reihe (Stufe 3, 5, 8 …) zeigt die Oberfläche
+  // nacheinander — immer nur den nächsten, den man noch nicht hat.
+  reihe?: string;
   // Bei kind 'item': wie viel von der Ware (arg = Waren-Kennung).
   menge?: number;
 };
@@ -290,6 +298,8 @@ export type Ruleset = {
   // bringt ein Stück obendrauf. Felder, Bäume und Deko machen nicht mit —
   // davon gibt es viele und gleiche; Sterne gehören an Gebäude. Ohne dieses
   // Feld gibt es keine Sterne, alte Fassungen bleiben unberührt.
+  // Ab 49: Platz 3 der Zaehler zaehlt geoeffnete Kisten (statt der toten Anfragen).
+  kistenZaehlen?: boolean;
   meisterschaft?: {
     stufen: readonly number[];
     schnellerProzent: number;
@@ -2816,33 +2826,151 @@ const V48: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V49: Mehr Erfolge — und Reihen. Fleiß (Ernten, Ansetzen), Handel (Verkäufe,
+// Wagen, Anfragen, Einnahmen), Tiere, Treue (Tages- und Wochenabschlüsse),
+// obere Stufen. Erfolge derselben Reihe zeigt die Oberfläche nacheinander.
+const REIHEN: Record<string, string> = {
+  lvl3: 'stufe', lvl5: 'stufe', lvl8: 'stufe', lvl15: 'stufe', lvl20: 'stufe', lvl30: 'stufe',
+  gold1k: 'gold', gold10k: 'gold', gold50k: 'gold',
+  silo2: 'lager', silo4: 'lager',
+  expand1: 'land', expand3: 'land', expand6: 'land', expand12: 'land',
+  clear10: 'raeumen', clear50: 'raeumen',
+  fish10: 'fische', fish50: 'fische', fish200: 'fische',
+  plots5: 'bauwerke', plots12: 'bauwerke',
+  deko3: 'deko', deko8: 'deko',
+  coop: 'staelle', coop2: 'staelle',
+  stern1: 'sterne', sterne5: 'sterne', sterne15: 'sterne',
+  meister1: 'meister', meister5: 'meister',
+  fest1: 'feste', fest4: 'feste', fest12: 'feste',
+};
+const ZAEHLER_ERNTEN = 0;
+const ZAEHLER_STARTEN = 1;
+const ZAEHLER_ZETTEL = 2;
+const ZAEHLER_KISTEN = 3;
+const ZAEHLER_VERKAUFT = 4;
+const ZAEHLER_GOLD = 5;
+const ZAEHLER_GEBAUT = 8;
+// „Anfragen erfuellen" zaehlte einen Befehl, den es seit Brett und Wagen nicht
+// mehr gibt — solche Zettel waren unerfuellbar. Jetzt zaehlt der Platz Kisten.
+// „Waren verkaufen" zaehlt verkaufte Kaestchen am Stand; das steht jetzt so da,
+// und die Zahlen passen zu Kaestchen statt zu Stueck.
+const KAESTCHEN_ZIEL: Record<string, number> = {
+  verkauf15: 5, 'w-verkauf80': 25, 'f-verkauf40': 12, 'f-verkauf50': 15, 'f-verkauf60': 18,
+};
+const ZAHLWORT: Record<number, string> = { 5: 'Fünf', 12: 'Zwölf', 15: 'Fünfzehn', 18: 'Achtzehn', 25: 'Fünfundzwanzig' };
+const zettelKlar = (t: AufgabeDef): AufgabeDef => {
+  if (t.art === ZAEHLER_KISTEN) return { ...t, label: t.label.replace('Anfragen erfüllen', 'Kisten öffnen') };
+  if (t.art === ZAEHLER_VERKAUFT && KAESTCHEN_ZIEL[t.id] !== undefined) {
+    const menge = KAESTCHEN_ZIEL[t.id]!;
+    return { ...t, menge, label: `${ZAHLWORT[menge] ?? menge} Kästchen am Stand verkaufen` };
+  }
+  return t;
+};
+const V49: Ruleset = {
   ...V48,
-  // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
+  version: 49,
+  kistenZaehlen: true,
+  tagesaufgaben: (V48.tagesaufgaben ?? []).map(zettelKlar),
+  wochenaufgaben: (V48.wochenaufgaben ?? []).map(zettelKlar),
   feste: {
     ...V48.feste!,
+    arten: V48.feste!.arten.map((a) => ({ ...a, aufgaben: a.aufgaben.map(zettelKlar) })),
+  },
+  achievements: [
+    ...(V48.achievements ?? []).map((a) => ({
+      ...a,
+      reihe: REIHEN[a.id],
+      // Die Feste ziehen zur Treue um — dort stehen die anderen Wiederkehr-Erfolge.
+      group: a.kind === 'feste' ? ('treue' as AchievementGroup) : a.group,
+    })),
+    // Hof
+    { id: 'baeume3', label: 'Drei Apfelbäume pflanzen', kind: 'plotPrefixCount', arg: 'apple-tree', menge: 3, gold: 700, xp: 80, group: 'hof', reihe: 'apfel' },
+    { id: 'plots20', label: 'Zwanzig Bauwerke stehen', kind: 'plots', arg: 20, gold: 2500, xp: 280, group: 'hof', reihe: 'bauwerke' },
+    { id: 'deko15', label: 'Fünfzehn Dekorationen aufstellen', kind: 'deko', arg: 15, gold: 1500, xp: 170, group: 'hof', reihe: 'deko' },
+    { id: 'tiere5', label: 'Fünf Tiere halten', kind: 'tiere', arg: 5, gold: 300, xp: 40, group: 'hof', reihe: 'tiere' },
+    { id: 'tiere15', label: 'Fünfzehn Tiere halten', kind: 'tiere', arg: 15, gold: 1200, xp: 150, group: 'hof', reihe: 'tiere' },
+    { id: 'tiere30', label: 'Dreißig Tiere halten', kind: 'tiere', arg: 30, gold: 3000, xp: 350, group: 'hof', reihe: 'tiere' },
+    // Fleiß
+    { id: 'ernte100', label: 'Hundert Plätze abernten', kind: 'zaehler', arg: ZAEHLER_ERNTEN, menge: 100, gold: 200, xp: 30, group: 'fleiss', reihe: 'ernte' },
+    { id: 'ernte1000', label: 'Tausend Plätze abernten', kind: 'zaehler', arg: ZAEHLER_ERNTEN, menge: 1000, gold: 1500, xp: 180, group: 'fleiss', reihe: 'ernte' },
+    { id: 'ernte10000', label: 'Zehntausend Plätze abernten', kind: 'zaehler', arg: ZAEHLER_ERNTEN, menge: 10000, gold: 8000, xp: 900, group: 'fleiss', reihe: 'ernte' },
+    { id: 'saeen500', label: 'Fünfhundert Mal etwas ansetzen', kind: 'zaehler', arg: ZAEHLER_STARTEN, menge: 500, gold: 900, xp: 110, group: 'fleiss', reihe: 'saeen' },
+    { id: 'saeen5000', label: 'Fünftausend Mal etwas ansetzen', kind: 'zaehler', arg: ZAEHLER_STARTEN, menge: 5000, gold: 6000, xp: 700, group: 'fleiss', reihe: 'saeen' },
+    { id: 'bauen25', label: 'Fünfundzwanzig Mal bauen oder ausbauen', kind: 'zaehler', arg: ZAEHLER_GEBAUT, menge: 25, gold: 1500, xp: 180, group: 'fleiss', reihe: 'bauen' },
+    { id: 'bauen60', label: 'Sechzig Mal bauen oder ausbauen', kind: 'zaehler', arg: ZAEHLER_GEBAUT, menge: 60, gold: 5000, xp: 550, group: 'fleiss', reihe: 'bauen' },
+    // Handel
+    { id: 'verkauf50', label: 'Fünfzig Kästchen am Stand verkaufen', kind: 'zaehler', arg: ZAEHLER_VERKAUFT, menge: 50, gold: 400, xp: 50, group: 'handel', reihe: 'verkauf' },
+    { id: 'verkauf300', label: 'Dreihundert Kästchen am Stand verkaufen', kind: 'zaehler', arg: ZAEHLER_VERKAUFT, menge: 300, gold: 2500, xp: 300, group: 'handel', reihe: 'verkauf' },
+    { id: 'verkauf1500', label: 'Fünfzehnhundert Kästchen am Stand verkaufen', kind: 'zaehler', arg: ZAEHLER_VERKAUFT, menge: 1500, gold: 12000, xp: 1300, group: 'handel', reihe: 'verkauf' },
+    { id: 'zettel25', label: 'Fünfundzwanzig Wagen losschicken', kind: 'zaehler', arg: ZAEHLER_ZETTEL, menge: 25, gold: 600, xp: 70, group: 'handel', reihe: 'wagen' },
+    { id: 'zettel200', label: 'Zweihundert Wagen losschicken', kind: 'zaehler', arg: ZAEHLER_ZETTEL, menge: 200, gold: 4000, xp: 450, group: 'handel', reihe: 'wagen' },
+    { id: 'kisten50', label: 'Fünfzig Kisten öffnen', kind: 'zaehler', arg: ZAEHLER_KISTEN, menge: 50, gold: 800, xp: 90, group: 'handel', reihe: 'kisten' },
+    { id: 'kisten300', label: 'Dreihundert Kisten öffnen', kind: 'zaehler', arg: ZAEHLER_KISTEN, menge: 300, gold: 4000, xp: 450, group: 'handel', reihe: 'kisten' },
+    { id: 'einnahme10k', label: 'Zehntausend Gold einnehmen', kind: 'zaehler', arg: ZAEHLER_GOLD, menge: 10000, gold: 500, xp: 70, group: 'handel', reihe: 'einnahmen' },
+    { id: 'einnahme100k', label: 'Hunderttausend Gold einnehmen', kind: 'zaehler', arg: ZAEHLER_GOLD, menge: 100000, gold: 3000, xp: 400, group: 'handel', reihe: 'einnahmen' },
+    { id: 'einnahme1m', label: 'Eine Million Gold einnehmen', kind: 'zaehler', arg: ZAEHLER_GOLD, menge: 1000000, gold: 20000, xp: 2000, group: 'handel', reihe: 'einnahmen' },
+    // Wohlstand
+    { id: 'lvl40', label: 'Stufe 40 erreichen', kind: 'level', arg: 40, gold: 30000, xp: 2000, group: 'wohlstand', reihe: 'stufe' },
+    { id: 'lvl50', label: 'Stufe 50 erreichen', kind: 'level', arg: 50, gold: 60000, xp: 3500, group: 'wohlstand', reihe: 'stufe' },
+    { id: 'gold200k', label: '200.000 Gold besitzen', kind: 'gold', arg: 200000, gold: 0, xp: 1200, group: 'wohlstand', reihe: 'gold' },
+    { id: 'silo6', label: 'Lager sechsmal ausbauen', kind: 'silo', arg: 6, gold: 3000, xp: 320, group: 'wohlstand', reihe: 'lager' },
+    // Land
+    { id: 'expand20', label: 'Zwanzig Länder freimachen', kind: 'expand', arg: 20, gold: 10000, xp: 900, group: 'land', reihe: 'land' },
+    { id: 'clear150', label: 'Hundertfünfzig Hindernisse räumen', kind: 'obstacles', arg: 150, gold: 3000, xp: 320, group: 'land', reihe: 'raeumen' },
+    // See
+    { id: 'fish500', label: 'Fünfhundert Fänge einholen', kind: 'fish', arg: 500, gold: 9000, xp: 900, group: 'see', reihe: 'fische' },
+    { id: 'pike3', label: '3 Hechte im Lager', kind: 'item', arg: 'fish-pike', menge: 3, gold: 900, xp: 100, group: 'see' },
+    // Vorrat
+    { id: 'eggs50', label: '50 Eier im Lager', kind: 'item', arg: 'eggs', menge: 50, gold: 300, xp: 40, group: 'vorrat' },
+    { id: 'milk30', label: '30 Milch im Lager', kind: 'item', arg: 'milk', menge: 30, gold: 300, xp: 40, group: 'vorrat' },
+    { id: 'flour30', label: '30 Mehl im Lager', kind: 'item', arg: 'flour', menge: 30, gold: 300, xp: 40, group: 'vorrat' },
+    { id: 'butter10', label: '10 Butter im Lager', kind: 'item', arg: 'butter', menge: 10, gold: 500, xp: 60, group: 'vorrat' },
+    { id: 'wool30', label: '30 Wolle im Lager', kind: 'item', arg: 'wool', menge: 30, gold: 600, xp: 70, group: 'vorrat' },
+    { id: 'yarn10', label: '10 Garn im Lager', kind: 'item', arg: 'yarn', menge: 10, gold: 900, xp: 100, group: 'vorrat' },
+    { id: 'torte5', label: '5 Sahnetorten im Lager', kind: 'item', arg: 'cream-cake', menge: 5, gold: 1800, xp: 200, group: 'vorrat' },
+    // Meisterschaft
+    { id: 'sterne30', label: 'Dreißig Meistersterne verdienen', kind: 'sterne', arg: 30, gold: 8000, xp: 900, group: 'meister', reihe: 'sterne' },
+    { id: 'meister10', label: 'Zehn Gebäude ganz gemeistert', kind: 'meister', arg: 10, gold: 18000, xp: 2000, group: 'meister', reihe: 'meister' },
+    // Treue
+    { id: 'tage7', label: 'Sieben Tagesabschlüsse', kind: 'tage', arg: 7, gold: 800, xp: 100, group: 'treue', reihe: 'tage' },
+    { id: 'tage30', label: 'Dreißig Tagesabschlüsse', kind: 'tage', arg: 30, gold: 3000, xp: 350, group: 'treue', reihe: 'tage' },
+    { id: 'tage100', label: 'Hundert Tagesabschlüsse', kind: 'tage', arg: 100, gold: 10000, xp: 1000, group: 'treue', reihe: 'tage' },
+    { id: 'wochen4', label: 'Vier Wochenabschlüsse', kind: 'wochen', arg: 4, gold: 3000, xp: 350, group: 'treue', reihe: 'wochen' },
+    { id: 'wochen12', label: 'Zwölf Wochenabschlüsse', kind: 'wochen', arg: 12, gold: 9000, xp: 900, group: 'treue', reihe: 'wochen' },
+  ],
+  wetter: {
+    ...V48.wetter!,
+    plaetze: V48.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V49,
+  // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
+  feste: {
+    ...V49.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V48.feste!.arten.map((a) => ({
+    arten: V49.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V47.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V49.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V48.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V49.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V48.fishing!,
+    ...V49.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V48.plots.map((p) => {
+  plots: V49.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -2908,17 +3036,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [46, V46],
   [47, V47],
   [48, V48],
+  [49, V49],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 48;
+export const LATEST_RULESET_VERSION = 49;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -3130,6 +3259,10 @@ export type AchievementCtx = {
   sterne: number;
   meister: number;
   feste: number;
+  zaehler: readonly number[];
+  tiere: number;
+  tage: number;
+  wochen: number;
 };
 
 // Stand und Ziel eines Erfolgs — daraus ergeben sich Fortschrittsbalken UND
@@ -3176,6 +3309,19 @@ export function achievementFortschritt(
       return { ist: ctx.meister, ziel: ach.arg as number };
     case 'feste':
       return { ist: ctx.feste, ziel: ach.arg as number };
+    case 'zaehler':
+      return { ist: ctx.zaehler[ach.arg as number] ?? 0, ziel: ach.menge ?? 1 };
+    case 'tiere':
+      return { ist: ctx.tiere, ziel: ach.arg as number };
+    case 'plotPrefixCount':
+      return {
+        ist: ctx.builtIds.filter((id) => id.indexOf(ach.arg as string) === 0).length,
+        ziel: ach.menge ?? 1,
+      };
+    case 'tage':
+      return { ist: ctx.tage, ziel: ach.arg as number };
+    case 'wochen':
+      return { ist: ctx.wochen, ziel: ach.arg as number };
     default:
       return { ist: 0, ziel: 1 };
   }

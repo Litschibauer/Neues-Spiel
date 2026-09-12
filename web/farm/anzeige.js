@@ -886,12 +886,32 @@ function numberPick(label, get, lo, hi, set, maxLabel) {
 // allein das Regelwerk (siehe view.ts) — hier wird nur sortiert und gemalt.
 var ZIEL_GRUPPEN = [
   { id: 'hof', label: 'Hof', bild: 'wheat' },
+  { id: 'fleiss', label: 'Fleiß', bild: 'corn' },
+  { id: 'handel', label: 'Handel', bild: 'cheese' },
   { id: 'wohlstand', label: 'Wohlstand', bild: 'gold' },
   { id: 'land', label: 'Land', bild: 'map' },
   { id: 'see', label: 'Angelsee', bild: 'fish-perch' },
   { id: 'vorrat', label: 'Vorrat', bild: 'plank' },
   { id: 'meister', label: 'Meisterschaft', bild: 'stern' },
+  { id: 'treue', label: 'Treue', bild: 'apple-pie' },
 ];
+
+// Reihen: Von „Stufe 3, 5, 8 …" steht nur der naechste offene Erfolg da; was
+// dahinter kommt, taucht auf, sobald der davor eingeloest ist. Erledigtes
+// klappt je Gruppe zusammen — so bleibt der Bildschirm ein Ziel, keine Liste.
+function zielReihen() {
+  var reihe = {}, platz = {};
+  (rules.achievements || []).forEach(function (a, i) { if (a.reihe) { reihe[a.id] = a.reihe; platz[a.id] = i; } });
+  return { reihe: reihe, platz: platz };
+}
+function zielVerdeckt(e, alle, reihen) {
+  var r = reihen.reihe[e.id];
+  if (!r || e.eingeloest || (e.erfuellt && !e.eingeloest)) return false;
+  // Verdeckt, wenn in derselben Reihe ein frueherer noch nicht eingeloest ist.
+  return alle.some(function (x) {
+    return x.id !== e.id && reihen.reihe[x.id] === r && reihen.platz[x.id] < reihen.platz[e.id] && !x.eingeloest;
+  });
+}
 
 // Reihenfolge in einer Gruppe: zuerst was man abholen kann, dann die
 // angefangenen (die dichtesten zuerst), zuletzt das Erledigte.
@@ -946,6 +966,7 @@ function renderZiele(v) {
     box.appendChild(hinweis);
   }
 
+  var reihen = zielReihen();
   ZIEL_GRUPPEN.forEach(function (gruppe) {
     var teil = liste.filter(function (e) { return e.gruppe === gruppe.id; });
     if (teil.length === 0) return;
@@ -962,7 +983,19 @@ function renderZiele(v) {
       teil.filter(function (e) { return e.eingeloest; }).length + '/' + teil.length + '</span>';
     box.appendChild(titel);
 
-    teil.forEach(function (e) { box.appendChild(zielZeile(e)); });
+    var erledigt = [];
+    teil.forEach(function (e) {
+      if (e.eingeloest) { erledigt.push(e); return; }
+      if (zielVerdeckt(e, liste, reihen)) return;
+      box.appendChild(zielZeile(e));
+    });
+    if (erledigt.length > 0) {
+      var falte = document.createElement('details');
+      falte.className = 'ziel-erledigt';
+      falte.innerHTML = '<summary>Erledigt · ' + erledigt.length + '</summary>';
+      erledigt.forEach(function (e) { falte.appendChild(zielZeile(e)); });
+      box.appendChild(falte);
+    }
   });
 
   box.querySelectorAll('.ziel-los').forEach(function (btn) {
