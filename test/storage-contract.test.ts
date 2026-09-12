@@ -163,6 +163,25 @@ for (const backend of BACKENDS) {
     assert.equal(store.listFehler(10).length, 0);
   });
 
+  suite('wipe(): danach ist die Welt leer — und bleibt es nach dem Neuöffnen', (store, ctx) => {
+    store.putFarms([{ account: account('a1'), game: game(1) }]);
+    store.putOffers([offer(1, 'a1')], []);
+    store.putPushAbo({ endpoint: 'e1', konto: 'a1', art: 'web', p256dh: 'p', auth: 'a', seitMs: T0, zuletztMs: 0 });
+    store.putRueckmeldung({ konto: 'a1', code: 'ABC', art: 'lob', text: 'schön', version: 'v', huelle: 'h', regelwerk: 1, geraet: 'g', zeitMs: T0 });
+    store.putFehler({ schluessel: 'k', konto: '', text: 'x', stapel: '', ort: '/', version: '', huelle: '', regelwerk: 0, geraet: '', zuletztMs: T0 });
+    store.setMeta('market.nextOfferId', '99');
+    store.wipe();
+    const wieder = ctx.reopen();
+    assert.deepEqual(wieder.listAccounts(), []);
+    assert.deepEqual(wieder.loadBook(), []);
+    assert.deepEqual(wieder.listPushAbos(), []);
+    assert.deepEqual(wieder.listRueckmeldungen(10, false), []);
+    assert.deepEqual(wieder.listFehler(10), []);
+    assert.equal(wieder.getMeta('market.nextOfferId'), null);
+    const neu = wieder.putRueckmeldung({ konto: 'b', code: 'DEF', art: 'idee', text: 'neu', version: 'v', huelle: 'h', regelwerk: 1, geraet: 'g', zeitMs: T0 });
+    assert.equal(neu, 1, 'die laufenden Nummern fangen wieder bei 1 an');
+  });
+
   suite('DER KERNPUNKT: zwei Käufer, ein Angebot — genau einer gewinnt', (store) => {
     store.putOffers([offer(1, 'anna')], []);
 

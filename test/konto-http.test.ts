@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,6 +23,10 @@ async function j(path: string, init: RequestInit = {}) {
 }
 const auth = (key: string) => ({ authorization: 'Bearer ' + key, 'content-type': 'application/json' });
 const JSON_KOPF = { 'content-type': 'application/json' };
+function zaehleHoefe(dbPfad: string): number {
+  const db = new DatabaseSync(dbPfad, { readOnly: true });
+  try { return Number((db.prepare('select count(*) as n from accounts').get() as { n: number }).n); } finally { db.close(); }
+}
 
 test('Konto über HTTP: Wort, Wiederherstellung, Bremsen, Briefkästen, Löschen', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'ns-konto-http-'));
@@ -101,4 +106,21 @@ test('Konto über HTTP: Wort, Wiederherstellung, Bremsen, Briefkästen, Löschen
   ok('danach 401', (await j('/api/state?deviceId=d2', { headers: auth(key2) })).status === 401);
   ok('Hof aus der Liste', (await j('/api/admin/accounts', { headers: adminH })).body.count === 0);
   ok('Hofcode löst nichts mehr auf', (await j('/api/wiederherstellen', { method: 'POST', headers: JSON_KOPF, body: JSON.stringify({ code: 'ABCDEF', wort: 'Apfelbaum am Hof' }) })).status === 401);
+
+  // Der Wipe: zwei Höfe, falscher Satz, richtiger Satz, Sicherung, leere Welt.
+  const h1 = await j('/api/account', { method: 'POST' });
+  const h2 = await j('/api/account', { method: 'POST' });
+  await j('/api/hof', { headers: auth(h1.body.key) });
+  const satzInfo = await j('/api/admin/wipe', { headers: adminH });
+  ok('Die Werkbank nennt den Satz mit Umgebung und Hofzahl', satzInfo.body.satz === 'ALLES LÖSCHEN dev 2', satzInfo.body);
+  const falschSatz = await j('/api/admin/wipe', { method: 'POST', headers: { ...adminH, ...JSON_KOPF }, body: JSON.stringify({ bestaetigung: 'ALLES LÖSCHEN dev 1' }) });
+  ok('Ein falscher Satz löscht nichts', falschSatz.status === 400 && (await j('/api/admin/accounts', { headers: adminH })).body.count === 2);
+  ok('Ohne Token geht es gar nicht', (await j('/api/admin/wipe', { method: 'POST', headers: JSON_KOPF, body: JSON.stringify({ bestaetigung: 'ALLES LÖSCHEN dev 2' }) })).status === 401);
+  const wipe = await j('/api/admin/wipe', { method: 'POST', headers: { ...adminH, ...JSON_KOPF }, body: JSON.stringify({ bestaetigung: 'ALLES LÖSCHEN dev 2' }) });
+  ok('Der richtige Satz löscht alles und nennt die Sicherung', wipe.status === 200 && wipe.body.geloescht === 2 && /vor-wipe-dev-/.test(wipe.body.sicherung), wipe.body);
+  ok('Die Sicherung liegt da und enthält die zwei Höfe', existsSync(wipe.body.sicherung) && zaehleHoefe(wipe.body.sicherung) === 2);
+  ok('Danach: keine Höfe, alte Schlüssel tot', (await j('/api/admin/accounts', { headers: adminH })).body.count === 0 && (await j('/api/state?deviceId=x', { headers: auth(h2.body.key) })).status === 401);
+  const frisch = await j('/api/account', { method: 'POST' });
+  ok('Ein neuer Hof geht wieder — das Universum lebt', frisch.status === 201);
+  ok('Der Satz zählt jetzt einen Hof', (await j('/api/admin/wipe', { headers: adminH })).body.satz === 'ALLES LÖSCHEN dev 1');
 });

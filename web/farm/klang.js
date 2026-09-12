@@ -71,7 +71,7 @@ function klaengeEntpacken() {
 
 // Spielt einen entpackten Klang: `rate` verschiebt die Tonhöhe (1 = wie
 // aufgenommen), `laut` skaliert, `ab` verzögert in Sekunden.
-function spiele(name, rate, laut, ab) {
+function klangSpielen(name, rate, laut, ab) {
   var buf = klangPuffer[name];
   if (!buf) return false;
   var q = audio.createBufferSource();
@@ -209,7 +209,7 @@ function klang(name) {
   if (!ctx || ctx.state !== 'running') return;
   klaengeEntpacken();
   var wahl = klangPuffer[name] ? name : 'tipp';
-  try { spiele(wahl, 1, KLAENGE[wahl] == null ? 1 : KLAENGE[wahl]); } catch (e) {}
+  try { klangSpielen(wahl, 1, KLAENGE[wahl] == null ? 1 : KLAENGE[wahl]); } catch (e) {}
 }
 
 // Ernten im Zug: Mit jedem Platz steigt der Ton eine Halbtonstufe, gedeckelt,
@@ -221,7 +221,7 @@ function ernteKlang(stufe) {
   if (!ctx || ctx.state !== 'running') return;
   klaengeEntpacken();
   var f = Math.pow(1.0595, Math.min(stufe, 12));
-  try { spiele('ernte', f, KLAENGE.ernte); } catch (e) {}
+  try { klangSpielen('ernte', f, KLAENGE.ernte); } catch (e) {}
 }
 
 document.addEventListener('pointerdown', function weck() {

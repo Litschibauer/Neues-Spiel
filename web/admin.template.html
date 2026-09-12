@@ -57,6 +57,9 @@
   button.klein { padding: .3rem .5rem; font-size: .68rem; }
   button:disabled { opacity: .4; }
   .log.post .erledigt { opacity: .45; }
+  .card.gefahr { border-color: var(--bad); }
+  .card.gefahr h2 { color: var(--bad); }
+  .card.gefahr .zeile { display: flex; gap: .5rem; align-items: center; }
   .log.post span:nth-child(4) { white-space: pre-wrap; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -316,6 +319,17 @@
       <h2>Server-Protokoll <span id="protokoll-filter" class="marke"></span></h2>
       <div class="log" id="sprotokoll"></div>
       <p class="hint">Abgelehnte Abgleiche, Divergenzen, Gerätewechsel, Regelwerks-Wanderungen und alles, was die Werkbank getan hat — die letzten Minuten aus dem Speicher des Servers.</p>
+    </div>
+
+    <div class="card gefahr">
+      <h2>Gefahrenzone — neues Universum</h2>
+      <p class="hint">Löscht <b>jeden Hof</b>, den Markt, alle Nachbarschaften, Briefkästen und Zähler. Vorher legt der Server eine Sicherung ab (<code>data/&lt;umgebung&gt;/sicherungen/vor-wipe-…db</code>). Zum Freischalten den Satz wörtlich abtippen:</p>
+      <p><code id="wipe-satz">…</code></p>
+      <div class="zeile">
+        <input id="wipe-eingabe" type="text" autocomplete="off" placeholder="Satz hier abtippen" style="flex:1">
+        <button class="danger" id="wipe-los" disabled>Alles löschen</button>
+      </div>
+      <p class="hint" id="wipe-stand"></p>
     </div>
 
     <p class="hint">Zum Spiel: <a href="/">Hof</a></p>
@@ -733,6 +747,45 @@
       .catch(function (e) { log('Push: ' + e.message, 'bad'); });
   });
 
+  // — Gefahrenzone ———————————————————————————————————————————————————————
+  var wipeSatz = '';
+  function ladeWipe() {
+    return api('/api/admin/wipe').then(function (d) {
+      wipeSatz = d.satz;
+      $('wipe-satz').textContent = d.satz;
+      pruefeWipe();
+    }).catch(function () {});
+  }
+  function pruefeWipe() {
+    var passt = wipeSatz && $('wipe-eingabe').value.trim() === wipeSatz;
+    $('wipe-los').disabled = !passt;
+    if (!$('wipe-los').dataset.sicher) $('wipe-los').textContent = 'Alles löschen';
+  }
+  $('wipe-eingabe').addEventListener('input', function () { $('wipe-los').dataset.sicher = ''; pruefeWipe(); });
+  $('wipe-los').addEventListener('click', function () {
+    var k = $('wipe-los');
+    if (!k.dataset.sicher) {
+      k.dataset.sicher = '1';
+      k.textContent = 'Wirklich? Nochmal klicken';
+      setTimeout(function () { k.dataset.sicher = ''; pruefeWipe(); }, 5000);
+      return;
+    }
+    k.disabled = true;
+    fetch('/api/admin/wipe', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+      body: JSON.stringify({ bestaetigung: $('wipe-eingabe').value.trim() }),
+    }).then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.error || ('HTTP ' + r.status)); return b; }); })
+      .then(function (d) {
+        $('wipe-stand').textContent = d.geloescht + ' Höfe gelöscht. Sicherung: ' + d.sicherung;
+        log('WIPE: ' + d.geloescht + ' Höfe gelöscht', 'bad');
+        $('wipe-eingabe').value = '';
+        gewaehlt = null;
+        setTimeout(function () { ladeHoefe(true); ladeProtokoll(); ladeStats(); ladeWipe(); ladePost(); }, 500);
+      })
+      .catch(function (e) { $('wipe-stand').textContent = 'Nicht gelöscht: ' + e.message; k.dataset.sicher = ''; pruefeWipe(); });
+  });
+
   // — Briefkasten ————————————————————————————————————————————————————————
   function ladePost() {
     var alle = $('post-alle').checked ? '?alle=1' : '';
@@ -861,6 +914,8 @@
       timer.protokoll = setInterval(function () { if (!document.hidden) ladeProtokoll(); }, 5000);
       timer.post = setInterval(function () { if (!document.hidden) ladePost(); }, 15000);
       ladePost();
+      ladeWipe();
+      timer.wipe = setInterval(function () { if (!document.hidden) ladeWipe(); }, 15000);
     }).catch(function (e) {
       $('connect').disabled = false;
       alert(e.message);

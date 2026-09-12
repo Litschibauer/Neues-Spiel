@@ -234,6 +234,16 @@ export class AccountStore {
     return this.store.deleteAccount(id);
   }
 
+  // Alle Höfe weg — Speicher und Datenbank. Siehe Storage.wipe().
+  alleLoeschen(): number {
+    const n = this.byId.size;
+    this.byId.clear();
+    this.byKeyHash.clear();
+    this.dirty.clear();
+    this.store.wipe();
+    return n;
+  }
+
   adopt(account: AccountRecord, game: GameBlob): void {
     this.byId.set(account.id, account);
     this.byKeyHash.set(account.keyHash, account.id);

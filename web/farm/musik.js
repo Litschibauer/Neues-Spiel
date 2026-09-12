@@ -15,6 +15,7 @@ var ostKaputt = false;
 var liste = [];
 var listeGeladen = false;
 var pos = 0;
+var ostFehler = 0;
 
 function mische(a) {
   for (var i = a.length - 1; i > 0; i--) {
@@ -30,8 +31,16 @@ function musikEl() {
   ostEl.preload = 'none';
   ostEl.volume = 0;
   ostEl.addEventListener('ended', naechster);
-  // Ein kaputter Track soll die Playlist nicht stoppen — einfach weiter.
-  ostEl.addEventListener('error', function () { if (musikAktiv() && ostGestartet) naechster(); });
+  // Ein kaputter Track soll die Playlist nicht stoppen — einfach weiter. Aber
+  // nicht endlos: Scheitert die ganze Liste hintereinander, ist die Musik aus,
+  // statt den Server im Sekundentakt mit Fehlanfragen zu überziehen.
+  ostEl.addEventListener('playing', function () { ostFehler = 0; });
+  ostEl.addEventListener('error', function () {
+    if (!musikAktiv() || !ostGestartet) return;
+    ostFehler++;
+    if (ostFehler > liste.length) { ostKaputt = true; barMalen(); return; }
+    naechster();
+  });
   return ostEl;
 }
 
@@ -40,10 +49,11 @@ function trackName(datei) {
 }
 
 function spiele(index) {
-  if (!liste.length) return;
+  if (!liste.length || typeof index !== 'number' || isNaN(index)) return;
   pos = ((index % liste.length) + liste.length) % liste.length;
+  if (!liste[pos]) return;
   var el = musikEl();
-  el.src = '/musik/' + encodeURIComponent(liste[pos]);
+  el.src = serverPfad('/musik/' + encodeURIComponent(liste[pos]));
   el.volume = 0;
   var p = el.play();
   if (p && p.catch) p.catch(function () {});

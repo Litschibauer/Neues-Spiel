@@ -57,6 +57,18 @@ export class Market {
     this.nextOfferId = Number(store.getMeta('market.nextOfferId') ?? '1');
   }
 
+  // Der Markt fängt von vorn an — nach einem Wipe der Datenbank.
+  reset(): void {
+    this.book.clear();
+    this.settlements.clear();
+    this.touched.clear();
+    this.ausgaben.clear();
+    this.nonce.clear();
+    this.runde.clear();
+    this.nextOfferId = 1;
+    this.rundeNr = 1;
+  }
+
   flush(): number {
     if (!this.store || this.touched.size === 0) return 0;
     const upserts: BookEntry[] = [];

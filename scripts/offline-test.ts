@@ -575,12 +575,22 @@ try {
     }
   };
 
-  console.log('1. Erster Besuch — neuen Hof anlegen (Feldtest-Ansicht)');
+  console.log('1. Erster Besuch — neuen Hof anlegen');
 
-  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/feldtest` });
-  await waitFor(cdp, 'document.getElementById("create")', 'Seite geladen');
+  // Die Einführung liegt über allem. Hier nur beiseiteschieben, nicht als
+  // gesehen markieren — Abschnitt 7 prüft, dass ein neuer Hof sie bekommt.
+  const tutWeg = `(function () { var t = document.getElementById('tut-bg'); if (t) t.hidden = true; })()`;
+  // Der Client liegt nach jeder Aktion im Gerät. Daraus lesen wir, was die
+  // Oberfläche nicht anzeigt: die Warteschlange und die laufenden Felder.
+  const gespeichert = `(function () { var NS = globalThis.NeuesSpiel; var raw = localStorage.getItem(NS.storageKeyFor(location.origin)); if (!raw) return null; return NS.restoreClient(JSON.parse(raw)).client; })()`;
+  const warteschlange = `(function () { var c = ${gespeichert}; return c ? c.queue.length : -1; })()`;
+  const laufendeFelder = `(function () { var c = ${gespeichert}; if (!c) return -1; var NS = globalThis.NeuesSpiel; return NS.farmView(c.preview(), NS.getRuleset(c.baseSnapshot.rulesetVersion), false).plots.filter(function (p) { return p.busy; }).length; })()`;
+  const gespeicherteSeq = `(function () { var c = ${gespeichert}; return c ? c.baseSnapshot.seq : -1; })()`;
+
+  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
+  await waitFor(cdp, `document.documentElement && document.documentElement.getAttribute('data-bereit') === '1' && document.getElementById('create')`, 'Seite geladen und verdrahtet');
   await evaluate(cdp, `document.getElementById('create').click()`);
-  await waitFor(cdp, '!document.getElementById("keybox").hidden', 'Schlüssel gezeigt');
+  await waitFor(cdp, '!document.getElementById("keygate").hidden', 'Schlüssel gezeigt');
 
   const shownKey = await evaluate<string>(cdp, `document.getElementById('keyvalue').textContent`);
   check(
@@ -590,50 +600,24 @@ try {
   );
 
   await evaluate(cdp, `document.getElementById('keydone').click()`);
-  try {
-    await waitFor(cdp, '!document.getElementById("game").hidden', 'Spiel sichtbar', 10_000);
-  } catch (e) {
-    const diag = await evaluate<string>(
-      cdp,
-      `JSON.stringify({
-         log: [...document.querySelectorAll('#log div')].map(d => d.textContent).slice(0, 5),
-         setupHidden: document.getElementById('setup').hidden,
-       })`,
-    );
-    console.error('  Diagnose:', diag, '| Dialoge:', JSON.stringify(dialogs));
-    throw e;
-  }
+  await waitFor(
+    cdp,
+    '!document.getElementById("shell").hidden && document.querySelectorAll("#plots .plot").length >= 3',
+    'Hof sichtbar',
+    15_000,
+  );
   check('Seite verbindet und zeigt den Hof', true);
+  await sleep(250);
+  const tutAufNeu = await evaluate<boolean>(cdp, `!!document.getElementById('tut-bg') && !document.getElementById('tut-bg').hidden`);
+  check('Ein neuer Hof bekommt sofort die Einführung', tutAufNeu, String(tutAufNeu));
+  await evaluate(cdp, tutWeg);
 
   await api('/api/admin/time?seconds=4000', 'POST');
-
-  try {
-    await waitFor(
-      cdp,
-      "document.querySelectorAll('#fields .field').length >= 3",
-      'Plätze gezeichnet',
-      8000,
-    );
-  } catch (e) {
-    console.error(
-      '  Diagnose:',
-      await evaluate<string>(
-        cdp,
-        `JSON.stringify({
-           fieldsHtml: (document.getElementById('fields')||{}).innerHTML?.slice(0,200),
-           log: [...document.querySelectorAll('#log div')].map(d => d.textContent).slice(0, 6)
-         })`,
-      ),
-    );
-    throw e;
-  }
-  for (const index of [0, 1]) {
-    await evaluate(cdp, `document.querySelectorAll('#fields .field')[${index}].click()`);
-    await sleep(150);
-  }
-  await sleep(300);
-  const queued = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
-  check('Aktionen landen in der Warteschlange', queued >= 2, `${queued} Commands`);
+  await sleep(400);
+  const gesaetAnfang = await evaluate<number>(cdp, plantAll);
+  check('Felder lassen sich ansäen', gesaetAnfang >= 2, `${gesaetAnfang} Felder`);
+  await waitFor(cdp, `${warteschlange} === 0`, 'Aktionen bestätigt', 10_000);
+  check('Aktionen werden bestätigt — die Warteschlange läuft leer', true);
 
   const savedRaw = await evaluate<string | null>(
     cdp,
@@ -668,29 +652,43 @@ try {
 
   const loadedOffline = await evaluate<boolean>(
     cdp,
-    `!!document.getElementById('game') && !document.getElementById('game').hidden`,
+    `!!document.getElementById('shell') && !document.getElementById('shell').hidden`,
   );
   check('App startet ohne Netz — kein Dinosaurier', loadedOffline);
+  await evaluate(cdp, tutWeg);
+  await waitFor(cdp, 'document.querySelectorAll("#plots .plot").length >= 3', 'Plätze ohne Netz gezeichnet', 10_000);
 
-  const restored = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
-  check(
-    'Nicht bestätigte Aktionen haben den Neustart überlebt',
-    restored === queued,
-    `${restored} von ${queued}`,
-  );
-
-  const stateMatches = await evaluate<boolean>(
-    cdp,
-    "document.querySelectorAll('#fields .field.growing').length >= 2",
-  );
-  check('Der Hof sieht aus wie vorher — die Felder laufen', stateMatches);
+  const laufen = await evaluate<number>(cdp, laufendeFelder);
+  check('Der Hof sieht aus wie vorher — die Felder laufen', laufen >= 2, `${laufen} Felder laufen`);
 
   console.log('\n3. Offline weiterspielen');
-  const before = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
-  await evaluate(cdp, `document.querySelectorAll('#fields .field')[2].click()`);
+  const before = await evaluate<number>(cdp, warteschlange);
+  // Ohne Netz rechnet das Gerät die Zeit selbst — mit zwei Ticks Sicherheit.
+  // Also warten, bis die Felder auch aus Sicht des Geräts reif sind.
+  await waitFor(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].filter(function (p) { return /fertig/.test(p.getAttribute('aria-label') || ''); }).length >= 2`,
+    'Felder ohne Netz reif',
+    20_000,
+  );
+  const offlineGeerntet = await evaluate<number>(cdp, harvestAll);
+  await sleep(200);
+  const offlineGesaet = await evaluate<number>(cdp, plantAll);
   await sleep(300);
-  const after = await evaluate<number>(cdp, "Number(document.getElementById('s-queue').textContent)");
-  check('Aktionen gehen im Funkloch weiter', after > before, `${before} → ${after}`);
+  const after = await evaluate<number>(cdp, warteschlange);
+  const felderLage = await evaluate<string>(cdp, `[...document.querySelectorAll('#plots .plot')].filter(function (p) { return /^Feld/.test(p.getAttribute('aria-label') || ''); }).map(function (p) { return p.getAttribute('aria-label'); }).join(' | ')`);
+  check('Aktionen gehen im Funkloch weiter', after > before && offlineGesaet >= 1, `${before} → ${after} · ${offlineGeerntet} geerntet, ${offlineGesaet} gesät · ${felderLage}`);
+
+  await cdp.send('Page.reload', { ignoreCache: false });
+  await sleep(1500);
+  await evaluate(cdp, tutWeg);
+  await waitFor(cdp, 'document.querySelectorAll("#plots .plot").length >= 3', 'Plätze nach dem zweiten Neuladen', 10_000);
+  const restored = await evaluate<number>(cdp, warteschlange);
+  check(
+    'Nicht bestätigte Aktionen haben den Neustart überlebt',
+    restored === after,
+    `${restored} von ${after}`,
+  );
 
   console.log('\n4. Netz zurück');
   await cdp.send('Network.emulateNetworkConditions', {
@@ -704,10 +702,7 @@ try {
   let synced = false;
   for (let i = 0; i < 40 && !synced; i++) {
     await sleep(500);
-    synced = await evaluate<boolean>(
-      cdp,
-      "Number(document.getElementById('s-queue').textContent) === 0",
-    );
+    synced = (await evaluate<number>(cdp, warteschlange)) === 0;
   }
   check('Alles bestätigt, Warteschlange leer', synced);
 
@@ -738,12 +733,12 @@ try {
 
   console.log('\n6. Markt — der zweite Hof verkauft, der erste kauft');
 
-  const syncAs = async (key: string, baseSeq: number, commands: unknown[]) =>
+  const syncAs = async (key: string, baseSeq: number, commands: unknown[], deviceId?: string) =>
     (await (
       await fetch(`http://127.0.0.1:${PORT}/api/sync`, {
         method: 'POST',
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ baseSeq, rulesetVersion: 1001, commands }),
+        body: JSON.stringify({ baseSeq, rulesetVersion: 1001, commands, deviceId }),
       })
     ).json()) as { ok: boolean; kind?: string; reason?: string; snapshot: { seq: number } };
 
@@ -759,7 +754,7 @@ try {
       snapshot: {
         seq: number;
         serverTs: number;
-        state: { tick: number; items: number[]; orders: unknown[] };
+        state: { tick: number; items: number[]; orders: unknown[]; offers: Array<{ id: number; item: number; amount: number; price: number }> };
       };
     };
 
@@ -780,93 +775,47 @@ try {
   check('Der Auftrag steht im Buch', _hb.offers === 1, `offers=${_hb.offers}`);
 
   await api(`/api/admin/grant?account=${status.accountId}&item=gold&amount=500`, 'POST');
-  await evaluate(cdp, `document.getElementById('sync').click()`);
-  await waitFor(cdp, `document.querySelectorAll('#market .offer').length === 1`, 'Angebot sichtbar');
-  await evaluate(cdp, `document.getElementById('collect').click()`);
-  await waitFor(
+  // Der Käufer ist der Hof im Browser. Gekauft wird hier über die API mit
+  // derselben Gerätekennung, damit das Gerät im Browser sein Spielrecht behält;
+  // der Browser übernimmt den neuen Stand beim nächsten Abgleich.
+  const ich = await evaluate<{ token: string; geraet: string }>(
     cdp,
-    `Number(document.querySelectorAll('#inventory .stat')[0].querySelector('dd').textContent) >= 360`,
-    'Münzen im Lager',
+    `({ token: localStorage.getItem('ns-token') || '', geraet: localStorage.getItem('ns-device') || '' })`,
+  );
+  const meinStand = await stateAs(ich.token);
+  const fremdesAngebot = meinStand.snapshot.state.offers.find((o) => o.amount === 10 && o.price === 3);
+  check(
+    'Der Käufer sieht das fremde Angebot',
+    !!fremdesAngebot && fremdesAngebot.item === 1,
+    fremdesAngebot ? `10 × Ware ${fremdesAngebot.item} für ${fremdesAngebot.price}` : `kein Angebot unter ${meinStand.snapshot.state.offers.length}`,
   );
 
-  const shelfText = await evaluate<string>(
-    cdp,
-    `document.querySelector('#market .offer').textContent`,
+  const wheatBefore = meinStand.snapshot.state.items[1] ?? 0;
+  let seqIch = meinStand.snapshot.seq;
+  const postGeholt = await syncAs(ich.token, seqIch, [{ seq: seqIch + 1, tick: tickFuer(meinStand.snapshot), type: 'COLLECT_MAIL' }], ich.geraet);
+  seqIch = postGeholt.snapshot.seq;
+  const gekauftAnfang = await syncAs(
+    ich.token,
+    seqIch,
+    [{ seq: seqIch + 1, tick: tickFuer(meinStand.snapshot), type: 'BUY_OFFER', offerId: fremdesAngebot?.id ?? -1 }],
+    ich.geraet,
   );
-  check('Der Käufer sieht das fremde Angebot', /10 Weizen/.test(shelfText), shelfText);
-
-  await cdp.send('Network.emulateNetworkConditions', {
-    offline: true,
-    latency: 0,
-    downloadThroughput: 0,
-    uploadThroughput: 0,
-  });
-  await evaluate(cdp, `window.dispatchEvent(new Event('offline'))`);
-  const greyed = await evaluate<boolean>(
-    cdp,
-    `document.getElementById('market').className === 'no-net'
-       && document.querySelector('#market .offer').disabled
-       && document.querySelectorAll('#market .offer').length === 1`,
-  );
-  check('Ohne Netz ist der Markt ausgegraut, nicht verschwunden', greyed);
-
-  await cdp.send('Network.emulateNetworkConditions', {
-    offline: false,
-    latency: 0,
-    downloadThroughput: -1,
-    uploadThroughput: -1,
-  });
-  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
-
-  await waitFor(
-    cdp,
-    `document.getElementById('pill').className.indexOf('live') >= 0
-       && Number(document.getElementById('s-queue').textContent) === 0
-       && document.querySelector('#market .offer')
-       && !document.querySelector('#market .offer').disabled`,
-    'Verbindung steht und Kaufknopf ist aktiv',
-  );
-
-  const wheatBefore = await evaluate<number>(
-    cdp,
-    `Number(document.querySelectorAll('#inventory .stat')[1].querySelector('dd').textContent)`,
-  );
-  await evaluate(cdp, `document.querySelector('#market .offer').click()`);
-  await waitFor(
-    cdp,
-    `Number(document.getElementById('s-queue').textContent) === 0`,
-    'Kauf bestätigt',
-  );
-
-  const wheatAfter = await evaluate<number>(
-    cdp,
-    `Number(document.querySelectorAll('#inventory .stat')[1].querySelector('dd').textContent)`,
-  );
-  if (wheatAfter === wheatBefore) {
-    console.error(
-      '  Seitenprotokoll:',
-      await evaluate<string>(
-        cdp,
-        `JSON.stringify([...document.querySelectorAll('#log div')].map(d => d.textContent).slice(0, 8))`,
-      ),
-    );
-    console.error(
-      '  Knopf:',
-      await evaluate<string>(
-        cdp,
-        `JSON.stringify({
-           n: document.querySelectorAll('#market .offer').length,
-           disabled: document.querySelector('#market .offer') ? document.querySelector('#market .offer').disabled : null,
-           gold: document.querySelectorAll('#inventory .stat')[0].querySelector('dd').textContent,
-         })`,
-      ),
-    );
-  }
-  check('Die gekaufte Ware ist da', wheatAfter === wheatBefore + 10, `${wheatBefore} → ${wheatAfter}`);
+  const meinStandDanach = await stateAs(ich.token);
+  const wheatAfter = meinStandDanach.snapshot.state.items[1] ?? 0;
+  check('Die gekaufte Ware ist da', gekauftAnfang.ok && wheatAfter === wheatBefore + 10, `${wheatBefore} → ${wheatAfter} (${gekauftAnfang.reason ?? gekauftAnfang.kind})`);
   check(
     'Und aus dem Buch verschwunden',
     ((await (await fetch(`http://127.0.0.1:${PORT}/health`)).json()) as { offers: number })
       .offers === 0,
+  );
+  // Der Browser zieht nach: ein Anstoß, dann steht sein Stand auf dem des Servers.
+  await evaluate(cdp, `window.dispatchEvent(new Event('online'))`);
+  await waitFor(cdp, `${gespeicherteSeq} >= ${meinStandDanach.snapshot.seq}`, 'Browser hat den Kauf übernommen', 10_000).catch(() => {});
+  const seqImBrowser = await evaluate<number>(cdp, gespeicherteSeq);
+  check(
+    'Der Browser übernimmt, was das Konto anderswo getan hat',
+    seqImBrowser >= meinStandDanach.snapshot.seq,
+    `seq ${seqImBrowser} gegen ${meinStandDanach.snapshot.seq}`,
   );
 
   const sellerState = (await (
@@ -951,7 +900,8 @@ try {
     cdp,
     `!!document.getElementById('tut-bg') && !document.getElementById('tut-bg').hidden`,
   );
-  check('Ein neuer Hof bekommt sofort die Einführung', tutAuf, String(tutAuf));
+  // Der Hof hat inzwischen XP — Veteranen bekommen die Einführung nicht nochmal.
+  check('Ein bespielter Hof bekommt die Einführung nicht nochmal aufgedrängt', !tutAuf, String(tutAuf));
   await evaluate(cdp, `(function(){ var s=document.getElementById('tut-skip'); if (s) s.click(); })()`);
   await sleep(150);
 

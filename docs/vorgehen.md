@@ -364,7 +364,8 @@ echter Datenbank. Zahlen in `deploy.md`.
 - Die **Werkbank** `/admin` zeigt jeden Hof (Sicht, Lager, Brett, Sozial,
   Technik), greift ein (Kisten, Waren, Zeit, Stufe, Bauten, Gerät freigeben),
   liest das Server-Protokoll und den **Briefkasten** (Rückmeldungen,
-  Fehlerberichte). Eingriffe werden beim nächsten Abgleich des Hofs angewandt,
+  Fehlerberichte). Ganz unten die **Gefahrenzone**: alles löschen für ein
+  neues Universum — nur mit abgetipptem Satz und mit Sicherung davor. Eingriffe werden beim nächsten Abgleich des Hofs angewandt,
   auch wenn er gerade offline ist.
 - **Bremsen** (`accounts.ts`, `Bremse`): Höfe anlegen 20/h je Herkunft, Sync
   240/min je Konto, Wiederherstellung 5/h je Hofcode + 20/h je Herkunft,

@@ -43,7 +43,7 @@ src/server/
   store.ts        Persistenz — atomar geschriebene JSON-Datei
 
 scripts/          Golden-Vector-Generator, Lastmessung, Seiten-Build
-web/              Vorlagen für Prüfstand, Feldtest und Werkbank
+web/              Vorlagen für Spiel, Prüfstand, Werkbank und Impressum
   farm/           Die Spielseite in Teilen — Build fügt sie zu einer Datei
 test/vectors/     Der Golden-Vector-Korpus (generiert, nicht von Hand pflegen)
 ```

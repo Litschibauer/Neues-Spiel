@@ -71,7 +71,7 @@ git clone https://github.com/Litschibauer/Neues-Spiel.git
 cd Neues-Spiel
 git checkout claude/live-service-game-concept-m4ymol
 
-npm run build   # baut dist/farm.html (das Spiel), dist/field-test.html, dist/conformance.html, dist/admin.html
+npm run build   # baut dist/farm.html (das Spiel), dist/admin.html, dist/impressum.html, dist/conformance.html
 npm test        # muss grün sein — sonst nicht ausrollen
 ```
 
@@ -81,17 +81,6 @@ npm test        # muss grün sein — sonst nicht ausrollen
 npm run dev     # Entwicklung, Port 8788
 npm run prod    # Produktion,  Port 8787
 ```
-
-### Zwei Oberflächen auf einem Kern
-
-`/` ist das Spiel: Plätze als Kacheln, Levelring, Markt, Lager. `/feldtest` ist
-dasselbe Spiel mit Messinstrumenten — Warteschlangenlänge, `seq`, Tick,
-Divergenz-Protokoll.
-
-Das ist kein Doppelaufwand, sondern ein Prüfmittel: Beide sind echte Clients auf
-demselben Sim-Kern. Zeigen sie denselben Hof unterschiedlich, liegt es an einer
-Anzeige und nicht an der Simulation — und genau das will man unterscheiden
-können, wenn etwas nicht stimmt.
 
 Eigene Gestaltung einsetzen: [`oberflaeche.md`](oberflaeche.md).
 
@@ -276,6 +265,29 @@ Zwei Wege vom Spieler zum Betreiber, beide in der Werkbank unter *Briefkasten*:
 
 Beides liegt in der Datenbank (`rueckmeldungen`, `fehler`); *erledigt* und
 *weg* gibt es als Knöpfe in der Werkbank.
+
+### Alles löschen — ein neues Universum
+
+Vor einem Release oder einer neuen Beta soll die Welt leer sein: keine Höfe,
+kein Markt, keine Nachbarschaften, keine Briefkästen, alle Zähler auf Anfang.
+Das macht die **Gefahrenzone** unten in der Werkbank — oder
+`POST /api/admin/wipe` mit dem Admin-Token.
+
+Zwei Riegel gegen Fettfinger:
+
+1. Man muss den Satz **`ALLES LÖSCHEN <umgebung> <anzahl höfe>`** wörtlich
+   abtippen (die Werkbank zeigt ihn, `GET /api/admin/wipe` liefert ihn). Die
+   Hofzahl steht drin, damit man hinsieht, was man löscht; stimmt sie nicht
+   mehr, weil gerade jemand einen Hof angelegt hat, passt der Satz nicht.
+2. Vorher legt der Server eine Sicherung ab:
+   `data/<umgebung>/sicherungen/vor-wipe-<umgebung>-<zeit>.db`. Schlägt die
+   fehl, wird nicht gelöscht. Zurück geht es, indem man den Dienst stoppt, die
+   Sicherung über `spiel.db` kopiert und wieder startet.
+
+Der Wipe kappt alle Ereignisleitungen; Geräte, die gerade spielen, landen beim
+nächsten Abgleich am Tor („Diesen Schlüssel kennt der Server nicht") und
+legen einen neuen Hof an. Ihr lokaler Spielstand ist damit hinfällig — das ist
+gewollt, es ist eine neue Welt.
 
 ### Impressum und Datenschutz
 
@@ -934,7 +946,7 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | Route | Auth | Zweck |
 | --- | --- | --- |
 | `GET /` | — | **Das Spiel** |
-| `GET /feldtest` | — | Messgerät: dieselbe Sim mit `seq`, Tick, Warteschlange und Protokoll |
+| `GET /impressum` | — | Impressum & Datenschutz |
 | `GET /admin` | — | Werkbank (Aktionen brauchen das Admin-Token) |
 | `GET /health` | — | Umgebung, Stand, Regelwerk, `secure`, `shell`, `streams`, `rejections` |
 | `GET /sw.js`, `GET /manifest.webmanifest` | — | App-Hülle für den Funkloch-Start |

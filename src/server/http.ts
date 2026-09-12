@@ -536,7 +536,6 @@ function loadPage(name: string): string | null {
 }
 
 const farmPage = loadPage('farm.html');
-const page = loadPage('field-test.html');
 const adminPage = loadPage('admin.html');
 const rechtPage = loadPage('impressum.html');
 
@@ -664,7 +663,56 @@ const MANIFEST = JSON.stringify({
 
 const ADMIN_ENABLED = CONFIG.adminEnabled;
 
+// Der Wipe: alles weg, ein neues Universum. Zwei Riegel: Der Aufrufer muss den
+// Satz „ALLES LÖSCHEN <umgebung> <anzahl höfe>" wörtlich mitschicken — die
+// Zahl zwingt ihn, hinzusehen, was er löscht —, und vorher wird die Datenbank
+// gesichert (vacuum into), damit ein Fettfinger nicht das Ende ist.
+function wipeSatz(): string {
+  return `ALLES LÖSCHEN ${CONFIG.env} ${accounts.count}`;
+}
+
+function sicherungVorWipe(): string | null {
+  try {
+    const dir = join(dirname(CONFIG.dbPath), 'sicherungen');
+    mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const ziel = join(dir, `vor-wipe-${CONFIG.env}-${stamp}.db`);
+    accounts.flush();
+    market.flush();
+    (accounts.storage as SqliteStorage).database.exec(`vacuum into '${ziel.replace(/'/g, "''")}'`);
+    return ziel;
+  } catch (err) {
+    console.error(`[wipe] Sicherung fehlgeschlagen: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+async function handleWipe(req: IncomingMessage, res: ServerResponse) {
+  if (req.method !== 'POST') return json(res, 200, { satz: wipeSatz(), hoefe: accounts.count, env: CONFIG.env });
+  const body = await leseJson<{ bestaetigung?: string }>(req, 4 * 1024);
+  const satz = String(body?.bestaetigung ?? '').trim();
+  if (satz !== wipeSatz()) {
+    notiere('werkbank', null, 'Wipe abgelehnt — Bestätigung stimmt nicht');
+    return json(res, 400, { error: 'CONFIRMATION_MISMATCH', erwartet: wipeSatz() });
+  }
+  const sicherung = sicherungVorWipe();
+  if (!sicherung) return json(res, 500, { error: 'BACKUP_FAILED' });
+
+  const vorher = accounts.count;
+  events.closeAll();
+  live.clear();
+  accounts.alleLoeschen();
+  market.reset();
+  rejections.clear();
+  protokoll.length = 0;
+  notiere('werkbank', null, `WIPE: ${vorher} Höfe gelöscht, Sicherung ${sicherung}`);
+  console.log(`[wipe] ${vorher} Höfe gelöscht — neues Universum. Sicherung: ${sicherung}`);
+  return json(res, 200, { ok: true, geloescht: vorher, sicherung });
+}
+
 function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
+  if (url.pathname === '/api/admin/wipe') return handleWipe(req, res);
+
   // Die Briefkästen hängen an keinem Hof.
   if (url.pathname === '/api/admin/rueckmeldungen') {
     if (req.method === 'POST') {
@@ -1151,12 +1199,6 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     if (!adminPage) return json(res, 500, { error: 'Seite fehlt — `npm run build`.' });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(adminPage);
-  }
-
-  if (url.pathname === '/feldtest' && req.method === 'GET') {
-    if (!page) return json(res, 500, { error: 'Seite fehlt — bitte `npm run build` ausführen.' });
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    return res.end(page);
   }
 
   if (url.pathname === '/' && req.method === 'GET') {
@@ -1763,7 +1805,6 @@ server.listen(PORT, CONFIG.host, () => {
   console.log(`Regelwerk:   Ziel v${TARGET_RULESET}`);
   console.log(`Höfe:        ${accounts.count}`);
   console.log(`Spiel:       ${farmPage ? '/' : 'FEHLT (npm run build)'}`);
-  console.log(`Feldtest:    ${page ? '/feldtest' : 'FEHLT (npm run build)'}`);
   console.log(`Admin:       …${TOKEN.slice(-4)}  (vollständig: cat ${TOKEN_PATH})`);
   console.log('');
 });

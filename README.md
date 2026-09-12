@@ -38,11 +38,10 @@ Nachmittag.
 | Adresse | Was |
 | --- | --- |
 | `/` | Das Spiel |
-| `/feldtest` | Dasselbe mit Messinstrumenten: `seq`, Tick, Warteschlange, Protokoll |
 | `/admin` | Werkbank: Zeit vorspulen, Ware schenken, zurücksetzen |
 | `/health` | Lebenszeichen |
 
-**Den Offline-Fall wirklich sehen:** Zwei Browser-Tabs auf `/` und `/feldtest`,
+**Den Offline-Fall wirklich sehen:** Das Spiel auf `/` öffnen,
 im Entwicklerwerkzeug das Netz auf „offline" stellen, weiterspielen, Seite neu
 laden — der Hof ist da, samt unbestätigter Aktionen. Netz wieder an, alles
 läuft nach.

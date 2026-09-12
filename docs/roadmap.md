@@ -264,9 +264,9 @@ keine einzige Spielregel: Eine neue Feldfrucht, ein neues Gebäude, ein neuer
 Gegenstand tauchen von allein auf, ohne dass hier eine Zeile fällt. Hätten wir
 sie vor der Datenumstellung gebaut, wäre jede Feldfrucht ein UI-Ticket geworden.
 
-Das Messgerät bleibt daneben auf `/feldtest` stehen. Zwei echte Clients auf
-einem Kern sind billig und verraten sofort, ob eine Abweichung an der Anzeige
-liegt oder an der Simulation.
+Das Messgerät auf `/feldtest` ist inzwischen abgebaut: Der Browsertest liest
+Warteschlange und Sicht direkt aus dem gespeicherten Client, die Werkbank
+zeigt seq, Tick und Alarme je Hof.
 
 Wie eigene Designs eingesetzt werden und was der Weg zur eigenständigen App
 kostet, steht in [`oberflaeche.md`](oberflaeche.md). Kurzform: Farben und Maße

@@ -671,3 +671,7 @@ if ('serviceWorker' in navigator) {
     tryReload();
   });
 }
+
+// Zuletzt: Die Seite meldet, dass alle Knöpfe verdrahtet sind. Die Seite ist
+// groß; wer vorher tippt, tippt ins Leere. Der Browsertest wartet darauf.
+document.documentElement.setAttribute('data-bereit', '1');

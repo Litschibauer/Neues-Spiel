@@ -150,10 +150,6 @@ ${modules}
 `;
 }
 
-export function buildFieldTestPage(): string {
-  return buildPageWithBundle('field-test.template.html');
-}
-
 export function buildFarmPage(): string {
   return buildPageWithBundle('farm/page.html');
 }
@@ -281,9 +277,6 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   const page = buildConformancePage();
   writeFileSync(join(outDir, 'conformance.html'), page);
 
-  const field = buildFieldTestPage();
-  writeFileSync(join(outDir, 'field-test.html'), field);
-
   const farm = buildFarmPage();
   writeFileSync(join(outDir, 'farm.html'), farm);
 
@@ -296,7 +289,6 @@ if (process.argv[1] && process.argv[1].endsWith('build-conformance.ts')) {
   console.log(
     `Prüfstand ${(page.length / 1024).toFixed(1)} kB → dist/conformance.html\n` +
       `Spiel      ${(farm.length / 1024).toFixed(1)} kB → dist/farm.html\n` +
-      `Feldtest   ${(field.length / 1024).toFixed(1)} kB → dist/field-test.html\n` +
       `Werkbank   ${(admin.length / 1024).toFixed(1)} kB → dist/admin.html\n` +
       `Impressum  ${(recht.length / 1024).toFixed(1)} kB → dist/impressum.html`,
   );

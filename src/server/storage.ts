@@ -129,6 +129,10 @@ export interface Storage {
   listFehler(limit: number): Fehlerbericht[];
   dropFehler(id: number | 'alle'): number;
 
+  // Alles weg — jeder Hof, der Markt, die Nachbarschaft, die Briefkästen. Für
+  // ein neues Universum vor einem Release. Wer das aufruft, hat vorher gesichert.
+  wipe(): void;
+
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
   close(): void;
@@ -429,6 +433,16 @@ export class SqliteStorage implements Storage {
     return Number(res.changes ?? 0);
   }
 
+  wipe(): void {
+    transaction(this.db, () => {
+      for (const tabelle of ['accounts', 'market_offers', 'market_settlements', 'freunde', 'hilfen', 'push_abos', 'rueckmeldungen', 'fehler', 'meta']) {
+        this.db.exec(`delete from ${tabelle}`);
+      }
+      // Die laufenden Nummern der autoincrement-Tabellen auch zurück.
+      this.db.exec('delete from sqlite_sequence');
+    });
+  }
+
   getMeta(key: string): string | null {
     return readMeta(this.db, key);
   }
@@ -595,6 +609,19 @@ export class MemoryStorage implements Storage {
     }
     for (const [k, f] of this.fehler) if (f.id === id) { this.fehler.delete(k); return 1; }
     return 0;
+  }
+
+  wipe(): void {
+    this.accounts.clear();
+    this.owners.clear();
+    this.book.clear();
+    this.pushAbos.clear();
+    this.settlements = [];
+    this.meta.clear();
+    this.rueckmeldungen = [];
+    this.fehler.clear();
+    this.naechsteRueckmeldung = 1;
+    this.naechsterFehler = 1;
   }
 
   getMeta(key: string): string | null {
