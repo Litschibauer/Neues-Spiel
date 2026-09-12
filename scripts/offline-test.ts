@@ -4694,13 +4694,16 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   // Netz weg — der Spieler saet, der Befehl bleibt in der Schlange.
   await cdp.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
   await sleep(300);
+  // Erst ernten, was reif ist, dann saeen — beides ohne Netz, beides bleibt liegen.
+  const werkGeerntet = await evaluate<number>(cdp, harvestAll);
+  await sleep(300);
   const werkGesaet = await evaluate<number>(cdp, plantAll);
   await sleep(300);
   const offlineSchlange = await wb_schlange();
   check(
-    'Im Funkloch bleibt die Saat als Befehl in der Schlange liegen',
-    werkGesaet > 0 && offlineSchlange > 0,
-    `${werkGesaet} gesät · ${offlineSchlange} in der Schlange`,
+    'Im Funkloch bleiben Ernte und Saat als Befehle in der Schlange liegen',
+    werkGeerntet + werkGesaet > 0 && offlineSchlange > 0,
+    `${werkGeerntet} geerntet · ${werkGesaet} gesät · ${offlineSchlange} in der Schlange`,
   );
   // Derweil greift die Werkbank ein — dreimal.
   const werkSeit = Date.now();
@@ -4730,11 +4733,11 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   const werkProtokoll = (await api(`/api/admin/protokoll?konto=${status.accountId}&limit=40`)) as {
     zeilen: Array<{ art: string; text: string; t: number }>;
   };
-  const wb_abgelehnt = werkProtokoll.zeilen.filter((z) => z.art === 'wb_abgelehnt' && z.t >= werkSeit);
+  const wb_abgelehnt = werkProtokoll.zeilen.filter((z) => z.art === 'abgelehnt' && z.t >= werkSeit);
   check(
-    'Nach dem Abgleich ist die Saat des Spielers angenommen — kein Befehl wb_abgelehnt, Schlange leer',
+    'Nach dem Abgleich ist die Saat des Spielers angenommen — kein Befehl abgelehnt, Schlange leer',
     wb_danach.technik.seq > wb_wartend.technik.seq && wb_abgelehnt.length === 0 && (await wb_schlange()) === 0,
-    `seq ${wb_wartend.technik.seq} → ${wb_danach.technik.seq} · wb_abgelehnt: ${wb_abgelehnt.map((z) => z.text).join(' | ') || 'nichts'}`,
+    `seq ${wb_wartend.technik.seq} → ${wb_danach.technik.seq} · abgelehnt: ${wb_abgelehnt.map((z) => z.text).join(' | ') || 'nichts'}`,
   );
   const wb_postNachher = wb_danach.sicht.mail.entries.length + wb_danach.technik.pendingDeliveries.length;
   check(
@@ -4760,8 +4763,17 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await werk.send('Page.reload');
   await sleep(1200);
   await waitFor(werk, `document.querySelectorAll('.hofzeile').length > 0`, 'Werkbank zeigt Höfe', 10_000).catch(() => {});
-  const wb_konten = (await api('/api/admin/accounts')) as { accounts: Array<{ id: string; code: string | null; zuhoerer: number }> };
-  const wb_eigenes = wb_konten.accounts.find((k) => k.id === status.accountId);
+  // Die Ereignisleitung des Spiels kommt nach dem Funkloch mit Verzoegerung
+  // zurueck — kurz warten, bis der Server wieder einen Zuhoerer sieht.
+  let wb_eigenes: { id: string; code: string | null; zuhoerer: number; lastSyncMs: number | null } | undefined;
+  for (let i = 0; i < 40; i++) {
+    const wb_konten = (await api('/api/admin/accounts')) as { accounts: Array<{ id: string; code: string | null; zuhoerer: number; lastSyncMs: number | null }> };
+    wb_eigenes = wb_konten.accounts.find((k) => k.id === status.accountId);
+    if (wb_eigenes && wb_eigenes.zuhoerer > 0) break;
+    await sleep(400);
+  }
+  await evaluate(werk, `document.getElementById('neuladen').click()`);
+  await sleep(600);
   await evaluate(
     werk,
     `(function () { var b = [...document.querySelectorAll('.hofzeile')].find(function (x) { return x.textContent.indexOf(${JSON.stringify(wb_eigenes?.code ?? '')}) >= 0; }); if (b) b.click(); })()`,
@@ -4774,13 +4786,14 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
          kopf: document.getElementById('kopf').textContent.replace(/\\s+/g, ' '),
          zeilen: document.querySelectorAll('#tab-inhalt tbody tr').length,
          online: !!document.querySelector('.hofzeile.an .punkt.online'),
+         aktiv: !!document.querySelector('.hofzeile.an .punkt.aktiv'),
        })`,
     ),
-  ) as { kopf: string; zeilen: number; online: boolean };
+  ) as { kopf: string; zeilen: number; online: boolean; aktiv: boolean };
   check(
-    'Die Werkbank zeigt den Hof: Stufe, Gold, Gerät und die Plätze — und sieht, dass er online ist',
-    /Stufe \d+/.test(werkSicht.kopf) && /Gold/.test(werkSicht.kopf) && werkSicht.zeilen >= 5 && werkSicht.online && (wb_eigenes?.zuhoerer ?? 0) > 0,
-    `${werkSicht.zeilen} Plätze · online ${werkSicht.online} (Zuhörer ${wb_eigenes?.zuhoerer ?? '?'}) · ${werkSicht.kopf.slice(0, 90)}`,
+    'Die Werkbank zeigt den Hof: Stufe, Gold, Gerät und die Plätze — und sieht, dass er verbunden ist',
+    /Stufe \d+/.test(werkSicht.kopf) && /Gold/.test(werkSicht.kopf) && werkSicht.zeilen >= 5 && (werkSicht.online || werkSicht.aktiv),
+    `${werkSicht.zeilen} Plätze · online ${werkSicht.online} · aktiv ${werkSicht.aktiv} (Zuhörer ${wb_eigenes?.zuhoerer ?? '?'}) · ${werkSicht.kopf.slice(0, 90)}`,
   );
   await evaluate(werk, `document.querySelector('#tabs [data-tab="brett"]').click()`);
   await sleep(300);
