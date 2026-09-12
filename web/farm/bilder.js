@@ -18,6 +18,7 @@ var KOERPER = {
   woodlot: 1.4, workshop: 3.1, smokehouse: 4.4, kitchen: 3.1, 'sheep-': 1.3, weberei: 3.1,
   'deco-fence': 0.7, 'deco-flowers': 0.7, 'deco-bench': 0.7,
   'deco-erntekranz': 0.7, 'deco-boje': 0.9, 'deco-marktfahne': 0.9, 'deco-laterne': 0.7,
+  saftpresse: 3.1,
 };
 var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
 var KOERPER_MOEBEL = {
@@ -198,6 +199,7 @@ function artRaumFor(p, k) {
   if (id === 'workshop') return artWerkstatt(k, p.busy);
   if (id === 'smokehouse') return artRaeucherei(k, p.busy);
   if (id === 'kitchen') return artHofkueche(k, p.busy);
+  if (id === 'saftpresse') return artSaftpresse(k, p.busy);
   if (id === 'deco-fence') return bild(k, 'zaun-m', 0, k.ph - 16);
   if (id === 'deco-flowers') return bild(k, 'gras-blumen', 0, k.ph - 16);
   if (id === 'deco-bench') return bild(k, 'tisch', 0, k.ph - 16);
@@ -217,7 +219,7 @@ function artFeld(k, stufe, crop) {
     out += bild(k, 'acker-l', 0, oben[r], 16, beet) + bild(k, 'acker-r', 16, oben[r], 16, beet);
   }
   if (stufe <= 0) return out;
-  var art = crop === 'corn' ? 'mais' : crop === 'wheat' ? 'weizen' : 'moehre';
+  var art = crop === 'corn' ? 'mais' : crop === 'wheat' ? 'weizen' : crop === 'sugar-cane' ? 'zuckerrohr' : 'moehre';
   var name = art + '-' + Math.min(3, Math.max(1, stufe));
   // Die Halme wiegen sich im Wind. Eine Gruppe je Reihe, nicht je Pflanze —
   // Felder gibt es nur eine Handvoll, das kostet nichts.
@@ -335,6 +337,20 @@ function artSchmiede(k, laeuft) {
     bild(k, 'schlot', 16, u - 32) +
     bild(k, 'ziegel', 0, u - 16) + bild(k, 'ofen-mund', 16, u - 16) + glut +
     bild(k, 'amboss', 2, u - 28, 12, 12);
+}
+
+// Saftpresse: rotes Dach, Holzwand, links das Fass, rechts der Glastank —
+// der leuchtet, wenn gepresst wird.
+function artSaftpresse(k, laeuft) {
+  var u = k.ph - 1;
+  var tank = laeuft
+    ? '<g>' + bild(k, 'tank-glas', 17, u - 17) +
+      '<animate attributeName="opacity" values="1;.55;1" dur="1.6s" repeatCount="indefinite"/></g>'
+    : bild(k, 'tank-glas', 17, u - 17);
+  return schatten(k, 16, u, 34) +
+    bild(k, 'dach-rot-l', 0, u - 40) + bild(k, 'dach-rot-r', 16, u - 40) +
+    bild(k, 'holz-wand', 0, u - 24) + bild(k, 'holz-wand', 16, u - 24) +
+    bild(k, 'fass-rot', 1, u - 15, 13, 14) + tank;
 }
 
 function artOfen(k, laeuft) {

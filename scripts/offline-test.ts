@@ -4873,6 +4873,82 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   );
   await browserCdp!.send('Target.closeTarget', { targetId: werkZiel.targetId }).catch(() => {});
 
+  console.log('\n9x. Feldfrüchte — Möhren, Zuckerrohr, Saftpresse');
+  await evaluate(cdp, `document.getElementById('bauen').click()`);
+  await sleep(400);
+  const presseImKatalog = await evaluate<string>(
+    cdp,
+    `(function () {
+       var k = [...document.querySelectorAll('#bauliste .card')].find(function (c) { return /Saftpresse/.test((c.querySelector('.top') || {}).textContent || ''); });
+       var t = k ? k.textContent.replace(/\\s+/g, ' ').slice(0, 80) : 'fehlt';
+       document.getElementById('bau-close').click();
+       return t;
+     })()`,
+  );
+  check('Die Saftpresse steht im Baukatalog', presseImKatalog !== 'fehlt', presseImKatalog);
+  await warteAufFreiesFeld(cdp);
+  const feldMenue = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var feld = [...document.querySelectorAll('#plots .plot')].find(function (p) {
+           var s = (p.querySelector('.status') || {}).textContent || '';
+           var al = p.getAttribute('aria-label') || '';
+           return /^Feld [0-9]/.test(al) && !p.classList.contains('ripe') && !p.querySelector('.bar');
+         });
+         if (!feld) return { feld: false };
+         feld.click();
+         var opts = [...document.querySelectorAll('#pick-list .opt')].map(function (o) { return { name: (o.querySelector('.top') || {}).textContent || '', frei: !o.disabled }; });
+         var kauf = [...document.querySelectorAll('#pick-list .nachkauf')].map(function (n) { return n.textContent.replace(/\\s+/g, ' ').slice(0, 60); });
+         return { feld: true, opts: opts, kauf: kauf };
+       })())`,
+    ),
+  ) as { feld: boolean; opts?: Array<{ name: string; frei: boolean }>; kauf?: string[] };
+  const namen = (feldMenue.opts ?? []).map((o) => o.name);
+  check(
+    'Ein Feld bietet Möhren und Zuckerrohr an — die Saat kauft man nach wie Mais',
+    feldMenue.feld && namen.some((n) => /Möhren/.test(n)) && namen.some((n) => /Zuckerrohr/.test(n)) &&
+      (feldMenue.kauf ?? []).some((k) => /Möhre/.test(k)),
+    `${namen.join(' | ')} · Nachkauf: ${(feldMenue.kauf ?? []).join(' | ')}`,
+  );
+  // Eine Möhre kaufen, dann säen.
+  const gesaetMoehre = await evaluate<string>(
+    cdp,
+    `(function () {
+       var zeile = [...document.querySelectorAll('#pick-list .nachkauf')].find(function (n) { return /Möhre/.test(n.textContent); });
+       var k = zeile && zeile.querySelector('.kaufen');
+       if (k) k.click();
+       return k ? 'gekauft' : 'kein Nachkauf';
+     })()`,
+  );
+  await sleep(700);
+  const gesaetMoehre2 = await evaluate<string>(
+    cdp,
+    `(function () {
+       var o = [...document.querySelectorAll('#pick-list .opt')].find(function (x) { return /Möhren/.test((x.querySelector('.top') || {}).textContent || '') && !x.disabled; });
+       if (!o) return 'Möhren nicht startbar: ' + [...document.querySelectorAll('#pick-list .opt')].map(function (x) { return (x.querySelector('.top') || {}).textContent + (x.disabled ? '(x)' : ''); }).join(',');
+       o.click();
+       return 'gesät';
+     })()`,
+  );
+  await sleep(500);
+  const moehrenFeld = await evaluate<string>(
+    cdp,
+    `([...document.querySelectorAll('#plots .plot')].find(function (p) { return /Möhren/.test(p.getAttribute('aria-label') || ''); }) || { getAttribute: function () { return 'kein Möhrenfeld'; } }).getAttribute('aria-label')`,
+  );
+  check(
+    'Nach dem Nachkauf lässt sich Möhre säen — das Feld sagt es',
+    gesaetMoehre === 'gekauft' && gesaetMoehre2 === 'gesät' && /Möhren/.test(moehrenFeld),
+    `${gesaetMoehre} · ${gesaetMoehre2} · „${moehrenFeld}"`,
+  );
+  await api(`/api/admin/time?account=${status.accountId}&seconds=60`, 'POST');
+  await sleep(900);
+  await evaluate(cdp, harvestAll);
+  await sleep(600);
+  const nachErnte = (await api(`/api/admin/status?account=${status.accountId}`)) as { state: { items: number[] }; itemIds: string[] };
+  const moehrenImLager = nachErnte.state.items[nachErnte.itemIds.indexOf('carrot')] ?? 0;
+  check('Aus einer Möhre werden zwei — die Ernte liegt im Lager', moehrenImLager >= 2, `${moehrenImLager} Möhren`);
+
   console.log('\n9y. Tagesbonus');
   await waitFor(
     cdp,

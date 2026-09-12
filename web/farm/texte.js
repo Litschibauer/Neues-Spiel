@@ -23,6 +23,8 @@ var NAMES = {
   wool: 'Wolle', yarn: 'Garn', sweater: 'Pullover', weberei: 'Weberei',
   'sheep-feed': 'Schaffutter',
   'deco-erntekranz': 'Erntekranz', 'deco-boje': 'Boje', 'deco-marktfahne': 'Marktfahne', 'deco-laterne': 'Laterne',
+  carrot: 'Möhren', 'sugar-cane': 'Zuckerrohr', sugar: 'Zucker', 'carrot-juice': 'Möhrensaft',
+  'apple-juice': 'Apfelsaft', syrup: 'Sirup', 'carrot-cake': 'Möhrenkuchen', saftpresse: 'Saftpresse',
 };
 function hasCowFeed() {
   return rules.items.some(function (x) { return x.id === 'cow-feed'; });
@@ -34,7 +36,7 @@ function nameOf(id) {
 function itemName(i) { return nameOf(rules.items[i].id); }
 // Die Warennamen stehen in der Mehrzahl, weil man selten eine einzelne hat.
 // Ein Fund ist genau so ein Fall: „1 Bretter" liest sich falsch.
-var EINZAHL = { plank: 'Brett', nail: 'Nagel', apple: 'Apfel', eggs: 'Ei', yarn: 'Garn', sweater: 'Pullover' };
+var EINZAHL = { plank: 'Brett', nail: 'Nagel', apple: 'Apfel', eggs: 'Ei', yarn: 'Garn', sweater: 'Pullover', carrot: 'Möhre', 'carrot-cake': 'Möhrenkuchen' };
 function stueckName(amount, i) {
   var id = rules.items[i].id;
   return amount === 1 && EINZAHL[id] ? EINZAHL[id] : itemName(i);

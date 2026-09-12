@@ -376,6 +376,7 @@ function plotIdName(id) {
   if (id.indexOf('sheep-') === 0) return { name: 'Schafweide', art: 'Neue Weide' };
   if (id === 'mill') return { name: 'Mühle', art: 'Neues Gebäude' };
   if (id === 'dairy') return { name: 'Molkerei', art: 'Neues Gebäude' };
+  if (id === 'saftpresse') return { name: 'Saftpresse', art: 'Neues Gebäude' };
   return { name: nameOf(id), art: 'Neu' };
 }
 

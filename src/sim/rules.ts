@@ -2944,33 +2944,138 @@ const V49: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V50: Neue Feldfrüchte und ihre Ketten. Möhren (ab Stufe 6) und Zuckerrohr
+// (ab 9) wachsen auf jedem Feld; die Saat kauft man wie Mais nach. Die
+// Saftpresse presst Apfelsaft, Möhrensaft und Sirup, die Mühle mahlt Zucker,
+// der Backofen backt Möhrenkuchen aus Möhren, Mehl, Ei und Zucker.
+const CARROT = 46;
+const SUGAR_CANE = 47;
+const SUGAR = 48;
+const CARROT_JUICE = 49;
+const APPLE_JUICE = 50;
+const SYRUP = 51;
+const CARROT_CAKE = 52;
+const R_CARROT = 39;
+const R_SUGAR_CANE = 40;
+const R_SUGAR = 41;
+const R_APPLE_JUICE = 42;
+const R_CARROT_JUICE = 43;
+const R_SYRUP = 44;
+const R_CARROT_CAKE = 45;
+const V50: Ruleset = {
   ...V49,
+  version: 50,
+  items: [
+    ...V49.items,
+    { id: 'carrot', storable: true, npcPrice: 9, npcBuyPrice: 12 },
+    { id: 'sugar-cane', storable: true, npcPrice: 12, npcBuyPrice: 16 },
+    { id: 'sugar', storable: true, npcPrice: 38, npcBuyPrice: 0 },
+    { id: 'carrot-juice', storable: true, npcPrice: 95, npcBuyPrice: 0 },
+    { id: 'apple-juice', storable: true, npcPrice: 110, npcBuyPrice: 0 },
+    { id: 'syrup', storable: true, npcPrice: 150, npcBuyPrice: 0 },
+    { id: 'carrot-cake', storable: true, npcPrice: 330, npcBuyPrice: 0 },
+  ],
+  recipes: [
+    ...V49.recipes,
+    { id: 'carrot', inputs: [want(CARROT, 1)], output: want(CARROT, 2), durationTicks: 300, xp: 6, minPlayerLevel: 6 },
+    { id: 'sugar-cane', inputs: [want(SUGAR_CANE, 1)], output: want(SUGAR_CANE, 2), durationTicks: 420, xp: 8, minPlayerLevel: 9 },
+    { id: 'sugar', inputs: [want(SUGAR_CANE, 2)], output: want(SUGAR, 1), durationTicks: 300, xp: 12, minPlayerLevel: 9 },
+    { id: 'apple-juice', inputs: [want(APPLE, 3)], output: want(APPLE_JUICE, 1), durationTicks: 480, xp: 30, minPlayerLevel: 7 },
+    { id: 'carrot-juice', inputs: [want(CARROT, 4)], output: want(CARROT_JUICE, 1), durationTicks: 420, xp: 26, minPlayerLevel: 7 },
+    { id: 'syrup', inputs: [want(SUGAR_CANE, 3)], output: want(SYRUP, 1), durationTicks: 600, xp: 40, minPlayerLevel: 10 },
+    {
+      id: 'carrot-cake',
+      inputs: [want(CARROT, 3), want(MEHL, 1), want(EGGS, 1), want(SUGAR, 1)],
+      output: want(CARROT_CAKE, 1),
+      durationTicks: 900,
+      xp: 70,
+      minPlayerLevel: 10,
+    },
+  ],
+  plots: [
+    ...V49.plots.map((p) => {
+      if (p.id.indexOf('field') === 0) {
+        return { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_CARROT, R_SUGAR_CANE] })) };
+      }
+      if (p.id === 'mill') return { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_SUGAR] })) };
+      if (p.id === 'oven') return { ...p, levels: p.levels.map((l) => ({ ...l, recipes: [...l.recipes, R_CARROT_CAKE] })) };
+      return p;
+    }),
+    {
+      id: 'saftpresse',
+      startLevel: 0,
+      place: at(0, 0, 8, 9),
+      size: { w: 2, h: 2 },
+      levels: [
+        {
+          label: 'Saftpresse',
+          cost: [want(PLANK, 10), want(NAIL, 6), want(GOLD, 1800)],
+          recipes: [R_APPLE_JUICE, R_CARROT_JUICE, R_SYRUP],
+          minPlayerLevel: 7,
+          slots: 1,
+        },
+        {
+          label: 'Zweite Presse',
+          cost: [want(PLANK, 8), want(GOLD, 3000)],
+          recipes: [R_APPLE_JUICE, R_CARROT_JUICE, R_SYRUP],
+          minPlayerLevel: 11,
+          slots: 2,
+        },
+      ],
+    },
+  ],
+  requestTemplates: [
+    ...V49.requestTemplates,
+    { id: 'moehren', wants: [want(CARROT, 6)], reward: gold(90), xp: 18 },
+    { id: 'zucker', wants: [want(SUGAR, 4)], reward: gold(200), xp: 36 },
+    { id: 'apfelsaft', wants: [want(APPLE_JUICE, 2)], reward: gold(300), xp: 50 },
+    { id: 'moehrensaft', wants: [want(CARROT_JUICE, 2)], reward: gold(260), xp: 46 },
+    { id: 'sirup', wants: [want(SYRUP, 1)], reward: gold(220), xp: 40 },
+    { id: 'moehrenkuchen', wants: [want(CARROT_CAKE, 1)], reward: gold(600), xp: 95 },
+  ],
+  achievements: [
+    ...(V49.achievements ?? []),
+    { id: 'saftpresse', label: 'Saftpresse bauen', kind: 'plot', arg: 'saftpresse', gold: 900, xp: 100, group: 'hof' },
+    { id: 'juice10', label: '10 Apfelsaft im Lager', kind: 'item', arg: 'apple-juice', menge: 10, gold: 700, xp: 80, group: 'vorrat' },
+    { id: 'cake5', label: '5 Möhrenkuchen im Lager', kind: 'item', arg: 'carrot-cake', menge: 5, gold: 1500, xp: 160, group: 'vorrat' },
+  ],
+  fundstuecke: {
+    ...V49.fundstuecke!,
+    tabelle: [...V49.fundstuecke!.tabelle, { item: CARROT, amount: 2, weight: 6 }],
+  },
+  wetter: {
+    ...V49.wetter!,
+    plaetze: V49.wetter!.plaetze,
+  },
+};
+
+const DEV: Ruleset = {
+  ...V50,
   // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
   feste: {
-    ...V49.feste!,
+    ...V50.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V49.feste!.arten.map((a) => ({
+    arten: V50.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V49.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V50.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V49.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V50.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V49.fishing!,
+    ...V50.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V49.plots.map((p) => {
+  plots: V50.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -3037,17 +3142,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [47, V47],
   [48, V48],
   [49, V49],
+  [50, V50],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 49;
+export const LATEST_RULESET_VERSION = 50;
 
 export const DEV_RULESET_VERSION = 1001;
 
