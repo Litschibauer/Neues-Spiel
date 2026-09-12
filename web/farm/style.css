@@ -1872,3 +1872,32 @@
   #rueck-senden { width: 100%; margin: .6rem 0 .4rem; padding: .7rem; font-size: .9rem; }
   #rueck-senden[disabled] { opacity: .45; }
   @media (prefers-reduced-motion: reduce) { .eingabe button.gefahr.sicher { animation: none; } }
+
+  /* — Die geführte Einführung ——————————————————————————————————————————— */
+  .fuehrung { position: fixed; inset: 0; z-index: 95; pointer-events: none; }
+  .fuehrung-schatten { position: absolute; inset: 0; background: rgba(28, 20, 30, .5); pointer-events: auto; }
+  .fuehrung-ring {
+    position: absolute; pointer-events: none; border: 3px solid var(--ripe); border-radius: 10px;
+    box-shadow: 0 0 0 4px rgba(216, 160, 44, .35), 0 0 18px rgba(216, 160, 44, .55);
+    animation: fuehrungPuls 1.3s ease-in-out infinite;
+  }
+  @keyframes fuehrungPuls { 50% { box-shadow: 0 0 0 9px rgba(216, 160, 44, .18), 0 0 26px rgba(216, 160, 44, .65); } }
+  .fuehrung-blase {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    top: calc(env(safe-area-inset-top, 0px) + 4.6rem);
+    width: min(92vw, 24rem); pointer-events: auto;
+    background: var(--surface); color: var(--ink);
+    border: 3px solid var(--kante); border-radius: 10px; box-shadow: 0 5px 0 var(--druck);
+    padding: .7rem .9rem .9rem; display: flex; flex-direction: column; gap: .35rem;
+  }
+  .fuehrung-blase.unten { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 4.4rem); }
+  .fuehrung-kopf { display: flex; justify-content: space-between; align-items: center; }
+  .fuehrung-schritt { font-family: var(--pixel); font-size: .72rem; color: var(--muted); letter-spacing: .04em; }
+  .fuehrung-skip { background: none; border: 0; color: var(--muted); font-size: .78rem; text-decoration: underline; padding: .2rem .1rem; cursor: pointer; }
+  .fuehrung-blase h2 {
+    margin: 0; font-family: var(--pixel); font-size: 1.05rem; text-transform: none;
+    letter-spacing: .02em; color: var(--ink);
+  }
+  .fuehrung-blase p { margin: 0; font-size: .9rem; line-height: 1.45; color: var(--ink); }
+  .fuehrung-weiter { margin-top: .35rem; padding: .6rem; font-size: .9rem; width: 100%; }
+  @media (prefers-reduced-motion: reduce) { .fuehrung-ring { animation: none; } }

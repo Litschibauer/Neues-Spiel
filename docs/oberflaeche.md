@@ -134,7 +134,7 @@ schieben, und jedes hängt an einem Ding, das man sieht:
 | Lager | Vorräte, Postfach, Ausbau — **nur Lager** |
 | Stand | anbieten, eigene Auslage, fremde Angebote |
 | Kiste | öffnet sich sofort, kein Blatt |
-| Zahnrad (Ecke) | Hofdaten, Hof sichern, Rückmeldung, Gerät abmelden |
+| Zahnrad (Ecke) | Hofdaten, Hof sichern, Rückmeldung, Anleitung (geführte Einführung), Gerät abmelden |
 
 **Verschieben ist eine Geste, kein Menü.** Lange auf ein Gebäude drücken (420 ms),
 dann folgt es dem Finger — eingerastet aufs Raster, nicht pixelgenau, damit man

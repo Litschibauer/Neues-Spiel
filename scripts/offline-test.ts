@@ -607,15 +607,40 @@ try {
     15_000,
   );
   check('Seite verbindet und zeigt den Hof', true);
-  await sleep(250);
-  const tutAufNeu = await evaluate<boolean>(cdp, `!!document.getElementById('tut-bg') && !document.getElementById('tut-bg').hidden`);
-  check('Ein neuer Hof bekommt sofort die Einführung', tutAufNeu, String(tutAufNeu));
-  await evaluate(cdp, tutWeg);
+  await sleep(300);
+  const fuehrungAuf = await evaluate<string>(cdp, `document.getElementById('fuehrung').hidden ? '' : document.getElementById('fuehrung-titel').textContent`);
+  check('Ein neuer Hof bekommt sofort die geführte Einführung', /Willkommen/.test(fuehrungAuf), fuehrungAuf || 'keine');
+  await evaluate(cdp, `document.getElementById('fuehrung-weiter').click()`);
+  await sleep(400);
+  const schrittSaeen = await evaluate<string>(
+    cdp,
+    `JSON.stringify({
+       titel: document.getElementById('fuehrung-titel').textContent,
+       loch: document.getElementById('fuehrung-schatten').style.clipPath.indexOf('evenodd') >= 0,
+       ring: !document.getElementById('fuehrung-ring').hidden,
+       gesperrt: !document.getElementById('fuehrung-schatten').hidden,
+     })`,
+  );
+  check(
+    'Schritt Säen: der Hof ist abgedunkelt und gesperrt, genau ein Feld leuchtet',
+    /Säen/.test(schrittSaeen) && /"loch":true/.test(schrittSaeen) && /"ring":true/.test(schrittSaeen) && /"gesperrt":true/.test(schrittSaeen),
+    schrittSaeen,
+  );
 
   await api('/api/admin/time?seconds=4000', 'POST');
   await sleep(400);
   const gesaetAnfang = await evaluate<number>(cdp, plantAll);
   check('Felder lassen sich ansäen', gesaetAnfang >= 2, `${gesaetAnfang} Felder`);
+  await waitFor(cdp, `/Ernten/.test(document.getElementById('fuehrung-titel').textContent)`, 'Einführung rückt weiter', 8_000).catch(() => {});
+  const nachSaat = await evaluate<string>(cdp, `document.getElementById('fuehrung-titel').textContent`);
+  check('Die Einführung rückt erst weiter, wenn man es wirklich getan hat', /Ernten/.test(nachSaat), nachSaat);
+  await evaluate(cdp, `document.getElementById('fuehrung-skip').click()`);
+  await sleep(200);
+  const uebersprungen = await evaluate<string>(
+    cdp,
+    `JSON.stringify({ zu: document.getElementById('fuehrung').hidden, gemerkt: Object.keys(localStorage).some(function (k) { return k.indexOf('ns-tut-') === 0 && localStorage.getItem(k) === 'done'; }) })`,
+  );
+  check('Überspringen beendet die Einführung und merkt es sich', uebersprungen === '{"zu":true,"gemerkt":true}', uebersprungen);
   await waitFor(cdp, `${warteschlange} === 0`, 'Aktionen bestätigt', 10_000);
   check('Aktionen werden bestätigt — die Warteschlange läuft leer', true);
 
@@ -898,7 +923,7 @@ try {
   await sleep(250);
   const tutAuf = await evaluate<boolean>(
     cdp,
-    `!!document.getElementById('tut-bg') && !document.getElementById('tut-bg').hidden`,
+    `!!document.getElementById('fuehrung') && !document.getElementById('fuehrung').hidden`,
   );
   // Der Hof hat inzwischen XP — Veteranen bekommen die Einführung nicht nochmal.
   check('Ein bespielter Hof bekommt die Einführung nicht nochmal aufgedrängt', !tutAuf, String(tutAuf));

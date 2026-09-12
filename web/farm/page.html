@@ -503,6 +503,20 @@
   </div>
 </div>
 
+<div class="fuehrung" id="fuehrung" hidden>
+  <div class="fuehrung-schatten" id="fuehrung-schatten"></div>
+  <div class="fuehrung-ring" id="fuehrung-ring" hidden></div>
+  <div class="fuehrung-blase" id="fuehrung-blase" role="dialog" aria-live="polite" aria-labelledby="fuehrung-titel">
+    <div class="fuehrung-kopf">
+      <span class="fuehrung-schritt" id="fuehrung-schritt"></span>
+      <button type="button" class="fuehrung-skip" id="fuehrung-skip">Überspringen</button>
+    </div>
+    <h2 id="fuehrung-titel"></h2>
+    <p id="fuehrung-text"></p>
+    <button type="button" class="primär fuehrung-weiter" id="fuehrung-weiter">Los geht’s</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -551,6 +565,8 @@
   <!--INCLUDE:farm/melden.js-->
 
   <!--INCLUDE:farm/konto.js-->
+
+  <!--INCLUDE:farm/fuehrung.js-->
 
   <!--INCLUDE:farm/tippen.js-->
 

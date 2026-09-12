@@ -192,6 +192,7 @@ web/farm/        Die Oberfläche: page.html (Markup), style.css, *.js Module
   bilder.js        Pixelkunst als SVG (ART-Tabelle), Boden, Sprites
   nachbarn.js      Freunde, Besuch, fremder Stand
   konto.js         Hof sichern, Wiederherstellung, Löschen, Rückmeldung, Fehler
+  fuehrung.js      die geführte Einführung für neue Höfe (Schritte, Spot, Sperre)
   momente.js       Meldungen mit Warteschlange
   texte.js         alle Namen und Texte (auch von der Werkbank benutzt)
   klang.js         Klänge abspielen (Aufnahmen, Tonhöhe je Erntekette)
@@ -429,8 +430,12 @@ echter Datenbank. Zahlen in `deploy.md`.
   wichtiger Nachrichten (gleiche Art wird zusammengelegt, `eilig` springt vor).
 - **Klang und Musik**: `klang('bestaetigt' | 'fehler' | …)`, Musik aus
   `web/musik/`; Lautstärken in den Einstellungen.
-- **Einführung**: `TUTORIAL` (einmal je Hof) und `FEATURE_TUT` (einmal je
-  Blatt) in `start.js`.
+- **Einführung**: geführt in `fuehrung.js` — der Hof ist abgedunkelt, ein
+  Element leuchtet (Loch per `clip-path`), es geht erst weiter, wenn der
+  Spieler es getan hat (`fertig()` je Schritt), überspringbar; einmal je Hof
+  (`ns-tut-<hof>`), nur für frische Höfe ohne XP. Dazu `FEATURE_TUT` in
+  `start.js`: Kartenfolgen einmal je Blatt, die die Einführung für Lager,
+  Brett und Bauen gleich als gesehen markiert.
 
 ---
 

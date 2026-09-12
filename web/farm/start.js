@@ -426,25 +426,7 @@ $('forget').addEventListener('click', function () {
   vergissGeraet();
 });
 
-// — Kurze Einführung für neue Höfe —————————————————————————————————————
-var TUTORIAL = [
-  { emoji: '🌾', titel: 'Willkommen auf deinem Hof!',
-    text: 'Hier säst, erntest und verarbeitest du. Alles läuft weiter — auch ohne Internet.' },
-  { emoji: '🌱', titel: 'Säen',
-    text: 'Tippe auf ein Feld und wähle Weizen oder Mais. Nach kurzer Zeit ist es reif.' },
-  { emoji: '❗', titel: 'Ernten',
-    text: 'Reife Felder tragen ein Ausrufezeichen. Tippe sie an — die Ware wandert ins Lager.' },
-  { emoji: '🚚', titel: 'Aufträge erfüllen',
-    text: 'Am Wagen unten wartet der Frachtbrief. Erfülle Aufträge und bekomme Gold und XP.' },
-  { emoji: '🔨', titel: 'Bauen & aufsteigen',
-    text: 'Mit dem Hammer baust du neue Gebäude: Ställe, Mühle, Backofen, Grill, Mine … Mit jeder Stufe kommt mehr dazu.' },
-  { emoji: '🎯', titel: 'Ziele & Erfolge',
-    text: 'Über das Zahnrad findest du Ziele und Erfolge. Erreichte Meilensteine löst du dort für Gold und XP ein.' },
-  { emoji: '🎁', titel: 'Jeden Tag ein Bonus',
-    text: 'Schau täglich vorbei: Der Tagesbonus wächst mit jedem Tag in Folge. Die Belohnung landet im Postfach.' },
-  { emoji: '🛒', titel: 'Handeln',
-    text: 'Im Verkaufsstand bietest du Waren anderen Höfen an. Viel Erfolg auf deinem Hof!' },
-];
+// — Einführung für neue Höfe (geführt, siehe fuehrung.js) ————————————————
 var tutStep = 0;
 
 // Pro Hof gemerkt: ein neuer Hof zeigt die Einführung, auch wenn auf demselben
@@ -468,7 +450,7 @@ function tutorialAbschliessen() {
   empfangPruefen();
 }
 function tutorialZeigen() {
-  var seiten = featureSeiten || TUTORIAL;
+  var seiten = featureSeiten || [];
   var s = seiten[tutStep];
   if (!s) { tutorialAbschliessen(); return; }
   $('tut-emoji').textContent = s.emoji;
@@ -493,8 +475,8 @@ function tutorialStarten(erzwingen) {
     // Nur für ganz frische Höfe automatisch — Veteranen (mit XP) verschonen.
     if (client && client.preview && client.preview().xp > 0) return;
   }
-  tutStep = 0;
-  tutorialZeigen();
+  // Die Einführung ist geführt: Der Hof selbst zeigt die ersten Schritte.
+  fuehrungStarten();
 }
 // — Kurze Einführung je Funktion ————————————————————————————————————————
 // Jedes größere Feature erklärt sich beim ersten Öffnen selbst. Pro Hof und
