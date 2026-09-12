@@ -4931,10 +4931,16 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
        return 'gesät';
      })()`,
   );
-  await sleep(500);
+  // Die Kachel sagt erst nach dem naechsten Zeichnen, was dort waechst.
+  await waitFor(
+    cdp,
+    `[...document.querySelectorAll('#plots .plot')].some(function (p) { return /Möhren/.test(p.getAttribute('aria-label') || ''); })`,
+    'Möhrenfeld beschriftet',
+    5_000,
+  ).catch(() => {});
   const moehrenFeld = await evaluate<string>(
     cdp,
-    `([...document.querySelectorAll('#plots .plot')].find(function (p) { return /Möhren/.test(p.getAttribute('aria-label') || ''); }) || { getAttribute: function () { return 'kein Möhrenfeld'; } }).getAttribute('aria-label')`,
+    `([...document.querySelectorAll('#plots .plot')].find(function (p) { return /Möhren/.test(p.getAttribute('aria-label') || ''); }) || { getAttribute: function () { return 'nichts'; } }).getAttribute('aria-label')`,
   );
   check(
     'Nach dem Nachkauf lässt sich Möhre säen — das Feld sagt es',
