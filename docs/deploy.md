@@ -504,8 +504,8 @@ wieder seine Chance.
 
 **Leicht heißt:** alle Tests außer `golden`, `conformance-bundle` und
 `session-fuzz`. Die drei laden die 63 MB Golden-Vektoren in den Speicher und
-rechnen minutenlang — ein 1-GB-Server erstickt daran, und ein erstickter Test
-ist rot, obwohl der Code grün ist. Die drei laufen dafür auf GitHub bei jedem
+rechnen minutenlang — der Server hat 965 MB, davon im Betrieb rund 600 frei,
+und erstickt daran; ein erstickter Test ist rot, obwohl der Code grün ist. Die drei laufen dafür auf GitHub bei jedem
 Push und bei dem, der pusht (`npm test`). Die leichte Suite läuft in einem
 Prozess nach dem anderen, mit 20 Minuten Zeitlimit und einem zweiten Versuch
 gegen Zeitflimmern.
