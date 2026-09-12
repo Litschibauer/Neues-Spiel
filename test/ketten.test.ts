@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRuleset, LATEST_RULESET_VERSION, levelRecipes, recipeOutputs } from '../src/sim/rules.ts';
+import { getRuleset, inSperre, LATEST_RULESET_VERSION, levelRecipes, recipeOutputs } from '../src/sim/rules.ts';
 import { initialState } from '../src/sim/state.ts';
 import { simulate } from '../src/sim/sim.ts';
 
@@ -73,8 +73,12 @@ test('die Barren aus der Schmiede werden weiterverarbeitet', () => {
 
 test('einen Baum zu fällen bringt Holz, ein Stein bringt keins', () => {
   const holz = idx('wood');
-  const baum = (V.obstacles ?? []).findIndex((o) => o.kind === 'tree');
-  const stein = (V.obstacles ?? []).findIndex((o) => o.kind === 'rock');
+  // Hindernisse in Sperrzonen (Wegrand, Ufer) bleiben liegen — also eins
+  // suchen, das wirklich zu räumen ist.
+  const raeumbar = (o: { kind: string; gx: number; gy: number; w: number; h: number }): boolean =>
+    !inSperre(V, o.gx, o.gy, o.w, o.h);
+  const baum = (V.obstacles ?? []).findIndex((o) => o.kind === 'tree' && raeumbar(o));
+  const stein = (V.obstacles ?? []).findIndex((o) => o.kind === 'rock' && raeumbar(o));
   assert.ok(baum >= 0 && stein >= 0, 'Karte hat Bäume und Steine');
 
   const saege = V.obstacleKinds!.tree!.tool;

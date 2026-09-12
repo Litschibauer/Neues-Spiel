@@ -128,7 +128,8 @@ function plotStatus(p) {
     return p.capacity + ' ' + tier.many + ' · ' + parts.join(' · ');
   }
   if (p.done) return 'fertig · ' + nameOf(p.producing);
-  if (p.busy) return timeText(p.remaining);
+  // Laeuft etwas, steht dabei, was: „Möhren · 27 s“ — nicht bloss die Zeit.
+  if (p.busy) return (p.producing ? nameOf(p.producing) + ' · ' : '') + timeText(p.remaining);
   if (p.blocked === 'level') return 'ab Stufe ' + p.upgrade.minPlayerLevel;
   if (p.blocked === 'inputs') return 'Zutaten fehlen';
   if (p.tap === 'buy') return p.upgrade.label + ' · ' + costText(p.upgrade.cost);
@@ -206,6 +207,9 @@ function renderPlots(v) {
     tile.classList.toggle('wahrzeichen', !!wahrzeichen);
     tile.style.zIndex = wahrzeichen ? '58' : String(1 + Math.round(ort.tiefe * 2));
     tile.dataset.platz = String(p.index);
+    // Der gezeigte Platz bleibt markiert, auch wenn der Hof dazwischen neu
+    // gemalt wird — sonst frisst ein reifendes Feld den Hinweis.
+    if (p.index === zeigtPlatz && Date.now() < zeigtBis) tile.classList.add('zeigt');
     tile.setAttribute('aria-label', plotName(p.index) + ' — ' + plotStatus(p));
 
     var art = document.createElement('div');
@@ -413,6 +417,7 @@ function renderHindernisse(v) {
   box.textContent = '';
 
   v.obstacles.forEach(function (h) {
+    if (inSperre(h.gx, h.gy, h.w, h.h)) return;
     var kasten = hindernisKasten(h);
     var koerper = koerperHindernis(h.kind, h.w, h.h);
     kasten.top -= koerper.hoch * zellH();
@@ -1825,6 +1830,8 @@ function restVon(p) {
 }
 
 var naechstesZiel = null;
+var zeigtPlatz = -1;
+var zeigtBis = 0;
 
 function renderNaechstes(v) {
   if (besuchAktiv()) { $('naechstes').hidden = true; return; }
@@ -1852,11 +1859,15 @@ function naechstesHin() {
     kameraKlemmen();
     kameraAnwenden();
   }
+  zeigtPlatz = ziel.plot;
+  zeigtBis = Date.now() + 2600;
   var kachel = document.querySelector('#plots .plot[data-platz="' + ziel.plot + '"]');
-  if (kachel) {
-    kachel.classList.add('zeigt');
-    setTimeout(function () { kachel.classList.remove('zeigt'); }, 2600);
-  }
+  if (kachel) kachel.classList.add('zeigt');
+  setTimeout(function () {
+    var k = document.querySelector('#plots .plot[data-platz="' + ziel.plot + '"]');
+    if (k) k.classList.remove('zeigt');
+    if (zeigtPlatz === ziel.plot) zeigtPlatz = -1;
+  }, 2600);
 }
 
 // — Booster ————————————————————————————————————————————————————————————

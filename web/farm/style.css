@@ -319,6 +319,9 @@
   .plot.zieht .meta { opacity: 0; }
   .plot.zieht.geht-nicht { filter: drop-shadow(0 0 0 var(--bad)) saturate(.4); opacity: .7; }
   .plot .art { display: block; width: 100%; height: 100%; }
+  /* Die Kunst darf ueber ihren Kasten hinausragen — Muehlenfluegel, Huehner
+     vor dem Stall, Rauch: nichts wird mehr am Rand abgeschnitten. */
+  .plot .art, .moebel .art, .hindernis .art { overflow: visible; }
   /* Pixelkacheln scharf hochziehen statt weichzeichnen. */
   .art image, .scene image, .badge image, .ic { image-rendering: pixelated; }
 
@@ -1768,6 +1771,59 @@
   .kaestchen .rest { font-size: .66rem; }
   .kaestchen .p { font-size: .68rem; }
 
+  /* — Knoepfe, die nach Pixelspiel aussehen ————————————————————————————
+     Ein Baustein fuer alle Knoepfe der Bedienung: Pixelschrift, Rahmen in der
+     Umrissfarbe der Kunst, harter Schatten, kleiner Radius. Gedrueckt sackt
+     der Knopf auf den Schatten. Preise und Zahlen bleiben in der Zahlenschrift,
+     weil die Pixelschrift 5 und S kaum unterscheidet. */
+  .sheet-close, .primär, .gate .big, .gate .ghost, .tut-knoepfe .big, .tut-knoepfe .ghost,
+  .nachkauf .kaufen, .ziel-los, .zettel-los, .ta-los, .loesch-knoepfe button, .loesch-steuer button,
+  .besuch-leiste button, .setzen button, .stufe-weiter, .kiste-weiter, #freundadd, .go, .abfahrt,
+  .preisknoepfe button, .pick button, .melden-schalter, .bonus-knopf, .naechstes {
+    font-family: var(--pixel); font-weight: 700; letter-spacing: .02em;
+    border: 2px solid var(--kante); border-radius: 6px;
+    box-shadow: 0 3px 0 var(--druck);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .sheet-close:active, .primär:active, .gate .big:active, .gate .ghost:active, .tut-knoepfe .big:active,
+  .tut-knoepfe .ghost:active, .nachkauf .kaufen:active, .ziel-los:active, .loesch-knoepfe button:active,
+  .loesch-steuer button:active, .besuch-leiste button:active, .setzen button:active, .stufe-weiter:active,
+  .kiste-weiter:active, #freundadd:active, .go:active, .preisknoepfe button:active, .pick button:active,
+  .naechstes:active {
+    transform: translateY(2px); box-shadow: 0 1px 0 var(--druck);
+  }
+  .primär, .gate .big, .tut-knoepfe .big, .nachkauf .kaufen, .ziel-los, .stufe-weiter, .kiste-weiter, #freundadd {
+    background: var(--accent); color: var(--on-accent);
+  }
+  .gate .ghost, .tut-knoepfe .ghost, .sheet-close, .besuch-leiste button, .loesch-steuer button, .preisknoepfe button, .pick button {
+    background: var(--surface); color: var(--ink);
+  }
+  .besuch-leiste button.an { color: var(--accent); }
+  .besuch-leiste button.zurueck { background: var(--ink); color: var(--surface); border-color: var(--kante); }
+  .gate input, .keybox code { border: 2px solid var(--kante); border-radius: 6px; }
+  .tut-dots span { border-radius: 2px; }
+  .gate .big, .gate .ghost, .tut-knoepfe .big, .tut-knoepfe .ghost { border-radius: 6px; }
+
+  /* Die runden HUD-Knoepfe am Hof (Bauen, Bonus, Einstellungen) werden Kacheln. */
+  .zahnrad {
+    border-radius: 8px; border: 2px solid var(--kante);
+    box-shadow: 0 3px 0 var(--druck);
+  }
+  .zahnrad:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--druck); }
+
+  /* Blaetter: Pixel-Ueberschrift, Karten mit Rahmen — bereits da; die
+     Aufzaehlungskarten bekommen dieselbe Ecke wie die Knoepfe. */
+  .sheet h3 { font-family: var(--pixel); letter-spacing: .02em; }
+  .sheet h2 { font-family: var(--pixel); letter-spacing: .04em; margin: .45rem 0 .05rem .15rem; }
+  /* Das Gold neben der Serie: dieselbe Kante, dieselbe Ecke — keine Pille. */
+  .coins {
+    border: 2px solid var(--kante); border-radius: 8px;
+    box-shadow: 0 2px 0 var(--druck); padding: .18rem .55rem .18rem .35rem;
+  }
+  .card.opt .top { font-family: var(--pixel); font-size: .95rem; }
+  .opt .yield { font-family: var(--num); }
+
   @media (prefers-reduced-motion: reduce) {
     .card:active, .kaestchen:active, .abfahrt:active, .chip:active { transform: none; }
+    .sheet-close:active, .primär:active, .zahnrad:active, .go:active { transform: none; }
   }

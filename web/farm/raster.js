@@ -109,11 +109,28 @@ function hindernisKasten(h) {
 }
 
 
+// Sperrzonen des Regelwerks (Wegrand, Ufer): Dort steht nichts, dort wird
+// nichts geraeumt — und Hindernisse darin bleiben unsichtbar.
+function inSperre(gx, gy, w, h) {
+  var zonen = (rules.grid && rules.grid.sperren) || [];
+  for (var i = 0; i < zonen.length; i++) {
+    var z = zonen[i];
+    if (gx < z.gx + z.w && z.gx < gx + w && gy < z.gy + z.h && z.gy < gy + h) return true;
+  }
+  return false;
+}
+function wegZeilen() {
+  var zonen = (rules.grid && rules.grid.sperren) || [];
+  for (var i = 0; i < zonen.length; i++) if (zonen[i].id === 'weg') return zonen[i].h;
+  return 0;
+}
+
 function passtHin(plot, gx, gy) {
   var g = rules.grid;
   if (!g) return false;
   var groesse = rules.plots[plot].size || { w: 1, h: 1 };
   if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return false;
+  if (inSperre(gx, gy, groesse.w, groesse.h)) return false;
 
   var hindernisse = rules.obstacles || [];
   for (var h = 0; h < hindernisse.length; h++) {

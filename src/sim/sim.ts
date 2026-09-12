@@ -20,6 +20,7 @@ import {
   festAktiv,
   festArtIndex,
   festAufgabenFuer,
+  inSperre,
   itemUnlockLevel,
   offerLimits,
   recipeOutputs,
@@ -1332,6 +1333,8 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
       if (!hindernis) throw new SimError('NO_SUCH_OBSTACLE');
       if (s.clearedObstacles.includes(cmd.index)) throw new SimError('ALREADY_CLEARED');
       if (obstacleLocked(rules, cmd.index, s.expandiert)) throw new SimError('CELL_TAKEN');
+      // In einer Sperrzone (Wegrand, Ufer) wird nicht geräumt — dort steht nie etwas.
+      if (inSperre(rules, hindernis.gx, hindernis.gy, hindernis.w, hindernis.h)) throw new SimError('CELL_TAKEN');
 
       const art = rules.obstacleKinds?.[hindernis.kind];
       if (!art) throw new SimError('NEEDS_TOOL');

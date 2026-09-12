@@ -532,7 +532,8 @@ function artBodenPixel(zeigeRaster) {
   var g = raster();
   var zb = zellB(), zh = zellH();
   var bandOben = projiziere(0, -BAND).y;
-  var ackerOben = projiziere(0, 0).y;
+  // Der Weg deckt auch den Wegrand des Rasters — dort steht nie etwas.
+  var ackerOben = projiziere(0, typeof wegZeilen === 'function' ? wegZeilen() : 0).y;
   function muster(id, name, breite, hoehe, inhalt) {
     return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" x="0" y="' + ackerOben + '" width="' + breite + '" height="' + hoehe + '">' +
       (inhalt || '<image href="' + (SPRITES[name] || '') + '" width="' + zb + '" height="' + (zh / ZELL_HOEHE) + '" preserveAspectRatio="none"/>') +

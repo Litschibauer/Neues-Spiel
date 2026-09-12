@@ -4905,20 +4905,23 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
     ),
   ) as { feld: boolean; opts?: Array<{ name: string; frei: boolean }>; kauf?: string[] };
   const namen = (feldMenue.opts ?? []).map((o) => o.name);
+  // Saat, die fehlt, steht als Nachkauf im Menü; was schon da ist (etwa als
+  // Fundstück), ist gleich startbar.
+  const moehrenStartbar = (feldMenue.opts ?? []).some((o) => /Möhren/.test(o.name) && o.frei);
   check(
     'Ein Feld bietet Möhren und Zuckerrohr an — die Saat kauft man nach wie Mais',
     feldMenue.feld && namen.some((n) => /Möhren/.test(n)) && namen.some((n) => /Zuckerrohr/.test(n)) &&
-      (feldMenue.kauf ?? []).some((k) => /Möhre/.test(k)),
-    `${namen.join(' | ')} · Nachkauf: ${(feldMenue.kauf ?? []).join(' | ')}`,
+      (moehrenStartbar || (feldMenue.kauf ?? []).some((k) => /Möhre/.test(k))),
+    `${namen.join(' | ')} · Nachkauf: ${(feldMenue.kauf ?? []).join(' | ') || '—'} · Möhren startbar ${moehrenStartbar}`,
   );
-  // Eine Möhre kaufen, dann säen.
+  // Eine Möhre kaufen, wenn keine da ist — dann säen.
   const gesaetMoehre = await evaluate<string>(
     cdp,
     `(function () {
        var zeile = [...document.querySelectorAll('#pick-list .nachkauf')].find(function (n) { return /Möhre/.test(n.textContent); });
        var k = zeile && zeile.querySelector('.kaufen');
-       if (k) k.click();
-       return k ? 'gekauft' : 'kein Nachkauf';
+       if (k) { k.click(); return 'gekauft'; }
+       return 'schon da';
      })()`,
   );
   await sleep(700);
@@ -4944,7 +4947,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   );
   check(
     'Nach dem Nachkauf lässt sich Möhre säen — das Feld sagt es',
-    gesaetMoehre === 'gekauft' && gesaetMoehre2 === 'gesät' && /Möhren/.test(moehrenFeld),
+    (gesaetMoehre === 'gekauft' || gesaetMoehre === 'schon da') && gesaetMoehre2 === 'gesät' && /Möhren/.test(moehrenFeld),
     `${gesaetMoehre} · ${gesaetMoehre2} · „${moehrenFeld}"`,
   );
   await api(`/api/admin/time?account=${status.accountId}&seconds=60`, 'POST');

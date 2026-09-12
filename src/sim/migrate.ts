@@ -384,6 +384,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['48->49', ZAEHLUNG_DAZU],
   // Feldfruechte: Waren, Rezepte und die Saftpresse wachsen an, der Stand mit.
   ['49->50', AUFS_RASTER],
+  // Sperrzonen und mehr Felder: Was im Wegrand oder am Ufer stand, zieht um.
+  ['50->51', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

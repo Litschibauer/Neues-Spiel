@@ -117,6 +117,20 @@ export function baumStufe(def: BaumDef, reifSeit: number, geerntet: number, tick
 export type GridDef = {
   w: number;
   h: number;
+  // Sperrzonen: Zellen, auf denen nichts stehen darf — weder Bauten noch
+  // Kisten, und Hindernisse darin lassen sich nicht räumen. Der Wegrand unter
+  // den Möbeln und das Ufer, an dem das Boot liegt. Die Oberfläche zeichnet
+  // Hindernisse darin nicht; die Sim kennt sie trotzdem, damit alte Stände
+  // nicht kippen.
+  sperren?: readonly Sperre[];
+};
+
+export type Sperre = {
+  id: string;
+  gx: number;
+  gy: number;
+  w: number;
+  h: number;
 };
 
 export type Obstacle = {
@@ -3049,33 +3063,81 @@ const V50: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V51: Ordnung auf dem Hof und mehr Felder. Zwei Sperrzonen: der Wegrand
+// unter den Möbeln (drei Zeilen, damit kein Dach mehr die Möbel verdeckt) und
+// das Ufer, an dem das Boot liegt — dort stand bisher ein Tümpel unter dem
+// Boot, und Kisten fielen dahinter. Dazu sechs Felder mehr (zwölf gesamt) und
+// vier statt drei am Start: Wer allein spielt, wartet sonst zu oft aufs Feld.
+const FELD_REZEPTE = V50.plots[0]!.levels[0]!.recipes;
+const neuesFeld = (nr: number, kosten: number, ab: number, x: number): PlotDef => ({
+  id: `field-${nr}`,
+  startLevel: 0,
+  place: at(x, 0, 6, 8),
+  size: { w: 2, h: 2 },
+  levels: [{ label: 'Feld', cost: gold(kosten), recipes: FELD_REZEPTE, minPlayerLevel: ab }],
+});
+const V51_PLOTS: readonly PlotDef[] = [
+  ...V50.plots.map((p) =>
+    p.id === 'field-4'
+      ? {
+          ...p,
+          startLevel: 1,
+          startCell: { gx: 6, gy: 11 },
+          levels: p.levels.map(({ minPlayerLevel: _weg, ...l }) => ({ ...l, cost: [] })),
+        }
+      : p,
+  ),
+  neuesFeld(7, 900, 7, 8),
+  neuesFeld(8, 1400, 8, 14),
+  neuesFeld(9, 2000, 9, 20),
+  neuesFeld(10, 3000, 10, 26),
+  neuesFeld(11, 4500, 12, 32),
+  neuesFeld(12, 6500, 14, 38),
+];
+const V51: Ruleset = {
   ...V50,
+  version: 51,
+  grid: {
+    ...V50.grid!,
+    sperren: [
+      { id: 'weg', gx: 0, gy: 0, w: V50.grid!.w, h: 3 },
+      { id: 'ufer', gx: 0, gy: 10, w: 6, h: 3 },
+    ],
+  },
+  plots: V51_PLOTS,
+  wetter: {
+    ...V50.wetter!,
+    plaetze: V51_PLOTS.map((p, i) => (p.id.indexOf('field-') === 0 ? i : -1)).filter((i) => i >= 0),
+  },
+};
+
+const DEV: Ruleset = {
+  ...V51,
   // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
   feste: {
-    ...V50.feste!,
+    ...V51.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V50.feste!.arten.map((a) => ({
+    arten: V51.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V50.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V51.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V50.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V51.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V50.fishing!,
+    ...V51.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V50.plots.map((p) => {
+  plots: V51.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -3143,17 +3205,18 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [48, V48],
   [49, V49],
   [50, V50],
+  [51, V51],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 50;
+export const LATEST_RULESET_VERSION = 51;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -3206,6 +3269,13 @@ export function blockiert(
   for (const feld of rules.expansions ?? []) {
     if (expandiert.includes(feld.id)) continue;
     if (ueberlappt(gx, gy, w, h, feld.gx, feld.gy, feld.w, feld.h)) return true;
+  }
+  return inSperre(rules, gx, gy, w, h);
+}
+
+export function inSperre(rules: Ruleset, gx: number, gy: number, w: number, h: number): boolean {
+  for (const z of rules.grid?.sperren ?? []) {
+    if (ueberlappt(gx, gy, w, h, z.gx, z.gy, z.w, z.h)) return true;
   }
   return false;
 }
@@ -3624,6 +3694,12 @@ export function validateRuleset(rules: Ruleset): string[] {
           `Platz ${i} (${p.id}) Stufe ${l + 1}: Levelsperre über dem Maximum — nie erreichbar`,
         );
       }
+    }
+  }
+
+  for (const z of rules.grid?.sperren ?? []) {
+    if (!rules.grid || z.gx < 0 || z.gy < 0 || z.gx + z.w > rules.grid.w || z.gy + z.h > rules.grid.h) {
+      problems.push(`Sperrzone ${z.id} liegt außerhalb des Rasters`);
     }
   }
 
