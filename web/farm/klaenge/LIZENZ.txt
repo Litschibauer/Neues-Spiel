@@ -3,31 +3,29 @@ Klänge des Spiels — Herkunft und Lizenz
 Alle Dateien hier sind aus CC0-Quellen gemischt (gemeinfrei, keine Namensnennung
 nötig — wir nennen sie trotzdem). Wie sie entstehen: scripts/klaenge-mischen.py.
 
-Quellen:
+Quelle:
   Kenney — Interface Sounds, Impact Sounds, RPG Audio (CC0)
     https://kenney.nl/assets/interface-sounds
     https://kenney.nl/assets/impact-sounds
     https://kenney.nl/assets/rpg-audio
-  Juhani Junkala — The Essential Retro Video Game Sound Effects Collection (CC0)
-    https://opengameart.org/content/512-sound-effects-8-bit-style
 
-Was woraus:
-  tipp        Kenney interface click_002
-  bestaetigt  Kenney interface confirmation_001
-  fehler      Kenney interface error_006
-  saat        Kenney impact footstep_grass_001 + _002
-  ernte       Kenney interface pluck_002 + rpg cloth2
-  muenzen     Kenney rpg handleCoins2
-  kauf        Kenney rpg handleCoins
-  kiste       Junkala powerup5 + Kenney interface glass_003
-  truhe       Kenney rpg metalLatch + creak3 + Junkala coin_double1
-  wagen       Kenney impact impactSoft_heavy_001 + rpg doorClose_4
-  tier        Kenney rpg dropLeather + cloth3
-  stufe       Junkala fanfare1
-  erfolg      Junkala powerup3
-  zettel      Junkala menu_select1
-  fund        Junkala coin_single2 + Kenney interface glass_001
-  bau         Kenney impact impactPlank_medium_001 + _002 + _003
+Was woraus (alles Aufnahmen, nichts Synthetisches, keine 8-Bit-Töne):
+  tipp        interface click_002
+  bestaetigt  interface confirmation_001
+  fehler      interface bong_001 (zweimal, tief)
+  saat        impact footstep_grass_001 + _002
+  ernte       rpg cloth2 + interface pluck_002 (leise, tiefer)
+  muenzen     rpg handleCoins2
+  kauf        rpg handleCoins
+  kiste       interface glass_003 + glass_001
+  truhe       rpg metalLatch + creak3 + handleCoins2
+  wagen       impact impactSoft_heavy_001 + rpg doorClose_4
+  tier        rpg dropLeather + cloth3
+  stufe       interface glass_001 als Dreiklang (1 · 1,26 · 1,5) + glass_004
+  erfolg      interface glass_001 in Grundton und Quinte
+  zettel      interface confirmation_001, etwas höher
+  fund        interface glass_001 + rpg handleCoins2
+  bau         impact impactPlank_medium_001 + _002 + _003
 
-Format: mono, 22050 Hz, 16 Bit, Spitze bei -2 dB. Beim Bauen wandern sie als
+Format: mono, 22050 Hz, 16 Bit, Spitze bei -5 dB. Beim Bauen wandern sie als
 Data-URI in die Seite (KLAENGE_DATEN) und sind damit offline sofort da.

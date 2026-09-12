@@ -5,7 +5,7 @@ function ladeProzent(key, standard) {
   return isNaN(v) ? standard : Math.max(0, Math.min(100, v));
 }
 var sfxProz = ladeProzent('ns-sfx', 70);
-var SFX_BASIS = 0.9; // 100 % ⇒ Master-Gain 0.9 (klar hörbar über der Musik)
+var SFX_BASIS = 0.75; // 100 % ⇒ Master-Gain 0.75 — hörbar über der Musik, aber nie laut
 function sfxFaktor() { return (sfxProz / 100) * SFX_BASIS; }
 
 var audio = null;

@@ -1,0 +1,21 @@
+Hintergrundmusik — Herkunft und Lizenz
+
+Alle Stücke sind CC0 (gemeinfrei) von opengameart.org. Umgewandelt mit
+scripts/musik-umwandeln.py: stereo, 44,1 kHz, 128 kBit/s, Lautheit angeglichen.
+
+another-august.mp3                 „Another August“ von cynicmusic — https://opengameart.org/content/another-august
+calm-piano.mp3                     „Calm Piano“ von cynicmusic — https://opengameart.org/content/calm-piano-1-vaporware
+contemplation.mp3                  „Contemplation“ von Joth — https://opengameart.org/content/contemplation-0
+restful-meadow.mp3                 „Restful Meadow“ von Tozn — https://opengameart.org/content/restful-meadow
+first-light.mp3                    „First Light Particles“ von Yoiymi — https://opengameart.org/content/first-light-particles-%E2%80%93-cc0-atmospheric-pianoambient-track
+fields-of-cabbage.mp3              „Fields of Cabbage“ von ARochIFoundOnMyPillow — https://opengameart.org/content/fields-of-cabbage
+meadow-thoughts.mp3                „Meadow Thoughts“ von Écrivin — https://opengameart.org/content/meadow-thoughts
+childhood-friends.mp3              „Childhood Friends“ von Juhani Junkala — https://opengameart.org/content/jrpg-pack-4-calm
+peaceful-days.mp3                  „Peaceful Days“ von Juhani Junkala — https://opengameart.org/content/jrpg-pack-4-calm
+sand-castles.mp3                   „Sand Castles“ von Juhani Junkala — https://opengameart.org/content/jrpg-pack-4-calm
+summer-memories.mp3                „Summer Memories“ von Juhani Junkala — https://opengameart.org/content/jrpg-pack-4-calm
+snow-drift.mp3                     „Snow Drift“ von HoliznaCC0 — https://opengameart.org/content/lo-fi-and-chill-collection
+first-snow.mp3                     „First Snow“ von HoliznaCC0 — https://opengameart.org/content/lo-fi-and-chill-collection
+everything-you-ever-dreamed.mp3    „Everything You Ever Dreamed“ von HoliznaCC0 — https://opengameart.org/content/lo-fi-and-chill-collection
+a-small-fire.mp3                   „A Small Fire Will Do“ von Trex0n — https://opengameart.org/content/a-small-fire-will-do-calming-loop
+shepherd-dog.mp3                   „Shepherd Dog“ von Zne Little Music — https://opengameart.org/content/shepherd-dog-day-13

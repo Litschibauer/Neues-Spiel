@@ -8,14 +8,12 @@ soundfile` (bringt numpy und libsndfile mit) und die entpackten Pakete:
     https://kenney.nl/assets/interface-sounds  (CC0)
     https://kenney.nl/assets/impact-sounds     (CC0)
     https://kenney.nl/assets/rpg-audio         (CC0)
-  retro512/  „The Essential Retro Video Game Sound Effects Collection“
-    von Juhani Junkala, https://opengameart.org/content/512-sound-effects-8-bit-style (CC0)
 
 Aufruf: python3 scripts/klaenge-mischen.py <ordner-mit-den-paketen>
 
 Jeder Klang ist eine Liste von Schichten (Datei, Einsatz in Sekunden,
 Lautstärke, Tonhöhe als Faktor). Ergebnis: mono, 22050 Hz, 16 Bit, Spitze
-bei -2 dB, kurzes Ein- und Ausblenden — klein genug, um als Data-URI in die
+bei -5 dB, kurzes Ein- und Ausblenden — klein genug, um als Data-URI in die
 Seite zu wandern und offline sofort da zu sein.
 """
 import os
@@ -39,38 +37,40 @@ Q = {
 
 # name: [(quelle, datei, einsatz_s, laut, tonhoehe, hoechstens_s)]
 REZEPTE = {
-    # Ein leiser Holzklick fürs Antippen — nichts, das nach Computer klingt.
-    'tipp': [('if', 'click_002.ogg', 0, 0.55, 1.0, None)],
+    # Das Spiel ist ruhig — die Klänge auch: Holz, Stoff, Gras, Glas, Münzen.
+    # Keine 8-Bit-Töne, keine Fanfaren. Was feiert, tut es mit Glöckchen.
+    # Ein leiser Holzklick fürs Antippen.
+    'tipp': [('if', 'click_002.ogg', 0, 0.5, 0.9, None)],
     # Etwas ist bestätigt: warm, kurz, nicht triumphierend.
-    'bestaetigt': [('if', 'confirmation_001.ogg', 0, 0.8, 1.0, None)],
-    # Geht nicht: ein gedämpfter Brummer, kein greller Alarm.
-    'fehler': [('if', 'error_006.ogg', 0, 0.8, 0.9, None)],
+    'bestaetigt': [('if', 'confirmation_001.ogg', 0, 0.7, 1.0, None)],
+    # Geht nicht: ein dumpfes, tiefes Klopfen — kein Alarm.
+    'fehler': [('if', 'bong_001.ogg', 0, 0.8, 0.85, None), ('if', 'bong_001.ogg', 0.11, 0.6, 0.8, None)],
     # Säen: zweimal ins Gras greifen.
-    'saat': [('im', 'footstep_grass_001.ogg', 0, 0.7, 1.0, None), ('im', 'footstep_grass_002.ogg', 0.09, 0.6, 0.95, None)],
-    # Ernten: ein Zupfen mit Blätterrascheln darunter.
-    'ernte': [('if', 'pluck_002.ogg', 0.01, 0.9, 1.0, None), ('rpg', 'cloth2.ogg', 0, 0.45, 1.1, 0.25)],
+    'saat': [('im', 'footstep_grass_001.ogg', 0, 0.6, 0.9, None), ('im', 'footstep_grass_002.ogg', 0.09, 0.5, 0.85, None)],
+    # Ernten: Blätterrascheln mit einem weichen Zupfen darunter.
+    'ernte': [('rpg', 'cloth2.ogg', 0, 0.8, 1.0, 0.25), ('if', 'pluck_002.ogg', 0.02, 0.35, 0.75, None)],
     # Münzen: echte Münzen in der Hand, kurz.
-    'muenzen': [('rpg', 'handleCoins2.ogg', 0, 1.0, 1.0, None)],
+    'muenzen': [('rpg', 'handleCoins2.ogg', 0, 0.9, 1.0, None)],
     # Kaufen: der volle Griff in den Beutel.
-    'kauf': [('rpg', 'handleCoins.ogg', 0, 0.9, 1.0, 0.45)],
-    # Eine Kiste taucht auf: ein kleiner Aufstieg, dazu ein Glitzern.
-    'kiste': [('retro', 'Positive Sounds/sfx_sounds_powerup5.wav', 0, 0.7, 1.0, None), ('if', 'glass_003.ogg', 0.12, 0.5, 1.0, None)],
-    # Die Truhe geht auf: Riegel, Knarzen des Deckels, dann Münzglanz.
-    'truhe': [('rpg', 'metalLatch.ogg', 0, 0.7, 1.0, None), ('rpg', 'creak3.ogg', 0.08, 0.6, 1.0, None), ('retro', 'Coins/sfx_coin_double1.wav', 0.36, 0.6, 1.0, None)],
+    'kauf': [('rpg', 'handleCoins.ogg', 0, 0.8, 1.0, 0.45)],
+    # Eine Kiste taucht auf: zwei weiche Glasklänge.
+    'kiste': [('if', 'glass_003.ogg', 0, 0.6, 0.9, None), ('if', 'glass_001.ogg', 0.10, 0.5, 1.0, None)],
+    # Die Truhe geht auf: Riegel, Knarzen des Deckels, dann leise Münzen.
+    'truhe': [('rpg', 'metalLatch.ogg', 0, 0.6, 0.9, None), ('rpg', 'creak3.ogg', 0.08, 0.55, 1.0, None), ('rpg', 'handleCoins2.ogg', 0.34, 0.5, 1.0, None)],
     # Der Wagen: eine Tür fällt zu, darunter ein tiefer Schlag.
-    'wagen': [('im', 'impactSoft_heavy_001.ogg', 0, 0.8, 0.9, None), ('rpg', 'doorClose_4.ogg', 0.02, 0.8, 1.0, 0.45)],
+    'wagen': [('im', 'impactSoft_heavy_001.ogg', 0, 0.7, 0.9, None), ('rpg', 'doorClose_4.ogg', 0.02, 0.6, 1.0, 0.45)],
     # Ein Tier kommt: etwas Weiches landet im Stroh.
-    'tier': [('rpg', 'dropLeather.ogg', 0, 0.9, 1.0, None), ('rpg', 'cloth3.ogg', 0.05, 0.35, 1.0, 0.3)],
-    # Stufenaufstieg: die kleine Fanfare, wie es sich für ein Pixelspiel gehört.
-    'stufe': [('retro', 'Fanfares/sfx_sounds_fanfare1.wav', 0, 0.85, 1.0, None)],
-    # Erfolg: ein Aufstieg, heller als die Kiste, kürzer als die Fanfare.
-    'erfolg': [('retro', 'Positive Sounds/sfx_sounds_powerup3.wav', 0, 0.8, 1.0, None)],
-    # Zettel geschafft: ein klarer Menü-Ton.
-    'zettel': [('retro', 'Menu Sounds/sfx_menu_select1.wav', 0, 0.7, 1.0, None)],
-    # Fundstück: eine einzelne Münze mit Glas obendrauf.
-    'fund': [('retro', 'Coins/sfx_coin_single2.wav', 0, 0.8, 1.0, None), ('if', 'glass_001.ogg', 0.05, 0.5, 1.0, None)],
-    # Bauen: drei Hammerschläge auf Bretter.
-    'bau': [('im', 'impactPlank_medium_001.ogg', 0, 0.9, 1.0, None), ('im', 'impactPlank_medium_002.ogg', 0.16, 0.85, 1.05, None), ('im', 'impactPlank_medium_003.ogg', 0.32, 0.95, 0.95, None)],
+    'tier': [('rpg', 'dropLeather.ogg', 0, 0.8, 1.0, None), ('rpg', 'cloth3.ogg', 0.05, 0.35, 1.0, 0.3)],
+    # Stufenaufstieg: drei Glöckchen aufwärts — ein Dreiklang, kein Trompetenstoß.
+    'stufe': [('if', 'glass_001.ogg', 0, 0.7, 1.0, None), ('if', 'glass_001.ogg', 0.16, 0.7, 1.26, None), ('if', 'glass_001.ogg', 0.32, 0.8, 1.5, None), ('if', 'glass_004.ogg', 0.34, 0.35, 1.0, 0.5)],
+    # Erfolg: zwei Glöckchen, die Quinte hinauf.
+    'erfolg': [('if', 'glass_001.ogg', 0, 0.7, 1.0, None), ('if', 'glass_001.ogg', 0.18, 0.75, 1.5, None)],
+    # Zettel geschafft: ein helles, warmes Bestätigen.
+    'zettel': [('if', 'confirmation_001.ogg', 0, 0.7, 1.2, None)],
+    # Fundstück: ein Glöckchen mit leisen Münzen.
+    'fund': [('if', 'glass_001.ogg', 0, 0.7, 1.19, None), ('rpg', 'handleCoins2.ogg', 0.06, 0.4, 1.0, 0.25)],
+    # Bauen: drei Hammerschläge auf Bretter, gedämpft.
+    'bau': [('im', 'impactPlank_medium_001.ogg', 0, 0.7, 0.95, None), ('im', 'impactPlank_medium_002.ogg', 0.16, 0.65, 1.0, None), ('im', 'impactPlank_medium_003.ogg', 0.32, 0.75, 0.9, None)],
 }
 
 
@@ -125,7 +125,7 @@ def mische(schichten):
     summe = np.zeros(laenge)
     for v, x in spuren:
         summe[v:v + len(x)] += x
-    summe = summe / (np.abs(summe).max() or 1.0) * 0.79  # -2 dB
+    summe = summe / (np.abs(summe).max() or 1.0) * 0.56  # -5 dB, das Spiel ist ruhig
     return blende(summe, 0.002, 0.02)
 
 
