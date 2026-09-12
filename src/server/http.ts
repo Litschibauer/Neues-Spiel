@@ -11,6 +11,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { freemem, totalmem } from 'node:os';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Server } from './server.ts';
 import type { Eingriff, SyncRequest } from './server.ts';
@@ -1095,10 +1096,21 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (url.pathname === '/health') {
+    // Der Riegel vor dem Deploy schreibt seinen Zustand nach data/deploy-stand.json —
+    // so sieht man von außen, ob ein Stand hängt, ohne auf den Server zu müssen.
+    let deploy: unknown = null;
+    try {
+      const pfad = join(ROOT, 'data', 'deploy-stand.json');
+      if (existsSync(pfad)) deploy = JSON.parse(readFileSync(pfad, 'utf8'));
+    } catch {
+      deploy = null;
+    }
     return json(res, 200, {
       ok: true,
       env: CONFIG.env,
       version: CONFIG.version,
+      deploy,
+      speicher: { rssMb: Math.round(process.memoryUsage().rss / 1048576), freiMb: Math.round(freemem() / 1048576), gesamtMb: Math.round(totalmem() / 1048576) },
       rulesetVersion: TARGET_RULESET,
       shell: SHELL_VERSION,
       accounts: accounts.count,

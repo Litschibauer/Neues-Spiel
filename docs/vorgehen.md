@@ -22,8 +22,10 @@ Abhängigkeiten: Der Kern läuft mit Node ≥ 22.6 und sonst nichts.
 
 Es gibt **einen** Branch, auf dem gearbeitet wird:
 `claude/live-service-game-concept-m4ymol`. Der Server zieht ihn alle zwei
-Minuten selbst (`scripts/auto-deploy.sh`), **lässt aber vorher `npm test`
-laufen** — ein roter Stand kommt nicht auf den Server. Dieselbe Prüfung zeigt
+Minuten selbst (`scripts/auto-deploy.sh`), **prüft aber vorher** (die leichte
+Suite ohne die drei Golden-Vektor-Schwergewichte) — ein roter Stand kommt
+nicht auf den Server; `/health` zeigt unter `deploy`, was der Riegel zuletzt
+getan hat. Dieselbe Prüfung zeigt
 GitHub als Ampel am Commit (`.github/workflows/pruefung.yml`). Ein grüner
 Push ist also ein Deploy; ein roter bleibt liegen, bis der nächste kommt.
 

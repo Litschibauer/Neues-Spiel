@@ -492,24 +492,48 @@ journalctl -u neues-spiel-prod -f
 ## Auto-Deploy (optional): bei jedem Push von selbst aktualisieren
 
 Ein Timer prüft alle zwei Minuten, ob der aktuelle Branch auf `origin` neuer
-ist, und fährt dann `git reset --hard origin/<branch>` → **`npm test`** →
-`npm run build` → `systemctl restart neues-spiel-prod`. Ohne neue Commits
+ist, und fährt dann `git reset --hard origin/<branch>` → **leichte Prüfung**
+→ `npm run build` → `systemctl restart neues-spiel-prod`. Ohne neue Commits
 passiert nichts. `data/` ist gitignored, die Spielstände bleiben also unberührt.
 
-**Der Riegel:** Fällt `npm test` durch, wird nicht neu gestartet. Das Skript
+**Der Riegel:** Fällt die Prüfung durch, wird nicht neu gestartet. Das Skript
 setzt den Checkout auf den alten Stand zurück, der laufende Dienst bleibt
 unberührt, und der abgelehnte Commit wird in `data/deploy-abgelehnt` gemerkt,
 damit er nicht alle zwei Minuten neu geprüft wird. Der nächste Commit bekommt
-wieder seine Chance. Die Ausgabe der Prüfung liegt in
-`data/deploy-pruefung.log`; das Journal zeigt den Auszug:
+wieder seine Chance.
+
+**Leicht heißt:** alle Tests außer `golden`, `conformance-bundle` und
+`session-fuzz`. Die drei laden die 63 MB Golden-Vektoren in den Speicher und
+rechnen minutenlang — ein 1-GB-Server erstickt daran, und ein erstickter Test
+ist rot, obwohl der Code grün ist. Die drei laufen dafür auf GitHub bei jedem
+Push und bei dem, der pusht (`npm test`). Die leichte Suite läuft in einem
+Prozess nach dem anderen, mit 20 Minuten Zeitlimit und einem zweiten Versuch
+gegen Zeitflimmern.
+
+**Von außen sehen:** `/health` zeigt unter `deploy` den letzten Lauf des
+Riegels (`rev`, `ergebnis` grün/rot/läuft, `dauerS`, `auszug` mit den roten
+Zeilen) und unter `speicher` den freien Arbeitsspeicher. Auf dem Server selbst:
 
 ```bash
 journalctl -u neues-spiel-deploy.service -n 30 --no-pager
+cat data/deploy-stand.json
+```
+
+**Wenn der Riegel klemmt** (rot aus einem Grund, der nicht am Code liegt), von
+Hand ausrollen — danach läuft der Timer wieder normal:
+
+```bash
+cd /home/Neues-Spiel
+rm -f data/deploy-abgelehnt
+git fetch origin && git reset --hard origin/claude/live-service-game-concept-m4ymol
+npm run build
+sudo systemctl restart neues-spiel-prod
 ```
 
 Dieselbe Prüfung läuft auch auf GitHub (`.github/workflows/pruefung.yml`) als
-Ampel am Commit — sie schützt den Server nicht, sie zeigt nur früher an.
-Schlägt der Build fehl, bricht das Skript ebenfalls **vor** dem Neustart ab.
+Ampel am Commit — dort die volle Suite. Sie schützt den Server nicht, sie
+zeigt nur früher an. Schlägt der Build fehl, bricht das Skript ebenfalls
+**vor** dem Neustart ab.
 
 Einmalig einrichten (Pfade ggf. anpassen, hier `/home/Neues-Spiel`):
 
