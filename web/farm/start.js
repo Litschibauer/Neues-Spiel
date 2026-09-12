@@ -105,6 +105,7 @@ function show(next) {
   // Wer das Lager zumacht, hat seine neuen Waren gesehen.
   if (view === 'lager' && next !== 'lager' && typeof lagerGesehenMerken === 'function') lagerGesehenMerken();
   view = next;
+  if (typeof tippWeg === 'function') tippWeg();
   if (next !== 'stand') standZu();
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
@@ -427,7 +428,6 @@ $('forget').addEventListener('click', function () {
 });
 
 // — Einführung für neue Höfe (geführt, siehe fuehrung.js) ————————————————
-var tutStep = 0;
 
 // Pro Hof gemerkt: ein neuer Hof zeigt die Einführung, auch wenn auf demselben
 // Gerät schon ein anderer Hof sie durchlaufen hat. Derselbe Hof sieht sie nie
@@ -438,35 +438,10 @@ function tutSchluessel() {
 function tutorialFertig() {
   try { return localStorage.getItem(tutSchluessel()) === 'done'; } catch (e) { return false; }
 }
-function tutorialAbschliessen() {
-  // Nur die große Einführung markiert den Hof als eingeführt; Feature-Seiten
-  // haben ihren eigenen Schlüssel und sind beim Öffnen schon gesetzt.
-  if (!featureSeiten) {
-    try { localStorage.setItem(tutSchluessel(), 'done'); } catch (e) {}
-  }
-  featureSeiten = null;
-  $('tut-bg').hidden = true;
-  // Die Einführung hatte Vorrang — jetzt darf der Empfang.
-  empfangPruefen();
-}
-function tutorialZeigen() {
-  var seiten = featureSeiten || [];
-  var s = seiten[tutStep];
-  if (!s) { tutorialAbschliessen(); return; }
-  $('tut-emoji').textContent = s.emoji;
-  $('tut-titel').textContent = s.titel;
-  $('tut-text').textContent = s.text;
-  var punkte = '';
-  for (var i = 0; i < seiten.length; i++) punkte += '<span class="' + (i === tutStep ? 'an' : '') + '"></span>';
-  $('tut-dots').innerHTML = punkte;
-  $('tut-next').textContent = tutStep === seiten.length - 1 ? 'Los geht’s' : 'Weiter';
-  $('tut-bg').hidden = false;
-}
 function tutorialStarten(erzwingen) {
-  featureSeiten = null;
   if (erzwingen) {
-    // „Anleitung" zeigt alles noch einmal, auch die Feature-Seiten.
-    for (var id in FEATURE_TUT) {
+    // „Einführung nochmal" zeigt alles noch einmal, auch die Zettel je Blatt.
+    for (var id in FEATURE_TIPP) {
       try { localStorage.removeItem(featureSchluessel(id)); } catch (e) {}
     }
   }
@@ -482,111 +457,24 @@ function tutorialStarten(erzwingen) {
 // Jedes größere Feature erklärt sich beim ersten Öffnen selbst. Pro Hof und
 // Feature einmal gemerkt, danach nie wieder. Über „Anleitung" in den
 // Einstellungen kann man sie zurücksetzen.
-var FEATURE_TUT = {
-  see: [
-    { emoji: '🎣', titel: 'Der Angelsee',
-      text: 'Hier fängst du Fisch für Aufträge und Gold. Gefischt wird mit Reusen — du legst Köder aus und holst den Fang später ab.' },
-    { emoji: '🪱', titel: 'Köder sieden',
-      text: 'Im Strandhaus machst du aus Weizen Köder. Das dauert, und es laufen nur zwei Sude gleichzeitig. Setz früh genug an.' },
-    { emoji: '⏳', titel: 'Reuse legen',
-      text: 'Tippe eine Insel an, um einen Köder zu legen. Nach einer Weile ist die Reuse voll und trägt ein Zeichen — dann einholen und neu bestücken.' },
-    { emoji: '🥫', titel: 'Nicht alles ist Fisch',
-      text: 'Manchmal hängt Seegras oder eine alte Dose drin. Beides lässt sich verkaufen, und manche Aufträge fragen sogar danach.' },
-  ],
-  mine: [
-    { emoji: '⛏️', titel: 'Die Mine',
-      text: 'Im Berg holst du Eisen- und Golderz. Erz ist die Grundlage für Barren, Nägel und die teuren Aufträge.' },
-    { emoji: '🧨', titel: 'Werkzeug nutzt sich ab',
-      text: 'Zum Graben brauchst du Spitzhacke, Schaufel oder Sprengsatz. Die stellst du selbst her — schau in die Werkstatt.' },
-  ],
-  werkstatt: [
-    { emoji: '🪚', titel: 'Die Werkstatt',
-      text: 'Endlich Werkzeug selbst machen: Bretter, Nägel, Säge, Schaufel, Spitzhacke, Pflöcke, Schlegel und Karten.' },
-    { emoji: '🪵', titel: 'Holz und Eisen',
-      text: 'Holz kommt vom Waldstück oder vom Bäumefällen, Eisenbarren aus der Schmiede. Beides zusammen ergibt das Werkzeug.' },
-    { emoji: '🗺️', titel: 'Damit wächst der Hof',
-      text: 'Karten, Schlegel und Pflöcke brauchst du fürs Freimachen von Land. Vorher kamen die nur aus Truhen — jetzt planst du selbst.' },
-  ],
-  waldstueck: [
-    { emoji: '🌲', titel: 'Das Waldstück',
-      text: 'Hier wächst Holz nach. Wie beim Weizen bleibt ein Stück als Saat zurück, aus einem werden drei.' },
-  ],
-  hofkueche: [
-    { emoji: '🍳', titel: 'Die Hofküche',
-      text: 'Hier wird aus fertigen Waren ein Gericht: Bauernbrettl aus Brot, Käse, Butter und Spiegelei, Sahnetorte aus Apfelkuchen und Sahne.' },
-    { emoji: '💰', titel: 'Das lohnt sich',
-      text: 'Gerichte bringen deutlich mehr als ihre Zutaten einzeln — und die besten Aufträge fragen genau danach.' },
-  ],
-  raeucherei: [
-    { emoji: '🐟', titel: 'Die Räucherei',
-      text: 'Aus deinen Fängen wird Räucherfisch — deutlich wertvoller als roh, und gefragt bei den besten Aufträgen.' },
-    { emoji: '🌿', titel: 'Auch für den Beifang',
-      text: 'Karpfen mit Seegras geräuchert bringt gleich zwei. So wird aus dem Zeug, das nur im Lager lag, endlich etwas.' },
-  ],
-  wagen: [
-    { emoji: '🚚', titel: 'Der Frachtbrief',
-      text: 'Am Wagen hängen Aufträge. Jeder will bestimmte Waren und zahlt dafür Gold und XP.' },
-    { emoji: '📦', titel: 'Laden und losschicken',
-      text: 'Hast du alles im Lager, erfüllst du den Auftrag mit einem Tipp. Der Wagen fährt los und kommt mit neuen Aufträgen zurück.' },
-    { emoji: '⏭️', titel: 'Nichts dabei?',
-      text: 'Aufträge, die du nicht magst, kannst du überspringen. Danach dauert es eine Weile, bis der nächste kommt.' },
-  ],
-  stand: [
-    { emoji: '🛒', titel: 'Dein Verkaufsstand',
-      text: 'Hier bietest du Waren anderen Höfen an. Du bestimmst Menge und Preis selbst.' },
-    { emoji: '💰', titel: 'Preise mit Augenmaß',
-      text: 'Zu teuer kauft niemand, zu billig verschenkst du. Die Spanne zeigt dir, was üblich ist. Verkauftes Gold holst du hier ab.' },
-  ],
-  nachbarn: [
-    { emoji: '🤝', titel: 'Nachbarn',
-      text: 'Tausch deinen Hof-Code mit Freunden. Danach könnt ihr euch gegenseitig besuchen.' },
-    { emoji: '⚡', titel: 'Helfen bringt beiden was',
-      text: 'Auf einem fremden Hof kannst du laufende Arbeit beschleunigen. Das kostet dich nichts und bringt dir XP.' },
-  ],
-  land: [
-    { emoji: '🗺️', titel: 'Neues Land',
-      text: 'Rund um deinen Hof liegt Wildnis. Jedes Stück lässt sich freimachen und erweitert deinen Platz dauerhaft.' },
-    { emoji: '🔨', titel: 'Werkzeug statt Gold',
-      text: 'Freimachen kostet Karte, Schlegel und Pflock. Die bekommst du aus Aufträgen und Truhen — sammle sie, bevor du planst.' },
-  ],
-  lager: [
-    { emoji: '📦', titel: 'Dein Lager',
-      text: 'Alles, was du erntest und herstellst, landet hier. Ist es voll, geht nichts mehr rein.' },
-    { emoji: '🏗️', titel: 'Größer bauen',
-      text: 'Mit Brettern und Nägeln baust du das Lager aus. Jede Stufe schafft deutlich mehr Platz.' },
-  ],
-  bauen: [
-    { emoji: '🔨', titel: 'Bauen',
-      text: 'Hier stehen alle Gebäude, die du bauen darfst. Was noch fehlt, zeigt dir die nötige Stufe.' },
-    { emoji: '📍', titel: 'Frei hinstellen',
-      text: 'Nach dem Kauf suchst du dir den Platz selbst aus. Später lässt sich alles wieder verschieben oder einpacken.' },
-  ],
-  bonus: [
-    { emoji: '🎁', titel: 'Tagesbonus',
-      text: 'Einmal am Tag wartet ein Geschenk. Die Belohnung landet in deinem Postfach.' },
-    { emoji: '🔥', titel: 'Dranbleiben lohnt',
-      text: 'Kommst du an mehreren Tagen hintereinander, wächst der Bonus. Ein ausgelassener Tag setzt die Reihe zurück.' },
-  ],
-  liste: [
-    { emoji: '🏆', titel: 'Bestenliste',
-      text: 'Alle Höfe nach XP sortiert. Dein eigener Rang ist hervorgehoben.' },
-  ],
-  abenteuer: [
-    { emoji: '📋', titel: 'Das Abenteuerbrett',
-      text: 'Hier hängen drei Aufgaben, die nur heute gelten. Sie sind für alle Höfe gleich und wechseln jeden Tag.' },
-    { emoji: '📌', titel: 'Zettel abnehmen',
-      text: 'Ist ein Zettel voll, nimmst du ihn ab und bekommst Gold und XP. Wer liegen bleibt, ist morgen weg.' },
-    { emoji: '🌙', titel: 'Zählt auch ohne Netz',
-      text: 'Was du im Funkloch schaffst, wird mitgezählt. Der neue Tag beginnt aber erst, wenn dein Hof wieder Verbindung hatte.' },
-  ],
-  ziele: [
-    { emoji: '🎯', titel: 'Ziele & Erfolge',
-      text: 'Erfolge sind in Gruppen sortiert. Was du abholen kannst, steht oben, angefangene zeigen ihren Fortschritt.' },
-    { emoji: '⭐', titel: 'Einlösen nicht vergessen',
-      text: 'Erfüllt heißt noch nicht ausgezahlt — erst das Einlösen bringt Gold und XP. Der Punkt am Zahnrad erinnert dich daran.' },
-    { emoji: '📋', titel: 'Tagesaufgaben hängen draußen',
-      text: 'Die Aufgaben des Tages stehen nicht hier, sondern am Abenteuerbrett auf deinem Hof.' },
-  ],
+// Ein Satz je Blatt, beim ersten Oeffnen, als angepinnter Zettel. Nicht mehr.
+var FEATURE_TIPP = {
+  see: 'Im Strandhaus Köder sieden, an einer Insel auslegen, später den Fang holen.',
+  mine: 'Mit der Spitzhacke gräbst du Erz — die Schmiede macht Barren daraus.',
+  werkstatt: 'Hier machst du Werkzeug selbst: Bretter, Nägel, Säge, Schaufel, Karten.',
+  waldstueck: 'Hier wächst Holz nach — ein Stück bleibt als Saat zurück.',
+  hofkueche: 'Aus fertigen Waren wird ein Gericht — das bringt mehr als die Zutaten einzeln.',
+  raeucherei: 'Aus deinem Fang wird Räucherfisch — deutlich wertvoller als roh.',
+  wagen: 'Jeder Zettel will Waren und zahlt Gold und Erfahrung. Nichts dabei? Tauschen.',
+  stand: 'Hier bietest du Waren anderen Höfen an — Menge und Preis bestimmst du.',
+  nachbarn: 'Tausch deinen Hofcode, besuch Nachbarn und hilf ihnen — das bringt beiden Erfahrung.',
+  land: 'Neues Land kostet Werkzeug statt Gold: Karten, Schlegel, Pflöcke.',
+  lager: 'Alles, was du hast. Wird es eng, baust du das Lager aus.',
+  bauen: 'Antippen, bauen, frei hinstellen — mit jeder Stufe kommt Neues dazu.',
+  bonus: 'Jeden Tag ein Bonus — er wächst, wenn du dranbleibst.',
+  liste: 'Alle Höfe nach Erfahrung. Deiner ist markiert.',
+  abenteuer: 'Die Zettel von heute — sie zählen auch ohne Netz. Morgen hängen neue.',
+  ziele: 'Erfolge in Gruppen. Was fertig ist, holst du hier ab.',
 };
 
 // Welcher Bildschirm welche Einführung zeigt. Neue Funktionen tragen sich hier
@@ -603,28 +491,49 @@ var BILDSCHIRM_TUT = {
   ziele: 'ziele',
   abenteuer: 'abenteuer',
 };
-var featureSeiten = null;
-var featureSchritt = 0;
 
 function featureSchluessel(id) {
   return (accountId ? 'ns-tut-' + accountId : 'ns-tutorial') + '-' + id;
 }
 
 // Zeigt die Einführung, falls dieser Hof sie noch nicht gesehen hat.
+var tippTimer = null;
+function tippZeigen(satz) {
+  $('tipp-text').textContent = satz;
+  $('tipp').hidden = false;
+  clearTimeout(tippTimer);
+  // Wer nicht tippt, bekommt den Zettel nach einer Weile von selbst abgenommen.
+  tippTimer = setTimeout(tippWeg, 9000);
+}
+function tippWeg() {
+  clearTimeout(tippTimer);
+  $('tipp').hidden = true;
+}
 function featureTutorial(id) {
-  var seiten = FEATURE_TUT[id];
-  if (!seiten) return;
+  var satz = FEATURE_TIPP[id];
+  if (!satz) return;
+  // Waehrend der gefuehrten Einfuehrung redet nur die Einfuehrung.
+  if (typeof fuehrungAktiv === 'function' && fuehrungAktiv()) return;
   try { if (localStorage.getItem(featureSchluessel(id)) === 'done') return; } catch (e) {}
   try { localStorage.setItem(featureSchluessel(id), 'done'); } catch (e) {}
-  featureSeiten = seiten;
-  featureSchritt = 0;
-  tutStep = 0;
-  tutorialZeigen();
+  tippZeigen(satz);
 }
-
-$('tut-next').addEventListener('click', function () { tutStep++; tutorialZeigen(); });
-$('tut-skip').addEventListener('click', tutorialAbschliessen);
+$('tipp-ok').addEventListener('click', tippWeg);
 $('anleitung').addEventListener('click', function () { show('farm'); tutorialStarten(true); });
+
+// Die HUD-Knoepfe tragen Pixelkunst aus dem Spiel selbst: Schlegel, Truhe, Zahnrad.
+(function () {
+  var bild = function (id, quelle) {
+    var el = $(id);
+    if (!el || !quelle) return;
+    var img = document.createElement('img');
+    img.src = quelle; img.alt = ''; img.setAttribute('aria-hidden', 'true');
+    el.insertBefore(img, el.firstChild);
+  };
+  bild('bauen', typeof ICONS === 'object' && ICONS.mallet);
+  bild('bonus-auf', typeof SPRITES === 'object' && SPRITES.truhe);
+  bild('zahnrad', typeof SPRITES === 'object' && SPRITES.zahnrad);
+})();
 
 meldenAnzeigen();
 meldenAuffrischen();

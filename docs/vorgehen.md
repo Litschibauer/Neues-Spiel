@@ -134,10 +134,25 @@ bleiben draußen. Optionale Felder bedingt anhängen
   überschreibt die drei Funktionen und zählt Aufrufe.
 - **Deutsch**, in der Sprache des Spiels: Hof, Wagen, Zettel, Brett, Stand,
   Lager. Fachwörter aus der Simulation bleiben Englisch (`plot`, `recipe`).
-- **Pixel-Retro**: Pixelschrift (`--pixel`), harte 2-Pixel-Kante (`--kante`),
-  versetzter Schatten (`--druck`), kleine Radien, Knöpfe sinken beim Drücken.
-  Keine Pillen, keine weichen Schatten, nichts, das nach Standard-UI aussieht.
-  Neue Sprites sind eigene Pixelkunst (`web/farm/sprites/LIZENZ.txt`).
+- **Holz und Papier.** Jedes Blatt ist ein Ort, kein Menü: Holzrahmen mit
+  Balken als Titel, darauf angepinntes Papier mit Tinte, Messingknöpfe für
+  alles, was etwas bringt. Der Trick steht am Ende von `style.css`: Auf dem
+  Holz sind die Farbmarken (`--muted`, `--ink`, `--surface` …) cremefarben,
+  auf dem Papier (`.card`, `.note`, `.opt` …) Tinte — ein Baustein muss nichts
+  wissen, er liest die Marken. Neue Blätter bekommen die Haut umsonst; ein
+  neuer Baustein mit hellem Hintergrund gehört in die Papier-Liste, sonst
+  steht Creme auf Creme. Die Kopfzeile ist derselbe Balken, der Hof ein
+  gerahmtes Bild, die HUD-Knöpfe tragen Pixelkunst aus dem Spiel (Schlegel,
+  Truhe, Zahnrad).
+- **Pixel-Retro**: Pixelschrift (`--pixel`), harte Kante (`--tinte`), versetzter
+  Schatten, kleine Radien, Knöpfe sinken beim Drücken. Keine Pillen, keine
+  weichen Schatten, nichts, das nach Standard-UI aussieht. Neue Sprites sind
+  eigene Pixelkunst (`web/farm/sprites/LIZENZ.txt`).
+- **Wenig Text.** Ein Satz, wo ein Satz reicht; Zahlen als Zahl, nicht als
+  Prosa. Listen werden Dinge: Erfolge sind Abzeichen, die Ehrentafel ein
+  Podest, das Baumenü zeigt das Gebäude. Erklärungen je Blatt sind ein
+  angepinnter Zettel mit einem Satz (`FEATURE_TIPP` in `start.js`), keine
+  Kartenfolge.
 - **Klänge sind Aufnahmen, keine Oszillatoren — und leise.** Gemeinfreie
   Geräusche (Kenney: Holz, Stoff, Gras, Glas, Münzen) werden mit
   `scripts/klaenge-mischen.py` zu `web/farm/klaenge/*.wav` gemischt (mono,
@@ -433,9 +448,9 @@ echter Datenbank. Zahlen in `deploy.md`.
 - **Einführung**: geführt in `fuehrung.js` — der Hof ist abgedunkelt, ein
   Element leuchtet (Loch per `clip-path`), es geht erst weiter, wenn der
   Spieler es getan hat (`fertig()` je Schritt), überspringbar; einmal je Hof
-  (`ns-tut-<hof>`), nur für frische Höfe ohne XP. Dazu `FEATURE_TUT` in
-  `start.js`: Kartenfolgen einmal je Blatt, die die Einführung für Lager,
-  Brett und Bauen gleich als gesehen markiert.
+  (`ns-tut-<hof>`), nur für frische Höfe ohne XP. Dazu `FEATURE_TIPP` in
+  `start.js`: ein Satz je Blatt beim ersten Öffnen als Zettel (`#tipp`); die
+  Einführung markiert Lager, Brett und Bauen gleich als gesehen.
 
 ---
 

@@ -116,9 +116,9 @@ async function schliesseTutorial(cdp: Cdp): Promise<void> {
     const offen = await evaluate<boolean>(
       cdp,
       `(function () {
-         var t = document.getElementById('tut-bg');
+         var t = document.getElementById('tipp');
          if (!t || t.hidden) return false;
-         var s = document.getElementById('tut-skip');
+         var s = document.getElementById('tipp-ok');
          if (s) s.click();
          return true;
        })()`,
@@ -607,7 +607,7 @@ try {
     15_000,
   );
   check('Seite verbindet und zeigt den Hof', true);
-  await sleep(300);
+  await waitFor(cdp, `!document.getElementById('fuehrung').hidden`, 'geführte Einführung', 8_000).catch(() => {});
   const fuehrungAuf = await evaluate<string>(cdp, `document.getElementById('fuehrung').hidden ? '' : document.getElementById('fuehrung-titel').textContent`);
   check('Ein neuer Hof bekommt sofort die geführte Einführung', /Willkommen/.test(fuehrungAuf), fuehrungAuf || 'keine');
   await evaluate(cdp, `document.getElementById('fuehrung-weiter').click()`);
@@ -4139,14 +4139,11 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await sleep(900);
   // Beim ersten Betreten erklärt sich der See selbst.
   const seeTut = await evaluate<string>(cdp, `(function () {
-    var t = document.getElementById('tut-bg');
-    return (t && !t.hidden) ? (document.getElementById('tut-titel') || {}).textContent || 'offen' : 'zu';
+    var t = document.getElementById('tipp');
+    return (t && !t.hidden) ? document.getElementById('tipp-text').textContent : 'zu';
   })()`);
-  check('Beim ersten Besuch erklärt sich der Angelsee', /Angelsee|Köder|Reuse/i.test(seeTut), seeTut);
-  await evaluate(cdp, `(function () {
-    var t = document.getElementById('tut-bg');
-    if (t && !t.hidden) document.getElementById('tut-skip').click();
-  })()`);
+  check('Beim ersten Besuch erklärt sich der Angelsee — mit einem Satz', /Köder|Fang|Insel/i.test(seeTut) && seeTut.length < 120, seeTut);
+  await evaluate(cdp, `(function () { var t = document.getElementById('tipp'); if (t && !t.hidden) document.getElementById('tipp-ok').click(); })()`);
   await sleep(400);
 
   const imSee = await evaluate<number>(cdp, `document.querySelectorAll('.see-spot').length`);
@@ -4270,7 +4267,7 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
   await evaluate(cdp, `document.getElementById('ziele-auf').click()`);
   await sleep(600);
   const zieleAmSee = await evaluate<{ zeilen: number; gruppen: number }>(cdp, `({
-    zeilen: document.querySelectorAll('#ziele-liste .ziel').length,
+    zeilen: document.querySelectorAll('#ziele-liste .abzeichen').length,
     gruppen: document.querySelectorAll('#ziele-liste .ziel-gruppe').length
   })`);
   check(

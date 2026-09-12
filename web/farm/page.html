@@ -72,18 +72,6 @@
   </div>
 </div>
 
-<div class="tut-bg" id="tut-bg" hidden>
-  <div class="tut-card" role="dialog" aria-modal="true">
-    <div class="tut-emoji" id="tut-emoji">🌾</div>
-    <h2 id="tut-titel"></h2>
-    <p id="tut-text"></p>
-    <div class="tut-dots" id="tut-dots"></div>
-    <div class="tut-knoepfe">
-      <button type="button" class="ghost" id="tut-skip">Überspringen</button>
-      <button type="button" class="big" id="tut-next">Weiter</button>
-    </div>
-  </div>
-</div>
 
 <div id="shell" hidden>
   <header class="topbar">
@@ -162,30 +150,13 @@
         </div>
         <div class="himmel" id="himmel" aria-hidden="true"></div>
         <div class="wetter" id="wetter" aria-hidden="true"></div>
-        <button class="zahnrad hammer" id="bauen" aria-label="Bauen">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 3l7 7-3 3-7-7z"/><path d="M11 6 4 13l3 3 7-7"/><path d="m6 16-3 5 5-3"/>
-          </svg>
-        </button>
+        <button class="zahnrad hammer" id="bauen" aria-label="Bauen"></button>
         <div class="setzen" id="setzen" hidden>
           <span id="setzen-text">Wohin?</span>
           <button id="setzen-ab">Abbrechen</button>
         </div>
-        <button class="zahnrad geschenk" id="bonus-auf" aria-label="Tagesbonus" hidden>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9"/>
-            <path d="M12 8v13M12 8S10 3 7.5 4.5 9 8 12 8zM12 8s2-5 4.5-3.5S15 8 12 8z"/>
-          </svg>
-        </button>
-        <button class="zahnrad" id="zahnrad" aria-label="Einstellungen">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3.2"/>
-            <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7 5.4 5.4"/>
-          </svg>
-          <span class="punkt" id="zahnrad-punkt" hidden></span>
+        <button class="zahnrad geschenk" id="bonus-auf" aria-label="Tagesbonus" hidden></button>
+        <button class="zahnrad" id="zahnrad" aria-label="Einstellungen"><span class="punkt" id="zahnrad-punkt" hidden></span>
         </button>
       </div>
       <div class="unterzeile">
@@ -309,7 +280,6 @@
   <div class="sheet-bg" id="rest-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rest-titel">
       <h3 id="rest-titel">Einstellungen</h3>
-      <div id="hofinfo"></div>
       <h2>Gerät</h2>
       <div class="card regler">
         <div class="body">
@@ -335,28 +305,24 @@
       <button class="card" id="abenteuer-auf">
         <div class="body">
           <div class="top">Abenteuerbrett</div>
-          <div class="sub">Die Aufgaben von heute</div>
         </div>
         <span class="go" id="abenteuer-zahl">📋</span>
       </button>
       <button class="card" id="ziele-auf">
         <div class="body">
-          <div class="top">Ziele &amp; Erfolge</div>
-          <div class="sub">Was du als Nächstes anpacken kannst</div>
+          <div class="top">Erfolge</div>
         </div>
         <span class="go" id="ziele-zahl">▶</span>
       </button>
       <button class="card" id="bestenliste-auf">
         <div class="body">
-          <div class="top">Bestenliste</div>
-          <div class="sub">Wer hat den weitesten Hof?</div>
+          <div class="top">Ehrentafel</div>
         </div>
         <span class="go">🏆</span>
       </button>
       <button class="card" id="anleitung">
         <div class="body">
-          <div class="top">Anleitung ansehen</div>
-          <div class="sub">Die kurze Einführung nochmal zeigen</div>
+          <div class="top">Einführung nochmal</div>
         </div>
         <span class="go">▶</span>
       </button>
@@ -364,21 +330,19 @@
       <button class="card" id="sicherung-auf">
         <div class="body">
           <div class="top">Hof sichern</div>
-          <div class="sub">Schlüssel, Wiederherstellungswort, Hof löschen</div>
+          <div class="sub">Schlüssel und Weg zurück</div>
         </div>
         <span class="go">🔑</span>
       </button>
       <button class="card" id="rueckmeldung-auf">
         <div class="body">
-          <div class="top">Rückmeldung geben</div>
-          <div class="sub">Fehler, Idee oder Lob an den Betreiber</div>
+          <div class="top">Rückmeldung</div>
         </div>
         <span class="go">✉️</span>
       </button>
       <button class="card" id="forget">
         <div class="body">
           <div class="top">Von diesem Gerät abmelden</div>
-          <div class="sub">Schlüssel und lokaler Stand werden hier gelöscht</div>
         </div>
       </button>
       <p class="tiny"><a href="/impressum">Impressum &amp; Datenschutz</a> · <span id="stand-anzeige"></span></p>
@@ -440,7 +404,7 @@
 
   <div class="sheet-bg" id="ziele-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ziele-titel">
-      <h3 id="ziele-titel">Ziele &amp; Erfolge</h3>
+      <h3 id="ziele-titel">Erfolge</h3>
       <div id="ziele-liste"></div>
       <button class="sheet-close" id="ziele-close">Schließen</button>
     </div>
@@ -460,7 +424,7 @@
 
   <div class="sheet-bg" id="bestenliste-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bestenliste-titel">
-      <h3 id="bestenliste-titel">Bestenliste</h3>
+      <h3 id="bestenliste-titel">Ehrentafel</h3>
       <div id="bestenliste-eigen"></div>
       <div id="bestenliste-liste"></div>
       <button class="sheet-close" id="bestenliste-close">Schließen</button>
@@ -501,6 +465,11 @@
     <div class="stufe-neu kiste-beute" id="kiste-beute"></div>
     <button type="button" id="kiste-weiter">Einpacken</button>
   </div>
+</div>
+
+<div class="tipp" id="tipp" hidden role="status">
+  <p id="tipp-text"></p>
+  <button type="button" id="tipp-ok">Alles klar</button>
 </div>
 
 <div class="fuehrung" id="fuehrung" hidden>

@@ -1901,3 +1901,209 @@
   .fuehrung-blase p { margin: 0; font-size: .9rem; line-height: 1.45; color: var(--ink); }
   .fuehrung-weiter { margin-top: .35rem; padding: .6rem; font-size: .9rem; width: 100%; }
   @media (prefers-reduced-motion: reduce) { .fuehrung-ring { animation: none; } }
+
+  /* — Holz und Papier: jedes Blatt ist ein Ort ——————————————————————————
+     Das Abenteuerbrett hat es vorgemacht: Holzrahmen, angepinntes Papier,
+     Pixelschrift auf dem Balken. Jetzt gilt das fuer jedes Blatt. Der Trick:
+     Auf dem Holz sind die Farbmarken cremefarben, auf dem Papier Tinte — die
+     Bausteine (.card, .note, .chip, .go …) lesen nur die Marken und muessen
+     nichts wissen. */
+  :root {
+    --holz: #8d5a35; --holz-dunkel: #6b4326; --holz-hell: #a8714a;
+    --papier: #f4ecd8; --papier-dunkel: #e2d5b5; --tinte: #3b2b3c; --tinte-grau: #7a6652;
+    --messing: #f6c35a; --messing-dunkel: #b8811f;
+  }
+  .sheet:not(.brettblatt) {
+    --surface: var(--papier); --sunk: var(--papier-dunkel); --line: rgba(59, 43, 60, .35);
+    --ink: var(--papier); --text: var(--papier); --muted: #ead9b6;
+    --accent-soft: #dfe9d0; --gold-soft: #f7e7b8; --warn-soft: #f9dcc4; --on-accent: #fff;
+    background: var(--holz);
+    background-image: repeating-linear-gradient(180deg, rgba(0, 0, 0, .13) 0 2px, rgba(255, 255, 255, .05) 2px 14px);
+    color: var(--papier);
+    box-shadow: 0 0 0 3px var(--holz-dunkel), 0 -8px 32px rgba(0, 0, 0, .28);
+  }
+  .sheet:not(.brettblatt) h3 {
+    font-family: var(--pixel); color: var(--papier); text-align: center; letter-spacing: .02em;
+    background: var(--holz-dunkel); box-shadow: 0 3px 0 var(--tinte);
+  }
+  .sheet:not(.brettblatt) h2 {
+    color: var(--papier); text-shadow: 0 1px 0 var(--tinte); font-family: var(--pixel);
+    font-size: .8rem; letter-spacing: .04em; margin: .55rem 0 .3rem .15rem; opacity: .95;
+  }
+  .sheet:not(.brettblatt) .sheet-close {
+    background: var(--holz-dunkel); color: var(--papier); border: 2px solid var(--tinte);
+    box-shadow: 0 -.6rem 0 .3rem var(--holz); font-family: var(--pixel);
+  }
+  /* Papier: alles, was eine Karte ist. Darauf gilt wieder Tinte. */
+  .sheet .card, .sheet .note, .sheet .empty, .sheet .kaestchen, .sheet .hofkarte, .sheet .nachbar,
+  .sheet .zettel, .sheet .opt, .sheet .upgrade, .sheet .rang-eigen, .sheet .stand-kopf,
+  .sheet .ziel-kopf, .sheet .abzeichen, .sheet .rang-liste, .sheet .podest-schild, .sheet .trade,
+  .sheet .bonus-tag, .sheet .booster-karte, .sheet .geschenk-wahl, .sheet .nachkauf, .sheet .loesch {
+    --muted: var(--tinte-grau); --ink: var(--tinte); --text: var(--tinte); --line: rgba(59, 43, 60, .25);
+    background: var(--papier); color: var(--tinte);
+    border: 2px solid var(--tinte); border-radius: 3px; box-shadow: 2px 3px 0 rgba(0, 0, 0, .25);
+  }
+  .sheet .note { background: #f9dcc4; color: #8a4b1c; }
+  .sheet .empty { border-style: dashed; box-shadow: none; }
+  .sheet .chip, .sheet .zutat, .sheet .posten {
+    --muted: var(--tinte-grau);
+    background: var(--papier); color: var(--tinte); border: 2px solid var(--tinte);
+    border-radius: 3px; box-shadow: 1px 2px 0 rgba(0, 0, 0, .2);
+  }
+  .sheet .zutat.fehlt, .sheet .posten.fehlt { background: #f9dcc4; color: #8a4b1c; }
+  /* Messing: alles, was man drueckt, um etwas zu bekommen. */
+  .sheet .go, .sheet .primär, .sheet .ziel-los, .sheet .eingabe button, .sheet .nachkauf .kaufen,
+  .sheet .abfahrt:not(.abreissen), .sheet .kiste-weiter, .sheet .stufe-weiter, .sheet .pick button,
+  .sheet .knopfreihe .ghost, .sheet .preisknoepfe button, .sheet .platzknoepfe button, .sheet .skip {
+    background: var(--messing); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    box-shadow: 0 3px 0 var(--messing-dunkel); font-family: var(--pixel); font-weight: 700;
+  }
+  .sheet .go:active, .sheet .primär:active, .sheet .ziel-los:active, .sheet .eingabe button:active {
+    transform: translateY(2px); box-shadow: 0 1px 0 var(--messing-dunkel);
+  }
+  .sheet .go[disabled], .sheet .primär[disabled], .sheet .skip[disabled] {
+    background: var(--papier-dunkel); color: var(--tinte-grau); box-shadow: none; opacity: 1;
+  }
+  .sheet .go.weg, .sheet .skip { background: var(--papier); box-shadow: 0 3px 0 rgba(0, 0, 0, .25); }
+  .sheet .eingabe input, .sheet textarea, .sheet input[type="text"], .sheet input[type="password"], .sheet input[type="number"] {
+    background: var(--papier); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+  }
+  .sheet .eingabe input::placeholder, .sheet textarea::placeholder { color: var(--tinte-grau); }
+  .sheet .tiny, .sheet .brett-unter, .sheet .ziel-gruppe { color: rgba(244, 236, 216, .85); }
+  .sheet .tiny a { color: var(--papier); }
+  .sheet .balken { background: var(--papier-dunkel); border: 2px solid var(--tinte); border-radius: 0; height: .55rem; }
+  .sheet .balken i { background: #5aa04f; }
+  .sheet .card.regler input[type="range"]::-webkit-slider-runnable-track { background: var(--papier-dunkel); }
+  .sheet .card .pay .amount { color: var(--messing-dunkel); }
+  .sheet .card .pay .xp, .sheet .card .xp { color: #4d8a3f; }
+  .sheet .ziel-brettlink { background: var(--papier); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px; box-shadow: 2px 3px 0 rgba(0, 0, 0, .25); }
+  .sheet .ziel-gruppe {
+    font-family: var(--pixel); font-size: .9rem; letter-spacing: .03em;
+    text-shadow: 0 2px 0 var(--tinte); border: 0; background: none; margin: .9rem 0 .4rem;
+  }
+  .sheet .ziel-gruppe .ziel-gruppe-zahl { background: var(--holz-dunkel); color: var(--papier); border: 2px solid var(--tinte); border-radius: 3px; padding: .05rem .4rem; }
+  .sheet .ziel-erledigt > summary { color: rgba(244, 236, 216, .85); }
+  .sheet .rang-eigen { text-align: center; font-family: var(--pixel); }
+
+  /* Erfolge als Abzeichen: eine Medaille je Ziel, zwei nebeneinander. */
+  .abzeichen-raster { display: grid; grid-template-columns: repeat(2, 1fr); gap: .55rem; margin-bottom: .3rem; }
+  .abzeichen { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .25rem; padding: .6rem .5rem .55rem; }
+  .abzeichen-medaille {
+    width: 2.9rem; height: 2.9rem; border-radius: 50%; display: grid; place-items: center;
+    background: var(--papier-dunkel); border: 3px solid var(--tinte-grau); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .12);
+  }
+  .abzeichen-medaille .ic { width: 1.5rem; height: 1.5rem; image-rendering: pixelated; }
+  .abzeichen.offen .abzeichen-medaille { background: var(--messing); border-color: var(--tinte); box-shadow: 0 0 0 3px rgba(246, 195, 90, .45), inset 0 -3px 0 rgba(0, 0, 0, .15); animation: fuehrungPuls 1.6s ease-in-out infinite; }
+  .abzeichen.erreicht .abzeichen-medaille { background: #8fc17a; border-color: var(--tinte); }
+  .abzeichen.zu .abzeichen-medaille .ic { opacity: .45; filter: grayscale(1); }
+  .abzeichen-name { font-family: var(--pixel); font-size: .8rem; line-height: 1.2; font-weight: 700; }
+  .abzeichen.erreicht .abzeichen-name { color: var(--tinte-grau); text-decoration: line-through; }
+  .abzeichen-lohn { font-size: .66rem; color: var(--messing-dunkel); font-weight: 700; }
+  .abzeichen .balken { width: 100%; margin-top: .1rem; }
+  .abzeichen-stand { font-size: .64rem; color: var(--tinte-grau); font-variant-numeric: tabular-nums; }
+  .abzeichen .ziel-los { width: 100%; margin-top: .2rem; padding: .4rem .3rem; font-size: .78rem; }
+  .abzeichen .abzeichen-fertig { font-size: .68rem; color: #4d8a3f; font-weight: 700; }
+
+  /* Die Ehrentafel: Podest fuer die ersten drei, darunter die Liste auf Papier. */
+  .podest { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; gap: .4rem; margin: .4rem 0 .8rem; }
+  .podest-platz { display: flex; flex-direction: column; align-items: center; gap: .2rem; min-width: 0; }
+  .podest-platz.eins { order: 2; } .podest-platz.zwei { order: 1; } .podest-platz.drei { order: 3; }
+  .podest-medaille {
+    width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 3px solid var(--tinte); display: grid; place-items: center;
+    font-family: var(--pixel); font-weight: 700; color: var(--tinte); box-shadow: 0 3px 0 rgba(0, 0, 0, .3);
+  }
+  .podest-platz.eins .podest-medaille { background: var(--messing); width: 2.9rem; height: 2.9rem; font-size: 1.1rem; }
+  .podest-platz.zwei .podest-medaille { background: #d9dde3; }
+  .podest-platz.drei .podest-medaille { background: #d9a066; }
+  .podest-name { font-family: var(--pixel); font-size: .78rem; font-weight: 700; color: var(--papier); text-shadow: 0 1px 0 var(--tinte); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .podest-stufe { font-size: .66rem; color: rgba(244, 236, 216, .85); }
+  .podest-block {
+    width: 100%; background: var(--holz-dunkel); border: 2px solid var(--tinte); border-radius: 3px 3px 0 0;
+    display: grid; place-items: center; font-family: var(--pixel); font-size: 1.4rem; font-weight: 700; color: var(--papier);
+    box-shadow: inset 0 3px 0 var(--holz-hell), 2px 3px 0 rgba(0, 0, 0, .3);
+  }
+  .podest-platz.eins .podest-block { height: 3.4rem; } .podest-platz.zwei .podest-block { height: 2.6rem; } .podest-platz.drei .podest-block { height: 2rem; }
+  .podest-platz.ich .podest-name { color: var(--messing); }
+  .rang-liste { padding: .2rem .6rem; }
+  .sheet .rang { border-bottom: 1px dashed rgba(59, 43, 60, .3); color: var(--tinte); }
+  .sheet .rang.ich { background: var(--gold-soft); outline: 2px solid var(--messing-dunkel); outline-offset: -2px; border-radius: 3px; }
+  .sheet .rang-platz { font-family: var(--pixel); }
+  .sheet .rang-wert { color: var(--tinte-grau); }
+
+  /* Das Baumenue zeigt, was man baut. */
+  .bau-bild { flex: none; width: 3.4rem; height: 3.4rem; display: grid; place-items: end center; overflow: visible; }
+  .bau-bild .art { width: 100%; height: 100%; overflow: visible; }
+
+  /* Der kurze Tipp beim ersten Oeffnen eines Blatts: ein Zettel, ein Satz. */
+  .tipp {
+    position: fixed; left: 50%; transform: translateX(-50%) rotate(-.6deg);
+    top: calc(env(safe-area-inset-top, 0px) + 4.4rem); z-index: 60;
+    width: min(90vw, 22rem); background: var(--papier); color: var(--tinte);
+    border: 2px solid var(--tinte); border-radius: 3px; box-shadow: 3px 5px 0 rgba(0, 0, 0, .3);
+    padding: .8rem .8rem .6rem; display: flex; flex-direction: column; gap: .5rem;
+  }
+  .tipp::before {
+    content: ''; position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    width: 11px; height: 11px; border-radius: 50%; background: #e8553c; border: 2px solid var(--tinte); box-shadow: 0 2px 0 rgba(0, 0, 0, .3);
+  }
+  .tipp p { margin: 0; font-size: .9rem; line-height: 1.4; }
+  .tipp button {
+    align-self: flex-end; background: var(--messing); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    padding: .4rem .9rem; font-family: var(--pixel); font-weight: 700; font-size: .8rem; box-shadow: 0 3px 0 var(--messing-dunkel);
+  }
+  .tipp button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--messing-dunkel); }
+
+  /* HUD: Holzkacheln mit Pixelkunst statt Strichsymbolen. */
+  .zahnrad {
+    background: var(--holz); color: var(--papier); border: 2px solid var(--tinte); border-radius: 6px;
+    box-shadow: inset 0 2px 0 var(--holz-hell), 0 3px 0 var(--tinte);
+  }
+  .zahnrad:active { transform: translateY(2px); box-shadow: inset 0 2px 0 var(--holz-hell), 0 1px 0 var(--tinte); }
+  .zahnrad img { width: 1.7rem; height: 1.7rem; image-rendering: pixelated; display: block; }
+  .zahnrad.geschenk { background: var(--messing); box-shadow: inset 0 2px 0 #ffe08a, 0 3px 0 var(--tinte); }
+  .zahnrad .punkt { border-color: var(--tinte); background: #e8553c; }
+  /* Nachbesserungen am Holz: Podest hat feste Plaetze, Gedruecktes ohne Ware
+     wird Papier, und auch „Anfragen" ist Messing. */
+  .podest-platz.eins { grid-column: 2; } .podest-platz.zwei { grid-column: 1; } .podest-platz.drei { grid-column: 3; }
+  .sheet .abfahrt[disabled], .sheet .kaufen[disabled], .sheet .ziel-los[disabled], .sheet .eingabe button[disabled] {
+    background: var(--papier-dunkel); color: var(--tinte-grau); box-shadow: none;
+  }
+  .sheet #freundadd, .sheet .go.freund, .sheet .hofkarte button, .sheet .nachbar button {
+    background: var(--messing); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    box-shadow: 0 3px 0 var(--messing-dunkel); font-family: var(--pixel); font-weight: 700;
+  }
+  .sheet .nachbar button.weg, .sheet .hofkarte button.weg { background: var(--papier); box-shadow: 0 3px 0 rgba(0, 0, 0, .25); }
+
+  /* Die Kopfzeile ist ein Balken aus demselben Holz, der Hof ein gerahmtes Bild. */
+  .topbar {
+    --muted: #ead9b6; --ink: var(--papier); --surface: var(--papier); --sunk: var(--holz-dunkel);
+    background: var(--holz);
+    background-image: repeating-linear-gradient(180deg, rgba(0, 0, 0, .13) 0 2px, rgba(255, 255, 255, .05) 2px 14px);
+    color: var(--papier); border-bottom: 3px solid var(--tinte);
+  }
+  .topbar .purse-main .who { color: var(--papier); text-shadow: 0 1px 0 var(--tinte); }
+  .topbar .purse-main .xp { color: #ead9b6; }
+  .topbar .ring b { color: var(--tinte); }
+  .topbar .ring::before {
+    content: ''; position: absolute; inset: .2rem; border-radius: 50%; background: var(--papier); z-index: -1;
+  }
+  .topbar .ring { z-index: 0; }
+  .topbar .coins { background: var(--messing); color: var(--tinte); border-color: var(--tinte); box-shadow: 0 2px 0 var(--messing-dunkel); }
+  .topbar .serie { background: var(--papier); color: #b8481a; border-color: var(--tinte); }
+  .topbar .silo { color: #ead9b6; }
+  .topbar .silo b { color: var(--papier); }
+  .topbar .silo-track { background: var(--holz-dunkel); border: 1px solid var(--tinte); height: .45rem; border-radius: 2px; }
+  .topbar .silo-fill { background: #8fc17a; border-radius: 0; }
+  .topbar .silo.full { color: #ffd0a8; }
+  .hof {
+    border: 3px solid var(--tinte); border-radius: 8px;
+    box-shadow: 0 0 0 3px var(--holz-dunkel), 0 4px 0 3px var(--tinte);
+  }
+  /* Auch der Weg und der Empfang schreiben auf Papier mit Tinte. */
+  .sheet .pfad .stein .karte, .sheet .pfad .stein .gabe, .sheet .empfang-zeile, .sheet .kaestchen .body, .sheet .stand-raster > * {
+    --muted: var(--tinte-grau); --ink: var(--tinte); --text: var(--tinte); color: var(--tinte);
+  }
+  .sheet .pfad .stein .karte { background: var(--papier); border: 2px solid var(--tinte); border-radius: 3px; box-shadow: 2px 3px 0 rgba(0, 0, 0, .25); }
+  .sheet .pfad .stein.jetzt .karte { border-color: var(--messing-dunkel); box-shadow: 2px 3px 0 rgba(0, 0, 0, .25), inset 0 0 0 2px var(--messing); }
+  .sheet .pfad .stein .knoten { border-color: var(--tinte); font-family: var(--pixel); }
+  .sheet .pfad::before { background: var(--holz-dunkel); }

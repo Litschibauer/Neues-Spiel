@@ -11,21 +11,47 @@ function ladeBestenliste() {
 
 function zeichneBestenliste(d) {
   $('bestenliste-eigen').innerHTML = d.ich
-    ? '<div class="rang-eigen">Dein Platz: <b>#' + d.ich.platz + '</b> von ' + d.gesamt +
-      ' · Stufe ' + d.ich.level + ' · ' + d.ich.xp + ' XP</div>'
+    ? '<div class="rang-eigen">Du: Platz ' + d.ich.platz + ' von ' + d.gesamt + '</div>'
     : '';
   var box = $('bestenliste-liste');
   box.textContent = '';
-  (d.top || []).forEach(function (e) {
+  var top = d.top || [];
+  if (top.length === 0) {
+    box.innerHTML = '<p class="empty">Noch niemand auf der Tafel.</p>';
+    return;
+  }
+
+  // Das Podest: die ersten drei, der Erste in der Mitte und am hoechsten.
+  var podest = document.createElement('div');
+  podest.className = 'podest';
+  var stufen = ['eins', 'zwei', 'drei'];
+  top.slice(0, 3).forEach(function (e, i) {
+    var platz = document.createElement('div');
+    platz.className = 'podest-platz ' + stufen[i] + (e.ich ? ' ich' : '');
+    platz.innerHTML =
+      '<div class="podest-medaille">' + e.platz + '</div>' +
+      '<div class="podest-name">' + e.name + '</div>' +
+      '<div class="podest-stufe">Stufe ' + e.level + '</div>' +
+      '<div class="podest-block">' + e.platz + '</div>';
+    podest.appendChild(platz);
+  });
+  box.appendChild(podest);
+
+  // Der Rest: eine Liste auf einem Blatt Papier.
+  var rest = top.slice(3);
+  if (rest.length === 0) return;
+  var liste = document.createElement('div');
+  liste.className = 'rang-liste';
+  rest.forEach(function (e) {
     var row = document.createElement('div');
     row.className = 'rang' + (e.ich ? ' ich' : '');
-    var platz = e.platz === 1 ? '🥇' : e.platz === 2 ? '🥈' : e.platz === 3 ? '🥉' : '#' + e.platz;
     row.innerHTML =
-      '<span class="rang-platz">' + platz + '</span>' +
+      '<span class="rang-platz">' + e.platz + '.</span>' +
       '<span class="rang-name">' + e.name + '</span>' +
-      '<span class="rang-wert">St. ' + e.level + ' · ' + e.xp + ' XP</span>';
-    box.appendChild(row);
+      '<span class="rang-wert">Stufe ' + e.level + '</span>';
+    liste.appendChild(row);
   });
+  box.appendChild(liste);
 }
 
 function hofLaden() {

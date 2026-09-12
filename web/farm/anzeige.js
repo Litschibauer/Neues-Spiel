@@ -989,16 +989,22 @@ function renderZiele(v) {
     box.appendChild(titel);
 
     var erledigt = [];
+    var raster = document.createElement('div');
+    raster.className = 'abzeichen-raster';
     teil.forEach(function (e) {
       if (e.eingeloest) { erledigt.push(e); return; }
       if (zielVerdeckt(e, liste, reihen)) return;
-      box.appendChild(zielZeile(e));
+      raster.appendChild(zielZeile(e, gruppe.bild));
     });
+    if (raster.children.length > 0) box.appendChild(raster);
     if (erledigt.length > 0) {
       var falte = document.createElement('details');
       falte.className = 'ziel-erledigt';
       falte.innerHTML = '<summary>Erledigt · ' + erledigt.length + '</summary>';
-      erledigt.forEach(function (e) { falte.appendChild(zielZeile(e)); });
+      var alt = document.createElement('div');
+      alt.className = 'abzeichen-raster';
+      erledigt.forEach(function (e) { alt.appendChild(zielZeile(e, gruppe.bild)); });
+      falte.appendChild(alt);
       box.appendChild(falte);
     }
   });
@@ -1279,31 +1285,32 @@ function festAbschnitt(v, box) {
   }
 }
 
-function zielZeile(e) {
+// Ein Erfolg ist ein Abzeichen: Medaille mit dem Bild seiner Gruppe, Name,
+// Lohn — und der Knopf, sobald es so weit ist. Grau, solange es aussteht;
+// Messing, wenn es abgeholt werden kann; gruen, wenn es haengt.
+function zielZeile(e, bild) {
   var einloesbar = e.erfuellt && !e.eingeloest;
-  var belohnung = (e.gold > 0 ? e.gold + ' Gold' : '') +
+  var lohn = (e.gold > 0 ? e.gold + ' Gold' : '') +
     (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
 
-  var row = document.createElement('div');
-  row.className = 'ziel' + (e.eingeloest ? ' erreicht' : '') + (einloesbar ? ' offen' : '');
+  var karte = document.createElement('div');
+  karte.className = 'abzeichen' + (e.eingeloest ? ' erreicht' : einloesbar ? ' offen' : ' zu');
 
-  // Bei zählbaren Zielen ein Balken mit Stand, sonst nur die Belohnung.
-  var fortschritt = e.ziel > 1 && !e.eingeloest
-    ? '<span class="ziel-fortschritt"><span class="balken"><i style="width:' + e.prozent +
-      '%"></i></span><span class="ziel-stand">' + e.ist + ' / ' + e.ziel + '</span></span>'
-    : '';
-
-  // Rechts steht, was es bringt — oder der Knopf, wenn es so weit ist.
-  var rechts = e.eingeloest
-    ? '<span class="ziel-hinweis erledigt">eingelöst</span>'
+  var unten = e.eingeloest
+    ? '<span class="abzeichen-fertig">hängt ✓</span>'
     : einloesbar
-      ? '<button type="button" class="ziel-los" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Einlösen</button>'
-      : '<span class="ziel-hinweis">' + belohnung.replace(' · ', '<br>') + '</span>';
+      ? '<button type="button" class="ziel-los" data-id="' + e.id + '" data-gold="' + e.gold + '" data-xp="' + e.xp + '">Abholen</button>'
+      : e.ziel > 1
+        ? '<span class="balken"><i style="width:' + e.prozent + '%"></i></span>' +
+          '<span class="abzeichen-stand">' + e.ist + ' / ' + e.ziel + '</span>'
+        : '';
 
-  row.innerHTML =
-    '<span class="ziel-haken">' + (e.eingeloest ? '✓' : e.erfuellt ? '★' : '○') + '</span>' +
-    '<span class="ziel-text">' + e.label + fortschritt + '</span>' + rechts;
-  return row;
+  karte.innerHTML =
+    '<span class="abzeichen-medaille">' + (bild ? iconTag(bild) : '★') + '</span>' +
+    '<span class="abzeichen-name">' + e.label + '</span>' +
+    '<span class="abzeichen-lohn">' + lohn + '</span>' +
+    unten;
+  return karte;
 }
 
 // Das Lager zeigt nur, was da ist. Was auf null faellt, verschwindet wieder —
@@ -1693,6 +1700,7 @@ function bauSektion(box, titel, liste, leerText) {
     karte.className = 'card';
     karte.disabled = !b.affordable;
     karte.innerHTML =
+      '<span class="bau-bild">' + bauVorschau(b) + '</span>' +
       '<div class="body">' +
       '<div class="top">' + g.name +
         (g.anzahl > 1 ? ' · noch ' + g.anzahl + ' frei' : '') +
@@ -1713,8 +1721,28 @@ function bauSektion(box, titel, liste, leerText) {
   });
 }
 
+// Ein kleines Bild des Bauwerks fuers Baumenue — dieselbe Kunst wie draussen,
+// nur ohne Platz: leer, still, nichts laeuft.
+function bauVorschau(b) {
+  var def = rules.plots[b.plot];
+  if (!def) return '';
+  var k = koerperFuer(def.id, b.size.w, b.size.h);
+  var p = {
+    id: def.id, index: b.plot, busy: false, done: false, progress: 0, producing: null,
+    stall: def.animal ? { animals: 0 } : null,
+    baum: def.id === 'apple-tree' ? { stufe: 'reif', reifIn: 0, geerntet: 0, ernten: 0 } : null,
+  };
+  try {
+    return '<svg class="art" viewBox="0 0 100 ' + k.vh + '" preserveAspectRatio="xMidYMax meet" aria-hidden="true">' +
+      artRaumFor(p, k) + '</svg>';
+  } catch (err) {
+    return '';
+  }
+}
+
 function renderHofinfo(v) {
   var box = $('hofinfo');
+  if (!box) return;
   box.textContent = '';
 
   var karte = document.createElement('div');
