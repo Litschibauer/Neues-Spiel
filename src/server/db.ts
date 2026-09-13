@@ -184,6 +184,28 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
   (db) => {
     db.exec(`alter table dorf_projekte add column bedarf_json text;`);
   },
+  // Der Zug: eine Fahrt je Serverwoche, Beiträge je Hof.
+  (db) => {
+    db.exec(`
+      create table zug_fahrten (
+        nr          integer primary key autoincrement,
+        woche       integer not null unique,
+        plan_json   text not null,
+        begonnen_ms integer not null,
+        fertig_ms   integer not null default 0
+      );
+      create table zug_beitraege (
+        nr       integer primary key autoincrement,
+        fahrt_nr integer not null,
+        konto    text not null,
+        item     text not null,
+        menge    integer not null,
+        zeit_ms  integer not null
+      );
+      create index zug_beitraege_fahrt on zug_beitraege (fahrt_nr);
+      create index zug_beitraege_konto on zug_beitraege (konto);
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

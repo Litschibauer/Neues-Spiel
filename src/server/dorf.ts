@@ -21,6 +21,8 @@ export type ProjektDef = {
 };
 
 export const DANKESWOCHE_MS = 7 * 86_400_000;
+// Ist das letzte Projekt gebaut, bleibt es stehen — dann kommt der Zug (zug.ts).
+// Neue Projekte hinten anhängen; das Dorf baut sie der Reihe nach.
 export const AKTIV_FENSTER_MS = 7 * 86_400_000;
 // Der Bedarf wird gemessen, nicht geraten: Beim Start eines Projekts zählt
 // der Server, was die in der letzten Woche aktiven Höfe von jeder Ware gerade
@@ -96,6 +98,8 @@ export type DorfStand = {
   dankeswoche: boolean;
   dankeswocheBis: number;
   naechstesMs: number;
+  // Das letzte Projekt steht: kein nächstes mehr, der Zug übernimmt.
+  alleGebaut: boolean;
   dank: readonly Bedarf[];
   helfer: Helfer[];
   mein: number;
@@ -116,9 +120,23 @@ export class Dorf {
   private version = 0;
   private zwischen: Zwischen | null = null;
 
-  constructor(db: Db, messen: (nowMs: number) => Messung) {
+  private readonly dankeswocheMs: number;
+
+  constructor(db: Db, messen: (nowMs: number) => Messung, dankeswocheMs: number = DANKESWOCHE_MS) {
     this.db = db;
     this.messen = messen;
+    this.dankeswocheMs = dankeswocheMs;
+  }
+
+  // Alles gebaut? Dann gibt es kein nächstes Projekt mehr.
+  alleGebaut(): boolean {
+    return this.anzahlFertig() >= PROJEKTE.length;
+  }
+
+  // Steht der Bahnhof? Daran hängt der Zug.
+  bahnhofSteht(): boolean {
+    const row = this.db.prepare("select count(*) as n from dorf_projekte where projekt = 'bahnhof' and fertig_ms > 0").get() as { n: number };
+    return Number(row.n) > 0;
   }
 
   // Ältere Zeilen (vor der Messung) tragen keinen Plan: dann gilt Grundmenge
@@ -188,7 +206,7 @@ export class Dorf {
   laufend(nowMs: number): Zeile {
     const z = this.neueste();
     if (!z) return this.starte(nowMs);
-    if (z.fertigMs > 0 && nowMs >= z.fertigMs + DANKESWOCHE_MS) return this.starte(nowMs);
+    if (z.fertigMs > 0 && nowMs >= z.fertigMs + this.dankeswocheMs && !this.alleGebaut()) return this.starte(nowMs);
     return z;
   }
 
@@ -256,7 +274,7 @@ export class Dorf {
 
   dankeswoche(nowMs: number): boolean {
     const z = this.laufend(nowMs);
-    return z.fertigMs > 0 && nowMs < z.fertigMs + DANKESWOCHE_MS;
+    return z.fertigMs > 0 && nowMs < z.fertigMs + this.dankeswocheMs;
   }
 
   stand(nowMs: number, konto?: string): DorfStand {
@@ -284,9 +302,10 @@ export class Dorf {
       etappen,
       fertig,
       fertigMs: z.fertigMs,
-      dankeswoche: fertig && nowMs < z.fertigMs + DANKESWOCHE_MS,
-      dankeswocheBis: fertig ? z.fertigMs + DANKESWOCHE_MS : 0,
-      naechstesMs: fertig ? z.fertigMs + DANKESWOCHE_MS : 0,
+      dankeswoche: fertig && nowMs < z.fertigMs + this.dankeswocheMs,
+      dankeswocheBis: fertig ? z.fertigMs + this.dankeswocheMs : 0,
+      naechstesMs: fertig && !this.alleGebaut() ? z.fertigMs + this.dankeswocheMs : 0,
+      alleGebaut: fertig && this.alleGebaut(),
       dank: def.dank,
       helfer: helfer.slice(0, 10),
       mein: konto ? (helfer.find((h) => h.konto === konto)?.menge ?? 0) : 0,

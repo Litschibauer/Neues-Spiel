@@ -207,6 +207,7 @@ function renderPlots(v) {
     tile.classList.toggle('wahrzeichen', !!wahrzeichen);
     tile.style.zIndex = wahrzeichen ? '58' : String(1 + Math.round(ort.tiefe * 2));
     tile.dataset.platz = String(p.index);
+    tile.dataset.art = p.id;
     // Der gezeigte Platz bleibt markiert, auch wenn der Hof dazwischen neu
     // gemalt wird — sonst frisst ein reifendes Feld den Hinweis.
     if (p.index === zeigtPlatz && Date.now() < zeigtBis) tile.classList.add('zeigt');
@@ -441,6 +442,7 @@ function renderHindernisse(v) {
     var knopf = document.createElement('button');
     knopf.className = 'moebel hindernis' +
       (h.removable ? ' raeumbar' : '') + (h.locked ? ' verborgen' : '');
+    knopf.dataset.art = h.kind;
     knopf.style.left = kasten.left + '%';
     knopf.style.top = kasten.top + '%';
     knopf.style.width = kasten.width + '%';
@@ -462,6 +464,7 @@ function renderHindernisse(v) {
     if (besuchAktiv()) knopf.disabled = true;
     box.appendChild(knopf);
   });
+  if (typeof lichterSetzen === 'function') lichterSetzen();
 }
 
 

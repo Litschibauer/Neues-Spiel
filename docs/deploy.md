@@ -348,6 +348,19 @@ gesynct — er wandert beim nächsten Sync. Steht dort eine alte Nummer **und**
 steht im Serverprotokoll, und der Hof spielt sicherheitshalber auf der alten
 Version weiter, statt kaputtzugehen.
 
+### Die Waage in Regelwerk 52
+
+Bis Regelwerk 51 zahlten Wochen- und Festzettel auf Stufe 1 das Vierzigfache
+einer Wagenfuhre (900 Gold für „100 Plätze abernten" gegen 95 für eine Fuhre
+Weizen), dazu 2.500 Gold Wochenabschluss — Stufe 10 und tausende Gold kamen
+aus Zetteln, nicht vom Hof. Seit 52: Fuhren bringen mehr (kleine die Hälfte
+mehr, große ein Sechstel), Tages-, Wochen- und Festzettel auf Stufe 1–3 vier
+Zehntel, bis Stufe 6 gut die Hälfte, darüber zwei Drittel; Tagesabschluss
+200 statt 500, Wochenabschluss 900 statt 2.500 (die Kiste bleibt). Die
+Funktionen `waageZettel` und `waageFuhre` in `rules.ts` rechnen das aus den
+alten Werten — wer nachjustiert, dreht dort an drei Zahlen, in einem neuen
+Regelwerk.
+
 ### Balance-Patch live beobachten
 
 In Produktion migriert der Server einen Spielstand beim nächsten Sync auf die
@@ -982,6 +995,17 @@ die es schon gibt. Beitragen geht nur mit Netz; ohne Netz zeigt das Blatt den
 zuletzt geholten Stand. Im Spiel: Zahnrad → „Dorfprojekt". Etappenwechsel und
 Fertigstellung kommen als Moment (Anstoß `dorf` auf der Live-Leitung).
 
+**Der Zug.** Steht der Bahnhof (das letzte Projekt; es bleibt stehen, kein
+Projekt wird zweimal gebaut), kommt jede Serverwoche ein Zug: vier Waren,
+aus der Wochennummer gezogen, Mengen gemessen wie beim Dorf. Der ganze
+Server lädt ein; ist alles drin, fährt er ab und jeder Helfer bekommt Dank
+als Post (Karte, Schnellwuchs, Gold). Montag um Mitternacht fährt er so oder
+so — was fehlt, fehlt, und ein neuer Zug steht da. Tabellen `zug_fahrten`,
+`zug_beitraege`; Routen `POST /api/zug/beitrag`, Stand hängt am
+`/api/dorf`-Stand unter `zug`. Der Zug steht auf jedem Hof vor dem Bahnhof,
+solange er beladen wird. `NEUES_SPIEL_DANKESWOCHE_MS` verkürzt die
+Dankeswoche für Tests.
+
 Werkbank: Karte „Dorfprojekt" zeigt Stand und Faktor; „Etappe füllen" füllt
 die laufende Etappe komplett, gutgeschrieben dem gewählten Hof — so lassen
 sich alle Zustände ansehen, auch der Dank. Projekte und Warenlisten stehen
@@ -1062,7 +1086,8 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | `GET /api/events` | Hof-Schlüssel | Offene Live-Leitung; trägt nur Anstöße, keine Spieldaten |
 | `POST /api/deliver?item=…&amount=N` | Hof-Schlüssel | Ware in den eigenen Briefkasten |
 | `GET /api/dorf`, `POST /api/dorf/beitrag?item=…&amount=N` | Hof-Schlüssel | Dorfprojekt: Stand, Beitrag an die Baustelle |
-| `GET /api/admin/dorf`, `POST /api/admin/dorf/fuellen?account=…` | Bearer | Dorfprojekt sehen, Etappe füllen (Test) |
+| `POST /api/zug/beitrag?item=…&amount=N` | Hof-Schlüssel | Den Zug beladen (Stand unter `/api/dorf` → `zug`) |
+| `GET /api/admin/dorf`, `POST /api/admin/dorf/fuellen?account=…`, `POST /api/admin/zug/fuellen?account=…` | Bearer | Dorf und Zug sehen, füllen (Test) |
 
 Der Markt braucht **keine eigene Route**: Fremde Angebote reisen im Snapshot mit
 (`state.offers`), gekauft wird mit einem normalen Command über `/api/sync`. Das

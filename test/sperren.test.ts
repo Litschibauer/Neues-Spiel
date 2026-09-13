@@ -57,7 +57,7 @@ test('zwoelf Felder, vier davon am Start — alle mit allen Feldfruechten und im
     assert.ok(rules.wetter!.plaetze.includes(i), 'Regen wirkt auf jedes Feld');
   }
   assert.deepEqual(validateRuleset(rules), []);
-  assert.equal(LATEST_RULESET_VERSION, 51);
+  assert.ok(LATEST_RULESET_VERSION >= 51);
 });
 
 test('der Umzug nach 51 holt Bauten aus dem Wegrand und vom Ufer', () => {

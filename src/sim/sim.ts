@@ -15,6 +15,7 @@ import {
   tagesAufgabenFuer,
   wochenAufgabenFuer,
   wetterBei,
+  saisonBei,
   meisterFaehig,
   sterneVon,
   festAktiv,
@@ -330,6 +331,16 @@ function verdoppleXp(vorher: State, nachher: State, rules: Ruleset): State {
   return raus;
 }
 
+// Jahreszeiten: Ist die Ware gerade in Saison, kommt ein Stück dazu — wie das
+// Extrastück der Meisterschaft ein Geschenk, das verfällt, wenn das Lager voll
+// ist, statt die Abholung zu blockieren.
+function saisonExtra(s: State, rules: Ruleset, item: number): readonly number[] {
+  const saison = saisonBei(rules, s.wochenNummer ?? 0);
+  if (!saison || saison.bonusItem !== item) return s.items;
+  if (rules.items[item]?.storable && spaceLeft(s, rules) < 1) return s.items;
+  return addItem(s.items, item, 1);
+}
+
 function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
   switch (cmd.type) {
     case 'START': {
@@ -521,6 +532,9 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
           }
         }
       }
+
+      // In Saison: ein Stück mehr — ein Geschenk, das verfällt, wenn es nicht passt.
+      next.items = saisonExtra(next, rules, recipe.output.item);
 
       // Der Fund kommt nach dem Ertrag: Erst muss die Ernte ins Lager passen.
       const fund = fundstueck(next, rules, cmd.plot);
@@ -1292,6 +1306,7 @@ function simulateRoh(s: State, cmd: Command, rules: Ruleset): State {
 
       const next = cloneState(s);
       next.items = addItem(s.items, ertrag.item, ertrag.amount);
+      next.items = saisonExtra(next, rules, ertrag.item);
       next.xp = s.xp + def.baum.xp;
       next.plots = replaceAt(s.plots, cmd.plot, {
         ...plot,

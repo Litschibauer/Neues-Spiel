@@ -444,9 +444,17 @@ echter Datenbank. Zahlen in `deploy.md`.
   (`besuchAktiv()`).
 - **Blätter** (`show(name)`): genau eines offen, `x-bg` sichtbar, Rest
   versteckt; `netzWache()` wirft aus Blättern, die Netz brauchen.
-- **Dorfprojekt**: `dorf.js` (Blatt „Dorfplatz", Beitrag, Momente), Server
-  `dorf.ts` (`PROJEKTE`, Etappen, Faktor, Dankeswoche). Der Abzug geht den
-  Weg des Geschenks (`nimmAb`), der Dank den der Post. Siehe `deploy.md`.
+- **Dorfprojekt und Zug**: `dorf.js` (Blatt „Dorfplatz", Bauzettel, Zug,
+  Momente, Bild des Bauwerks in `dorfTeile`), Server `dorf.ts` (`PROJEKTE`,
+  Etappen, gemessener Bedarf, Dankeswoche; endliche Reihe, der Bahnhof
+  bleibt) und `zug.ts` (eine Fahrt je Serverwoche, `ZUG_WAREN`, `ZUG_DANK`).
+  Der Abzug geht den Weg des Geschenks (`nimmAb`), der Dank den der Post.
+- **Jahreszeiten, Tag und Nacht**: Die Jahreszeit kommt aus der Serverwoche
+  (`jahreszeiten` im Regelwerk, `saisonBei`; Saisonware bringt ein Stück
+  mehr, `saisonExtra` in `sim.ts`); der Hof färbt sich je Saison per Klasse
+  `saison-<n>` (`style.css`). Die Nacht ist Stimmung nach der Geräteuhr:
+  `nachtdecke` multipliziert die Welt, `lichter` (Laternen, Glühwürmchen)
+  liegen darüber (`wetter.js`, `lichterSetzen`).
 - **Benachrichtigungen**: `melden.js` (Abo im Browser, Apple in der App),
   Server `push.ts`/`apns.ts`, `/api/push/abo` und `/api/push/probe`. Wie sie
   ankommen und wo es hängt: `deploy.md`, „Benachrichtigungen".

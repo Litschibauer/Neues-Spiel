@@ -309,6 +309,10 @@
           <button class="klein" id="dorf-laden">Neu laden</button>
         </div>
         <p class="hint">Zum Ausprobieren der Zustände: Etappe fertig, Bauwerk steht, Dank als Post, Dankeswoche im Tagesbonus. Im echten Betrieb füllen die Spieler.</p>
+        <p class="hint" id="zug-stand">Zug: —</p>
+        <div class="zeile" style="margin-bottom:0">
+          <button class="klein" id="zug-fuellen">Zug volladen (gutgeschrieben dem gewählten Hof)</button>
+        </div>
       </div>
 
       <div class="card">
@@ -764,11 +768,20 @@
       var e = d.etappen[d.etappe];
       $('dorf-marke').textContent = d.projekt.name + (d.fertig ? ' · steht' : ' · Etappe ' + (d.etappe + 1) + '/' + d.etappen.length);
       $('dorf-stand').textContent = (d.fertig
-        ? 'Dankeswoche bis ' + new Date(d.dankeswocheBis).toLocaleString('de-DE')
+        ? (d.alleGebaut ? 'Alles gebaut — der Bahnhof steht' : 'Dankeswoche bis ' + new Date(d.dankeswocheBis).toLocaleString('de-DE'))
         : e.name + ': ' + e.bedarf.map(function (b) { return b.item + ' ' + b.geliefert + '/' + b.menge; }).join(' · ')) +
         ' · gemessen bei ' + d.faktor + ' aktiven Höfen · ' + d.helfer.length + ' Helfer';
+      var z = d.zug;
+      $('zug-stand').textContent = !z ? 'Zug: erst wenn der Bahnhof steht'
+        : 'Zug Woche ' + z.woche + (z.fertig ? ' · abgefahren' : ' · fährt ' + new Date(z.abfahrtMs).toLocaleString('de-DE')) + ' · ' +
+          z.bestellung.map(function (b) { return b.item + ' ' + b.geliefert + '/' + b.menge; }).join(' · ') + ' · ' + z.helfer.length + ' Helfer';
     }).catch(function (e) { $('dorf-stand').textContent = e.message; });
   }
+  $('zug-fuellen').addEventListener('click', function () {
+    api('/api/admin/zug/fuellen' + (gewaehlt ? '?account=' + encodeURIComponent(gewaehlt.id) : ''), 'POST')
+      .then(function (r) { log('Zug: vollgeladen' + (r.fertig ? ' — abgefahren, Dank verschickt' : ''), 'good'); ladeDorf(); })
+      .catch(function (e) { log('Zug: ' + e.message, 'bad'); });
+  });
   $('dorf-fuellen').addEventListener('click', function () {
     api('/api/admin/dorf/fuellen' + (gewaehlt ? '?account=' + encodeURIComponent(gewaehlt.id) : ''), 'POST')
       .then(function (r) { log('Dorf: Etappe gefüllt' + (r.projektFertig ? ' — das Bauwerk steht, Dank verschickt' : ''), 'good'); ladeDorf(); })

@@ -305,6 +305,12 @@ export type Ruleset = {
   // `regenSchubProzent` seiner Dauer geschenkt. Ohne dieses Feld ist das
   // Wetter Stimmung und sonst nichts.
   wetter?: { fensterTicks: number; regenSchubProzent: number; plaetze: readonly number[] };
+  // Jahreszeiten: Der Hof lebt im Wochenrhythmus — je `wochenJeSaison`
+  // Serverwochen eine Jahreszeit, reihum. In jeder ist eine Ware „in Saison":
+  // Jede Abholung davon bringt ein Stück mehr, wenn es ins Lager passt. Die
+  // Woche kommt vom Server (`wochenNummer`), also sehen Gerät und Server
+  // dieselbe Jahreszeit; vor dem ersten Kontakt gibt es keine.
+  jahreszeiten?: { wochenJeSaison: number; saisons: readonly SaisonDef[] };
   // Meisterschaft: Jede Werkstatt und jeder Stall zählt seine Abholungen. Ab
   // `stufen[k]` Abholungen leuchtet der (k+1)-te Stern. Erster Stern: Alles,
   // was dort angesetzt wird, läuft `schnellerProzent` schneller. Zweiter:
@@ -2394,6 +2400,24 @@ export function wochenAufgabenFuer(
 // Verteilung, die der Himmel vorher nur zur Stimmung zog: 62 % klar, 23 %
 // wolkig, 15 % Regen.
 export type WetterArt = 'klar' | 'wolkig' | 'regen';
+
+export type SaisonDef = { name: string; bonusItem: number };
+
+// Die Jahreszeit einer Serverwoche — reihum, ab Woche 1. Woche 0 heißt: noch
+// kein Serverkontakt, also keine Jahreszeit.
+export function saisonBei(rules: Ruleset, woche: number): SaisonDef | null {
+  const j = rules.jahreszeiten;
+  if (!j || j.saisons.length === 0 || woche <= 0 || j.wochenJeSaison <= 0) return null;
+  const i = Math.floor(woche / j.wochenJeSaison) % j.saisons.length;
+  return j.saisons[i] ?? null;
+}
+
+// Wann die nächste Jahreszeit beginnt, in Serverwochen ab `woche`.
+export function saisonWechselInWochen(rules: Ruleset, woche: number): number {
+  const j = rules.jahreszeiten;
+  if (!j || j.wochenJeSaison <= 0) return 0;
+  return j.wochenJeSaison - (woche % j.wochenJeSaison);
+}
 // Feste. Der Wochentag kommt aus dem Servertag: Tag 0 der Epoche war ein
 // Donnerstag, darum die Verschiebung um drei — dieselbe wie bei der Woche.
 export function wochentagVon(tag: number): number {
@@ -3111,33 +3135,88 @@ const V51: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V52: Jahreszeiten — und die Waage zwischen Spielen und Zetteln. Jede
+// Serverwoche eine andere Jahreszeit: Frühling, Sommer, Herbst, Winter — und
+// in jeder bringt eine Ware ein Stück mehr je Abholung.
+//
+// Balance: Bisher zahlten Wochen- und Festzettel auf Stufe 1 das Vierzigfache
+// einer Wagenfuhre, dazu der Wochenabschluss — Stufe 10 und tausende Gold
+// kamen aus Zetteln, nicht vom Hof. Jetzt: Fuhren bringen mehr (kleine Fuhren
+// die Hälfte mehr), Tages-, Wochen- und Festzettel bringen auf niedrigen
+// Stufen weniger als die Hälfte, auf hohen etwas weniger; die Abschlüsse
+// schrumpfen mit. Der Wochenabschluss behält seine Kiste. Der Hof bleibt
+// der Ort, an dem Geld entsteht; die Zettel sind die Zugabe.
+// Ganzzahlig, wie alles im Kern: Prozent und Runden auf Zehner bzw. Fünfer.
+function aufZehner(n: number, prozent: number): number {
+  return Math.floor((n * prozent + 500) / 1000) * 10;
+}
+function aufFuenfer(n: number, prozent: number): number {
+  return Math.floor((n * prozent + 250) / 500) * 5;
+}
+function waageZettel<T extends { gold: number; xp: number; minLevel?: number }>(a: T): T {
+  const stufe = a.minLevel ?? 1;
+  const prozent = stufe <= 3 ? 40 : stufe <= 6 ? 55 : 65;
+  return { ...a, gold: aufZehner(a.gold, prozent), xp: aufFuenfer(a.xp, prozent) };
+}
+function waageFuhre(t: RequestTemplate): RequestTemplate {
+  const gold = t.reward.find((s) => s.item === V51.currency)?.amount ?? 0;
+  const prozent = gold < 500 ? 150 : gold < 1000 ? 130 : 115;
+  return {
+    ...t,
+    reward: t.reward.map((s) => (s.item === V51.currency ? { ...s, amount: aufFuenfer(s.amount, prozent) } : s)),
+    xp: Math.floor((t.xp * prozent + 50) / 100),
+  };
+}
+const V52: Ruleset = {
   ...V51,
-  // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
+  version: 52,
+  requestTemplates: V51.requestTemplates.map(waageFuhre),
+  tagesaufgaben: V51.tagesaufgaben!.map(waageZettel),
+  tagesAbschluss: { gold: 200, xp: 40 },
+  wochenaufgaben: V51.wochenaufgaben!.map(waageZettel),
+  wochenAbschluss: { ...V51.wochenAbschluss!, gold: 900, xp: 160 },
   feste: {
     ...V51.feste!,
+    arten: V51.feste!.arten.map((art) => ({ ...art, aufgaben: art.aufgaben.map(waageZettel) })),
+  },
+  jahreszeiten: {
+    wochenJeSaison: 1,
+    saisons: [
+      { name: 'Frühling', bonusItem: CARROT },
+      { name: 'Sommer', bonusItem: WHEAT },
+      { name: 'Herbst', bonusItem: APPLE },
+      { name: 'Winter', bonusItem: EGGS },
+    ],
+  },
+};
+
+const DEV: Ruleset = {
+  ...V52,
+  // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
+  feste: {
+    ...V52.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V51.feste!.arten.map((a) => ({
+    arten: V52.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V51.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V52.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V51.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V52.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V51.fishing!,
+    ...V52.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V51.plots.map((p) => {
+  plots: V52.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -3206,17 +3285,19 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [49, V49],
   [50, V50],
   [51, V51],
+  [52, V52],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+  52,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 51;
+export const LATEST_RULESET_VERSION = 52;
 
 export const DEV_RULESET_VERSION = 1001;
 
@@ -3623,6 +3704,13 @@ export function listingFee(rules: Ruleset, item: number, amount: number): number
 
 export function validateRuleset(rules: Ruleset): string[] {
   const problems: string[] = [];
+  if (rules.jahreszeiten) {
+    const j = rules.jahreszeiten;
+    if (j.wochenJeSaison <= 0 || j.saisons.length === 0) problems.push('Jahreszeiten ohne Takt oder ohne Saisons');
+    for (const s of j.saisons) {
+      if (!rules.items[s.bonusItem]) problems.push(`Saison ${s.name}: Ware ${s.bonusItem} gibt es nicht`);
+    }
+  }
   const itemOk = (i: number) => Number.isInteger(i) && i >= 0 && i < rules.items.length;
 
   if (!itemOk(rules.currency)) problems.push(`Währung ${rules.currency} steht nicht im Katalog`);

@@ -31,7 +31,8 @@ import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
 import { ladeVapid, sendePush } from './push.ts';
-import { Dorf, projektDef, AKTIV_FENSTER_MS, type Messung } from './dorf.ts';
+import { Dorf, projektDef, AKTIV_FENSTER_MS, DANKESWOCHE_MS, type Bedarf, type Messung } from './dorf.ts';
+import { Zug, ZUG_DANK } from './zug.ts';
 import { apnsAusUmgebung, sendeApns } from './apns.ts';
 import type { PushAbo } from './storage.ts';
 import { EconStats } from './econstats.ts';
@@ -217,28 +218,37 @@ function dorfMessung(now: number): Messung {
   }
   return { aktive, vorrat: (item) => summe.get(item) ?? 0 };
 }
-const dorf = new Dorf((accounts.storage as SqliteStorage).database, dorfMessung);
+// Die Dankeswoche lässt sich für Tests verkürzen.
+const DANKESWOCHE = Number(process.env.NEUES_SPIEL_DANKESWOCHE_MS ?? DANKESWOCHE_MS);
+const dorf = new Dorf((accounts.storage as SqliteStorage).database, dorfMessung, DANKESWOCHE);
+// Der Zug: erst wenn der Bahnhof steht.
+const zug = new Zug((accounts.storage as SqliteStorage).database, dorfMessung, () => dorf.bahnhofSteht());
+
+function mitNamen<T extends { konto: string }>(helfer: T[], konto?: string) {
+  return helfer.map((h) => ({ ...h, name: sozial.karte(h.konto)?.name ?? 'Ein Hof', du: h.konto === konto }));
+}
 
 function dorfStand(konto?: string) {
-  const st = dorf.stand(Date.now(), konto);
+  const jetzt = Date.now();
+  const st = dorf.stand(jetzt, konto);
+  const z = zug.stand(jetzt, konto);
   return {
     ...st,
-    helfer: st.helfer.map((h) => ({ ...h, name: sozial.karte(h.konto)?.name ?? 'Ein Hof', du: h.konto === konto })),
+    helfer: mitNamen(st.helfer, konto),
+    zug: z ? { ...z, helfer: mitNamen(z.helfer, konto) } : null,
   };
 }
 
-// Wenn es steht: jeder Helfer bekommt den Dank als Post — und eine Nachricht,
-// falls er welche bekommt. Läuft genau einmal, beim letzten Beitrag.
-function dorfDank(nr: number, projektId: string, jetzt: number): void {
-  const def = projektDef(projektId);
-  if (!def) return;
+// Dank als Post an eine Liste von Höfen — und eine Nachricht, falls sie
+// welche bekommen. Läuft genau einmal, beim letzten Beitrag.
+function dankVerteilen(helfer: ReadonlyArray<{ konto: string }>, dank: readonly Bedarf[], jetzt: number, titel: string, text: string, art: string): number {
   const ids: string[] = [];
-  for (const h of dorf.helfer(nr)) {
+  for (const h of helfer) {
     const konto = accounts.get(h.konto);
     if (!konto) continue;
     const spiel = gameFor(konto);
     const rules = getRuleset(spiel.snapshot.rulesetVersion);
-    for (const d of def.dank) {
+    for (const d of dank) {
       const item = d.item === 'gold' ? rules.currency : rules.items.findIndex((i) => i.id === d.item);
       if (item < 0) continue;
       spiel.deliver({ item, amount: d.menge, arrivedAt: jetzt });
@@ -248,12 +258,20 @@ function dorfDank(nr: number, projektId: string, jetzt: number): void {
     events.nudge(h.konto, 'farm');
     ids.push(h.konto);
   }
-  notiere('dorf', null, `${def.name} steht — Dank an ${ids.length} Helfer`);
-  console.log(`[dorf] ${def.name} fertig, Dank an ${ids.length} Helfer`);
-  if (ids.length > 0) {
-    pushAn(ids, `${def.name} steht!`, 'Dein Dank liegt im Postfach. Die Dankeswoche läuft: Tagesbonus doppelt.', 'dorf')
-      .catch((e) => console.warn('[dorf] Push fehlgeschlagen:', e));
-  }
+  notiere(art, null, `${titel} — Dank an ${ids.length} Helfer`);
+  console.log(`[${art}] ${titel}, Dank an ${ids.length} Helfer`);
+  if (ids.length > 0) pushAn(ids, titel, text, art).catch((e) => console.warn(`[${art}] Push fehlgeschlagen:`, e));
+  return ids.length;
+}
+
+function dorfDank(nr: number, projektId: string, jetzt: number): void {
+  const def = projektDef(projektId);
+  if (!def) return;
+  dankVerteilen(dorf.helfer(nr), def.dank, jetzt, `${def.name} steht!`, 'Dein Dank liegt im Postfach. Die Dankeswoche läuft: Tagesbonus doppelt.', 'dorf');
+}
+
+function zugDank(nr: number, jetzt: number): void {
+  dankVerteilen(zug.helfer(nr), ZUG_DANK, jetzt, 'Der Zug ist abgefahren!', 'Voll beladen — dein Dank liegt im Postfach.', 'zug');
 }
 market.hofInfo = (id) => {
   const karte = sozial.karte(id);
@@ -886,6 +904,17 @@ function handleAdmin(url: URL, req: IncomingMessage, res: ServerResponse) {
     return json(res, 200, { ok: true, projektFertig: erg.projektFertig, stand: dorfStand() });
   }
 
+  if (url.pathname === '/api/admin/zug/fuellen' && req.method === 'POST') {
+    const wer = url.searchParams.get('account') ?? 'werkbank';
+    const jetzt = Date.now();
+    const erg = zug.fuelle(wer, jetzt);
+    if (!erg.ok) return json(res, 409, { error: 'NOT_NEEDED' });
+    if (erg.fertig) zugDank(erg.nr, jetzt);
+    events.broadcast('dorf');
+    notiere('werkbank', null, `Zug: vollgeladen (${wer})${erg.fertig ? ' — abgefahren' : ''}`);
+    return json(res, 200, { ok: true, fertig: erg.fertig, stand: dorfStand() });
+  }
+
   if (url.pathname === '/api/admin/push') {
     const titel = (url.searchParams.get('titel') ?? '').trim();
     const text = (url.searchParams.get('text') ?? '').trim();
@@ -1430,6 +1459,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       market.forget(account.id);
       sozial.vergissHof(account.id);
       dorf.vergissHof(account.id);
+      zug.vergissHof(account.id);
       accounts.loesche(account.id);
       events.broadcast('market', account.id);
       notiere('konto', account.id, `Hof ${karte.code} auf Wunsch gelöscht`);
@@ -1620,6 +1650,40 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       if (erg.etappeFertig || erg.projektFertig) events.broadcast('dorf');
       events.nudge(account.id, 'farm');
       return json(res, 200, { ok: true, angenommen: erg.angenommen, etappeFertig: erg.etappeFertig, projektFertig: erg.projektFertig, stand: dorfStand(account.id) });
+    }
+
+    if (url.pathname === '/api/zug/beitrag' && req.method === 'POST') {
+      const name = url.searchParams.get('item') ?? '';
+      const wunsch = Number(url.searchParams.get('amount') ?? '1');
+      const item = resolveItem(game, name);
+      const rules = getRuleset(game.snapshot.rulesetVersion);
+      if (item === null || item === rules.currency) return json(res, 400, { error: 'BAD_ITEM' });
+      if (!Number.isInteger(wunsch) || wunsch <= 0 || wunsch > 999) return json(res, 400, { error: 'BAD_AMOUNT' });
+      const jetzt = Date.now();
+      const offen = zug.offen(name, jetzt);
+      if (offen <= 0) return json(res, 409, { error: 'NOT_NEEDED' });
+
+      game.receiveExternal();
+      const habe = count(game.snapshot.state, item);
+      const menge = Math.min(wunsch, offen, habe);
+      if (menge <= 0) return json(res, 409, { error: 'NOT_ENOUGH_ITEMS' });
+      game.nimmAb(item, menge);
+      game.receiveExternal();
+      if (count(game.snapshot.state, item) !== habe - menge) return json(res, 409, { error: 'NOT_ENOUGH_ITEMS' });
+      persist(account, game);
+
+      const erg = zug.beitrag(account.id, name, menge, jetzt);
+      if (!erg.ok) {
+        game.deliver({ item, amount: menge, arrivedAt: jetzt });
+        game.receiveExternal();
+        persist(account, game);
+        return json(res, 409, { error: 'NOT_NEEDED' });
+      }
+      notiere('zug', account.id, `${erg.angenommen}× ${name} in den Zug`);
+      if (erg.fertig) zugDank(erg.nr, jetzt);
+      if (erg.fertig) events.broadcast('dorf');
+      events.nudge(account.id, 'farm');
+      return json(res, 200, { ok: true, angenommen: erg.angenommen, fertig: erg.fertig, stand: dorfStand(account.id) });
     }
 
     if (url.pathname === '/api/hof') {

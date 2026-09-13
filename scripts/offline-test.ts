@@ -465,6 +465,8 @@ function startServer() {
         NEUES_SPIEL_SAVE: join(dataDir, 'save.json'),
         NEUES_SPIEL_TOKEN_FILE: join(dataDir, 'token'),
         NEUES_SPIEL_VERSION: 'offline-test',
+        // Dorf: Dankeswoche eine Millisekunde, damit der Zug im Test erreichbar ist.
+        NEUES_SPIEL_DANKESWOCHE_MS: '1',
       },
     },
   );
@@ -1377,8 +1379,13 @@ try {
   ) as { regenAmHimmel: boolean; zeile: boolean; text: string };
   check(
     'Der Regen am Himmel ist der Regen, der wirkt — Himmel und Regenzeile stimmen überein',
-    wetterLage.regenAmHimmel === wetterLage.zeile && (!wetterLage.zeile || /schneller/.test(wetterLage.text)),
+    wetterLage.regenAmHimmel ? (wetterLage.zeile && /schneller/.test(wetterLage.text)) : !/schneller/.test(wetterLage.text),
     wetterLage.zeile ? wetterLage.text : `kein Regen gerade (Himmel: ${wetterLage.regenAmHimmel})`,
+  );
+  check(
+    'Ohne Regen nennt die Zeile die Jahreszeit und die Saisonware',
+    wetterLage.regenAmHimmel || (wetterLage.zeile && /(Frühling|Sommer|Herbst|Winter) · .+ bringt eine mehr/.test(wetterLage.text)),
+    wetterLage.text,
   );
 
   check(
@@ -1826,6 +1833,41 @@ try {
     'Ein Brett geht an die Baustelle: du stehst als Helfer, und das Brett ist vom Hof weg — auf dem Server und auf dem Gerät',
     nachBeitrag.du && nachBeitrag.helfer === 1 && /1 Stück/.test(nachBeitrag.mein) && planksServer === planksVor - 1 && nachBeitrag.lokal === planksVor - 1,
     `Bretter ${planksVor} → Server ${planksServer}, Gerät ${nachBeitrag.lokal} · ${JSON.stringify(nachBeitrag)}`,
+  );
+  await evaluate(cdp, `document.getElementById('dorf-close').click()`);
+  await sleep(200);
+
+  // Der Zug: Steht der Bahnhof (drei Projekte, aus der Werkbank gefüllt),
+  // steht jede Woche ein Zug mit Bestellung im Dorfplatz — und auf dem Hof.
+  let projekteFertig = 0;
+  for (let i = 0; i < 12 && projekteFertig < 3; i++) {
+    const f = (await api('/api/admin/dorf/fuellen', 'POST')) as { projektFertig?: boolean };
+    if (f.projektFertig) projekteFertig++;
+    await sleep(20);
+  }
+  await sleep(4800);
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('dorf-auf').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#dorf-liste .dorf-zeile').length >= 4`, 'Zug mit Bestellung im Dorfplatz', 8_000);
+  const zugBild = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var gruppen = [...document.querySelectorAll('#dorf-liste .ziel-gruppe')].map(function (g) { return g.textContent; });
+         return {
+           zeilen: document.querySelectorAll('#dorf-liste .dorf-zeile').length,
+           zug: gruppen.some(function (g) { return /Der Zug/.test(g) && /fährt in/.test(g); }),
+           hof: (document.getElementById('dorf') || {}).getAttribute ? document.getElementById('dorf').getAttribute('aria-label') : '',
+           etappen: [...document.querySelectorAll('#dorf-liste .dorf-etappe.fertig')].length,
+         };
+       })())`,
+    ),
+  ) as { zeilen: number; zug: boolean; hof: string; etappen: number };
+  check(
+    'Steht der Bahnhof, wartet der Zug: vier Waren, Abfahrt genannt, das Bauwerk auf dem Hof fertig',
+    projekteFertig === 3 && zugBild.zeilen === 4 && zugBild.zug && /Bahnhof, fertig/.test(zugBild.hof) && zugBild.etappen === 3,
+    `${projekteFertig} Projekte · ${JSON.stringify(zugBild)}`,
   );
   await evaluate(cdp, `document.getElementById('dorf-close').click()`);
   await sleep(200);

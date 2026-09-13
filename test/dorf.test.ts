@@ -74,7 +74,7 @@ test('Beiträge füllen Etappen, das Projekt wird fertig, dann läuft die Dankes
   assert.equal(dorf.dankeswoche(T0 + 10_000), true);
   assert.equal(dorf.offen('plank', T0 + 10_000), 0, 'fertig heißt: nichts mehr annehmen');
 
-  // Nach der Dankeswoche: das nächste Projekt, mit neuem Faktor.
+  // Nach der Dankeswoche: das nächste Projekt, neu gemessen.
   const spaeter = s2.fertigMs + DANKESWOCHE_MS + 1;
   const dorf2 = new Dorf(db, () => ({ aktive: 20, vorrat: (item) => (item === 'stake' ? 1000 : 0) }));
   const s3 = dorf2.stand(spaeter, 'anna');
@@ -109,4 +109,24 @@ test('der Zwischenspeicher lügt nie: nach jedem Beitrag stimmt der Stand sofort
   assert.equal(danach.mein, 5);
   dorf.beitrag('ben', 'plank', 1, T0 + 1);
   assert.deepEqual(dorf.stand(T0 + 2, 'ben').helfer.map((h) => h.konto), ['anna', 'ben']);
+});
+
+test('nach dem letzten Projekt bleibt das Bauwerk stehen — der Bahnhof steht, kein nächstes Projekt', () => {
+  const db = openDb(':memory:');
+  const dorf = new Dorf(db, leer(2), 1);
+  let t = T0;
+  for (let p = 0; p < PROJEKTE.length; p++) {
+    let erg = dorf.fuelle('anna', t);
+    for (let i = 0; i < 6 && !(erg.ok && erg.projektFertig); i++) erg = dorf.fuelle('anna', ++t);
+    assert.ok(erg.ok && erg.projektFertig, `Projekt ${p} fertig`);
+    t += 10;
+  }
+  assert.equal(dorf.alleGebaut(), true);
+  assert.equal(dorf.bahnhofSteht(), true);
+  const s = dorf.stand(t + 100_000, 'anna');
+  assert.equal(s.projekt.id, 'bahnhof');
+  assert.equal(s.fertig, true);
+  assert.equal(s.alleGebaut, true);
+  assert.equal(s.naechstesMs, 0, 'kein nächstes Projekt');
+  assert.equal(dorf.offen('plank', t + 100_000), 0);
 });

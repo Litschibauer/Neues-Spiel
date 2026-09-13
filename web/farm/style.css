@@ -280,6 +280,54 @@
   }
   .himmel { z-index: 65; background: transparent; transition: background 2.5s linear; }
   .wetter { z-index: 66; overflow: hidden; opacity: 1; transition: opacity 1.5s ease; }
+  /* Die Nacht liegt IN der Welt (wandert mit der Kamera) und multipliziert:
+     Weiß am Tag, tiefes Blau in der Nacht. Darüber die Lichter. */
+  .nachtdecke {
+    position: absolute; inset: -60% 0 0 0; z-index: 64; pointer-events: none;
+    background: #fff; mix-blend-mode: multiply; transition: background 2.5s linear;
+  }
+  .lichter { position: absolute; inset: 0; z-index: 65; pointer-events: none; }
+  .lichter > span { position: absolute; display: block; }
+  .laternenschein {
+    background: radial-gradient(ellipse at 50% 42%, rgba(255, 214, 120, .55) 0%, rgba(255, 190, 80, .22) 35%, transparent 70%);
+    transform: scale(2.6, 2.2); mix-blend-mode: screen;
+  }
+  .gluehwuermchen::before {
+    content: ''; position: absolute; left: 50%; top: 40%; width: 4px; height: 4px; border-radius: 50%;
+    background: #e8ff9a; box-shadow: 0 0 6px 3px rgba(220, 255, 140, .7);
+    animation: gluehen 4s ease-in-out infinite; animation-delay: inherit; animation-duration: inherit;
+  }
+  @keyframes gluehen {
+    0%, 100% { opacity: 0; transform: translate(0, 0); }
+    20% { opacity: 1; }
+    50% { opacity: .8; transform: translate(var(--dx, 20%), var(--dy, -30%)); }
+    80% { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { .gluehwuermchen::before { animation: none; opacity: .8; } }
+
+  /* Jahreszeiten: jede Woche sieht der Hof anders aus. Bäume und Boden. */
+  .hof.saison-0 .hindernis[data-art="tree"] .art { filter: hue-rotate(-12deg) saturate(1.3) brightness(1.06); }
+  .hof.saison-0 .hindernis[data-art="tree"]::after {
+    content: ''; position: absolute; inset: 8% 14% 34% 14%; pointer-events: none;
+    background-image: radial-gradient(circle, rgba(255, 190, 215, .95) 0 1.5px, transparent 2.2px);
+    background-size: 11px 9px;
+  }
+  .hof.saison-1 .scene { filter: saturate(1.1) brightness(1.03); }
+  .hof.saison-2 .hindernis[data-art="tree"] .art { filter: sepia(.6) saturate(1.7) hue-rotate(-24deg); }
+  .hof.saison-2 .scene { filter: sepia(.22) saturate(1.05); }
+  .hof.saison-3 .scene { filter: saturate(.2) brightness(1.22); }
+  .hof.saison-3 .hindernis[data-art="tree"] .art { filter: saturate(.25) brightness(1.18); }
+  .hof.saison-3 .hindernis[data-art="tree"]::after, .hof.saison-3 .hindernis[data-art="rock"]::after {
+    content: ''; position: absolute; left: 14%; right: 14%; top: 10%; height: 22%; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 100%, rgba(255,255,255,.85), rgba(255,255,255,.4) 60%, transparent 72%);
+  }
+  .hof.saison-3 .welt::after {
+    content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: .75;
+    background-image:
+      radial-gradient(ellipse, rgba(255,255,255,.9) 0 42%, transparent 62%),
+      radial-gradient(ellipse, rgba(255,255,255,.7) 0 30%, transparent 55%);
+    background-size: 34px 22px, 23px 17px; background-position: 9px 13px, 2px 4px;
+  }
   .wetter.wolkig { background: rgba(120,126,138,.12); }
   /* Sanfter Nieselregen: weit auseinander, blass, leicht unscharf, ruhig — kein
      hartes Streifenflimmern. */

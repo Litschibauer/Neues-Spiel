@@ -19,6 +19,8 @@ import {
   wochenAufgabenFuer,
   wetterBei,
   wetterWechselIn,
+  saisonBei,
+  saisonWechselInWochen,
   meisterFaehig,
   meisterGrenzen,
   sterneVon,
@@ -335,6 +337,8 @@ export type FarmView = {
   feste: FestView | null;
   // Das Wetter der Sim — was der Himmel zeigt, ist das, was wirkt.
   wetter: { art: WetterArt; wechselIn: number; wirkt: boolean; regenSchubProzent: number } | null;
+  // Die Jahreszeit der Serverwoche: Name, Saisonware, und wie viele Wochen sie noch hat.
+  saison: { name: string; index: number; bonusItem: number; nochWochen: number } | null;
   // Booster: Vorrat und Restlaufzeit. null, wenn das Regelwerk keine kennt.
   booster: {
     xpItem: number;
@@ -889,6 +893,12 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     aufgaben: aufgabenView(state, rules),
     wochenaufgaben: wochenView(state, rules),
     feste: festView(state, rules),
+    saison: (() => {
+      const s = saisonBei(rules, state.wochenNummer ?? 0);
+      if (!s) return null;
+      const alle = rules.jahreszeiten!.saisons;
+      return { name: s.name, index: alle.indexOf(s), bonusItem: s.bonusItem, nochWochen: saisonWechselInWochen(rules, state.wochenNummer ?? 0) };
+    })(),
     wetter: rules.wetter
       ? {
           art: wetterBei(rules, state.tick),
