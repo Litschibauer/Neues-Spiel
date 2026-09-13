@@ -446,7 +446,8 @@ echter Datenbank. Zahlen in `deploy.md`.
   gy)` in `raster.js` spiegelt die PLACE-Regeln der Simulation (Rand,
   Sperrzone, Hindernis — geräumte zählen nicht —, gesperrtes Land, belegt)
   und nennt den Grund; der Fußabdruck (`#fussabdruck`) zeigt die belegten
-  Zellen grün oder rot, ein abgelehnter Wurf sagt warum. Die Browsersuite
+  Zellen grün oder rot, ein abgelehnter Wurf sagt warum; am Bildrand
+  schwenkt die Kamera mit (`randSchwenkPruefen`). Die Browsersuite
   vergleicht jede Zelle mit `NS.blockiert` — Oberfläche und Sim müssen
   einig sein.
 - **Blätter** (`show(name)`): genau eines offen, `x-bg` sichtbar, Rest

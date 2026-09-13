@@ -3413,6 +3413,49 @@ try {
     JSON.stringify(zugAufFrei),
   );
 
+  // Am Bildrand schwenkt der Hof mit, solange der Finger dort bleibt — und
+  // das Bauwerk bleibt angehoben.
+  const randSchwenk = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `(function () {
+         var NS = globalThis.NeuesSpiel;
+         var raw = localStorage.getItem(NS.storageKeyFor(location.origin));
+         var r = NS.restoreClient(JSON.parse(raw)); var c = r.client || r;
+         var s = c.preview(); var rules = NS.getRuleset(c.baseSnapshot.rulesetVersion);
+         var idx = s.plots.findIndex(function (p, i) { return p.gx >= 0 && p.level > 0 && /^field-/.test(rules.plots[i].id); });
+         var tile = document.querySelector('#plots .plot[data-platz="' + idx + '"]');
+         var hof = document.getElementById('hof').getBoundingClientRect();
+         var welt = document.getElementById('welt');
+         var r0 = tile.getBoundingClientRect();
+         tile.dispatchEvent(new PointerEvent('pointerdown', { clientX: r0.left + r0.width / 2, clientY: r0.top + r0.height / 2, bubbles: true, button: 0 }));
+         return new Promise(function (fertig) {
+           setTimeout(function () {
+             var vorher = welt.style.transform;
+             document.dispatchEvent(new PointerEvent('pointermove', { clientX: hof.right - 10, clientY: hof.top + hof.height / 2, bubbles: true }));
+             setTimeout(function () {
+               var mitte = welt.style.transform;
+               var hebt = tile.classList.contains('zieht');
+               document.dispatchEvent(new PointerEvent('pointermove', { clientX: hof.left + hof.width / 2, clientY: hof.top + hof.height / 2, bubbles: true }));
+               setTimeout(function () {
+                 var danach = welt.style.transform;
+                 document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+                 setTimeout(function () {
+                   fertig(JSON.stringify({ geschwenkt: vorher !== mitte, hebt: hebt, steht: mitte === danach, vorher: vorher, mitte: mitte }));
+                 }, 300);
+               }, 250);
+             }, 400);
+           }, 600);
+         });
+       })()`,
+    ),
+  ) as { geschwenkt: boolean; hebt: boolean; steht: boolean; vorher: string; mitte: string };
+  check(
+    'Am Bildrand schwenkt der Hof beim Ziehen mit, in der Mitte steht er wieder still',
+    randSchwenk.geschwenkt && randSchwenk.hebt && randSchwenk.steht,
+    `${randSchwenk.vorher} → ${randSchwenk.mitte} · angehoben ${randSchwenk.hebt} · still ${randSchwenk.steht}`,
+  );
+
   // Und wo es nicht passt, sagt der Hof warum — statt still nichts zu tun.
   const zugAufSperre = JSON.parse(
     await evaluate<string>(

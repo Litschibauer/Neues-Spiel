@@ -593,8 +593,9 @@ function ziehLos(e) {
   ziehZu(e);
 }
 
-function ziehZu(e) {
+function ziehZu(e, vomSchwenk) {
   if (!ziehen || !ziehen.aktiv) return;
+  if (!vomSchwenk) randSchwenkPruefen(e);
   var feld = zeigerAufFeld(e);
   if (!feld) return;
 
@@ -614,9 +615,47 @@ function ziehZu(e) {
   ziehen.tile.style.height = kasten.height + '%';
 }
 
+// Am Rand mitschwenken: Wer ein Bauwerk zum Bildrand zieht, will weiter —
+// also faehrt die Kamera in die Richtung, solange der Finger dort bleibt, und
+// der Zielplatz wandert mit. Am Anschlag der Kamera passiert nichts mehr.
+var randSchwenk = null;
+var RAND_ZONE = 44;
+var RAND_TEMPO = 9;
+
+function randSchwenkPruefen(e) {
+  if (!ziehen || !ziehen.aktiv) { randSchwenkStopp(); return; }
+  var k = $('hof').getBoundingClientRect();
+  var dx = 0, dy = 0;
+  if (e.clientX < k.left + RAND_ZONE) dx = 1;
+  else if (e.clientX > k.right - RAND_ZONE) dx = -1;
+  if (e.clientY < k.top + RAND_ZONE) dy = 1;
+  else if (e.clientY > k.bottom - RAND_ZONE) dy = -1;
+  if (!dx && !dy) { randSchwenkStopp(); return; }
+  var wo = { clientX: e.clientX, clientY: e.clientY };
+  if (!randSchwenk) randSchwenk = { dx: dx, dy: dy, e: wo, timer: setInterval(randSchwenkSchritt, 16) };
+  else { randSchwenk.dx = dx; randSchwenk.dy = dy; randSchwenk.e = wo; }
+}
+
+function randSchwenkSchritt() {
+  if (!randSchwenk || !ziehen || !ziehen.aktiv) { randSchwenkStopp(); return; }
+  var vx = kamera.x, vy = kamera.y;
+  kamera.x += randSchwenk.dx * RAND_TEMPO;
+  kamera.y += randSchwenk.dy * RAND_TEMPO;
+  kameraAnwenden();
+  if (kamera.x === vx && kamera.y === vy) return;
+  ziehZu(randSchwenk.e, true);
+}
+
+function randSchwenkStopp() {
+  if (!randSchwenk) return;
+  clearInterval(randSchwenk.timer);
+  randSchwenk = null;
+}
+
 function ziehEnde() {
   if (!ziehen) return;
   clearTimeout(ziehen.timer);
+  randSchwenkStopp();
   var war = ziehen;
   ziehen = null;
 
