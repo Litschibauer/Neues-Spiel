@@ -444,6 +444,9 @@ echter Datenbank. Zahlen in `deploy.md`.
   (`besuchAktiv()`).
 - **Blätter** (`show(name)`): genau eines offen, `x-bg` sichtbar, Rest
   versteckt; `netzWache()` wirft aus Blättern, die Netz brauchen.
+- **Benachrichtigungen**: `melden.js` (Abo im Browser, Apple in der App),
+  Server `push.ts`/`apns.ts`, `/api/push/abo` und `/api/push/probe`. Wie sie
+  ankommen und wo es hängt: `deploy.md`, „Benachrichtigungen".
 - **Meldungen**: `toast()` für sofort, `momente.js` für eine Warteschlange
   wichtiger Nachrichten (gleiche Art wird zusammengelegt, `eilig` springt vor).
   Ein Zettel kommt nur für das, was der Hof nicht selbst zeigt: Säen und

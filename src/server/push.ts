@@ -77,12 +77,21 @@ export function vapidToken(keys: VapidKeys, aud: string, jetzt: number): string 
 
 // Verschlüsselt die Nachricht für ein Gerät (RFC 8291). Ergebnis ist der
 // komplette Rumpf: salt | Datensatzgröße | Länge | Serverschlüssel | Geheimtext.
-export function verschluessele(sub: PushSub, klartext: Buffer): Buffer {
+//
+// `probe` ist nur für den Prüfvektor aus RFC 8291 da: Mit festem Salz und
+// festem Serverschlüssel muss Byte für Byte herauskommen, was der Standard
+// vorrechnet. Im Betrieb ist beides zufällig.
+export function verschluessele(
+  sub: PushSub,
+  klartext: Buffer,
+  probe?: { salt: Buffer; serverPrivat: Buffer },
+): Buffer {
   const geraet = fromB64url(sub.p256dh);
   const auth = fromB64url(sub.auth);
 
   const ecdh = createECDH('prime256v1');
-  ecdh.generateKeys();
+  if (probe) ecdh.setPrivateKey(probe.serverPrivat);
+  else ecdh.generateKeys();
   const serverPub = ecdh.getPublicKey();
   const gemeinsam = ecdh.computeSecret(geraet);
 
@@ -95,7 +104,7 @@ export function verschluessele(sub: PushSub, klartext: Buffer): Buffer {
   ]);
   const prk = Buffer.from(hkdfSync('sha256', gemeinsam, auth, info, 32));
 
-  const salt = randomBytes(16);
+  const salt = probe ? probe.salt : randomBytes(16);
   const cek = Buffer.from(
     hkdfSync('sha256', prk, salt, Buffer.from('Content-Encoding: aes128gcm\0'), 16),
   );

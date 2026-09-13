@@ -721,6 +721,7 @@
         $('pushstand').textContent =
           'Erreichbar: ' + d.hoefe + ' Höfe · ' + d.abos + ' Geräte' +
           ' (' + d.web + ' Browser, ' + d.ios + ' App)' +
+          (d.abos === 0 ? ' — noch kein Gerät hat „Benachrichtigungen" im Spiel eingeschaltet' : '') +
           (d.ios > 0 && !d.apnsBereit ? ' — Achtung: Apple-Schlüssel fehlt, App-Geräte bekommen nichts' : '');
       })
       .catch(function (e) { $('pushstand').textContent = 'Erreichbar: ' + e.message; });

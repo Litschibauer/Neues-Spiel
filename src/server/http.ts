@@ -93,6 +93,7 @@ const WIEDER_BREMSE_HOF = new Bremse(5, 3_600_000);
 const WIEDER_BREMSE_HERKUNFT = new Bremse(20, 3_600_000);
 const RUECK_BREMSE = new Bremse(10, 3_600_000);
 const FEHLER_BREMSE = new Bremse(30, 3_600_000);
+const PROBE_BREMSE = new Bremse(6, 3_600_000);
 
 const limiter = new CreateLimiter(
   Number(process.env.NEUES_SPIEL_NEW_PER_HOUR ?? 20),
@@ -103,7 +104,11 @@ const market = new Market(accounts.storage);
 
 // Push: Schlüsselpaar liegt neben den Serverdaten und wird beim ersten Start
 // erzeugt. Es darf sich nie ändern, sonst verfallen alle Abos der Spieler.
-const VAPID = ladeVapid(join(dirname(SAVE_PATH), 'vapid.json'), 'mailto:hof@neues-spiel');
+// Der Absender im Ausweis (JWT `sub`) muss eine gültige Adresse sein — eine
+// https-Seite oder eine echte mailto-Adresse. Manche Push-Dienste lehnen
+// sonst ab. Überschreibbar, falls der Betreiber eine eigene nennen will.
+const PUSH_KONTAKT = process.env.NEUES_SPIEL_PUSH_KONTAKT?.trim() || 'https://github.com/Litschibauer/Neues-Spiel';
+const VAPID = ladeVapid(join(dirname(SAVE_PATH), 'vapid.json'), PUSH_KONTAKT);
 
 // Echte Push-Dienste sprechen immer HTTPS. Nur auf dem eigenen Rechner lassen
 // wir HTTP zu, sonst ließe sich der Weg lokal nicht ausprobieren.
@@ -1451,6 +1456,19 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         zuletztMs: 0,
       });
       return json(res, 200, { ok: true, art: 'web' });
+    }
+
+    // Probe: eine Nachricht an die eigenen Geräte, mit ehrlicher Antwort —
+    // so sieht der Spieler auf dem Gerät selbst, ob und warum nichts ankommt.
+    if (url.pathname === '/api/push/probe' && req.method === 'POST') {
+      const bremse = PROBE_BREMSE.zaehle(account.id, Date.now());
+      if (!bremse.ok) return json(res, 429, { error: 'TOO_MANY_PROBES', warteMs: bremse.warteMs });
+      const geraete = accounts.storage.listPushAbos(account.id).length;
+      if (geraete === 0) {
+        return json(res, 200, { ok: true, geraete: 0, gesendet: 0, entfernt: 0, fehler: ['Dieses Gerät ist nicht angemeldet — Schalter einmal aus und wieder an'] });
+      }
+      return pushAn([account.id], 'Probe vom Hof', 'Wenn du das liest, kommen Benachrichtigungen an.', 'probe')
+        .then((r) => json(res, 200, { ok: true, geraete, ...r }));
     }
 
     if (url.pathname === '/api/push/abo' && req.method === 'DELETE') {

@@ -149,7 +149,25 @@ function meldenAnzeigen() {
             : 'Sag Bescheid, wenn etwas fertig ist';
   $('melden-schalter').disabled =
     stand === 'geht-nicht' || stand === 'blockiert' || stand === 'zum-home';
+  $('melden-probe').hidden = stand !== 'an';
 }
+
+// Die Probe sagt ehrlich, was der Server erreicht hat — und wenn nichts,
+// warum. Das ist der einzige Weg, es auf dem Gerät selbst zu sehen.
+$('melden-probe').addEventListener('click', function () {
+  if (!netzOk()) { toast('Ohne Netz geht das nicht', true); return; }
+  var knopf = $('melden-probe');
+  knopf.disabled = true;
+  api('/api/push/probe', { method: 'POST' })
+    .then(function (d) {
+      if (d.gesendet > 0) toast('Probe unterwegs — gleich in den Mitteilungen');
+      else toast((d.fehler && d.fehler[0]) || 'Der Push-Dienst hat nicht angenommen', true);
+    })
+    .catch(function (e) {
+      toast(e.message === 'HTTP 429' ? 'Genug Proben für jetzt' : 'Probe ging nicht raus', true);
+    })
+    .then(function () { knopf.disabled = false; });
+});
 
 $('melden-schalter').addEventListener('click', function () {
   var stand = meldenStand();

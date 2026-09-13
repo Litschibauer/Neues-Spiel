@@ -90,6 +90,25 @@ test('eine verschlüsselte Nachricht lässt sich mit dem Geräteschlüssel wiede
   assert.equal(offen.subarray(0, offen.length - 1).toString(), klartext, 'Inhalt kommt heil an');
 });
 
+// Der Prüfvektor aus RFC 8291, Anhang A: feste Schlüssel, festes Salz — dann
+// muss Byte für Byte herauskommen, was der Standard vorrechnet. Das ist der
+// einzige Beweis, der nicht zirkulär ist (oben spielen wir beide Seiten selbst).
+test('die Verschlüsselung trifft den Prüfvektor aus RFC 8291 Byte für Byte', () => {
+  const sub: PushSub = {
+    endpoint: 'https://push.example.com/rfc8291',
+    p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4',
+    auth: 'BTBZMqHH6r4Tts7J_aSIgg',
+  };
+  const rumpf = verschluessele(sub, Buffer.from('When I grow up, I want to be a watermelon'), {
+    salt: Buffer.from('DGv6ra1nlYgDCS1FRnbzlw', 'base64url'),
+    serverPrivat: Buffer.from('yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw', 'base64url'),
+  });
+  assert.equal(
+    rumpf.toString('base64url'),
+    'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN',
+  );
+});
+
 test('Datensatzgröße und Schlüssellänge stehen im Kopf, wie der Standard es will', () => {
   const geraet = createECDH('prime256v1');
   geraet.generateKeys();

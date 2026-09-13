@@ -956,6 +956,43 @@ verhält sich anders als eine Attrappe:
 
 ---
 
+## Benachrichtigungen: wie sie ankommen
+
+Der Weg hat drei Stationen, und an jeder kann es hängen:
+
+1. **Das Gerät meldet sich an.** Im Spiel unter Zahnrad → „Benachrichtigungen"
+   auf „An". Der Browser fragt um Erlaubnis, stellt ein Abo aus (Endpunkt bei
+   Google, Mozilla oder Apple plus zwei Schlüssel) und das Spiel schickt es an
+   `/api/push/abo`. Ohne diesen Schritt gibt es nichts zu senden: Die Werkbank
+   zeigt dann „0 Geräte". Auf dem iPhone geht das nur, wenn die Seite auf dem
+   Home-Bildschirm liegt und von dort gestartet wird (Schalter sagt „Fast");
+   in Safari selbst gibt es keine Web-Benachrichtigungen. In der nativen App
+   läuft es über Apple und braucht den APNs-Schlüssel (siehe `ios-app/`).
+2. **Der Server verschlüsselt und schickt.** Für jedes Abo einzeln, an den
+   Push-Dienst des Browsers, ausgewiesen mit einem signierten Schlüssel
+   (`data/<env>/vapid.json`, darf sich nie ändern). Der Absender darin ist
+   `NEUES_SPIEL_PUSH_KONTAKT` (Standard: die Projektseite). Die Werkbank
+   protokolliert, was der Push-Dienst geantwortet hat; tote Abos (404/410)
+   fliegen raus.
+3. **Der Browser zeigt sie an** — als Mitteilung des Systems (Mitteilungs-
+   zentrale, Sperrbildschirm), auch wenn das Spiel zu ist. Tippen bringt den
+   Hof nach vorn. Ist der Browser ganz beendet, kommt sie beim nächsten Start
+   (Android und Home-Bildschirm-Apps auch dann). Was das Gerät selbst
+   stummgeschaltet hat (Nicht stören, Browser ohne Mitteilungsrecht), sieht
+   der Server nicht.
+
+**Wer schickt wann?** Die Werkbank sofort („Push" an alle oder einen Hof).
+Der Server von selbst alle fünf Minuten: nur an Höfe, deren Spieler seit
+20 Minuten weg ist, höchstens alle sechs Stunden, und nur wenn wirklich
+etwas wartet (reife Plätze, volle Reusen, fertiger Köder).
+
+**Selbst prüfen:** Unter dem Schalter steht „Probe schicken". Die Antwort
+sagt ehrlich, was der Server erreicht hat — „Probe unterwegs" oder den
+Grund (nicht angemeldet, Push-Dienst antwortet 403 …). Sechs Proben je
+Stunde. Die Verschlüsselung selbst ist gegen den Prüfvektor aus RFC 8291
+getestet (`test/push.test.ts`), der ganze Weg gegen einen nachgebauten
+Push-Dienst (`test/push-http.test.ts`).
+
 ## Werkbank: `/admin`
 
 Ein kleines Panel zum Herbeiführen von Situationen, auf die man sonst warten
