@@ -152,7 +152,10 @@ bleiben draußen. Optionale Felder bedingt anhängen
   Prosa. Listen werden Dinge: Erfolge sind Abzeichen, die Ehrentafel ein
   Podest, das Baumenü zeigt das Gebäude. Erklärungen je Blatt sind ein
   angepinnter Zettel mit einem Satz (`FEATURE_TIPP` in `start.js`), keine
-  Kartenfolge.
+  Kartenfolge. Was abholbar ist, steht oben: Im Erfolge-Blatt sammelt
+  „Zum Abholen" alle erfüllten Erfolge quer durch die Gruppen, ab zwei mit
+  „Alle abholen" (`erfolgeAbholen`). Stufenaufstieg und Kiste feiern auf
+  derselben Bühne (`.stufe-karte`: Holz, Balken, Papierzeilen, Messing).
 - **Klänge sind Aufnahmen, keine Oszillatoren — und leise.** Gemeinfreie
   Geräusche (Kenney: Holz, Stoff, Gras, Glas, Münzen) werden mit
   `scripts/klaenge-mischen.py` zu `web/farm/klaenge/*.wav` gemischt (mono,

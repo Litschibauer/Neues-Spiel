@@ -954,9 +954,35 @@ function renderZiele(v) {
   kopf.innerHTML =
     '<div class="ziel-kopf-zahl"><b>' + fertig + '</b> von ' + liste.length + ' eingelöst</div>' +
     '<span class="balken"><i style="width:' +
-      Math.floor((fertig * 100) / liste.length) + '%"></i></span>' +
-    (offen > 0 ? '<div class="ziel-kopf-hinweis">' + offen + ' warten auf dich</div>' : '');
+      Math.floor((fertig * 100) / liste.length) + '%"></i></span>';
   box.appendChild(kopf);
+
+  // Was man abholen kann, steht ganz oben — quer durch alle Gruppen, mit
+  // einem Knopf fuer alles auf einmal. Niemand soll durch Gruppen scrollen,
+  // um sein Gold zu finden.
+  var wartend = liste.filter(function (e) { return e.erfuellt && !e.eingeloest; });
+  if (wartend.length > 0) {
+    var obenTitel = document.createElement('div');
+    obenTitel.className = 'ziel-gruppe ziel-wartend';
+    obenTitel.innerHTML = '<span>Zum Abholen</span><span class="ziel-gruppe-zahl">' + wartend.length + '</span>';
+    box.appendChild(obenTitel);
+    var obenRaster = document.createElement('div');
+    obenRaster.className = 'abzeichen-raster';
+    wartend.forEach(function (e) { obenRaster.appendChild(zielZeile(e, gruppeBild(e.gruppe))); });
+    box.appendChild(obenRaster);
+    // Ab zwei lohnt ein Knopf fuer alles; bei einem reicht der am Abzeichen.
+    if (wartend.length > 1) {
+      var summe = { gold: 0, xp: 0 };
+      wartend.forEach(function (e) { summe.gold += e.gold || 0; summe.xp += e.xp || 0; });
+      var alle = document.createElement('button');
+      alle.type = 'button';
+      alle.className = 'ziel-alle';
+      alle.id = 'ziele-alle';
+      alle.textContent = 'Alle abholen' + (lohnText(summe) ? ' · ' + lohnText(summe) : '');
+      alle.addEventListener('click', function () { erfolgeAbholen(wartend, alle); });
+      box.appendChild(alle);
+    }
+  }
 
   // Die Aufgaben des Tages haben ein eigenes Zuhause am Abenteuerbrett. Hier
   // steht nur der Hinweis, damit man sie vom Ziele-Bildschirm aus findet.
@@ -993,6 +1019,7 @@ function renderZiele(v) {
     raster.className = 'abzeichen-raster';
     teil.forEach(function (e) {
       if (e.eingeloest) { erledigt.push(e); return; }
+      if (e.erfuellt) return; // steht schon oben unter „Zum Abholen"
       if (zielVerdeckt(e, liste, reihen)) return;
       raster.appendChild(zielZeile(e, gruppe.bild));
     });
@@ -1288,10 +1315,30 @@ function festAbschnitt(v, box) {
 // Ein Erfolg ist ein Abzeichen: Medaille mit dem Bild seiner Gruppe, Name,
 // Lohn — und der Knopf, sobald es so weit ist. Grau, solange es aussteht;
 // Messing, wenn es abgeholt werden kann; gruen, wenn es haengt.
+function gruppeBild(id) {
+  for (var i = 0; i < ZIEL_GRUPPEN.length; i++) if (ZIEL_GRUPPEN[i].id === id) return ZIEL_GRUPPEN[i].bild;
+  return null;
+}
+
+// Alles auf einmal: jeder Erfolg einzeln bei der Sim, aber eine Meldung, ein
+// Muenzregen, ein Funke — nicht zwoelf hintereinander.
+function erfolgeAbholen(wartend, knopf) {
+  var wo = knopf.getBoundingClientRect();
+  var gold = 0, xp = 0, n = 0, fehler = null;
+  wartend.forEach(function (e) {
+    var r = client.claimAchievement(e.id);
+    if (r.ok) { n++; gold += e.gold || 0; xp += e.xp || 0; }
+    else fehler = r;
+  });
+  if (n === 0) { act(null, fehler || { ok: false, code: 'UNKNOWN' }); return; }
+  act(n === 1 ? 'Erfolg eingelöst' : n + ' Erfolge eingelöst', { ok: true }, 'stufe');
+  if (gold > 0) muenzenFliegen(wo, gold);
+  if (xp > 0) xpAuf(wo, xp);
+}
+
 function zielZeile(e, bild) {
   var einloesbar = e.erfuellt && !e.eingeloest;
-  var lohn = (e.gold > 0 ? e.gold + ' Gold' : '') +
-    (e.gold > 0 && e.xp > 0 ? ' · ' : '') + (e.xp > 0 ? e.xp + ' XP' : '');
+  var lohn = lohnText(e);
 
   var karte = document.createElement('div');
   karte.className = 'abzeichen' + (e.eingeloest ? ' erreicht' : einloesbar ? ' offen' : ' zu');

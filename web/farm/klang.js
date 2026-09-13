@@ -323,7 +323,7 @@ function feiereStufe(level) {
 
   (karte.plots || []).forEach(function (id) {
     var pn = plotIdName(id);
-    zeilen.push('<div class="zeile"><span class="mark">🔨</span><span>' + pn.name +
+    zeilen.push('<div class="zeile"><span class="mark">' + (iconTag('mallet') || '🔨') + '</span><span>' + pn.name +
       '</span><span class="was">' + pn.art + '</span></div>');
   });
   (karte.recipes || []).forEach(function (i) {

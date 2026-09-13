@@ -2023,6 +2023,64 @@ try {
     await evaluate<boolean>(cdp, `document.getElementById('stufe-feier').hidden`),
   );
 
+  // Was abholbar ist, steht im Erfolge-Blatt ganz oben, vor allen Gruppen —
+  // und ab zwei holt ein Knopf alles auf einmal.
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('ziele-auf').click()`);
+  await sleep(600);
+  const goldVorErfolgen = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
+  const erfolgeOben = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var kinder = [...document.getElementById('ziele-liste').children];
+         var oben = kinder.findIndex(function (k) { return k.classList.contains('ziel-wartend'); });
+         var gruppe = kinder.findIndex(function (k) { return k.classList.contains('ziel-gruppe') && !k.classList.contains('ziel-wartend'); });
+         var knopf = document.getElementById('ziele-alle');
+         return {
+           wartend: document.querySelectorAll('#ziele-liste .ziel-los').length,
+           vorGruppen: oben >= 0 && (gruppe < 0 || oben < gruppe),
+           knopf: knopf ? knopf.textContent : '',
+         };
+       })())`,
+    ),
+  ) as { wartend: number; vorGruppen: boolean; knopf: string };
+  check(
+    'Abholbare Erfolge stehen ganz oben, vor allen Gruppen',
+    erfolgeOben.wartend > 0 && erfolgeOben.vorGruppen,
+    `${erfolgeOben.wartend} wartend · Knopf für alle: „${erfolgeOben.knopf || 'keiner'}"`,
+  );
+  check(
+    'Ab zwei wartenden Erfolgen gibt es einen Knopf für alle',
+    erfolgeOben.wartend < 2 ? erfolgeOben.knopf === '' : /Alle abholen/.test(erfolgeOben.knopf),
+    erfolgeOben.knopf || `${erfolgeOben.wartend} wartend, kein Knopf`,
+  );
+  await evaluate(cdp, `(function () {
+    var alle = document.getElementById('ziele-alle');
+    if (alle) { alle.click(); return; }
+    var eins = document.querySelector('#ziele-liste .ziel-los');
+    if (eins) eins.click();
+  })()`);
+  await sleep(700);
+  const nachErfolgen = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify({
+         wartend: document.querySelectorAll('#ziele-liste .ziel-los').length,
+         knopf: !!document.getElementById('ziele-alle'),
+         gold: Number(document.getElementById('gold').textContent),
+       })`,
+    ),
+  ) as { wartend: number; knopf: boolean; gold: number };
+  check(
+    'Abholen löst jeden wartenden Erfolg ein — das Gold liegt danach im Beutel',
+    nachErfolgen.wartend === 0 && !nachErfolgen.knopf && nachErfolgen.gold > goldVorErfolgen,
+    `${goldVorErfolgen} → ${nachErfolgen.gold} Gold · ${nachErfolgen.wartend} übrig`,
+  );
+  await evaluate(cdp, `document.getElementById('ziele-close').click()`);
+  await sleep(300);
+
   const pfad = await evaluate<{
     offen: boolean;
     steine: number;

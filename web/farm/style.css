@@ -2010,6 +2010,48 @@
   .abzeichen-stand { font-size: .64rem; color: var(--tinte-grau); font-variant-numeric: tabular-nums; }
   .abzeichen .ziel-los { width: 100%; margin-top: .2rem; padding: .4rem .3rem; font-size: .78rem; }
   .abzeichen .abzeichen-fertig { font-size: .68rem; color: #4d8a3f; font-weight: 700; }
+  /* „Zum Abholen" steht ueber allen Gruppen; der Knopf holt alles auf einmal. */
+  .sheet .ziel-wartend { color: var(--messing); border-bottom-color: var(--messing); }
+  .sheet .ziel-wartend .ziel-gruppe-zahl { color: var(--messing); }
+  .sheet .ziel-alle {
+    width: 100%; height: 2.6rem; margin: .1rem 0 .6rem; font-size: .8rem;
+    background: var(--messing); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    box-shadow: 0 3px 0 var(--messing-dunkel); font-family: var(--pixel); font-weight: 700;
+  }
+  .sheet .ziel-alle:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--messing-dunkel); }
+
+  /* Stufenaufstieg und Kiste feiern auf derselben Buehne wie die Blaetter:
+     Holzrahmen, Balken als Titel, Papierzeilen, Messingmedaille. */
+  .stufe-karte {
+    background: var(--holz); color: var(--papier); border-radius: 6px; padding: 1.4rem 1rem 1rem;
+    background-image: repeating-linear-gradient(180deg, rgba(0, 0, 0, .13) 0 2px, rgba(255, 255, 255, .05) 2px 14px);
+    border: 3px solid var(--holz-dunkel); box-shadow: 0 0 0 2px var(--tinte), 0 10px 0 rgba(0, 0, 0, .35);
+  }
+  .stufe-strahlen { opacity: .4; background: repeating-conic-gradient(from 0deg, rgba(246, 195, 90, .45) 0deg 12deg, transparent 12deg 24deg); }
+  .stufe-zahl {
+    background: var(--messing); color: var(--tinte); border: 3px solid var(--tinte);
+    box-shadow: inset 0 -4px 0 var(--messing-dunkel), 0 4px 0 var(--tinte);
+    font-family: var(--pixel); font-size: 1.7rem; font-weight: 700;
+  }
+  .stufe-titel {
+    font-family: var(--pixel); font-size: .95rem; letter-spacing: .03em; font-weight: 700;
+    color: var(--papier); text-shadow: 0 2px 0 var(--tinte);
+    background: var(--holz-dunkel); margin: .5rem -1rem 0; padding: .5rem .6rem; box-shadow: 0 3px 0 var(--tinte);
+  }
+  .stufe-neu { margin-top: 1rem; }
+  .stufe-neu .zeile {
+    background: var(--papier); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, .25);
+  }
+  .stufe-neu .zeile .was { color: var(--tinte-grau); }
+  .stufe-neu .zeile .mark { background: var(--papier-dunkel); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px; }
+  .stufe-neu .zeile .mark img.ic { width: 1rem; height: 1rem; image-rendering: pixelated; }
+  .kiste-beute .zeile { font-family: var(--pixel); font-size: .85rem; }
+  #stufe-weiter, #kiste-weiter {
+    background: var(--messing); color: var(--tinte); border: 2px solid var(--tinte); border-radius: 3px;
+    box-shadow: 0 3px 0 var(--messing-dunkel); font-family: var(--pixel); font-weight: 700;
+  }
+  #stufe-weiter:active, #kiste-weiter:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--messing-dunkel); }
 
   /* Die Ehrentafel: Podest fuer die ersten drei, darunter die Liste auf Papier. */
   .podest { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; gap: .4rem; margin: .4rem 0 .8rem; }
