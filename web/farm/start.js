@@ -1,6 +1,10 @@
 function setConn(state, weak) {
   var el = $('conn');
-  if (state === 'live') { el.className = 'conn live'; $('conn-text').textContent = 'verbunden'; }
+  if (state === 'live') {
+    el.className = 'conn live'; $('conn-text').textContent = 'verbunden';
+    // Sobald Netz da ist: den Dorfstand holen, damit das Bauwerk auf dem Hof steht.
+    if (typeof dorfLaden === 'function' && !dorfStand) dorfLaden();
+  }
   else if (state === 'catching-up') { el.className = 'conn'; $('conn-text').textContent = 'synchronisiert…'; }
   else if (weak) { el.className = 'conn off'; $('conn-text').textContent = 'Netz zu schwach — läuft weiter'; }
   else { el.className = 'conn off'; $('conn-text').textContent = 'ohne Netz — läuft weiter'; }
@@ -186,6 +190,7 @@ $('abenteuer-auf').addEventListener('click', function () { show('abenteuer'); })
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('dorf-auf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
+$('dorf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
 $('brett').addEventListener('click', function () { show('brett'); });
 $('abenteuer').addEventListener('click', function () { show('abenteuer'); });
 $('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });

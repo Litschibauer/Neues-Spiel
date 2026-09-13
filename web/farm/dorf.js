@@ -211,29 +211,40 @@ function dorfItemIndex(id) {
 }
 
 // Das Bild der Baustelle: je Etappe wächst etwas dazu. Pixelkunst aus
-// Rechtecken, damit es zu den Sprites passt und keine Datei braucht.
-function dorfBild(d) {
+// Rechtecken in einem 64×34-Pixel-Raum (vier Kacheln breit), damit dasselbe
+// Motiv auf dem Blatt und als Bauwerk auf dem Hof steht. Jedes Teil ist
+// [x, y, Breite, Höhe, Farbe]; die Grundlinie liegt bei y = 34.
+function dorfTeile(d) {
   var stufe = d.fertig ? d.etappen.length : d.etappe;
-  var r = function (x, y, w, h, f) { return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + f + '"/>'; };
-  var holz = '#8d5a35', dunkel = '#6b4326', stein = '#9c9a94', steinD = '#6f6d68', dach = '#b5473a', dachD = '#8a3128', gras = '#7bbf5a', erde = '#a0764c', eisen = '#5a6470', wasser = '#4a90c2';
-  var teile = [r(0, 34, 64, 6, gras)];
+  var holz = '#8d5a35', dunkel = '#6b4326', stein = '#9c9a94', steinD = '#6f6d68', dach = '#b5473a', dachD = '#8a3128', erde = '#a0764c', eisen = '#5a6470', wasser = '#4a90c2';
+  var teile = [];
   // Schild „Baustelle" — solange nichts steht.
-  if (stufe === 0) {
-    teile.push(r(28, 20, 2, 14, dunkel), r(22, 14, 14, 8, holz), r(23, 15, 12, 6, '#f4ecd8'));
-  }
+  if (stufe === 0) teile.push([28, 20, 2, 14, dunkel], [22, 14, 14, 8, holz], [23, 15, 12, 6, '#f4ecd8']);
   if (d.projekt.id === 'brunnen') {
-    if (stufe >= 1) teile.push(r(24, 28, 16, 6, steinD), r(26, 30, 12, 4, wasser));
-    if (stufe >= 2) teile.push(r(22, 24, 20, 6, stein), r(22, 24, 20, 1, '#c9c7c0'), r(20, 29, 24, 2, steinD));
-    if (stufe >= 3) teile.push(r(23, 8, 2, 16, dunkel), r(39, 8, 2, 16, dunkel), r(18, 4, 28, 5, dach), r(20, 2, 24, 3, dachD), r(30, 12, 4, 3, holz), r(31, 15, 2, 9, '#e2d5b5'));
+    if (stufe >= 1) teile.push([24, 28, 16, 6, steinD], [26, 30, 12, 4, wasser]);
+    if (stufe >= 2) teile.push([22, 24, 20, 6, stein], [22, 24, 20, 1, '#c9c7c0'], [20, 29, 24, 2, steinD]);
+    if (stufe >= 3) teile.push([23, 8, 2, 16, dunkel], [39, 8, 2, 16, dunkel], [18, 4, 28, 5, dach], [20, 2, 24, 3, dachD], [30, 12, 4, 3, holz], [31, 15, 2, 9, '#e2d5b5']);
   } else if (d.projekt.id === 'bruecke') {
-    teile.push(r(0, 30, 64, 4, wasser));
-    if (stufe >= 1) teile.push(r(14, 22, 4, 12, dunkel), r(30, 22, 4, 12, dunkel), r(46, 22, 4, 12, dunkel));
-    if (stufe >= 2) teile.push(r(6, 20, 52, 4, holz), r(6, 20, 52, 1, '#a8714a'));
-    if (stufe >= 3) { for (var x = 8; x < 58; x += 8) teile.push(r(x, 12, 2, 8, dunkel)); teile.push(r(6, 12, 52, 2, holz)); }
+    teile.push([0, 30, 64, 4, wasser]);
+    if (stufe >= 1) teile.push([14, 22, 4, 12, dunkel], [30, 22, 4, 12, dunkel], [46, 22, 4, 12, dunkel]);
+    if (stufe >= 2) teile.push([6, 20, 52, 4, holz], [6, 20, 52, 1, '#a8714a']);
+    if (stufe >= 3) { for (var x = 8; x < 58; x += 8) teile.push([x, 12, 2, 8, dunkel]); teile.push([6, 12, 52, 2, holz]); }
   } else {
-    if (stufe >= 1) teile.push(r(0, 30, 64, 4, erde), r(0, 31, 64, 1, eisen), r(0, 33, 64, 1, eisen));
-    if (stufe >= 2) teile.push(r(8, 24, 48, 6, stein), r(8, 24, 48, 1, '#c9c7c0'));
-    if (stufe >= 3) teile.push(r(18, 12, 28, 12, holz), r(20, 14, 6, 6, '#f4ecd8'), r(38, 14, 6, 6, '#f4ecd8'), r(29, 16, 6, 8, dunkel), r(14, 8, 36, 5, dach), r(16, 6, 32, 3, dachD));
+    if (stufe >= 1) teile.push([0, 30, 64, 4, erde], [0, 31, 64, 1, eisen], [0, 33, 64, 1, eisen]);
+    if (stufe >= 2) teile.push([8, 24, 48, 6, stein], [8, 24, 48, 1, '#c9c7c0']);
+    if (stufe >= 3) teile.push([18, 12, 28, 12, holz], [20, 14, 6, 6, '#f4ecd8'], [38, 14, 6, 6, '#f4ecd8'], [29, 16, 6, 8, dunkel], [14, 8, 36, 5, dach], [16, 6, 32, 3, dachD]);
   }
-  return '<svg viewBox="0 0 64 40" shape-rendering="crispEdges" aria-hidden="true">' + teile.join('') + '</svg>';
+  return teile;
+}
+
+function dorfRects(teile, px, py, e) {
+  return teile.map(function (t) {
+    return '<rect x="' + ((px + t[0]) * e) + '" y="' + ((py + t[1]) * e) + '" width="' + (t[2] * e + 0.03) +
+      '" height="' + (t[3] * e + 0.03) + '" fill="' + t[4] + '"/>';
+  }).join('');
+}
+
+function dorfBild(d) {
+  return '<svg viewBox="0 0 64 40" shape-rendering="crispEdges" aria-hidden="true">' +
+    '<rect x="0" y="34" width="64" height="6" fill="#7bbf5a"/>' + dorfRects(dorfTeile(d), 0, 0, 1) + '</svg>';
 }

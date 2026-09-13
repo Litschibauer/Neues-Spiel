@@ -180,6 +180,10 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       create index dorf_beitraege_konto on dorf_beitraege (konto);
     `);
   },
+  // Der Bedarf je Projekt wird beim Start gemessen und festgeschrieben.
+  (db) => {
+    db.exec(`alter table dorf_projekte add column bedarf_json text;`);
+  },
 ];
 
 function migrate(db: Db): void {

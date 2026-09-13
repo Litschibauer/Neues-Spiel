@@ -162,7 +162,9 @@ function onNudge(arten) {
   // Ein Geschenk kuendigt sich mit eigener Art an — dann holen wir nach, von wem.
   if (String(arten).indexOf('geschenk') >= 0 && typeof geschenkeHolen === 'function') geschenkeHolen();
   if ((arten || '').indexOf('sozial') >= 0) sozialFrisch();
-  if ((arten || '').indexOf('dorf') >= 0 && typeof dorfLaden === 'function') dorfLaden();
+  // Das Dorf meldet sich an alle zugleich — den Nachschlag verteilen, sonst
+  // fragen tausend Höfe in derselben Sekunde.
+  if ((arten || '').indexOf('dorf') >= 0 && typeof dorfLaden === 'function') setTimeout(dorfLaden, 300 + Math.random() * 4000);
 
   if (nudgeTimer) return;
   nudgeTimer = setTimeout(function () {

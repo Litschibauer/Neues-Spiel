@@ -1801,14 +1801,14 @@ try {
   ) as { offen: boolean; name: string; bild: boolean; zeilen: number; bretter: string | null; knopf: boolean; helfer: number };
   check(
     'Der Dorfplatz zeigt das Bauwerk, den Bauzettel mit Waren und die leere Helferliste',
-    dorfBild.offen && /Dorfbrunnen/.test(dorfBild.name) && dorfBild.bild && dorfBild.zeilen >= 2 && dorfBild.bretter === '0 / 16' && dorfBild.knopf && dorfBild.helfer === 0,
+    dorfBild.offen && /Dorfbrunnen/.test(dorfBild.name) && dorfBild.bild && dorfBild.zeilen >= 2 && dorfBild.bretter === '0 / 32' && dorfBild.knopf && dorfBild.helfer === 0,
     JSON.stringify(dorfBild),
   );
   await evaluate(cdp, `(function () {
     var z = [...document.querySelectorAll('#dorf-liste .dorf-zeile')].find(function (x) { return /Bretter/.test(x.textContent); });
     z.querySelector('.dorf-knoepfe .go').click();
   })()`);
-  await waitFor(cdp, `[...document.querySelectorAll('#dorf-liste .dorf-zeile')].some(function (z) { return /Bretter/.test(z.textContent) && /1 \\/ 16/.test(z.querySelector('.dorf-stand').textContent); })`, 'Beitrag gebucht', 8_000);
+  await waitFor(cdp, `[...document.querySelectorAll('#dorf-liste .dorf-zeile')].some(function (z) { return /Bretter/.test(z.textContent) && /1 \\/ 32/.test(z.querySelector('.dorf-stand').textContent); })`, 'Beitrag gebucht', 8_000);
   await sleep(1500);
   const nachBeitrag = JSON.parse(
     await evaluate<string>(

@@ -46,7 +46,7 @@ test('Dorfprojekt über HTTP: Stand, Beitrag, Etappen, Dank, Dankeswoche', async
   ok('zwei Höfe angelegt', a.status === 201 && b.status === 201);
 
   const s0 = await j('/api/dorf', { headers: auth(key) });
-  ok('der Stand nennt Projekt, Etappen mit Bedarf, Faktor 1 bei zwei Höfen', s0.status === 200 && s0.body.projekt.id === 'brunnen' && s0.body.faktor === 1 && s0.body.etappen.length === 3 && s0.body.etappen[0].bedarf[0].item === 'plank' && s0.body.fertig === false, s0.body);
+  ok('der Stand nennt Projekt, Etappen mit Grundmengen (zwei Höfe ohne Vorrat), gemessen bei zwei Höfen', s0.status === 200 && s0.body.projekt.id === 'brunnen' && s0.body.faktor === 2 && s0.body.etappen.length === 3 && s0.body.etappen[0].bedarf[0].item === 'plank' && s0.body.etappen[0].bedarf[0].menge === 32 && s0.body.fertig === false, s0.body);
   ok('ohne Schlüssel kein Stand', (await j('/api/dorf')).status === 401);
 
   // Beiträge: was nicht gebraucht wird, was man nicht hat.
@@ -73,7 +73,7 @@ test('Dorfprojekt über HTTP: Stand, Beitrag, Etappen, Dank, Dankeswoche', async
   // Dank als Post beim Helfer, nicht beim Zuschauer.
   const statA = await j(`/api/admin/status?account=${id}`, { headers: admin });
   const postA = (statA.body.state.mail ?? []) as Array<{ item: number; amount: number }>;
-  ok('der Helfer hat Post: Karten und Gold', postA.some((m) => m.amount === 400) && postA.some((m) => m.amount === 2), postA);
+  ok('der Helfer hat Post: Karten und Gold', postA.some((m) => m.amount === 800) && postA.some((m) => m.amount === 4), postA);
   const statB = await j(`/api/admin/status?account=${b.body.accountId}`, { headers: admin });
   ok('wer nichts gegeben hat, bekommt keinen Dank', ((statB.body.state.mail ?? []) as unknown[]).length === 0, statB.body.state.mail);
 

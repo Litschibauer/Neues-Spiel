@@ -24,6 +24,7 @@ var KOERPER_HINDERNIS = { tree: 1.0, rock: 0.7, pond: 0 };
 var KOERPER_MOEBEL = {
   brett: 1.3, lagerhaus: 1.3, stand: 1.3, nachbarn: 1.3, wagen: 1.3, kiste: 1.3,
   abenteuer: 1.6,
+  dorf: 1.4,
   boot: 0.6, schatz: 0.8,
 };
 var KOERPER_SEE = { haus: 1.85, dock: 0.4, spot: 0.9 };
@@ -485,6 +486,10 @@ function artMoebelRaum(id, k, z) {
       pix(k, z.wartet ? ABENTEUER : ABENTEUER_RUHIG, FARBEN, 4, u - 35, 2);
   }
   if (id === 'kiste') return schatten(k, 16, u, 30) + bild(k, 'truhe', 0, u - 32, 32, 32);
+  // Das Dorfprojekt: dasselbe Motiv wie auf dem Blatt, Grundlinie auf u.
+  if (id === 'dorf' && z.stand && typeof dorfTeile === 'function') {
+    return schatten(k, 32, u, 56) + dorfRects(dorfTeile(z.stand), 0, u - 34, k.e);
+  }
   if (id === 'schatz') return bild(k, 'truhe-blau', 0, u - 15);
   if (id === 'boot') {
     return schatten(k, 48, u - 1, 52) + pix(k, z.heil ? BOOT_HEIL : BOOT_KAPUTT, FARBEN, 24, u - 31, 3);

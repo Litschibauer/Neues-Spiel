@@ -959,9 +959,18 @@ verhält sich anders als eine Attrappe:
 ## Dorfprojekt: alle Höfe bauen zusammen
 
 Ein Bauwerk je Server, in Etappen, gefüllt mit Waren der Spieler: Dorfbrunnen,
-Holzbrücke, Kleiner Bahnhof — der Reihe nach, immer wieder. Der Bedarf jeder
-Etappe skaliert mit den Höfen, die in der letzten Woche da waren (Faktor
-`ceil(aktive/8)`, höchstens 25), festgelegt beim Start des Projekts. Steht das
+Holzbrücke, Kleiner Bahnhof — der Reihe nach, immer wieder. Das Bauwerk steht
+auf jedem Hof (Möbelreihe oben, neben dem Abenteuerbrett) und wächst mit jeder
+Etappe; Antippen öffnet den Dorfplatz. **Der Bedarf wird gemessen, nicht
+geraten:** Beim Start eines Projekts zählt der Server, was die in der letzten
+Woche aktiven Höfe von jeder Ware gerade haben. Eine Etappe verlangt 30 %
+davon (`ANTEIL_VORRAT`), mindestens die Grundmenge aus `PROJEKTE`, höchstens
+das Zweihundertfache. Was noch niemand herstellt, bleibt bei der Grundmenge.
+So ist eine Etappe für vier Höfe so erreichbar wie für tausend, und ein Dorf
+voller fleißiger Höfe baut Größeres. Die Mengen stehen für die Dauer des
+Projekts fest (`bedarf_json`). Der Stand ist zwischengespeichert und wird nur durch
+Beiträge ungültig; der Anstoß an alle Höfe wird auf dem Gerät um bis zu vier
+Sekunden gestreut, damit nicht tausend Höfe in derselben Sekunde fragen. Steht das
 Bauwerk, bekommt jeder Helfer den Dank als Post (Karten, Eisen, Gold, je nach
 Projekt) und alle eine **Dankeswoche**: sieben Tage doppelter Tagesbonus.
 Danach beginnt das nächste Projekt.

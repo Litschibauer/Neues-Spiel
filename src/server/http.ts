@@ -31,7 +31,7 @@ import { Tagesbonus } from './tagesbonus.ts';
 import { Market, connectMarket, publishOrders, settleSales } from './market.ts';
 import { EventHub } from './events.ts';
 import { ladeVapid, sendePush } from './push.ts';
-import { Dorf, projektDef, AKTIV_FENSTER_MS } from './dorf.ts';
+import { Dorf, projektDef, AKTIV_FENSTER_MS, type Messung } from './dorf.ts';
 import { apnsAusUmgebung, sendeApns } from './apns.ts';
 import type { PushAbo } from './storage.ts';
 import { EconStats } from './econstats.ts';
@@ -198,11 +198,26 @@ function apnsKlartext(art: string, status: number, grund?: string): string {
 }
 const sozial = new Sozial((accounts.storage as SqliteStorage).database);
 const tagesbonus = new Tagesbonus((accounts.storage as SqliteStorage).database);
-// Das Dorfprojekt: ein Bauwerk je Server. Der Bedarf richtet sich nach den
-// Höfen, die in der letzten Woche da waren.
-const dorf = new Dorf((accounts.storage as SqliteStorage).database, (now) =>
-  accounts.list().filter((a) => now - a.lastSeenMs < AKTIV_FENSTER_MS).length,
-);
+// Das Dorfprojekt: ein Bauwerk je Server. Der Bedarf wird beim Start des
+// Projekts gemessen: was die in der letzten Woche aktiven Höfe von jeder Ware
+// gerade haben. Einmal je Projekt, nicht je Anfrage.
+function dorfMessung(now: number): Messung {
+  const summe = new Map<string, number>();
+  let aktive = 0;
+  for (const a of accounts.list()) {
+    if (now - a.lastSeenMs > AKTIV_FENSTER_MS) continue;
+    const snap = live.get(a.id)?.snapshot ?? accounts.load(a.id)?.snapshot;
+    if (!snap) continue;
+    aktive++;
+    const r = getRuleset(snap.rulesetVersion);
+    snap.state.items.forEach((n, i) => {
+      const id = r.items[i]?.id;
+      if (id && n > 0) summe.set(id, (summe.get(id) ?? 0) + n);
+    });
+  }
+  return { aktive, vorrat: (item) => summe.get(item) ?? 0 };
+}
+const dorf = new Dorf((accounts.storage as SqliteStorage).database, dorfMessung);
 
 function dorfStand(konto?: string) {
   const st = dorf.stand(Date.now(), konto);

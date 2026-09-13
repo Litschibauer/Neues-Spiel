@@ -298,6 +298,8 @@ function moebelSvg(id, zustand, artId) {
     '" preserveAspectRatio="none" aria-hidden="true">' + artMoebelRaum(artId || id, m, zustand) + '</svg>';
 }
 
+// Das Dorfprojekt steht am Weg (Sperre „weg", Zeilen 0–2) unter dem Brett,
+// wo keine Baeume stehen — so ist es im ersten Bild, ohne Schwenken.
 // Die Moebelreihe am oberen Rand, [gx, gy, Breite, Hoehe] in Zellen. Die
 // Spalten duerfen sich NICHT ueberlappen — Wagen und Kiste sind meistens
 // versteckt, ein Zusammenstoss faellt deshalb erst auf, wenn sie auftauchen.
@@ -311,6 +313,7 @@ var MOEBEL_ORTE = {
   wagen: [16, -2.4, 4, 2],
   kiste: [21, -2.4, 2, 2],
   abenteuer: [24, -2.4, 3, 3],
+  dorf: [4, 0, 4, 3],
   boot: [0, 10, 6, 3],
 };
 
@@ -390,6 +393,19 @@ function renderMoebel(v) {
   }
 
   ['brett', 'lagerhaus', 'stand', 'nachbarn', 'abenteuer'].forEach(setzeMoebel);
+
+  // Das Dorfprojekt steht auf jedem Hof — und wächst mit jeder Etappe.
+  var dorfEl = $('dorf');
+  if (dorfEl) {
+    var ds = typeof dorfStand !== 'undefined' ? dorfStand : null;
+    dorfEl.hidden = !ds || !hatRaster();
+    if (!dorfEl.hidden) {
+      moebel(dorfEl, { stand: ds }, ds.fertig ? ds.projekt.name : 'Dorf', 0);
+      dorfEl.setAttribute('aria-label', 'Dorfprojekt — ' + ds.projekt.name +
+        (ds.fertig ? ', fertig' : ', Etappe ' + (ds.etappe + 1) + ' von ' + ds.etappen.length));
+      setzeMoebel('dorf');
+    }
+  }
 
   var offen = v.chests.filter(function (k) { return k.ready; });
   var kiste = $('kiste');

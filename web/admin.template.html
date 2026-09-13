@@ -766,7 +766,7 @@
       $('dorf-stand').textContent = (d.fertig
         ? 'Dankeswoche bis ' + new Date(d.dankeswocheBis).toLocaleString('de-DE')
         : e.name + ': ' + e.bedarf.map(function (b) { return b.item + ' ' + b.geliefert + '/' + b.menge; }).join(' · ')) +
-        ' · Faktor ' + d.faktor + ' · ' + d.helfer.length + ' Helfer';
+        ' · gemessen bei ' + d.faktor + ' aktiven Höfen · ' + d.helfer.length + ' Helfer';
     }).catch(function (e) { $('dorf-stand').textContent = e.message; });
   }
   $('dorf-fuellen').addEventListener('click', function () {
