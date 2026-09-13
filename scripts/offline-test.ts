@@ -3217,6 +3217,45 @@ try {
     `${konnteSchieben}, Setzmodus ${imSetzmodus}`,
   );
 
+  // Zelle für Zelle: Die Oberfläche darf nur das verbieten, was auch die
+  // Simulation verbietet — und nichts erlauben, was sie abweist. Jeder
+  // gebaute Platz gegen jede Zelle des Rasters.
+  const paritaet = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var NS = globalThis.NeuesSpiel;
+         var raw = localStorage.getItem(NS.storageKeyFor(location.origin));
+         var r = NS.restoreClient(JSON.parse(raw)); var c = r.client || r;
+         var s = c.preview(); var rules = NS.getRuleset(c.baseSnapshot.rulesetVersion); var g = rules.grid;
+         var falsch = [], geprueft = 0, erlaubt = 0;
+         for (var i = 0; i < s.plots.length; i++) {
+           if (s.plots[i].gx < 0 || s.plots[i].level <= 0 || rules.plots[i].fixed) continue;
+           var gr = rules.plots[i].size || { w: 1, h: 1 };
+           for (var gy = -1; gy <= g.h; gy++) for (var gx = -1; gx <= g.w; gx++) {
+             var ui = NS.passtHin(i, gx, gy);
+             var sim = !(gx < 0 || gy < 0 || gx + gr.w > g.w || gy + gr.h > g.h)
+               && !NS.blockiert(rules, gx, gy, gr.w, gr.h, s.clearedObstacles || [], s.expandiert || []);
+             if (sim) for (var k = 0; k < s.plots.length; k++) {
+               if (k === i || s.plots[k].gx < 0) continue;
+               var s2 = rules.plots[k].size || { w: 1, h: 1 };
+               var frei = gx + gr.w <= s.plots[k].gx || s.plots[k].gx + s2.w <= gx || gy + gr.h <= s.plots[k].gy || s.plots[k].gy + s2.h <= gy;
+               if (!frei) { sim = false; break; }
+             }
+             geprueft++; if (sim) erlaubt++;
+             if (ui !== sim && falsch.length < 5) falsch.push(rules.plots[i].id + '@' + gx + ',' + gy + ' ui=' + ui + ' sim=' + sim + ' grund=' + NS.warumNicht(i, gx, gy));
+           }
+         }
+         return { geprueft: geprueft, erlaubt: erlaubt, falsch: falsch };
+       })())`,
+    ),
+  ) as { geprueft: number; erlaubt: number; falsch: string[] };
+  check(
+    'Oberfläche und Simulation sind sich über jede Zelle einig, wohin ein Bauwerk darf',
+    paritaet.geprueft > 1000 && paritaet.erlaubt > 0 && paritaet.falsch.length === 0,
+    `${paritaet.geprueft} Zellen geprüft, ${paritaet.erlaubt} erlaubt` + (paritaet.falsch.length ? ' · uneins: ' + paritaet.falsch.join(' | ') : ''),
+  );
+
 
   console.log('\n9g. Hindernisse wegräumen');
 
@@ -3315,6 +3354,104 @@ try {
     'Mit Säge ist der Baum weg und bringt XP',
     /Wegräumen/.test(geraeumt) && danach.baeume === stehenBaeume - 1 && danach.xp !== xpVorher,
     `${geraeumt} · ${xpVorher} → ${danach.xp}`,
+  );
+
+  // Wo der Baum stand, ist jetzt Platz — und Ziehen muss das wissen. Ein Feld
+  // wird mit echten Zeigerereignissen genau dorthin gezogen; vorher hatte die
+  // Vorschau solche Zellen als belegt gemeldet, obwohl die Sim sie erlaubt.
+  await sleep(600);
+  const zugAufFrei = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `(function () {
+         var NS = globalThis.NeuesSpiel;
+         var raw = localStorage.getItem(NS.storageKeyFor(location.origin));
+         var r = NS.restoreClient(JSON.parse(raw)); var c = r.client || r;
+         var s = c.preview(); var rules = NS.getRuleset(c.baseSnapshot.rulesetVersion);
+         var frei = (s.clearedObstacles || []).map(function (i) { return rules.obstacles[i]; })
+           .filter(function (h) { return h && h.w === 1 && h.h === 1 && !NS.blockiert(rules, h.gx, h.gy, 1, 1, s.clearedObstacles, s.expandiert || []); })[0];
+         if (!frei) return Promise.resolve(JSON.stringify({ fehler: 'keine geräumte Zelle' }));
+         var idx = s.plots.findIndex(function (p, i) { return p.gx >= 0 && p.level > 0 && /^field-/.test(rules.plots[i].id); });
+         if (idx < 0) return Promise.resolve(JSON.stringify({ fehler: 'kein Feld' }));
+         // Ein Feld ist groesser als eine Zelle: einen Standplatz suchen, der die
+         // geraeumte Zelle mit abdeckt und sonst frei ist. Der Finger zeigt auf
+         // die Mitte (Standplatz plus halbe Groesse), wie feldFuer es rechnet.
+         var gr = rules.plots[idx].size || { w: 1, h: 1 };
+         var anker = null;
+         for (var ay = frei.gy - gr.h + 1; ay <= frei.gy && !anker; ay++) for (var ax = frei.gx - gr.w + 1; ax <= frei.gx; ax++) {
+           if (NS.passtHin(idx, ax, ay)) { anker = { gx: ax, gy: ay }; break; }
+         }
+         if (!anker) return Promise.resolve(JSON.stringify({ fehler: 'kein Standplatz um die geraeumte Zelle', frei: frei }));
+         var vorschau = NS.passtHin(idx, anker.gx, anker.gy);
+         var tile = document.querySelector('#plots .plot[data-platz="' + idx + '"]');
+         var welt = document.getElementById('welt').getBoundingClientRect();
+         var g = rules.grid; var BAND = 4;
+         var zx = welt.left + welt.width * (anker.gx + (gr.w >> 1) + 0.5) / g.w;
+         var zy = welt.top + welt.height * (anker.gy + (gr.h >> 1) + BAND + 0.5) / (g.h + BAND);
+         var r0 = tile.getBoundingClientRect();
+         tile.dispatchEvent(new PointerEvent('pointerdown', { clientX: r0.left + r0.width / 2, clientY: r0.top + r0.height / 2, bubbles: true, button: 0 }));
+         return new Promise(function (fertig) {
+           setTimeout(function () {
+             document.dispatchEvent(new PointerEvent('pointermove', { clientX: zx, clientY: zy, bubbles: true }));
+             var abdruck = document.getElementById('fussabdruck');
+             var rot = tile.classList.contains('geht-nicht');
+             var abdruckDa = abdruck && !abdruck.hidden && !abdruck.classList.contains('geht-nicht');
+             document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+             setTimeout(function () {
+               var raw2 = localStorage.getItem(NS.storageKeyFor(location.origin));
+               var r2 = NS.restoreClient(JSON.parse(raw2)); var c2 = r2.client || r2; var p = c2.preview().plots[idx];
+               fertig(JSON.stringify({ ziel: [anker.gx, anker.gy], geraeumt: [frei.gx, frei.gy], vorschau: vorschau, rot: rot, abdruck: abdruckDa, danach: [p.gx, p.gy], zettel: document.getElementById('toast').textContent }));
+             }, 400);
+           }, 600);
+         });
+       })()`,
+    ),
+  ) as { fehler?: string; ziel: number[]; vorschau: boolean; rot: boolean; abdruck: boolean; danach: number[]; zettel: string };
+  check(
+    'Wo ein Hindernis geräumt wurde, lässt sich ein Feld hinziehen — Vorschau grün, Abdruck da, Feld steht dort',
+    !zugAufFrei.fehler && zugAufFrei.vorschau && !zugAufFrei.rot && zugAufFrei.abdruck && zugAufFrei.danach[0] === zugAufFrei.ziel[0] && zugAufFrei.danach[1] === zugAufFrei.ziel[1],
+    JSON.stringify(zugAufFrei),
+  );
+
+  // Und wo es nicht passt, sagt der Hof warum — statt still nichts zu tun.
+  const zugAufSperre = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `(function () {
+         var NS = globalThis.NeuesSpiel;
+         var raw = localStorage.getItem(NS.storageKeyFor(location.origin));
+         var r = NS.restoreClient(JSON.parse(raw)); var c = r.client || r;
+         var s = c.preview(); var rules = NS.getRuleset(c.baseSnapshot.rulesetVersion);
+         var idx = s.plots.findIndex(function (p, i) { return p.gx >= 0 && p.level > 0 && /^field-/.test(rules.plots[i].id); });
+         var tile = document.querySelector('#plots .plot[data-platz="' + idx + '"]');
+         var welt = document.getElementById('welt').getBoundingClientRect();
+         var g = rules.grid; var BAND = 4;
+         // Zeile 1 liegt in der Sperre „weg".
+         var zx = welt.left + welt.width * (5.5) / g.w;
+         var zy = welt.top + welt.height * (1 + BAND + 0.5) / (g.h + BAND);
+         var r0 = tile.getBoundingClientRect(); var vorher = [s.plots[idx].gx, s.plots[idx].gy];
+         document.getElementById('toast').textContent = '';
+         tile.dispatchEvent(new PointerEvent('pointerdown', { clientX: r0.left + r0.width / 2, clientY: r0.top + r0.height / 2, bubbles: true, button: 0 }));
+         return new Promise(function (fertig) {
+           setTimeout(function () {
+             document.dispatchEvent(new PointerEvent('pointermove', { clientX: zx, clientY: zy, bubbles: true }));
+             var rot = tile.classList.contains('geht-nicht');
+             var abdruckRot = document.getElementById('fussabdruck').classList.contains('geht-nicht');
+             document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+             setTimeout(function () {
+               var raw2 = localStorage.getItem(NS.storageKeyFor(location.origin));
+               var r2 = NS.restoreClient(JSON.parse(raw2)); var c2 = r2.client || r2; var p = c2.preview().plots[idx];
+               fertig(JSON.stringify({ rot: rot, abdruckRot: abdruckRot, geblieben: p.gx === vorher[0] && p.gy === vorher[1], zettel: document.getElementById('toast').textContent, abdruckWeg: document.getElementById('fussabdruck').hidden }));
+             }, 400);
+           }, 600);
+         });
+       })()`,
+    ),
+  ) as { rot: boolean; abdruckRot: boolean; geblieben: boolean; zettel: string; abdruckWeg: boolean };
+  check(
+    'Auf dem Weg abgesetzt: Vorschau rot, das Feld bleibt, und der Zettel sagt warum',
+    zugAufSperre.rot && zugAufSperre.abdruckRot && zugAufSperre.geblieben && /Weg/.test(zugAufSperre.zettel) && zugAufSperre.abdruckWeg,
+    JSON.stringify(zugAufSperre),
   );
 
   const platzFrei = (await api(`/api/admin/status?account=${status.accountId}`)) as {

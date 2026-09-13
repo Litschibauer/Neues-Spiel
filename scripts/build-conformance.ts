@@ -143,6 +143,7 @@ ${modules}
     storageKeyFor: storageKeyFor,
     farmView: farmView,
     sizeOf: sizeOf,
+    blockiert: blockiert,
     freischaltungenAb: freischaltungenAb,
     itemUnlockLevel: itemUnlockLevel,
   };

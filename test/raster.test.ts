@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '../src/client/client.ts';
-import { RULESETS, getRuleset, sizeOf, validateRuleset } from '../src/sim/rules.ts';
+import { RULESETS, getRuleset, sizeOf, validateRuleset, inSperre, LATEST_RULESET_VERSION } from '../src/sim/rules.ts';
 import { count, initialState } from '../src/sim/state.ts';
 import { farmView } from '../src/client/view.ts';
 import { assertInvariants, migrateState } from '../src/sim/migrate.ts';
 import type { State } from '../src/sim/state.ts';
+import { simulate } from '../src/sim/sim.ts';
 
 const T0 = 1_700_000_000_000;
 const rules = getRuleset(10);
@@ -320,4 +321,19 @@ test('das Anzeigemodell sagt, was ein Hindernis kostet', () => {
 
   const baum = v.obstacles.find((h) => h.kind === 'tree')!;
   assert.equal(baum.removable, false, 'ohne Säge geht kein Baum');
+});
+
+test('wo ein Hindernis geräumt ist, darf gebaut werden — vorher nicht', () => {
+  const rules = getRuleset(LATEST_RULESET_VERSION);
+  const s = initialState(rules);
+  const feld = s.plots.findIndex((p, i) => p.gx >= 0 && p.level > 0 && rules.plots[i]!.id.startsWith('field-'));
+  const idx = (rules.obstacles ?? []).findIndex((h) => h.w === 1 && h.h === 1 && !inSperre(rules, h.gx, h.gy, 1, 1)
+    && !(rules.expansions ?? []).some((e) => h.gx >= e.gx && h.gx < e.gx + e.w && h.gy >= e.gy && h.gy < e.gy + e.h));
+  assert.ok(feld >= 0 && idx >= 0, 'Feld und freies Hindernis gefunden');
+  const h = rules.obstacles![idx]!;
+  assert.throws(() => simulate(s, { seq: 1, tick: 10, type: 'PLACE', plot: feld, gx: h.gx, gy: h.gy }, rules), /CELL_TAKEN/);
+  const geraeumt = { ...s, clearedObstacles: [idx] };
+  const danach = simulate(geraeumt, { seq: 1, tick: 10, type: 'PLACE', plot: feld, gx: h.gx, gy: h.gy }, rules);
+  assert.equal(danach.plots[feld]!.gx, h.gx);
+  assert.equal(danach.plots[feld]!.gy, h.gy);
 });

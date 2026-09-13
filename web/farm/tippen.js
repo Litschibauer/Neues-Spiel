@@ -570,6 +570,8 @@ function ziehStart(e, plot, tile) {
     y: e.clientY,
     aktiv: false,
     ziel: null,
+    grund: null,
+    letzte: null,
     timer: setTimeout(function () { ziehLos(e); }, 200),
   };
 }
@@ -597,9 +599,13 @@ function ziehZu(e) {
   if (!feld) return;
 
   var ziel = feldFuer(ziehen.plot, feld);
-  var geht = passtHin(ziehen.plot, ziel.gx, ziel.gy);
+  var grund = warumNicht(ziehen.plot, ziel.gx, ziel.gy);
+  var geht = grund === null;
   ziehen.ziel = geht ? ziel : null;
+  ziehen.grund = grund;
+  ziehen.letzte = ziel;
   ziehen.tile.classList.toggle('geht-nicht', !geht);
+  fussabdruckZeigen(ziehen.plot, ziel.gx, ziel.gy, geht);
 
   var kasten = plotKasten(ziehen.plot, { gx: ziel.gx, gy: ziel.gy });
   ziehen.tile.style.left = kasten.left + '%';
@@ -621,12 +627,22 @@ function ziehEnde() {
   bauModus = false;
   $('hof').classList.remove('setzt');
   $('setzen').hidden = true;
+  fussabdruckWeg();
 
+  var vorher = client.preview().plots[war.plot];
   if (war.ziel) {
-    client.localTick = tickNow();
-    var res = client.place(war.plot, war.ziel.gx, war.ziel.gy);
-    if (res.ok) { toast(plotName(war.plot) + ' steht jetzt hier'); save(); scheduleSync(); }
-    else toast(CODES[res.code] || res.code, true);
+    if (vorher && vorher.gx === war.ziel.gx && vorher.gy === war.ziel.gy) {
+      // Wieder dort abgesetzt, wo es stand: nichts zu tun, nichts zu sagen.
+    } else {
+      client.localTick = tickNow();
+      var res = client.place(war.plot, war.ziel.gx, war.ziel.gy);
+      if (res.ok) { toast(plotName(war.plot) + ' steht jetzt hier'); klang('bestaetigt'); save(); scheduleSync(); }
+      else toast(CODES[res.code] || res.code, true);
+    }
+  } else if (war.grund && war.letzte && !(vorher && vorher.gx === war.letzte.gx && vorher.gy === war.letzte.gy)) {
+    // Losgelassen, wo es nicht passt: das Bauwerk bleibt, und man erfährt warum.
+    toast(GRUND_TEXT[war.grund], true);
+    klang('fehler');
   }
   render();
 }
@@ -824,6 +840,7 @@ document.addEventListener('pointermove', function (e) {
   if (ernteZug) { e.preventDefault(); ernteZugZu(e); return; }
   if (saeZug) { e.preventDefault(); saeZugZu(e); return; }
   if (ziehen && ziehen.aktiv) { e.preventDefault(); ziehZu(e); return; }
+  if (setzePlot >= 0 && !ziehen) { setzenVorschau(e); return; }
 
   // Wischt der Finger von einem reifen Platz weg, wird geerntet; von einem
   // leeren gesaet. Beides statt zu schwenken, und beides nur dort, wo man
@@ -903,7 +920,17 @@ function endeSetzen() {
   bauModus = false;
   $('hof').classList.remove('setzt');
   $('setzen').hidden = true;
+  fussabdruckWeg();
   render();
+}
+
+// Im Setzmodus zeigt der Fußabdruck unter dem Zeiger, wohin es käme.
+function setzenVorschau(e) {
+  if (setzePlot < 0) return;
+  var feld = zeigerAufFeld(e);
+  if (!feld) { fussabdruckWeg(); return; }
+  var ziel = feldFuer(setzePlot, feld);
+  fussabdruckZeigen(setzePlot, ziel.gx, ziel.gy, passtHin(setzePlot, ziel.gx, ziel.gy));
 }
 
 function baueUndSetze(plot) {
@@ -942,10 +969,16 @@ $('hof').addEventListener('click', function (e) {
   if (!feld) return;
 
   client.localTick = tickNow();
-  var groesse = rules.plots[setzePlot].size || { w: 1, h: 1 };
-  var g = rules.grid;
-  var gx = Math.max(0, Math.min(g.w - groesse.w, feld.gx - (groesse.w >> 1)));
-  var gy = Math.max(0, Math.min(g.h - groesse.h, feld.gy - (groesse.h >> 1)));
+  var ziel = feldFuer(setzePlot, feld);
+  var gx = ziel.gx, gy = ziel.gy;
+  // Erst die Oberfläche fragen: Sie kennt den Grund, die Sim nur den Code.
+  var grund = warumNicht(setzePlot, gx, gy);
+  if (grund) {
+    fussabdruckZeigen(setzePlot, gx, gy, false);
+    toast(GRUND_TEXT[grund], true);
+    klang('fehler');
+    return;
+  }
 
   var res = client.place(setzePlot, gx, gy);
   if (res.ok) bauMoment(setzePlot);

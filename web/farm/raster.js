@@ -125,26 +125,41 @@ function wegZeilen() {
   return 0;
 }
 
-function passtHin(plot, gx, gy) {
-  var g = rules.grid;
-  if (!g) return false;
-  var groesse = rules.plots[plot].size || { w: 1, h: 1 };
-  if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return false;
-  if (inSperre(gx, gy, groesse.w, groesse.h)) return false;
+// Passt das Bauwerk dorthin? Dieselben Regeln wie die Simulation (PLACE):
+// Rand, Sperrzone, Hindernis (geräumte zählen nicht), gesperrtes Land, andere
+// Bauwerke. Gibt den GRUND zurück, damit die Oberfläche sagen kann, warum
+// nicht — oder null, wenn es passt.
+var GRUND_TEXT = {
+  rand: 'Da ist kein Platz',
+  sperre: 'Am Weg und am Ufer steht nichts',
+  hindernis: 'Da liegt noch etwas im Weg — erst räumen',
+  land: 'Das Land ist noch nicht freigeschaltet',
+  belegt: 'Da steht schon etwas',
+};
 
+function warumNicht(plot, gx, gy) {
+  var g = rules.grid;
+  if (!g) return 'rand';
+  var groesse = rules.plots[plot].size || { w: 1, h: 1 };
+  if (gx < 0 || gy < 0 || gx + groesse.w > g.w || gy + groesse.h > g.h) return 'rand';
+  if (inSperre(gx, gy, groesse.w, groesse.h)) return 'sperre';
+  var stand = client.preview();
+
+  var geraeumt = stand.clearedObstacles || [];
   var hindernisse = rules.obstacles || [];
   for (var h = 0; h < hindernisse.length; h++) {
+    if (geraeumt.indexOf(h) >= 0) continue;
     var hi = hindernisse[h];
     var offen =
       gx + groesse.w <= hi.gx ||
       hi.gx + hi.w <= gx ||
       gy + groesse.h <= hi.gy ||
       hi.gy + hi.h <= gy;
-    if (!offen) return false;
+    if (!offen) return 'hindernis';
   }
 
   var felder = rules.expansions || [];
-  var frei2 = (client.preview().expandiert) || [];
+  var frei2 = stand.expandiert || [];
   for (var e = 0; e < felder.length; e++) {
     var ex = felder[e];
     if (frei2.indexOf(ex.id) >= 0) continue;
@@ -153,10 +168,10 @@ function passtHin(plot, gx, gy) {
       ex.gx + ex.w <= gx ||
       gy + groesse.h <= ex.gy ||
       ex.gy + ex.h <= gy;
-    if (!raus) return false;
+    if (!raus) return 'land';
   }
 
-  var andere = client.preview().plots;
+  var andere = stand.plots;
   for (var i = 0; i < andere.length; i++) {
     if (i === plot || andere[i].gx < 0) continue;
     var s2 = rules.plots[i].size || { w: 1, h: 1 };
@@ -165,9 +180,34 @@ function passtHin(plot, gx, gy) {
       andere[i].gx + s2.w <= gx ||
       gy + groesse.h <= andere[i].gy ||
       andere[i].gy + s2.h <= gy;
-    if (!frei) return false;
+    if (!frei) return 'belegt';
   }
-  return true;
+  return null;
+}
+
+function passtHin(plot, gx, gy) {
+  return warumNicht(plot, gx, gy) === null;
+}
+
+// Der Fußabdruck: die Zellen, die das Bauwerk wirklich belegt — grün, wenn es
+// passt, rot, wenn nicht. Die Kunst ragt über den Standplatz hinaus, der
+// Abdruck nicht; er sagt, wo das Ding steht.
+function fussabdruckZeigen(plot, gx, gy, geht) {
+  var el = $('fussabdruck');
+  if (!el || !hatRaster()) return;
+  var groesse = rules.plots[plot].size || { w: 1, h: 1 };
+  var k = feldKasten(gx, gy, groesse.w, groesse.h);
+  el.style.left = k.left + '%';
+  el.style.top = k.top + '%';
+  el.style.width = k.breite + '%';
+  el.style.height = k.hoehe + '%';
+  el.classList.toggle('geht-nicht', !geht);
+  el.hidden = false;
+}
+
+function fussabdruckWeg() {
+  var el = $('fussabdruck');
+  if (el) el.hidden = true;
 }
 
 function feldFuer(plot, feld) {
@@ -361,4 +401,11 @@ function zeigerAufFeld(e) {
   var gy = Math.floor((ly / m.h) * gesamtReihen()) - BAND;
   if (gx < 0 || gx >= raster().w || gy < 0 || gy >= raster().h) return null;
   return { gx: gx, gy: gy };
+}
+
+// Fuer die Browsersuite: dieselbe Pruefung, die das Ziehen benutzt, von aussen
+// aufrufbar — so laesst sich Zelle fuer Zelle gegen die Simulation vergleichen.
+if (typeof NS === 'object' && NS) {
+  NS.passtHin = passtHin;
+  NS.warumNicht = warumNicht;
 }

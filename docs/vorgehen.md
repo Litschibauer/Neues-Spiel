@@ -442,6 +442,13 @@ echter Datenbank. Zahlen in `deploy.md`.
   DOM neu; Plätze sind Kacheln mit SVG-Kunst, Positionen kommen aus dem Raster
   (`raster.js`). Zu Besuch zeigt dieselbe Funktion den fremden Hof
   (`besuchAktiv()`).
+- **Verschieben**: langes Drücken hebt ein Bauwerk an, `warumNicht(plot, gx,
+  gy)` in `raster.js` spiegelt die PLACE-Regeln der Simulation (Rand,
+  Sperrzone, Hindernis — geräumte zählen nicht —, gesperrtes Land, belegt)
+  und nennt den Grund; der Fußabdruck (`#fussabdruck`) zeigt die belegten
+  Zellen grün oder rot, ein abgelehnter Wurf sagt warum. Die Browsersuite
+  vergleicht jede Zelle mit `NS.blockiert` — Oberfläche und Sim müssen
+  einig sein.
 - **Blätter** (`show(name)`): genau eines offen, `x-bg` sichtbar, Rest
   versteckt; `netzWache()` wirft aus Blättern, die Netz brauchen.
 - **Dorfprojekt und Zug**: `dorf.js` (Blatt „Dorfplatz", Bauzettel, Zug,

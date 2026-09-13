@@ -365,7 +365,16 @@
     transition: none;
   }
   .plot.zieht .meta { opacity: 0; }
-  .plot.zieht.geht-nicht { filter: drop-shadow(0 0 0 var(--bad)) saturate(.4); opacity: .7; }
+  .plot.zieht.geht-nicht { filter: saturate(.25) sepia(.35) drop-shadow(0 0 5px #e8553c); opacity: .75; }
+  /* Der Fussabdruck: die Zellen, die das Bauwerk belegt — gruen passt, rot nicht.
+     Die Kunst ragt darueber hinaus; der Abdruck ist die Wahrheit. */
+  .fussabdruck {
+    position: absolute; z-index: 95; pointer-events: none; box-sizing: border-box;
+    border: 3px solid #4fd35a; border-radius: 4px; background: rgba(120, 220, 120, .28);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .22);
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 1px, transparent 1px 12px);
+  }
+  .fussabdruck.geht-nicht { border-color: #e8553c; background-color: rgba(232, 85, 60, .34); }
   .plot .art { display: block; width: 100%; height: 100%; }
   /* Die Kunst darf ueber ihren Kasten hinausragen — Muehlenfluegel, Huehner
      vor dem Stall, Rauch: nichts wird mehr am Rand abgeschnitten. */
