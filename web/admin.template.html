@@ -302,6 +302,16 @@
       </div>
 
       <div class="card">
+        <h2>Dorfprojekt <span id="dorf-marke" class="marke"></span></h2>
+        <p class="hint" id="dorf-stand">—</p>
+        <div class="zeile" style="margin-bottom:0">
+          <button class="klein" id="dorf-fuellen">Etappe füllen (gutgeschrieben dem gewählten Hof)</button>
+          <button class="klein" id="dorf-laden">Neu laden</button>
+        </div>
+        <p class="hint">Zum Ausprobieren der Zustände: Etappe fertig, Bauwerk steht, Dank als Post, Dankeswoche im Tagesbonus. Im echten Betrieb füllen die Spieler.</p>
+      </div>
+
+      <div class="card">
         <h2>Verlauf hier</h2>
         <div class="log" id="log"></div>
       </div>
@@ -748,6 +758,24 @@
       .catch(function (e) { log('Push: ' + e.message, 'bad'); });
   });
 
+  // — Dorf —————————————————————————————————————————————————————————————————
+  function ladeDorf() {
+    api('/api/admin/dorf').then(function (d) {
+      var e = d.etappen[d.etappe];
+      $('dorf-marke').textContent = d.projekt.name + (d.fertig ? ' · steht' : ' · Etappe ' + (d.etappe + 1) + '/' + d.etappen.length);
+      $('dorf-stand').textContent = (d.fertig
+        ? 'Dankeswoche bis ' + new Date(d.dankeswocheBis).toLocaleString('de-DE')
+        : e.name + ': ' + e.bedarf.map(function (b) { return b.item + ' ' + b.geliefert + '/' + b.menge; }).join(' · ')) +
+        ' · Faktor ' + d.faktor + ' · ' + d.helfer.length + ' Helfer';
+    }).catch(function (e) { $('dorf-stand').textContent = e.message; });
+  }
+  $('dorf-fuellen').addEventListener('click', function () {
+    api('/api/admin/dorf/fuellen' + (gewaehlt ? '?account=' + encodeURIComponent(gewaehlt.id) : ''), 'POST')
+      .then(function (r) { log('Dorf: Etappe gefüllt' + (r.projektFertig ? ' — das Bauwerk steht, Dank verschickt' : ''), 'good'); ladeDorf(); })
+      .catch(function (e) { log('Dorf: ' + e.message, 'bad'); });
+  });
+  $('dorf-laden').addEventListener('click', ladeDorf);
+
   // — Gefahrenzone ———————————————————————————————————————————————————————
   var wipeSatz = '';
   function ladeWipe() {
@@ -907,6 +935,7 @@
       $('panel').hidden = false;
       ladeStats();
       pushStand();
+      ladeDorf();
       ladeProtokoll();
       Object.keys(timer).forEach(function (k) { if (timer[k]) clearInterval(timer[k]); });
       timer.stats = setInterval(ladeStats, 3000);

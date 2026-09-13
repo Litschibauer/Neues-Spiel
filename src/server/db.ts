@@ -156,6 +156,30 @@ const MIGRATIONS: ReadonlyArray<(db: Db) => void> = [
       create index fehler_zuletzt on fehler (zuletzt_ms);
     `);
   },
+  // Das Dorfprojekt: ein Bauwerk je Server, Beiträge je Hof.
+  (db) => {
+    db.exec(`
+      create table dorf_projekte (
+        nr          integer primary key autoincrement,
+        projekt     text not null,
+        faktor      integer not null default 1,
+        etappe      integer not null default 0,
+        begonnen_ms integer not null,
+        fertig_ms   integer not null default 0
+      );
+      create table dorf_beitraege (
+        nr         integer primary key autoincrement,
+        projekt_nr integer not null,
+        etappe     integer not null,
+        konto      text not null,
+        item       text not null,
+        menge      integer not null,
+        zeit_ms    integer not null
+      );
+      create index dorf_beitraege_projekt on dorf_beitraege (projekt_nr, etappe);
+      create index dorf_beitraege_konto on dorf_beitraege (konto);
+    `);
+  },
 ];
 
 function migrate(db: Db): void {

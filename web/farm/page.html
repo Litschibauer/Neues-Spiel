@@ -309,6 +309,14 @@
         </div>
         <span class="go">▶</span>
       </button>
+      <h2>Dorf</h2>
+      <button class="card" id="dorf-auf">
+        <div class="body">
+          <div class="top">Dorfprojekt</div>
+          <div class="sub" id="dorf-sub">Alle Höfe bauen zusammen</div>
+        </div>
+        <span class="go" id="dorf-zahl">▶</span>
+      </button>
       <button class="card" id="abenteuer-auf">
         <div class="body">
           <div class="top">Abenteuerbrett</div>
@@ -438,6 +446,14 @@
     </div>
   </div>
 
+  <div class="sheet-bg" id="dorf-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dorf-titel">
+      <h3 id="dorf-titel">Dorfplatz</h3>
+      <div id="dorf-liste"></div>
+      <button class="sheet-close" id="dorf-close">Schließen</button>
+    </div>
+  </div>
+
   <div class="sheet-bg" id="stand-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="stand-titel">
       <h3 id="stand-titel">Verkaufsstand</h3>
@@ -535,6 +551,7 @@
   <!--INCLUDE:farm/empfang.js-->
 
   <!--INCLUDE:farm/momente.js-->
+  <!--INCLUDE:farm/dorf.js-->
 
   <!--INCLUDE:farm/angeln.js-->
 

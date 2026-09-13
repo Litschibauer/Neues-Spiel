@@ -77,6 +77,9 @@ function renderBonus() {
     ? '<p class="lead">Tag ' + s.streak + ' in Folge — hol dir deine Belohnung ab!</p>'
     : '<p class="lead">Heute schon abgeholt. Komm morgen wieder für Tag ' +
         Math.min(s.streak + 1, s.laenge) + '.</p>';
+  // Dankeswoche des Dorfs: doppeltes Gold — steht dran, damit niemand raetselt.
+  var mal = s.dorfwoche ? 2 : 1;
+  if (s.dorfwoche) kopf += '<p class="note">Dankeswoche im Dorf: heute doppeltes Gold.</p>';
 
   box.innerHTML = kopf + leiter;
 
@@ -84,7 +87,7 @@ function renderBonus() {
   knopf.className = 'primär';
   knopf.disabled = !s.verfuegbar || !netzOk();
   knopf.textContent = s.verfuegbar
-    ? 'Abholen · ' + s.heute.gold + ' Gold' + (s.heute.xp > 0 ? ' + ' + s.heute.xp + ' XP' : '')
+    ? 'Abholen · ' + (s.heute.gold * mal) + ' Gold' + (s.heute.xp > 0 ? ' + ' + s.heute.xp + ' XP' : '')
     : 'Morgen wieder';
   knopf.addEventListener('click', bonusEinloesen);
   box.appendChild(knopf);

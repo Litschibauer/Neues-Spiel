@@ -435,7 +435,7 @@ export class SqliteStorage implements Storage {
 
   wipe(): void {
     transaction(this.db, () => {
-      for (const tabelle of ['accounts', 'market_offers', 'market_settlements', 'freunde', 'hilfen', 'push_abos', 'rueckmeldungen', 'fehler', 'meta']) {
+      for (const tabelle of ['accounts', 'market_offers', 'market_settlements', 'freunde', 'hilfen', 'push_abos', 'rueckmeldungen', 'fehler', 'meta', 'dorf_projekte', 'dorf_beitraege']) {
         this.db.exec(`delete from ${tabelle}`);
       }
       // Die laufenden Nummern der autoincrement-Tabellen auch zurück.

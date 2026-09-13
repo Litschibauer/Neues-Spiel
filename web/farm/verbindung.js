@@ -162,6 +162,7 @@ function onNudge(arten) {
   // Ein Geschenk kuendigt sich mit eigener Art an — dann holen wir nach, von wem.
   if (String(arten).indexOf('geschenk') >= 0 && typeof geschenkeHolen === 'function') geschenkeHolen();
   if ((arten || '').indexOf('sozial') >= 0) sozialFrisch();
+  if ((arten || '').indexOf('dorf') >= 0 && typeof dorfLaden === 'function') dorfLaden();
 
   if (nudgeTimer) return;
   nudgeTimer = setTimeout(function () {

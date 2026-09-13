@@ -444,6 +444,9 @@ echter Datenbank. Zahlen in `deploy.md`.
   (`besuchAktiv()`).
 - **Blätter** (`show(name)`): genau eines offen, `x-bg` sichtbar, Rest
   versteckt; `netzWache()` wirft aus Blättern, die Netz brauchen.
+- **Dorfprojekt**: `dorf.js` (Blatt „Dorfplatz", Beitrag, Momente), Server
+  `dorf.ts` (`PROJEKTE`, Etappen, Faktor, Dankeswoche). Der Abzug geht den
+  Weg des Geschenks (`nimmAb`), der Dank den der Post. Siehe `deploy.md`.
 - **Benachrichtigungen**: `melden.js` (Abo im Browser, Apple in der App),
   Server `push.ts`/`apns.ts`, `/api/push/abo` und `/api/push/probe`. Wie sie
   ankommen und wo es hängt: `deploy.md`, „Benachrichtigungen".

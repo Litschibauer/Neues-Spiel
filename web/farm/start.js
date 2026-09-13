@@ -110,7 +110,7 @@ function show(next) {
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
   // „besuch" hat kein Blatt: Der fremde Hof steht im Hof selbst.
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -121,7 +121,7 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste' || name === 'sicherung' || name === 'rueckmeldung') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -185,6 +185,7 @@ $('melden-schalter').addEventListener('click', function () {
 $('abenteuer-auf').addEventListener('click', function () { show('abenteuer'); });
 $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
+$('dorf-auf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
 $('brett').addEventListener('click', function () { show('brett'); });
 $('abenteuer').addEventListener('click', function () { show('abenteuer'); });
 $('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });
@@ -564,8 +565,15 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(function () {
   });
 
+  // Neu geladen wird nur, wenn ein NEUER Worker einen alten abloest — nach
+  // einem Deploy. Beim allerersten Besuch uebernimmt der Worker die Seite
+  // ebenfalls („controllerchange"), aber die ist gerade frisch vom Netz; ein
+  // Neuladen wuerde nur unterbrechen, was der Spieler gerade tut — etwa den
+  // Hof anlegen.
+  var hatteWorker = !!navigator.serviceWorker.controller;
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hatteWorker) { hatteWorker = true; return; }
     if (reloading) return;
     reloading = true;
 

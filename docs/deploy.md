@@ -956,6 +956,28 @@ verhält sich anders als eine Attrappe:
 
 ---
 
+## Dorfprojekt: alle Höfe bauen zusammen
+
+Ein Bauwerk je Server, in Etappen, gefüllt mit Waren der Spieler: Dorfbrunnen,
+Holzbrücke, Kleiner Bahnhof — der Reihe nach, immer wieder. Der Bedarf jeder
+Etappe skaliert mit den Höfen, die in der letzten Woche da waren (Faktor
+`ceil(aktive/8)`, höchstens 25), festgelegt beim Start des Projekts. Steht das
+Bauwerk, bekommt jeder Helfer den Dank als Post (Karten, Eisen, Gold, je nach
+Projekt) und alle eine **Dankeswoche**: sieben Tage doppelter Tagesbonus.
+Danach beginnt das nächste Projekt.
+
+Das Dorf ist Sache des Servers (`src/server/dorf.ts`, Tabellen
+`dorf_projekte`, `dorf_beitraege`), nicht der Simulation: Der Abzug vom Hof
+läuft als äußere Änderung wie ein Geschenk, der Dank als Post — beides Wege,
+die es schon gibt. Beitragen geht nur mit Netz; ohne Netz zeigt das Blatt den
+zuletzt geholten Stand. Im Spiel: Zahnrad → „Dorfprojekt". Etappenwechsel und
+Fertigstellung kommen als Moment (Anstoß `dorf` auf der Live-Leitung).
+
+Werkbank: Karte „Dorfprojekt" zeigt Stand und Faktor; „Etappe füllen" füllt
+die laufende Etappe komplett, gutgeschrieben dem gewählten Hof — so lassen
+sich alle Zustände ansehen, auch der Dank. Projekte und Warenlisten stehen
+in `PROJEKTE` in `dorf.ts`; neue Projekte einfach anhängen.
+
 ## Benachrichtigungen: wie sie ankommen
 
 Der Weg hat drei Stationen, und an jeder kann es hängen:
@@ -1030,6 +1052,8 @@ NEUES_SPIEL_ADMIN=0 npm run dev
 | `POST /api/sync` | Hof-Schlüssel | Command-Log einreichen |
 | `GET /api/events` | Hof-Schlüssel | Offene Live-Leitung; trägt nur Anstöße, keine Spieldaten |
 | `POST /api/deliver?item=…&amount=N` | Hof-Schlüssel | Ware in den eigenen Briefkasten |
+| `GET /api/dorf`, `POST /api/dorf/beitrag?item=…&amount=N` | Hof-Schlüssel | Dorfprojekt: Stand, Beitrag an die Baustelle |
+| `GET /api/admin/dorf`, `POST /api/admin/dorf/fuellen?account=…` | Bearer | Dorfprojekt sehen, Etappe füllen (Test) |
 
 Der Markt braucht **keine eigene Route**: Fremde Angebote reisen im Snapshot mit
 (`state.offers`), gekauft wird mit einem normalen Command über `/api/sync`. Das

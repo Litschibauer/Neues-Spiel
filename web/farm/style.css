@@ -2020,6 +2020,37 @@
   }
   .sheet .ziel-alle:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--messing-dunkel); }
 
+  /* Der Dorfplatz: Bild der Baustelle, Bauzettel mit Waren, Helferliste. */
+  .sheet .dorf-kopf, .sheet .dorf-zettel, .sheet .dorf-helfer { display: flex; flex-direction: column; align-items: stretch; }
+  .dorf-kopf { text-align: center; }
+  .dorf-bild { width: 100%; max-width: 15rem; margin: 0 auto .4rem; }
+  .dorf-bild svg { width: 100%; height: auto; display: block; }
+  .dorf-name { font-family: var(--pixel); font-size: 1rem; font-weight: 700; }
+  .dorf-text { margin: .2rem 0 .5rem; font-size: .8rem; color: var(--muted); line-height: 1.35; }
+  .dorf-kopf .balken { width: 100%; }
+  .dorf-etappen { display: flex; gap: .3rem; justify-content: center; flex-wrap: wrap; margin-top: .5rem; }
+  .dorf-etappe { font-size: .64rem; font-weight: 700; padding: .2rem .45rem; border: 2px solid var(--tinte-grau); border-radius: 3px; color: var(--tinte-grau); }
+  .dorf-etappe.jetzt { border-color: var(--tinte); color: var(--tinte); background: var(--messing); }
+  .dorf-etappe.fertig { border-color: var(--tinte); color: var(--tinte); background: #8fc17a; }
+  .dorf-zettel { display: flex; flex-direction: column; gap: .7rem; }
+  .dorf-zeile { display: grid; grid-template-columns: 1fr auto; gap: .25rem .5rem; align-items: center; }
+  .dorf-ware { display: flex; align-items: center; gap: .35rem; font-weight: 700; font-size: .85rem; }
+  .dorf-ware .ic { width: 1.2rem; height: 1.2rem; image-rendering: pixelated; }
+  .dorf-stand { font-variant-numeric: tabular-nums; font-size: .78rem; font-weight: 700; }
+  .dorf-zeile .balken { grid-column: 1 / -1; width: 100%; }
+  .dorf-habe { font-size: .7rem; color: var(--muted); }
+  .dorf-zeile.voll .dorf-habe { color: #4d8a3f; font-weight: 700; }
+  .dorf-knoepfe { display: flex; gap: .3rem; justify-self: end; }
+  .sheet .dorf-knoepfe .go { padding: .3rem .5rem; font-size: .72rem; min-width: 2.6rem; }
+  .dorf-helfer { gap: .3rem; }
+  .dorf-helfer .leer { margin: 0; font-size: .8rem; color: var(--muted); text-align: center; }
+  .dorf-helfer .zeile { display: flex; gap: .5rem; align-items: baseline; font-size: .82rem; }
+  .dorf-helfer .zeile.du { font-weight: 700; }
+  .dorf-helfer .platz { font-family: var(--pixel); width: 1.8rem; flex: none; }
+  .dorf-helfer .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dorf-helfer .wert { font-variant-numeric: tabular-nums; flex: none; }
+  .dorf-mein { text-align: center; margin: .2rem 0 .6rem; }
+
   /* Stufenaufstieg und Kiste feiern auf derselben Buehne wie die Blaetter:
      Holzrahmen, Balken als Titel, Papierzeilen, Messingmedaille. */
   .stufe-karte {

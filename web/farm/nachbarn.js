@@ -58,6 +58,7 @@ function hofLaden() {
   return api('/api/hof').then(function (h) {
     eigenerHof = h;
     zeichneEigenenHof();
+    if (typeof dorfLaden === 'function') dorfLaden();
     return h;
   }).catch(function () {});
 }

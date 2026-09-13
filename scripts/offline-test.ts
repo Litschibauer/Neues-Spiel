@@ -1759,6 +1759,77 @@ try {
   await evaluate(cdp, `document.getElementById('lager-close').click()`);
   await sleep(200);
 
+  // Das Dorfprojekt: Waren gehen an die Baustelle statt an den Händler — der
+  // Server bucht ab, das Gerät zieht nach, und man steht auf der Helferliste.
+  console.log('\n4b. Dorfprojekt — alle Höfe bauen zusammen');
+  await api(`/api/admin/grant?account=${status.accountId}&item=plank&amount=3`, 'POST');
+  await sleep(400);
+  await evaluate(cdp, `document.getElementById('lagerhaus').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#mail .card').length > 0`, 'Bretter im Postfach');
+  for (let i = 0; i < 4; i++) {
+    const c = await evaluate<boolean>(cdp, `!!document.querySelector('#mail .card')`);
+    if (!c) break;
+    await evaluate(cdp, `document.querySelector('#mail .card').click()`);
+    await sleep(300);
+  }
+  await evaluate(cdp, `document.getElementById('lager-close').click()`);
+  await sleep(1200);
+  const PLANK = 10;
+  const planksLokal = `(function () { var NS = globalThis.NeuesSpiel; var raw = localStorage.getItem(NS.storageKeyFor(location.origin)); if (!raw) return -1; var r = NS.restoreClient(JSON.parse(raw)); var c = r.client || r; return c.preview().items[${PLANK}] || 0; })()`;
+  const planksVor = ((await api(`/api/admin/status?account=${status.accountId}`)) as { state: { items: number[] } }).state.items[PLANK] ?? 0;
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('dorf-auf').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#dorf-liste .dorf-zeile').length > 0`, 'Dorfplatz mit Bauzettel', 8_000);
+  const dorfBild = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var zeilen = [...document.querySelectorAll('#dorf-liste .dorf-zeile')];
+         var bretter = zeilen.find(function (z) { return /Bretter/.test(z.textContent); });
+         return {
+           offen: !document.getElementById('dorf-bg').hidden,
+           name: (document.querySelector('#dorf-liste .dorf-name') || {}).textContent || '',
+           bild: !!document.querySelector('#dorf-liste .dorf-bild svg'),
+           zeilen: zeilen.length,
+           bretter: bretter ? bretter.querySelector('.dorf-stand').textContent : null,
+           knopf: bretter ? !bretter.querySelector('.dorf-knoepfe .go').disabled : false,
+           helfer: document.querySelectorAll('#dorf-liste .dorf-helfer .zeile').length,
+         };
+       })())`,
+    ),
+  ) as { offen: boolean; name: string; bild: boolean; zeilen: number; bretter: string | null; knopf: boolean; helfer: number };
+  check(
+    'Der Dorfplatz zeigt das Bauwerk, den Bauzettel mit Waren und die leere Helferliste',
+    dorfBild.offen && /Dorfbrunnen/.test(dorfBild.name) && dorfBild.bild && dorfBild.zeilen >= 2 && dorfBild.bretter === '0 / 16' && dorfBild.knopf && dorfBild.helfer === 0,
+    JSON.stringify(dorfBild),
+  );
+  await evaluate(cdp, `(function () {
+    var z = [...document.querySelectorAll('#dorf-liste .dorf-zeile')].find(function (x) { return /Bretter/.test(x.textContent); });
+    z.querySelector('.dorf-knoepfe .go').click();
+  })()`);
+  await waitFor(cdp, `[...document.querySelectorAll('#dorf-liste .dorf-zeile')].some(function (z) { return /Bretter/.test(z.textContent) && /1 \\/ 16/.test(z.querySelector('.dorf-stand').textContent); })`, 'Beitrag gebucht', 8_000);
+  await sleep(1500);
+  const nachBeitrag = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify({
+         du: !!document.querySelector('#dorf-liste .dorf-helfer .zeile.du'),
+         helfer: document.querySelectorAll('#dorf-liste .dorf-helfer .zeile').length,
+         mein: (document.querySelector('#dorf-liste .dorf-mein') || {}).textContent || '',
+         lokal: ${planksLokal},
+       })`,
+    ),
+  ) as { du: boolean; helfer: number; mein: string; lokal: number };
+  const planksServer = ((await api(`/api/admin/status?account=${status.accountId}`)) as { state: { items: number[] } }).state.items[PLANK] ?? 0;
+  check(
+    'Ein Brett geht an die Baustelle: du stehst als Helfer, und das Brett ist vom Hof weg — auf dem Server und auf dem Gerät',
+    nachBeitrag.du && nachBeitrag.helfer === 1 && /1 Stück/.test(nachBeitrag.mein) && planksServer === planksVor - 1 && nachBeitrag.lokal === planksVor - 1,
+    `Bretter ${planksVor} → Server ${planksServer}, Gerät ${nachBeitrag.lokal} · ${JSON.stringify(nachBeitrag)}`,
+  );
+  await evaluate(cdp, `document.getElementById('dorf-close').click()`);
+  await sleep(200);
+
   const werkzeugStand = await evaluate<{ saege: boolean; kaeseGesperrt: boolean; kaeseText: string }>(
     cdp,
     `(function () {
@@ -5761,6 +5832,13 @@ const schwenken = await evaluate<{ vorher: string; nachher: string; klar: boolea
 } catch (err) {
   failed = true;
   console.error(`\nAbbruch: ${(err as Error).message}`);
+  // Was die Seite und der Server dazu sagen — sonst rät man im Dunkeln.
+  try {
+    if (cdp) {
+      console.error('  Seite:', await evaluate<string>(cdp, `JSON.stringify({ url: location.href, zettel: (document.getElementById('toast') || {}).textContent, tor: !(document.getElementById('gate') || { hidden: true }).hidden, schluessel: !(document.getElementById('keygate') || { hidden: true }).hidden })`));
+    }
+  } catch { /* Seite schon weg */ }
+  console.error('  Server (Ende des Protokolls):\n' + serverLog.slice(-1500));
 } finally {
   cdp?.close();
   browser.kill('SIGKILL');
