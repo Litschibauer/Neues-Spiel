@@ -443,6 +443,11 @@ echter Datenbank. Zahlen in `deploy.md`.
   versteckt; `netzWache()` wirft aus Blättern, die Netz brauchen.
 - **Meldungen**: `toast()` für sofort, `momente.js` für eine Warteschlange
   wichtiger Nachrichten (gleiche Art wird zusammengelegt, `eilig` springt vor).
+  Ein Zettel kommt nur für das, was der Hof nicht selbst zeigt: Säen und
+  Ernten bleiben stumm (Name und Ausbeute steigen über dem Platz auf,
+  `zahlAuf`), gemeldet werden Fund, volles Lager, leere Saat und Fehler.
+  `act(null, …)` ist der stumme Weg. Der Zettel ist Papier mit Tinte, keine
+  Pille.
 - **Klang und Musik**: `klang('bestaetigt' | 'fehler' | …)`, Musik aus
   `web/musik/`; Lautstärken in den Einstellungen.
 - **Einführung**: geführt in `fuehrung.js` — der Hof ist abgedunkelt, ein

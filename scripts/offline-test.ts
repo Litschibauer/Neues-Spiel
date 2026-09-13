@@ -1035,7 +1035,9 @@ try {
 
   const beforeHarvest = await stockOf('Weizen');
   const goldVorErnte = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
-  await evaluate(cdp, `document.querySelector('#plots .plot.ripe').click()`);
+  // Der Zettel wird vorher geleert: Ernten meldet sich nur bei einem Fund,
+  // ein alter Text darf nicht als frische Meldung durchgehen.
+  await evaluate(cdp, `(function () { document.getElementById('toast').textContent = ''; document.querySelector('#plots .plot.ripe').click(); })()`);
   await sleep(90);
   // Die Ernte fliegt als Bild ins Lager — nicht nur als Zahl nach oben.
   const ernteFlug = JSON.parse(
@@ -1123,8 +1125,9 @@ try {
 
   // Fundstuecke: Was die Sim in den Acker legt, muss die Oberflaeche genauso
   // melden — und nie etwas erfinden. Weizen bringt kein Gold; steigt es
-  // trotzdem, war das ein Fund, und der muss in der Meldung stehen. Steht ein
-  // Gold-Fund in der Meldung, muss genau diese Summe angekommen sein.
+  // trotzdem, war das ein Fund, und der muss auf dem Zettel stehen. Steht ein
+  // Gold-Fund auf dem Zettel, muss genau diese Summe angekommen sein. Ohne
+  // Fund bleibt der Zettel leer — Ernten selbst meldet sich nicht mehr.
   const ernteMeldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
   const goldNachErnte = await evaluate<number>(cdp, `Number(document.getElementById('gold').textContent)`);
   const goldDazu = goldNachErnte - goldVorErnte;
@@ -1173,6 +1176,7 @@ try {
         pointerType: 'mouse',
       });
 
+    await evaluate(cdp, `document.getElementById('toast').textContent = ''`);
     await maus('mousePressed', punkte[0].x, punkte[0].y);
     await sleep(40);
     for (let k = 1; k < punkte.length; k++) {
@@ -1196,9 +1200,9 @@ try {
       `${punkte.length} reif → ${nochReif} übrig, Weizen ${weizenVorZug} → ${weizenNachZug}`,
     );
     check(
-      'Der Zug meldet sich einmal als Zug, nicht einmal pro Platz',
-      /Pl(ä|a)tze geerntet/.test(meldung),
-      meldung,
+      'Der Zug erntet still — nur ein Fund oder ein volles Lager melden sich',
+      meldung === '' || /^(Fund:|Lager voll)/.test(meldung),
+      meldung || 'kein Zettel',
     );
     check(
       'Nach dem Wischen geht kein Auswahlblatt auf',
@@ -1325,11 +1329,10 @@ try {
     const vor = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
     await mausZug(nachWahl);
     const nach = await evaluate<number>(cdp, `document.querySelectorAll('#plots .plot .bar').length`);
-    const meldung = await evaluate<string>(cdp, `document.getElementById('toast').textContent`);
     check(
       'Nach der Wahl sät ein Wisch alle leeren Felder mit derselben Sorte an',
-      nach > vor && /angesetzt/.test(meldung),
-      `${vor} → ${nach} laufende Felder · ${meldung} (gewählt: ${sorte})`,
+      nach > vor,
+      `${vor} → ${nach} laufende Felder (gewählt: ${sorte})`,
     );
   }
 

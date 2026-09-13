@@ -21,7 +21,7 @@ function hoch(kasten) {
 function act(name, result, ton) {
   if (!isActive) return;
   if (result.ok) {
-    toast(name);
+    if (name) toast(name);
     klang(ton || 'tipp');
     save();
     scheduleSync();
@@ -64,8 +64,10 @@ function fundAus(vor, nach, erwartet) {
   return null;
 }
 
-function fundText(fund) {
-  return fund ? ' · Fund: ' + fund.amount + ' ' + stueckName(fund.amount, fund.item) : '';
+// Saeen und Ernten melden sich nicht — Name und Ausbeute steigen ueber dem
+// Platz auf. Ein Zettel kommt nur fuer das, was der Platz nicht zeigt: ein Fund.
+function fundMeldung(fund) {
+  return fund ? 'Fund: ' + fund.amount + ' ' + stueckName(fund.amount, fund.item) : null;
 }
 
 // Ein Fund darf sich nicht anfuehlen wie eine Ernte mehr: eigener Klang,
@@ -96,7 +98,7 @@ function tapPlot(i) {
     var erwartet = ertragVon(i, 0);
     var res = client.collect(i);
     var fund = res.ok ? fundAus(vorLager, client.preview().items, erwartet) : null;
-    act('Geerntet · ' + p.output.amount + ' ' + itemName(p.output.item) + fundText(fund), res, 'ernte');
+    act(fundMeldung(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
       warenFliegen(wo, p.output.item, p.output.amount);
@@ -125,10 +127,8 @@ function tapPlot(i) {
   if (p.tap === 'start') {
     if (istFeld(p)) merkeSaat(p.next.recipe);
     var gestartet = client.start(i, p.next.recipe);
-    act('Gestartet · ' + nameOf(p.next.id) +
-          (p.next.inputs.length > 0 ? ' · −' + costText(p.next.inputs) : ''),
-        gestartet, 'saat');
-    if (gestartet.ok) saatFliegt(i, p.next.inputs);
+    act(null, gestartet, 'saat');
+    if (gestartet.ok) { zahlAuf(platzKasten(i), nameOf(p.next.id), 'saat'); saatFliegt(i, p.next.inputs); }
     return;
   }
   // Gebautes, nicht-festes Bauwerk ohne andere Aktion (z. B. Deko): Menü zum
@@ -149,7 +149,7 @@ function tapBaum(p) {
     var vorLager = client.preview().items.slice();
     var res = client.harvestTree(p.index);
     var fund = res.ok ? fundAus(vorLager, client.preview().items, [b.ertrag]) : null;
-    act('Geerntet · ' + b.ertrag.amount + ' ' + itemName(b.ertrag.item) + fundText(fund), res, 'ernte');
+    act(fundMeldung(fund), res, 'ernte');
     if (res.ok) {
       zahlAuf(wo, '+' + b.ertrag.amount + ' ' + itemName(b.ertrag.item), 'ware');
       warenFliegen(wo, b.ertrag.item, b.ertrag.amount);
@@ -178,7 +178,7 @@ function collectSlot(p, j) {
   var erwartet = ertragVon(p.index, j);
   var erg = client.collect(p.index, j);
   var fund = erg.ok ? fundAus(vorLager, client.preview().items, erwartet) : null;
-  act('Geerntet · ' + out.amount + ' ' + itemName(out.item) + fundText(fund), erg, 'ernte');
+  act(fundMeldung(fund), erg, 'ernte');
   if (erg.ok) {
     zahlAuf(woTier, '+' + out.amount + ' ' + itemName(out.item), 'ware');
     warenFliegen(woTier, out.item, out.amount);
@@ -191,8 +191,7 @@ function feedSlot(p, j) {
   if (open.length > 1) { openPicker(p, j); return; }
   if (open.length === 0) { toast('Erst ab einer höheren Stufe', true); return; }
   var o = open[0];
-  act('Gestartet · ' + nameOf(o.id) + (o.inputs.length > 0 ? ' · −' + costText(o.inputs) : ''),
-      client.start(p.index, o.recipe, j));
+  act(null, client.start(p.index, o.recipe, j));
 }
 
 function slotStatus(p, s, lager) {
@@ -653,8 +652,7 @@ function ernteZugLos(i, e) {
   // Ein Tick fuer den ganzen Zug: Der Server weist Befehle ab, deren Tick
   // zurueckspringt, und pro Platz neu zu stellen bringt nichts.
   client.localTick = tickNow();
-  ernteZug = { hatte: {}, zahl: 0, menge: {}, funde: 0, fundMenge: {},
-    xp: client.preview().xp, voll: false, letzter: -1 };
+  ernteZug = { hatte: {}, zahl: 0, funde: 0, fundMenge: {}, voll: false, letzter: -1 };
   if (schwenk) { schwenk = null; $('hof').classList.remove('schwenkt'); }
   if (ziehen) { clearTimeout(ziehen.timer); ziehen = null; }
   $('hof').classList.add('erntet');
@@ -689,7 +687,6 @@ function ernteSchritt(i) {
 
   ernteZug.hatte[i] = true;
   ernteZug.zahl++;
-  ernteZug.menge[p.output.item] = (ernteZug.menge[p.output.item] || 0) + p.output.amount;
   zahlAuf(wo, '+' + p.output.amount + ' ' + itemName(p.output.item), 'ware');
   warenFliegen(wo, p.output.item, p.output.amount, 2);
   var fund = fundAus(vorLager, client.preview().items, erwartet);
@@ -795,8 +792,7 @@ function saeZugEnde() {
   if (zug.zahl === 0) return;
 
   klickSchlucken = Date.now();
-  toast(zug.zahl + (zug.zahl === 1 ? ' Feld' : ' Felder') + ' angesetzt · ' + zug.name +
-    (zug.leer ? ' · dann war Schluss' : ''), zug.leer);
+  if (zug.leer) toast(zug.name + ' ist alle', true);
   save();
   scheduleSync();
   render();
@@ -812,18 +808,13 @@ function ernteZugEnde() {
   // Der Fingerabdruck darf hinterher nicht noch als Tipp durchgehen.
   klickSchlucken = Date.now();
 
-  var teile = Object.keys(zug.menge).map(function (k) {
-    return '+' + zug.menge[k] + ' ' + itemName(Number(k));
-  });
-  var dazu = client.preview().xp - zug.xp;
-  // Ein Zug, eine Meldung — nicht acht Toasts hintereinander.
+  // Ein Zug, hoechstens ein Zettel — und nur, wenn er etwas sagt, was die
+  // Zahlen ueber den Plaetzen nicht schon gesagt haben.
   var fundTeile = Object.keys(zug.fundMenge).map(function (k) {
     return zug.fundMenge[k] + ' ' + stueckName(zug.fundMenge[k], Number(k));
   });
-  toast(zug.zahl + (zug.zahl === 1 ? ' Platz' : ' Plätze') + ' geerntet · ' +
-    teile.join(' · ') + (dazu > 0 ? ' · +' + dazu + ' XP' : '') +
-    (zug.funde > 0 ? ' · Fund: ' + fundTeile.join(' · ') : '') +
-    (zug.voll ? ' · Lager voll' : ''), zug.voll);
+  if (zug.voll) toast('Lager voll', true);
+  else if (zug.funde > 0) toast('Fund: ' + fundTeile.join(' · '));
   save();
   scheduleSync();
   render();
@@ -1091,10 +1082,8 @@ function zeichnePicker(p) {
       // das Wischen nach einem Besuch im Huehnerstall stumm aus.
       if (istFeld(p)) merkeSaat(o.recipe);
       var los = client.start(p.index, o.recipe, slot);
-      act('Gestartet · ' + nameOf(o.id) +
-            (o.inputs.length > 0 ? ' · −' + costText(o.inputs) : ''),
-          los);
-      if (los.ok) saatFliegt(p.index, o.inputs);
+      act(null, los);
+      if (los.ok) { zahlAuf(platzKasten(p.index), nameOf(o.id), 'saat'); saatFliegt(p.index, o.inputs); }
     });
     box.appendChild(card);
 

@@ -1272,23 +1272,25 @@
   }
 
   /* Der naechste Schritt: immer ein Grund zu bleiben, nie eine Aufforderung. */
+  /* Die Zeile „als Naechstes" ist ein kleines Papierschild mit Warenbild. */
   .naechstes {
-    display: flex; align-items: center; gap: .35rem; min-width: 0;
-    max-width: 62vw; padding: .28rem .6rem;
-    border: 2px solid var(--kante); border-radius: 6px;
-    background: var(--surface); color: var(--ink);
+    display: flex; align-items: center; gap: .4rem; min-width: 0;
+    max-width: 62vw; padding: .3rem .6rem;
+    border: 2px solid var(--tinte); border-radius: 3px;
+    background: var(--papier); color: var(--tinte);
     font-size: .72rem; font-weight: 700; line-height: 1.2;
-    box-shadow: 0 2px 0 var(--druck);
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, .3);
     transition: transform .08s, box-shadow .08s;
   }
   .naechstes:active { transform: translateY(2px); box-shadow: none; }
-  .naechstes .ns-icon { font-size: .85rem; flex: none; }
+  .naechstes .ns-icon { flex: none; display: flex; }
+  .naechstes .ns-icon img.ic { width: 1rem; height: 1rem; image-rendering: pixelated; display: block; }
   .naechstes .ns-text {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
   /* Liegt etwas bereit, blinzelt der Rahmen — laeuft nur etwas, bleibt er ruhig. */
-  .naechstes.bereit { background: var(--accent-soft); border-color: var(--accent); }
+  .naechstes.bereit { background: var(--messing); box-shadow: 2px 3px 0 var(--messing-dunkel); }
 
   /* Der Platz, den die Leiste gemeint hat, meldet sich kurz. */
   .plot.zeigt::after {
@@ -1594,20 +1596,23 @@
     background: var(--accent); color: var(--on-accent); font-size: .9rem; font-weight: 700;
   }
 
+  /* Meldungen sind Zettel, keine Pillen: Papier, Tinte, harter Schatten —
+     und sie kommen nur fuer das, was der Hof nicht selbst zeigt. */
   .toast {
-    position: fixed; left: 50%; transform: translateX(-50%);
+    position: fixed; left: 50%; transform: translateX(-50%) rotate(-.4deg);
     bottom: calc(4.6rem + env(safe-area-inset-bottom)); z-index: 40;
-    background: var(--ink); color: var(--ground);
-    border-radius: 999px; padding: .45rem .9rem; font-size: .78rem; font-weight: 600;
-    box-shadow: var(--shadow); opacity: 0; transition: opacity .2s, transform .2s;
+    background: var(--papier); color: var(--tinte);
+    border: 2px solid var(--tinte); border-radius: 3px; padding: .5rem .9rem;
+    font-size: .8rem; font-weight: 700; line-height: 1.3;
+    box-shadow: 3px 4px 0 rgba(0, 0, 0, .3); opacity: 0; transition: opacity .2s, transform .2s;
     pointer-events: none; max-width: 90vw; text-align: center;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem); }
-  .toast.bad { background: var(--bad); color: var(--surface); }
-  /* Eine Meldung mit Weg: antippbar, mit Pfeil, und sie bleibt laenger. */
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-.2rem) rotate(-.4deg); }
+  .toast.bad { color: #8a2f2f; border-color: #8a2f2f; background: #f6e3d9; }
+  /* Eine Meldung mit Weg: antippbar, mit Pfeil, Messingrand, und sie bleibt laenger. */
   .toast.tippbar {
     pointer-events: auto; cursor: pointer;
-    box-shadow: var(--shadow), 0 0 0 2px var(--accent);
+    box-shadow: 3px 4px 0 rgba(0, 0, 0, .3), 0 0 0 2px var(--messing);
   }
   .toast.tippbar::after { content: '  ›'; font-weight: 800; opacity: .8; }
 
@@ -1779,10 +1784,12 @@
   .sheet-close, .primär, .gate .big, .gate .ghost, .tut-knoepfe .big, .tut-knoepfe .ghost,
   .nachkauf .kaufen, .ziel-los, .zettel-los, .ta-los, .loesch-knoepfe button, .loesch-steuer button,
   .besuch-leiste button, .setzen button, .stufe-weiter, .kiste-weiter, #freundadd, .go, .abfahrt,
-  .preisknoepfe button, .pick button, .melden-schalter, .bonus-knopf, .naechstes {
-    font-family: var(--pixel); font-weight: 700; letter-spacing: .02em;
+  .preisknoepfe button, .pick button, .melden-schalter, .bonus-knopf {
     border: 2px solid var(--kante); border-radius: 6px;
     box-shadow: 0 3px 0 var(--druck);
+  }
+  .preisknoepfe button, .pick button, .melden-schalter, .bonus-knopf, .naechstes {
+    font-family: var(--pixel); font-weight: 700; letter-spacing: .02em;
     transition: transform .08s, box-shadow .08s;
   }
   .sheet-close:active, .primär:active, .gate .big:active, .gate .ghost:active, .tut-knoepfe .big:active,

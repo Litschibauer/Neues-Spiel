@@ -1826,8 +1826,9 @@ function naechsterSchritt(v) {
   });
 
   if (reif.length > 0) {
+    var erste = reif[0];
     return {
-      icon: '🌾',
+      bild: erste.baum ? (erste.baum.ertrag ? itemIcon(erste.baum.ertrag.item) : '') : itemIcon(erste.output.item),
       bereit: true,
       text: reif.length === 1
         ? plotName(reif[0].index) + ' ist fertig'
@@ -1839,17 +1840,17 @@ function naechsterSchritt(v) {
     var was = laeuft.baum
       ? plotName(laeuft.index)
       : (laeuft.producing ? nameOf(laeuft.producing) : plotName(laeuft.index));
-    return { icon: '⏳', bereit: false, text: was + ' in ' + timeText(restVon(laeuft)), plot: laeuft.index };
+    return { bild: laeuft.producing ? iconTag(laeuft.producing) : '', bereit: false, text: was + ' in ' + timeText(restVon(laeuft)), plot: laeuft.index };
   }
 
   var zettel = ((v.truck && v.truck.board) || []).filter(function (z) { return z.deliverable; });
-  if (zettel.length > 0) return { icon: '🚚', bereit: true, text: 'Zettel lieferbar', blatt: 'brett' };
+  if (zettel.length > 0) return { bild: '', bereit: true, text: 'Zettel lieferbar', blatt: 'brett' };
 
   var frei = null;
   v.plots.forEach(function (p) {
     if (frei === null && p.level > 0 && !p.deco && !p.baum && p.tap === 'start') frei = p;
   });
-  if (frei !== null) return { icon: '🌱', bereit: false, text: 'Nichts läuft — säen?', plot: frei.index };
+  if (frei !== null) return { bild: '', bereit: false, text: 'Nichts läuft — säen?', plot: frei.index };
   return null;
 }
 
@@ -1869,7 +1870,10 @@ function renderNaechstes(v) {
   naechstesZiel = schritt;
   knopf.hidden = schritt === null;
   if (schritt === null) return;
-  $('naechstes-icon').textContent = schritt.icon;
+  // Ein Warenbild statt Emoji — und gar keins, wenn es keine Ware gibt.
+  var bildBox = $('naechstes-icon');
+  bildBox.innerHTML = schritt.bild || '';
+  bildBox.hidden = !schritt.bild;
   $('naechstes-text').textContent = schritt.text;
   knopf.classList.toggle('bereit', !!schritt.bereit);
 }
