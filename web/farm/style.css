@@ -489,6 +489,25 @@
     border-radius: 999px; background: var(--gold, #e0a800); border: 2px solid var(--surface);
   }
   .hammer { right: 3.7rem; }
+  /* Das Kalenderblatt: Monat, Tag, Uhrzeit der Hofzeit — unten links, wie ein
+     Abreißkalender an der Stallwand. Oben links stehen die Nachbarn. */
+  .kalenderblatt {
+    position: absolute; bottom: .45rem; left: .45rem; z-index: 70;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 0 .22rem; min-width: 4.6rem; border: 2px solid var(--tinte, #2b1d12); border-radius: 4px;
+    background: var(--papier, #f3e7c9); color: var(--tinte, #2b1d12);
+    box-shadow: 0 3px 0 var(--tinte, #2b1d12); font-family: inherit; line-height: 1.1; cursor: pointer;
+  }
+  .kalenderblatt:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--tinte, #2b1d12); }
+  .kalenderblatt .kb-monat {
+    display: block; width: 100%; box-sizing: border-box; padding: .16rem .3rem .12rem;
+    background: #b8402e; color: #fff4d6; font-size: .48rem; letter-spacing: .03em;
+    text-transform: uppercase; white-space: nowrap; text-align: center;
+  }
+  .kalenderblatt.nacht .kb-monat { background: #3d3f7a; }
+  .kalenderblatt .kb-tag { font-size: .92rem; font-weight: 700; padding-top: .14rem; }
+  .kalenderblatt .kb-uhr { font-size: .56rem; color: var(--tinte-grau, #6b5843); }
+  .hof.setzt .kalenderblatt { opacity: .35; pointer-events: none; }
   .geschenk { right: 6.95rem; color: var(--on-accent); background: var(--accent); }
   .geschenk.winkt { animation: winken 1.4s ease-in-out infinite; }
   /* Ein Moebel, das einen Moment lang auf sich aufmerksam macht. */

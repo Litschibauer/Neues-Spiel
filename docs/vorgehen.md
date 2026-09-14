@@ -486,6 +486,11 @@ echter Datenbank. Zahlen in `deploy.md`.
   Etappen, gemessener Bedarf, Dankeswoche; endliche Reihe, der Bahnhof
   bleibt) und `zug.ts` (eine Fahrt je Serverwoche, `ZUG_WAREN`, `ZUG_DANK`).
   Der Abzug geht den Weg des Geschenks (`nimmAb`), der Dank den der Post.
+- **Startland und Vorgeräumtes**: `expansions` sind die kaufbaren Felder;
+  seit 54 fehlen w1 und w4 darin, sie sind Starthof. `vorgeraeumt` nennt
+  Hindernis-Indizes, die `initialState` gleich in `clearedObstacles` legt
+  (Migration `VORGERAEUMT_DAZU`). Die Hindernisliste nie kürzen oder
+  umsortieren — jeder Stand referenziert sie über den Index.
 - **Jahreszeiten, Tag und Nacht**: Die Jahreszeit kommt seit Regelwerk 53
   aus der Hofzeit (`jahreszeiten.quelle: 'hofzeit'`, `saisonVon` in
   `rules.ts`; bis 52 aus der Serverwoche); Saisonware bringt ein Stück mehr

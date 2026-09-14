@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getRuleset, listingFee } from '../src/sim/rules.ts';
+import { DEV_RULESET_VERSION, getRuleset, listingFee } from '../src/sim/rules.ts';
 
 const CHROME_CANDIDATES = [
   process.env.CHROMIUM_PATH,
@@ -435,6 +435,8 @@ async function plantSomething(cdp: Cdp): Promise<boolean> {
 }
 
 const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
+// Regelwerk 54: so viele Hindernisse gelten auf jedem neuen Hof als geräumt.
+const NS_VORGERAEUMT = (getRuleset(DEV_RULESET_VERSION).vorgeraeumt ?? []).length;
 function check(name: string, ok: boolean, detail?: string): void {
   checks.push({ name, ok, detail });
   console.log(`  ${ok ? '✓' : '✗'} ${name}${detail ? `  (${detail})` : ''}`);
@@ -1899,10 +1901,11 @@ try {
            echtzeit: document.querySelectorAll('#kalender-liste .kalender-ereignis.echtzeit').length,
            zeile: zeile && !zeile.hidden ? zeile.textContent : '',
            sub: (document.getElementById('kalender-sub') || {}).textContent || '',
+           blatt: (function () { var b = document.getElementById('kalenderblatt'); return b && !b.hidden ? b.textContent.replace(/\s+/g, ' ').trim() : ''; })(),
          };
        })())`,
     ),
-  ) as { monat: string; tag: string; monate: string[]; heute: number; jahreszeiten: number; jetzt: number; ereignisse: number; echtzeit: number; zeile: string; sub: string };
+  ) as { monat: string; tag: string; monate: string[]; heute: number; jahreszeiten: number; jetzt: number; ereignisse: number; echtzeit: number; zeile: string; sub: string; blatt: string };
   const monatBekannt = kalender.monate.includes(kalender.monat);
   check(
     'Das Kalenderblatt zeigt Hofmonat, Tag von 31 und Uhrzeit, ein Tag ist heute, vier Jahreszeiten, eine davon jetzt',
@@ -1918,6 +1921,12 @@ try {
     'Wetterzeile und Kalenderkarte nennen denselben Hofmonat',
     (kalender.zeile === '' || kalender.zeile.indexOf(kalender.monat) === 0 || /Regen/.test(kalender.zeile)) && kalender.sub.indexOf(kalender.monat) >= 0,
     `Zeile: ${kalender.zeile} · Karte: ${kalender.sub}`,
+  );
+  const blattTag = (kalender.tag.match(/^Tag (\d+) von 31/) || [])[1];
+  check(
+    'Das Kalenderblatt unten links auf dem Hof zeigt Monat, Tag und Uhrzeit der Hofzeit',
+    kalender.blatt.indexOf(kalender.monat) === 0 && !!blattTag && kalender.blatt.indexOf('Tag ' + blattTag) > 0 && /\d+:\d\d Uhr/.test(kalender.blatt),
+    kalender.blatt,
   );
   await evaluate(cdp, `document.getElementById('kalender-close').click()`);
   await sleep(200);
@@ -1953,7 +1962,8 @@ try {
   await sleep(200);
 
   // Der Großteil des (nun doppelt breiten UND doppelt hohen) Hofs ist gesperrt:
-  // 8 alte Felder (w1–w6, m1, m2) + 8 rechts (n1–n8) + 16 unten (u1–u16) = 32.
+  // 6 alte Felder (w2, w3, w5, w6, m1, m2 — w1 und w4 gehören seit Regelwerk 54
+  // zum Starthof) + 8 rechts (n1–n8) + 16 unten (u1–u16) = 30.
   const sperren = await evaluate<{ anzahl: number; text: string }>(
     cdp,
     `(function () {
@@ -1963,7 +1973,7 @@ try {
   );
   check(
     'Der weitaus größte Teil des Hofs liegt in gesperrten Feldern, samt Bergen',
-    sperren.anzahl === 32,
+    sperren.anzahl === 30,
     `${sperren.anzahl} Felder`,
   );
   check(
@@ -3552,8 +3562,8 @@ try {
   };
   check(
     'Der Server weiß, dass da jetzt Platz ist',
-    platzFrei.state.clearedObstacles.length === 1,
-    `geräumt: ${JSON.stringify(platzFrei.state.clearedObstacles)}`,
+    platzFrei.state.clearedObstacles.length === (NS_VORGERAEUMT + 1),
+    `geräumt: ${JSON.stringify(platzFrei.state.clearedObstacles)} (vorgeräumt: ${NS_VORGERAEUMT})`,
   );
 
   console.log('\n9h. Die Zeitung — ein Aushang je Hof');

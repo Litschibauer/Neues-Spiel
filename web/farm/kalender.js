@@ -30,7 +30,30 @@ function kalenderAnzeigen() {
   if (!sub) return;
   var z = hofzeitJetzt();
   sub.textContent = z ? hofzeitKurz(z) : 'Der Hof rechnet noch nach der Uhr des Geräts';
+  kalenderblattZeigen(z);
   if (view === 'kalender') renderKalender();
+}
+
+// Das Kalenderblatt unten links auf dem Hof: Monat, Tag und Uhrzeit der
+// Hofzeit, jede Sekunde nachgeführt. Antippen öffnet den Kalender. Ohne
+// Stempel vom Server (erster Kontakt) bleibt es weg — dann gäbe es nur die
+// Uhr des Geräts, und die ist nicht die des Hofs.
+var kalenderblattStand = '';
+function kalenderblattZeigen(z) {
+  var el = $('kalenderblatt');
+  if (!el) return;
+  if (z === undefined) z = hofzeitJetzt();
+  if (!z || (typeof besuchAktiv === 'function' && besuchAktiv())) { el.hidden = true; kalenderblattStand = ''; return; }
+  var mm = z.minute < 10 ? '0' + z.minute : String(z.minute);
+  var stand = z.monatName + '|' + z.tag + '|' + z.stunde + ':' + mm + '|' + z.tagesphase;
+  el.hidden = false;
+  if (stand === kalenderblattStand) return;
+  kalenderblattStand = stand;
+  $('kb-monat').textContent = z.monatName;
+  $('kb-tag').textContent = 'Tag ' + z.tag;
+  $('kb-uhr').textContent = z.stunde + ':' + mm + ' Uhr';
+  el.classList.toggle('nacht', z.tagesphase !== 'tag');
+  el.title = hofzeitKurz(z) + ' · ' + z.jahreszeitName;
 }
 
 function kalenderAuf() {

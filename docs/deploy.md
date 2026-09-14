@@ -361,6 +361,19 @@ Funktionen `waageZettel` und `waageFuhre` in `rules.ts` rechnen das aus den
 alten Werten — wer nachjustiert, dreht dort an drei Zahlen, in einem neuen
 Regelwerk.
 
+### Mehr Startland, längere Zettel (Regelwerk 54)
+
+Der Starthof war mit Mühle, Werkstatt, Backstube und vier Feldern auf 13
+Spalten schnell voll. Seit 54 gehören die beiden Felder gleich rechts davon
+(oben w1, unten w4) jedem Hof von Anfang an, mit weniger Unkraut als vorher:
+neun Hindernisse dort gelten als geräumt (`vorgeraeumt` im Regelwerk; die
+Hindernisliste bleibt unverändert, weil ihre Indizes in jedem Stand stecken).
+Die Wanderung 53→54 trägt das Vorgeräumte in jeden alten Stand ein; wer w1
+oder w4 schon gekauft hatte, verliert nichts. Die Tageszettel verlangen jetzt
+das Drei- bis Vierfache (40 statt 10 Plätze abernten, 2.500 statt 800 Gold)
+bei gleicher Belohnung — vorher waren sie in einer Viertelstunde erledigt, weil
+Weizen in 30 Sekunden wächst.
+
 ### Die Hofzeit (Regelwerk 53)
 
 Seit Regelwerk 53 hat das Spiel einen eigenen Kalender, die **Hofzeit**:

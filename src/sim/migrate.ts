@@ -212,6 +212,24 @@ export const ZAEHLER_DAZU: MigrationStep = (state, from, to) => {
   return next;
 };
 
+// Was das Zielregelwerk als vorgeräumt kennt, kommt in clearedObstacles —
+// wer es selbst schon geräumt hatte, bleibt unverändert. Danach aufs Raster.
+// Felder, die das Ziel nicht mehr als Erweiterung kennt (sie sind Starthof
+// geworden), fliegen aus expandiert — sonst schlägt die Invariante an.
+export const VORGERAEUMT_DAZU: MigrationStep = (state, from, to) => {
+  const dazu = (to.vorgeraeumt ?? []).filter((i) => !state.clearedObstacles.includes(i));
+  const bekannt = new Set((to.expansions ?? []).map((e) => e.id));
+  const expandiert = state.expandiert.filter((id) => bekannt.has(id));
+  let s = state;
+  if (dazu.length > 0 || expandiert.length !== state.expandiert.length) {
+    const next = cloneState(state);
+    next.clearedObstacles = [...state.clearedObstacles, ...dazu];
+    next.expandiert = expandiert;
+    s = next;
+  }
+  return AUFS_RASTER(s, from, to);
+};
+
 export const AUFS_RASTER: MigrationStep = (state, from, to) => {
   const gewachsen = GROW_AND_RETIME(state, from, to);
   const raster = to.grid;
@@ -390,6 +408,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['51->52', AUFS_RASTER],
   // Hofzeit: die Jahreszeit kommt aus dem Kalender; der Stand bleibt.
   ['52->53', AUFS_RASTER],
+  // Startland: zwei Felder gehören jedem Hof, und was dort vorgeräumt ist, gilt auch für alte Stände.
+  ['53->54', VORGERAEUMT_DAZU],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

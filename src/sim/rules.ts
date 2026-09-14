@@ -264,6 +264,10 @@ export type Ruleset = {
   chestQueueMax?: number;
   grid?: GridDef;
   obstacles?: readonly Obstacle[];
+  // Hindernisse, die von Anfang an als geräumt gelten (Indizes in obstacles).
+  // Die Liste der Hindernisse bleibt unverändert — Indizes stecken in jedem
+  // Stand —, aber ein neuer Hof beginnt mit diesen in clearedObstacles.
+  vorgeraeumt?: readonly number[];
   // Hindernis räumen: welches Werkzeug es kostet, wie viel XP es gibt und was
   // dabei abfällt. `ertrag` fehlt in alten Regelwerken, dann bleibt es beim XP.
   obstacleKinds?: Record<string, { tool: number; xp: number; ertrag?: ItemStack }>;
@@ -3214,33 +3218,66 @@ const V53: Ruleset = {
   jahreszeiten: { ...V52.jahreszeiten!, quelle: 'hofzeit' },
 };
 
-const DEV: Ruleset = {
+// V54: Mehr Platz am Anfang, längere Tageszettel. Die beiden Felder gleich
+// rechts vom Starthof (w1 oben, w4 unten) gehören von Anfang an dazu — der
+// Hof war mit Mühle, Werkstatt und Feldern auf 13 Spalten schnell voll und
+// unübersichtlich. Dort wächst etwas weniger Unkraut: neun Hindernisse gelten
+// als geräumt (vorgeraeumt), die Liste selbst bleibt, damit kein Index rutscht.
+// Die Tageszettel waren in einer Viertelstunde erledigt (Weizen wächst in 30
+// Sekunden); jetzt verlangen sie das Drei- bis Vierfache bei gleicher
+// Belohnung — ein Zettel ist wieder Arbeit für den Tag, nicht für die Pause.
+const V54_STARTLAND: readonly string[] = ['w1', 'w4'];
+const V54_ZETTEL: Readonly<Record<string, { menge: number; label: string }>> = {
+  ernte10: { menge: 40, label: '40 Plätze abernten' },
+  ernte25: { menge: 100, label: '100 Plätze abernten' },
+  saeen12: { menge: 40, label: '40 Mal etwas ansetzen' },
+  saeen30: { menge: 100, label: '100 Mal etwas ansetzen' },
+  zettel1: { menge: 3, label: 'Drei Wagen losschicken' },
+  zettel3: { menge: 8, label: 'Acht Wagen losschicken' },
+  anfrage2: { menge: 3, label: 'Drei Kisten öffnen' },
+  verkauf15: { menge: 12, label: 'Zwölf Kästchen am Stand verkaufen' },
+  gold800: { menge: 2500, label: '2.500 Gold einnehmen' },
+  fisch6: { menge: 12, label: 'Zwölf Fische einholen' },
+  raeumen3: { menge: 4, label: 'Vier Hindernisse räumen' },
+};
+const V54: Ruleset = {
   ...V53,
+  version: 54,
+  expansions: (V53.expansions ?? []).filter((e) => !V54_STARTLAND.includes(e.id)),
+  vorgeraeumt: [23, 25, 27, 28, 56, 57, 58, 60, 62],
+  tagesaufgaben: (V53.tagesaufgaben ?? []).map((a) => {
+    const neu = V54_ZETTEL[a.id];
+    return neu ? { ...a, menge: neu.menge, label: neu.label } : a;
+  }),
+};
+
+const DEV: Ruleset = {
+  ...V54,
   // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
   feste: {
-    ...V53.feste!,
+    ...V54.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V53.feste!.arten.map((a) => ({
+    arten: V54.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V53.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V54.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V53.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V54.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V53.fishing!,
+    ...V54.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V53.plots.map((p) => {
+  plots: V54.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -3311,18 +3348,19 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [51, V51],
   [52, V52],
   [53, V53],
+  [54, V54],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53,
+  52, 53, 54,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 53;
+export const LATEST_RULESET_VERSION = 54;
 
 export const DEV_RULESET_VERSION = 1001;
 

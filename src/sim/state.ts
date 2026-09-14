@@ -339,7 +339,7 @@ export function initialState(rules: Ruleset): State {
     chests: [],
     nextChestId: 1,
     pendingBoxes: [],
-    clearedObstacles: [],
+    clearedObstacles: (rules.vorgeraeumt ?? []).slice(),
     expandiert: [],
     chestReadyAt: 0,
     skipReadyAt: 0,

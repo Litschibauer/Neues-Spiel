@@ -192,6 +192,8 @@ $('bestenliste-auf').addEventListener('click', function () { show('bestenliste')
 $('dorf-auf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
 $('dorf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
 $('kalender-auf').addEventListener('click', kalenderAuf);
+$('kalenderblatt').addEventListener('click', kalenderAuf);
+setInterval(function () { kalenderblattZeigen(); }, 1000);
 $('brett').addEventListener('click', function () { show('brett'); });
 $('abenteuer').addEventListener('click', function () { show('abenteuer'); });
 $('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });

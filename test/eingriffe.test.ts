@@ -154,7 +154,8 @@ test('Lager, Land, Hindernis, Boot, Booster, Wagen, Kiste auf dem Hof — jeder 
   const st = server.snapshot.state;
   assert.equal(st.siloLevel, stufen - 1, 'gedeckelt auf die letzte Stufe');
   assert.deepEqual(st.expandiert, [erw]);
-  assert.deepEqual(st.clearedObstacles, [0]);
+  assert.ok(st.clearedObstacles.includes(0), 'das geräumte Hindernis steht drin');
+  assert.equal(st.clearedObstacles.filter((i) => i === 0).length, 1, 'und nur einmal');
   assert.equal(st.bootRepariert, true);
   assert.ok(st.xpDoppeltBis >= st.tick + 600);
   assert.ok(st.truck.awayUntil <= st.tick);
