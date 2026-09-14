@@ -1902,10 +1902,11 @@ try {
            zeile: zeile && !zeile.hidden ? zeile.textContent : '',
            sub: (document.getElementById('kalender-sub') || {}).textContent || '',
            blatt: (function () { var b = document.getElementById('kalenderblatt'); return b && !b.hidden ? b.textContent.replace(/\s+/g, ' ').trim() : ''; })(),
+           echt: (function () { var e = NS.hofzeit(Math.floor(Date.now() / 1000)); return { monat: e.monatName, tag: e.tag }; })(),
          };
        })())`,
     ),
-  ) as { monat: string; tag: string; monate: string[]; heute: number; jahreszeiten: number; jetzt: number; ereignisse: number; echtzeit: number; zeile: string; sub: string; blatt: string };
+  ) as { monat: string; tag: string; monate: string[]; heute: number; jahreszeiten: number; jetzt: number; ereignisse: number; echtzeit: number; zeile: string; sub: string; blatt: string; echt: { monat: string; tag: number } };
   const monatBekannt = kalender.monate.includes(kalender.monat);
   check(
     'Das Kalenderblatt zeigt Hofmonat, Tag von 31 und Uhrzeit, ein Tag ist heute, vier Jahreszeiten, eine davon jetzt',
@@ -1927,6 +1928,13 @@ try {
     'Das Kalenderblatt unten links auf dem Hof zeigt Monat, Tag und Uhrzeit der Hofzeit',
     kalender.blatt.indexOf(kalender.monat) === 0 && !!blattTag && kalender.blatt.indexOf('Tag ' + blattTag) > 0 && /\d+:\d\d Uhr/.test(kalender.blatt),
     kalender.blatt,
+  );
+  // Die Werkbank hat diesem Hof vorhin Stunden geschenkt (drei Hoftage, liefen
+  // sie mit). Die Hofzeit bleibt trotzdem bei der echten Uhr — dieselbe für alle.
+  check(
+    'Geschenkte Zeit aus der Werkbank verschiebt den Kalender nicht: Hofzeit = echte Uhr',
+    kalender.monat === kalender.echt.monat && Math.abs(Number(blattTag) - kalender.echt.tag) <= 1,
+    `Blatt: ${kalender.monat}, Tag ${blattTag} · echte Uhr: ${kalender.echt.monat}, Tag ${kalender.echt.tag}`,
   );
   await evaluate(cdp, `document.getElementById('kalender-close').click()`);
   await sleep(200);

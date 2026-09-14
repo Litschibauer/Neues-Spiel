@@ -120,8 +120,10 @@ Es gibt drei Zeitquellen, und sie werden nicht vermischt:
   31 Tagen, ein Hoftag dauert eine echte Stunde, Tag von 6 bis 19 Uhr, Nacht
   davor und danach. Sie ist eine reine Funktion der Unix-Sekunde:
   `hofzeit(tick + zeitVersatz)`. Damit alle Höfe denselben Kalender sehen,
-  stempelt der Server `zeitVersatz` **genau einmal** in `applyExternal` (die
-  Unix-Sekunde, die Tick null entspricht) und fasst ihn danach nie wieder an.
+  stempelt der Server `zeitVersatz` in `applyExternal` als
+  `floor(serverTs / 1000) − tick` des Snapshots — im Gleichschritt konstant,
+  nur nach geschenkter Zeit (`grantTime`) neu, damit die Hofzeit bei der
+  echten Uhr bleibt.
   `unixVon(state)` in `state.ts` liefert die Unix-Sekunde oder `null`,
   solange noch nicht gestempelt ist — dann gilt keine Jahreszeit, und der
   Client zeichnet Nacht nach der Geräteuhr. `zeitVersatz` wird nicht gehasht:

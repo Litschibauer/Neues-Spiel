@@ -392,7 +392,15 @@ Im Spiel: Die Wetterzeile nennt Monat und Tag, das Kalenderblatt (Zahnrad →
 Kalender) zeigt Monat, Uhrzeit, Jahreszeit, das Blatt mit 31 Tagen und die
 nächsten Termine — jeder mit seiner Quelle (Hofzeit oder echte Zeit) und
 Countdown in echter Zeit. Wer beobachten will, ob die Uhr stimmt: Zwei Geräte
-müssen dieselbe Hofzeit zeigen, und `/health` nennt `rulesetVersion` 53.
+müssen dieselbe Hofzeit zeigen, und `/health` nennt mindestens `rulesetVersion` 53.
+
+**Geschenkte Zeit aus der Werkbank** (`/api/admin/time`, die Knöpfe „+1 h",
+„+1 Tag") lässt Saat, Kisten und Wagen reifen, indem der Tick des Hofs
+vorausspringt. Die Hofzeit macht das nicht mit: Der Server stempelt den
+Versatz danach neu, sodass `tick + zeitVersatz` die echte Unix-Sekunde
+bleibt. Kalender, Jahreszeit und Nacht sind für alle Höfe dieselben, auch für
+einen, dem man einen Tag geschenkt hat. Wer eine andere Jahreszeit sehen
+will, wartet auf sie — oder ändert im Dev-Regelwerk die Epoche.
 
 ### Balance-Patch live beobachten
 

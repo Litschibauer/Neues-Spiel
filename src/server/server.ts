@@ -420,12 +420,17 @@ export class Server {
       state = fest;
     }
 
-    // Die Hofzeit: einmal den Versatz zur echten Uhr stempeln. Der Tick des
-    // Snapshots gehört zu seinem serverTs — daraus folgt, welche Unix-Sekunde
-    // Tick null war. Danach nie wieder anfassen: Er ist die Uhr aller Höfe.
-    if (!state.zeitVersatz) {
+    // Die Hofzeit: der Versatz zur echten Uhr. Der Tick des Snapshots gehört
+    // zu seinem serverTs — daraus folgt, welche Unix-Sekunde Tick null war.
+    // Im Normalfall ändert sich das nie, Tick und serverTs laufen im
+    // Gleichschritt. Schenkt die Werkbank Zeit (grantTime), rückt serverTs
+    // zurück und der Tick springt voraus — dann wird neu gestempelt, damit
+    // die Hofzeit bei der echten Uhr bleibt. Sie ist die Uhr aller Höfe;
+    // geschenkte Zeit lässt Saat und Kisten reifen, nicht den Kalender.
+    const versatzSoll = Math.floor(this.snapshot.serverTs / 1000) - this.snapshot.state.tick;
+    if (state.zeitVersatz !== versatzSoll) {
       const gestempelt = cloneState(state);
-      gestempelt.zeitVersatz = Math.floor(this.snapshot.serverTs / 1000) - this.snapshot.state.tick;
+      gestempelt.zeitVersatz = versatzSoll;
       state = gestempelt;
     }
 
