@@ -1,3 +1,4 @@
+import { hofzeit } from './zeit.ts';
 export type ItemStack = {
   item: number;
   amount: number;
@@ -310,7 +311,9 @@ export type Ruleset = {
   // Jede Abholung davon bringt ein Stück mehr, wenn es ins Lager passt. Die
   // Woche kommt vom Server (`wochenNummer`), also sehen Gerät und Server
   // dieselbe Jahreszeit; vor dem ersten Kontakt gibt es keine.
-  jahreszeiten?: { wochenJeSaison: number; saisons: readonly SaisonDef[] };
+  // `quelle`: 'woche' (V52: je Serverwoche eine) oder 'hofzeit' (ab V53: aus
+  // dem Spielkalender in zeit.ts — drei Hofmonate je Jahreszeit).
+  jahreszeiten?: { wochenJeSaison: number; saisons: readonly SaisonDef[]; quelle?: 'woche' | 'hofzeit' };
   // Meisterschaft: Jede Werkstatt und jeder Stall zählt seine Abholungen. Ab
   // `stufen[k]` Abholungen leuchtet der (k+1)-te Stern. Erster Stern: Alles,
   // was dort angesetzt wird, läuft `schnellerProzent` schneller. Zweiter:
@@ -2404,12 +2407,24 @@ export type WetterArt = 'klar' | 'wolkig' | 'regen';
 export type SaisonDef = { name: string; bonusItem: number };
 
 // Die Jahreszeit einer Serverwoche — reihum, ab Woche 1. Woche 0 heißt: noch
-// kein Serverkontakt, also keine Jahreszeit.
+// kein Serverkontakt, also keine Jahreszeit. (Quelle 'woche', V52.)
 export function saisonBei(rules: Ruleset, woche: number): SaisonDef | null {
   const j = rules.jahreszeiten;
   if (!j || j.saisons.length === 0 || woche <= 0 || j.wochenJeSaison <= 0) return null;
   const i = Math.floor(woche / j.wochenJeSaison) % j.saisons.length;
   return j.saisons[i] ?? null;
+}
+
+// Die Jahreszeit eines Standes: nach Hofzeit aus dem Tick (ab V53), sonst
+// nach Serverwoche. Die Reihenfolge der `saisons` ist die des Kalenders:
+// Frühling, Sommer, Herbst, Winter.
+// `unix` ist die echte Zeit des Standes (tick + zeitVersatz) oder null, wenn
+// der Server sie noch nicht gestempelt hat — dann gibt es keine Jahreszeit.
+export function saisonVon(rules: Ruleset, unix: number | null, woche: number): SaisonDef | null {
+  const j = rules.jahreszeiten;
+  if (!j || j.saisons.length === 0) return null;
+  if (j.quelle === 'hofzeit') return unix === null ? null : j.saisons[hofzeit(unix).jahreszeit % j.saisons.length] ?? null;
+  return saisonBei(rules, woche);
 }
 
 // Wann die nächste Jahreszeit beginnt, in Serverwochen ab `woche`.
@@ -3190,33 +3205,42 @@ const V52: Ruleset = {
   },
 };
 
-const DEV: Ruleset = {
+// V53: Die Hofzeit. Die Jahreszeit kommt aus dem Spielkalender (zeit.ts) —
+// drei Hofmonate je Jahreszeit, ein Hoftag ist eine echte Stunde — statt aus
+// der Serverwoche. Gleiche Saisonwaren, gleiche Wirkung.
+const V53: Ruleset = {
   ...V52,
+  version: 53,
+  jahreszeiten: { ...V52.jahreszeiten!, quelle: 'hofzeit' },
+};
+
+const DEV: Ruleset = {
+  ...V53,
   // Im Feldtest ist jeden Tag Fest, und die Festzettel sind ein Zehntel so lang.
   feste: {
-    ...V52.feste!,
+    ...V53.feste!,
     tage: [0, 1, 2, 3, 4, 5, 6],
-    arten: V52.feste!.arten.map((a) => ({
+    arten: V53.feste!.arten.map((a) => ({
       ...a,
       aufgaben: a.aufgaben.map((t) => ({ ...t, menge: zehntel(t.menge) })),
     })),
   },
   // Im Feldtest sollen Sterne in Minuten kommen, nicht in Tagen.
-  meisterschaft: { ...V52.meisterschaft!, stufen: [3, 8, 20] },
+  meisterschaft: { ...V53.meisterschaft!, stufen: [3, 8, 20] },
   version: 1001,
   requestSkipCooldownTicks: 60,
   truckAwayTicks: 9,
   chestEveryTicks: 60,
-  recipes: V52.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
+  recipes: V53.recipes.map((r) => ({ ...r, durationTicks: zehntel(r.durationTicks) })),
   // Im Feldtest soll der ganze Angel-Kreislauf in Sekunden durchlaufen, nicht
   // in Minuten — sonst dauert eine Prüfung länger als der Rest zusammen.
   fishing: {
-    ...V52.fishing!,
+    ...V53.fishing!,
     soakTicks: 20,
     craft: { ...V35.fishing!.craft!, durationTicks: 10 },
   },
   // Auf den Plaetzen der neuesten Fassung aufsetzen, damit DEV alles erbt.
-  plots: V52.plots.map((p) => {
+  plots: V53.plots.map((p) => {
     let q = p;
     if (p.animal) q = { ...q, animal: { ...p.animal, growTicks: zehntel(p.animal.growTicks) } };
     if (p.baum) {
@@ -3286,18 +3310,19 @@ export const RULESETS: ReadonlyMap<number, Ruleset> = new Map([
   [50, V50],
   [51, V51],
   [52, V52],
+  [53, V53],
   [1001, DEV],
 ]);
 
 export const PRODUCTION_VERSIONS: readonly number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52,
+  52, 53,
 ];
 
 export const CURRENT_RULESET_VERSION = 1;
 
-export const LATEST_RULESET_VERSION = 52;
+export const LATEST_RULESET_VERSION = 53;
 
 export const DEV_RULESET_VERSION = 1001;
 

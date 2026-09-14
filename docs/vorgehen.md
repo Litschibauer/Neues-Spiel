@@ -109,6 +109,33 @@ Server eine Abweichung nicht. Reine Zähler für Anzeige (Tage, Wochen, Feste)
 bleiben draußen. Optionale Felder bedingt anhängen
 (`(p.meister ? \`*${p.meister}\` : '')`), damit alte Vektoren gleich bleiben.
 
+### 2.4a Drei Uhren, und welche wofür
+
+Es gibt drei Zeitquellen, und sie werden nicht vermischt:
+
+- **Der Tick** (`state.tick`, eine Sekunde) ist die Uhr der Simulation. Er
+  fängt für jeden Hof bei null an und ist das Einzige, worauf `src/sim/`
+  rechnet. Wachstum, Fahrten, Kisten — alles in Ticks.
+- **Die Hofzeit** (`src/sim/zeit.ts`) ist der Kalender im Spiel: 12 Monate zu
+  31 Tagen, ein Hoftag dauert eine echte Stunde, Tag von 6 bis 19 Uhr, Nacht
+  davor und danach. Sie ist eine reine Funktion der Unix-Sekunde:
+  `hofzeit(tick + zeitVersatz)`. Damit alle Höfe denselben Kalender sehen,
+  stempelt der Server `zeitVersatz` **genau einmal** in `applyExternal` (die
+  Unix-Sekunde, die Tick null entspricht) und fasst ihn danach nie wieder an.
+  `unixVon(state)` in `state.ts` liefert die Unix-Sekunde oder `null`,
+  solange noch nicht gestempelt ist — dann gilt keine Jahreszeit, und der
+  Client zeichnet Nacht nach der Geräteuhr. `zeitVersatz` wird nicht gehasht:
+  Der Client übernimmt ihn mit dem Snapshot.
+- **Die Serverzeit** (UTC, ohne Sommerzeit) ist die echte Uhr: Tagesbonus,
+  Tageszettel, Wochenzettel, Feste, Dankeswoche, Zug. Sie wird als
+  `serverTag` und `wochenNummer` gestempelt, nicht als Datum.
+
+Regel: Wer etwas „am Kalender" festmacht (Jahreszeit, Nacht), rechnet mit der
+Hofzeit. Wer etwas „an einem echten Tag" festmacht (Belohnungen, Zettel),
+rechnet mit der Serverzeit. `EREIGNISSE` in `zeit.ts` listet beides mit
+seiner Quelle, und der Kalender im Spiel zeigt die Quelle dazu. Neue Termine
+kommen dort hinein, nicht als eigene Uhr.
+
 ### 2.5 Der Server ist die Wahrheit, der Client rechnet vor
 
 - Der Client führt Befehle sofort aus (`src/client/client.ts`), hängt sie an
@@ -192,6 +219,7 @@ src/sim/         Die Simulation. rein, deterministisch, ganzzahlig.
   commands.ts      die Befehlstypen
   migrate.ts       Wanderung eines Zustands von Version a nach b
   canonical.ts     was in den Hash eingeht
+  zeit.ts          die Hofzeit: Kalender, Fenster, Termine (reine Funktion der Unix-Sekunde)
   hash.ts/sha256   Prüfsumme
 src/client/      client.ts (Befehle, Warteschlange, preview), sync-engine.ts
                  (Abgleich, Backoff, Verbindungszustand), view.ts (farmView:
@@ -211,6 +239,7 @@ web/farm/        Die Oberfläche: page.html (Markup), style.css, *.js Module
   nachbarn.js      Freunde, Besuch, fremder Stand
   konto.js         Hof sichern, Wiederherstellung, Löschen, Rückmeldung, Fehler
   fuehrung.js      die geführte Einführung für neue Höfe (Schritte, Spot, Sperre)
+  kalender.js      das Kalenderblatt (Hofzeit, Monat, Jahreszeiten, Termine)
   momente.js       Meldungen mit Warteschlange
   texte.js         alle Namen und Texte (auch von der Werkbank benutzt)
   klang.js         Klänge abspielen (Aufnahmen, Tonhöhe je Erntekette)
@@ -457,12 +486,15 @@ echter Datenbank. Zahlen in `deploy.md`.
   Etappen, gemessener Bedarf, Dankeswoche; endliche Reihe, der Bahnhof
   bleibt) und `zug.ts` (eine Fahrt je Serverwoche, `ZUG_WAREN`, `ZUG_DANK`).
   Der Abzug geht den Weg des Geschenks (`nimmAb`), der Dank den der Post.
-- **Jahreszeiten, Tag und Nacht**: Die Jahreszeit kommt aus der Serverwoche
-  (`jahreszeiten` im Regelwerk, `saisonBei`; Saisonware bringt ein Stück
-  mehr, `saisonExtra` in `sim.ts`); der Hof färbt sich je Saison per Klasse
-  `saison-<n>` (`style.css`). Die Nacht ist Stimmung nach der Geräteuhr:
-  `nachtdecke` multipliziert die Welt, `lichter` (Laternen, Glühwürmchen)
-  liegen darüber (`wetter.js`, `lichterSetzen`).
+- **Jahreszeiten, Tag und Nacht**: Die Jahreszeit kommt seit Regelwerk 53
+  aus der Hofzeit (`jahreszeiten.quelle: 'hofzeit'`, `saisonVon` in
+  `rules.ts`; bis 52 aus der Serverwoche); Saisonware bringt ein Stück mehr
+  (`saisonExtra` in `sim.ts`); der Hof färbt sich je Saison per Klasse
+  `saison-<n>` (`style.css`). Die Nacht folgt der Hofzeit (`himmelStunde` in
+  `wetter.js`; ohne Stempel der Geräteuhr): `nachtdecke` multipliziert die
+  Welt, `lichter` (Laternen, Glühwürmchen) liegen darüber (`lichterSetzen`).
+  `kalender.js` zeichnet das Kalenderblatt aus `NS.hofzeit` und
+  `NS.EREIGNISSE`; `view.ts` liefert `hofzeit` und `saison` dazu.
 - **Benachrichtigungen**: `melden.js` (Abo im Browser, Apple in der App),
   Server `push.ts`/`apns.ts`, `/api/push/abo` und `/api/push/probe`. Wie sie
   ankommen und wo es hängt: `deploy.md`, „Benachrichtigungen".

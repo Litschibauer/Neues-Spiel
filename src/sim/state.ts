@@ -125,6 +125,11 @@ export type State = {
   // Stand ohne Kontakt behält den zuletzt bekannten Tag — deshalb rollen
   // Tagesaufgaben offline nicht weiter, während der Fortschritt trotzdem zählt.
   serverTag: number;
+  // Der Tick zählt je Hof ab null. Damit alle Höfe dieselbe Hofzeit sehen,
+  // stempelt der Server einmal den Versatz zur echten Uhr: Unix-Sekunden =
+  // tick + zeitVersatz. 0 heißt: noch nicht gestempelt, keine Hofzeit. Nicht
+  // Teil des Hashes — wie die Woche kommt er vom Server, nicht aus Befehlen.
+  zeitVersatz: number;
   // Fuer welchen Tag tagStart/tagGeholt gelten. Wechselt der Server-Tag, setzt
   // der Server beides zurueck — an derselben Stelle, an der er den Tag stempelt.
   tagNummer: number;
@@ -187,6 +192,12 @@ export function tagesAbgenommen(s: State): number {
 
 // Die Woche haengt am Server-Tag: Tag 0 der Epoche war ein Donnerstag, darum
 // die Verschiebung um drei — so beginnt jede Woche am Montag (UTC).
+// Unix-Sekunden eines Standes, falls der Server den Versatz gestempelt hat — sonst null.
+export function unixVon(s: State): number | null {
+  const v = s.zeitVersatz ?? 0;
+  return v === 0 ? null : s.tick + v;
+}
+
 export function wocheVonTag(tag: number): number {
   return Math.floor((tag + 3) / 7);
 }
@@ -340,6 +351,7 @@ export function initialState(rules: Ruleset): State {
     angelKoeder: [],
     zaehler: zaehler,
     serverTag: 0,
+    zeitVersatz: 0,
     tagNummer: 0,
     tagStart: [],
     tagGeholt: [],
@@ -427,6 +439,7 @@ export function normalizeState(s: State): State {
     angelKoeder: s.angelKoeder ?? [],
     zaehler: s.zaehler ?? [],
     serverTag: s.serverTag ?? 0,
+    zeitVersatz: s.zeitVersatz ?? 0,
     tagNummer: s.tagNummer ?? 0,
     tagStart: s.tagStart ?? [],
     tagGeholt: s.tagGeholt ?? [],
@@ -472,6 +485,7 @@ export function cloneState(s: State): State {
     angelKoeder: s.angelKoeder ?? [],
     zaehler: s.zaehler ?? [],
     serverTag: s.serverTag ?? 0,
+    zeitVersatz: s.zeitVersatz ?? 0,
     tagNummer: s.tagNummer ?? 0,
     tagStart: s.tagStart ?? [],
     tagGeholt: s.tagGeholt ?? [],

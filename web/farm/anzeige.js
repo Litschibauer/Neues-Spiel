@@ -51,6 +51,7 @@ function render() {
   renderEmpfang();
   renderNaechstes(v);
   wetterUebernehmen(hofV);
+  if (typeof kalenderAnzeigen === 'function') kalenderAnzeigen();
   momentePruefen(v);
   winkeAnwenden();
   bonusKnopf();

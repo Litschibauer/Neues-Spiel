@@ -321,6 +321,13 @@
         </div>
         <span class="go" id="dorf-zahl">▶</span>
       </button>
+      <button class="card" id="kalender-auf">
+        <div class="body">
+          <div class="top">Kalender</div>
+          <div class="sub" id="kalender-sub">Hofzeit</div>
+        </div>
+        <span class="go">📅</span>
+      </button>
       <button class="card" id="abenteuer-auf">
         <div class="body">
           <div class="top">Abenteuerbrett</div>
@@ -450,6 +457,14 @@
     </div>
   </div>
 
+  <div class="sheet-bg" id="kalender-bg" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="kalender-titel">
+      <h3 id="kalender-titel">Kalender</h3>
+      <div id="kalender-liste"></div>
+      <button class="sheet-close" id="kalender-close">Schließen</button>
+    </div>
+  </div>
+
   <div class="sheet-bg" id="dorf-bg" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dorf-titel">
       <h3 id="dorf-titel">Dorfplatz</h3>
@@ -556,6 +571,7 @@
 
   <!--INCLUDE:farm/momente.js-->
   <!--INCLUDE:farm/dorf.js-->
+  <!--INCLUDE:farm/kalender.js-->
 
   <!--INCLUDE:farm/angeln.js-->
 

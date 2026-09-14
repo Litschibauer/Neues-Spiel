@@ -361,6 +361,26 @@ Funktionen `waageZettel` und `waageFuhre` in `rules.ts` rechnen das aus den
 alten Werten — wer nachjustiert, dreht dort an drei Zahlen, in einem neuen
 Regelwerk.
 
+### Die Hofzeit (Regelwerk 53)
+
+Seit Regelwerk 53 hat das Spiel einen eigenen Kalender, die **Hofzeit**:
+Ein Hoftag dauert eine echte Stunde, ein Monat 31 Hoftage, ein Jahr zwölf
+Monate (Frühfrühling, Frühling, Spätfrühling, Frühsommer …). Tag ist von 6 bis
+19 Uhr Hofzeit, dazwischen Nacht mit Laternen und Glühwürmchen; die tiefe
+Nacht (21 bis 5 Uhr) ist ein eigenes Fenster. Die Jahreszeit kommt seit 53 aus
+diesem Kalender (drei Monate je Jahreszeit, gut vier echte Tage), bis 52 aus
+der Serverwoche. Die Uhr ist für alle Höfe dieselbe: `HOFZEIT_EPOCHE` in
+`src/sim/zeit.ts` ist Tag 1 des Frühfrühlings im Jahr 1, und der Server
+stempelt jedem Hof einmal den Versatz zwischen seinem Tick und der
+Unix-Sekunde (`zeitVersatz`). Echte Termine — Tagesbonus, Zettel, Feste,
+Zug — bleiben an der Serverzeit (UTC), unabhängig vom Kalender.
+
+Im Spiel: Die Wetterzeile nennt Monat und Tag, das Kalenderblatt (Zahnrad →
+Kalender) zeigt Monat, Uhrzeit, Jahreszeit, das Blatt mit 31 Tagen und die
+nächsten Termine — jeder mit seiner Quelle (Hofzeit oder echte Zeit) und
+Countdown in echter Zeit. Wer beobachten will, ob die Uhr stimmt: Zwei Geräte
+müssen dieselbe Hofzeit zeigen, und `/health` nennt `rulesetVersion` 53.
+
 ### Balance-Patch live beobachten
 
 In Produktion migriert der Server einen Spielstand beim nächsten Sync auf die

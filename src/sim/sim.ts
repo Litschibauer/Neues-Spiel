@@ -15,7 +15,7 @@ import {
   tagesAufgabenFuer,
   wochenAufgabenFuer,
   wetterBei,
-  saisonBei,
+  saisonVon,
   meisterFaehig,
   sterneVon,
   festAktiv,
@@ -53,8 +53,7 @@ import {
   festAbgenommen,
   wocheVonTag,
   wochenAbgenommen,
-  wochenFortschritt,
-} from './state.ts';
+  wochenFortschritt, unixVon } from './state.ts';
 import { advancePassives } from './produce.ts';
 
 export const MAX_PENDING_BOXES = 20;
@@ -335,7 +334,7 @@ function verdoppleXp(vorher: State, nachher: State, rules: Ruleset): State {
 // Extrastück der Meisterschaft ein Geschenk, das verfällt, wenn das Lager voll
 // ist, statt die Abholung zu blockieren.
 function saisonExtra(s: State, rules: Ruleset, item: number): readonly number[] {
-  const saison = saisonBei(rules, s.wochenNummer ?? 0);
+  const saison = saisonVon(rules, unixVon(s), s.wochenNummer ?? 0);
   if (!saison || saison.bonusItem !== item) return s.items;
   if (rules.items[item]?.storable && spaceLeft(s, rules) < 1) return s.items;
   return addItem(s.items, item, 1);

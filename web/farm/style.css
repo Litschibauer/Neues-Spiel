@@ -2108,6 +2108,41 @@
   .dorf-helfer .wert { font-variant-numeric: tabular-nums; flex: none; }
   .dorf-mein { text-align: center; margin: .2rem 0 .6rem; }
 
+  /* Der Kalender: Monatsblatt, Jahreszeiten, was als Naechstes kommt. */
+  .sheet .kalender-kopf { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .15rem; }
+  .kalender-jahr { font-size: .7rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .kalender-monat { font-family: var(--pixel); font-size: 1.25rem; font-weight: 700; }
+  .kalender-tag { font-size: .82rem; font-variant-numeric: tabular-nums; }
+  .kalender-saison { display: flex; align-items: center; gap: .35rem; margin-top: .3rem; font-size: .8rem; font-weight: 700; }
+  .kalender-saison .ic { width: 1.1rem; height: 1.1rem; image-rendering: pixelated; }
+  .kalender-kopf.saison-0 .kalender-saison { color: #4d8a3f; }
+  .kalender-kopf.saison-1 .kalender-saison { color: #b8811f; }
+  .kalender-kopf.saison-2 .kalender-saison { color: #b5473a; }
+  .kalender-kopf.saison-3 .kalender-saison { color: #4f7cc4; }
+  .sheet .kalender-blatt { display: grid; grid-template-columns: repeat(8, 1fr); gap: .3rem; }
+  .kalender-zelle {
+    font-family: var(--pixel); font-size: .78rem; text-align: center; padding: .32rem 0;
+    border: 2px solid var(--tinte-grau); border-radius: 3px; color: var(--tinte);
+  }
+  .kalender-zelle.vorbei { color: var(--tinte-grau); border-color: var(--papier-dunkel); background: var(--papier-dunkel); }
+  .kalender-zelle.heute { background: var(--messing); border-color: var(--tinte); box-shadow: 0 2px 0 var(--messing-dunkel); }
+  .sheet .kalender-jahreszeiten { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; }
+  .kalender-jz {
+    display: flex; flex-direction: column; align-items: center; gap: .15rem; padding: .4rem .2rem;
+    border: 2px solid var(--tinte-grau); border-radius: 3px; font-size: .68rem; color: var(--tinte-grau);
+  }
+  .kalender-jz .ic { width: 1.2rem; height: 1.2rem; image-rendering: pixelated; }
+  .kalender-jz b { font-family: var(--pixel); font-size: .74rem; }
+  .kalender-jz i { font-style: normal; }
+  .kalender-jz.jetzt { border-color: var(--tinte); color: var(--tinte); background: var(--messing); }
+  .sheet .kalender-ereignisse { display: flex; flex-direction: column; gap: .45rem; }
+  .kalender-ereignis { display: grid; grid-template-columns: 1fr auto; gap: .1rem .5rem; align-items: baseline; font-size: .8rem; }
+  .kalender-ereignis .ke-name { font-weight: 700; }
+  .kalender-ereignis .ke-quelle { grid-row: 2; font-size: .64rem; color: var(--muted); }
+  .kalender-ereignis .ke-rest { grid-row: 1 / span 2; font-variant-numeric: tabular-nums; font-family: var(--pixel); font-size: .78rem; }
+  .kalender-ereignis.hofzeit .ke-quelle { color: #b8811f; }
+  .kalender-mein { text-align: center; margin: .2rem 0 .6rem; }
+
   /* Stufenaufstieg und Kiste feiern auf derselben Buehne wie die Blaetter:
      Holzrahmen, Balken als Titel, Papierzeilen, Messingmedaille. */
   .stufe-karte {

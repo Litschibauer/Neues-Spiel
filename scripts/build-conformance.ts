@@ -9,6 +9,7 @@ const SIM = join(ROOT, 'src', 'sim');
 const MODULES = ['rules.ts', 'state.ts', 'produce.ts', 'commands.ts', 'canonical.ts', 'sim.ts'];
 
 const CLIENT_MODULES = [
+  'sim/zeit.ts',
   'sim/rules.ts',
   'sim/state.ts',
   'sim/produce.ts',
@@ -144,6 +145,19 @@ ${modules}
     farmView: farmView,
     sizeOf: sizeOf,
     blockiert: blockiert,
+    hofzeit: hofzeit,
+    HOFZEIT_EPOCHE: HOFZEIT_EPOCHE,
+    HOFTAG_S: HOFTAG_S,
+    HOFSTUNDE_S: HOFSTUNDE_S,
+    MONATE: MONATE,
+    JAHRESZEITEN: JAHRESZEITEN,
+    ZEITFENSTER: ZEITFENSTER,
+    imFenster: imFenster,
+    EREIGNISSE: EREIGNISSE,
+    verbleibendBisBeginn: verbleibendBisBeginn,
+    dauerInHofzeit: dauerInHofzeit,
+    jahreszeitGrenzen: jahreszeitGrenzen,
+    hofmonatGrenzen: hofmonatGrenzen,
     freischaltungenAb: freischaltungenAb,
     itemUnlockLevel: itemUnlockLevel,
   };

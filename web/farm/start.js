@@ -114,7 +114,7 @@ function show(next) {
   if (next !== 'besuch' && next !== 'fremdstand') besuchEnde();
   if (next !== 'freunde') freundeWachen(false);
   // „besuch" hat kein Blatt: Der fremde Hof steht im Hof selbst.
-  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf'].forEach(function (name) {
+  ['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'bonus', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf', 'kalender'].forEach(function (name) {
     $(name + '-bg').hidden = name !== next;
   });
   render();
@@ -125,7 +125,7 @@ function show(next) {
   }
 }
 
-['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf'].forEach(function (name) {
+['brett', 'lager', 'stand', 'rest', 'bau', 'freunde', 'fremdstand', 'pfad', 'erweiterung', 'ziele', 'bestenliste', 'abenteuer', 'empfang', 'sicherung', 'rueckmeldung', 'dorf', 'kalender'].forEach(function (name) {
   var zurueck = name === 'fremdstand' ? 'besuch' : (name === 'ziele' || name === 'bestenliste' || name === 'sicherung' || name === 'rueckmeldung') ? 'rest' : 'farm';
   $(name + '-close').addEventListener('click', function () { show(zurueck); });
   $(name + '-bg').addEventListener('click', function (e) {
@@ -191,6 +191,7 @@ $('ziele-auf').addEventListener('click', function () { show('ziele'); });
 $('bestenliste-auf').addEventListener('click', function () { show('bestenliste'); ladeBestenliste(); });
 $('dorf-auf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
 $('dorf').addEventListener('click', function () { show('dorf'); renderDorf(); dorfLaden(); });
+$('kalender-auf').addEventListener('click', kalenderAuf);
 $('brett').addEventListener('click', function () { show('brett'); });
 $('abenteuer').addEventListener('click', function () { show('abenteuer'); });
 $('lagerhaus').addEventListener('click', function () { loeschZu(); show('lager'); });

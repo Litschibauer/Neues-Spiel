@@ -78,11 +78,22 @@ function tagesphase(stunde) {
   return 'tag';
 }
 
+// Die Stunde: nach Hofzeit, wenn das Regelwerk sie kennt (dann ist es für
+// alle gleichzeitig Nacht, und die Sim weiß es auch) — sonst nach der Uhr
+// des Geräts, als Stimmung.
+function himmelStunde() {
+  if (typeof hofzeitJetzt === 'function') {
+    var z = hofzeitJetzt();
+    if (z) return z.stunde + z.minute / 60;
+  }
+  var d = new Date();
+  return d.getHours() + d.getMinutes() / 60;
+}
+
 function himmelMalen() {
   var el = $('himmel');
   if (!el) return;
-  var d = new Date();
-  var stunde = d.getHours() + d.getMinutes() / 60;
+  var stunde = himmelStunde();
   var c = himmelBei(stunde);
   el.style.background = 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + c.a + ')';
   var decke = $('nachtdecke');
@@ -155,7 +166,8 @@ function wetterUebernehmen(v) {
       zeile.textContent = '🌧 Regen · Saat wächst ' + v.wetter.regenSchubProzent + ' % schneller · noch ' + timeText(v.wetter.wechselIn);
     } else if (saison) {
       zeile.style.color = SAISON_FARBEN[saison.index] || '';
-      zeile.textContent = saison.name + ' · ' + itemName(saison.bonusItem) + ' bringt eine mehr';
+      var hz = v && v.hofzeit;
+      zeile.textContent = (hz ? hz.monatName + ', Tag ' + hz.tag : saison.name) + ' · ' + itemName(saison.bonusItem) + ' bringt eine mehr';
     }
   }
   var hof = $('hof');
@@ -171,4 +183,5 @@ function wetterUebernehmen(v) {
 }
 
 himmelMalen();
-setInterval(himmelMalen, 30000);
+// Ein Hoftag ist eine Stunde: alle paar Sekunden nachfärben, sonst springt der Abend.
+setInterval(himmelMalen, 5000);

@@ -1383,8 +1383,8 @@ try {
     wetterLage.zeile ? wetterLage.text : `kein Regen gerade (Himmel: ${wetterLage.regenAmHimmel})`,
   );
   check(
-    'Ohne Regen nennt die Zeile die Jahreszeit und die Saisonware',
-    wetterLage.regenAmHimmel || (wetterLage.zeile && /(Frühling|Sommer|Herbst|Winter) · .+ bringt eine mehr/.test(wetterLage.text)),
+    'Ohne Regen nennt die Zeile Hofmonat, Tag und die Saisonware',
+    wetterLage.regenAmHimmel || (wetterLage.zeile && /(frühling|sommer|herbst|winter), Tag \d+ · .+ bringt eine mehr/i.test(wetterLage.text)),
     wetterLage.text,
   );
 
@@ -1870,6 +1870,56 @@ try {
     `${projekteFertig} Projekte · ${JSON.stringify(zugBild)}`,
   );
   await evaluate(cdp, `document.getElementById('dorf-close').click()`);
+  await sleep(200);
+
+  // Der Kalender: Die Hofzeit läuft für alle Höfe nach derselben Uhr. Das
+  // Kalenderblatt zeigt Monat, Tag und Uhrzeit aus NS.hofzeit — und die
+  // Wetterzeile nennt denselben Monat.
+  await evaluate(cdp, `document.getElementById('zahnrad').click()`);
+  await sleep(300);
+  await evaluate(cdp, `document.getElementById('kalender-auf').click()`);
+  await waitFor(cdp, `document.querySelectorAll('#kalender-liste .kalender-zelle').length === 31`, 'Kalenderblatt mit 31 Tagen', 8_000);
+  const kalender = JSON.parse(
+    await evaluate<string>(
+      cdp,
+      `JSON.stringify((function () {
+         var NS = globalThis.NeuesSpiel;
+         var monat = (document.querySelector('#kalender-liste .kalender-monat') || {}).textContent || '';
+         var tag = (document.querySelector('#kalender-liste .kalender-tag') || {}).textContent || '';
+         var jz = [...document.querySelectorAll('#kalender-liste .kalender-jz')];
+         var zeile = document.getElementById('wetterzeile');
+         return {
+           monat: monat,
+           tag: tag,
+           monate: NS.MONATE.slice(),
+           heute: document.querySelectorAll('#kalender-liste .kalender-zelle.heute').length,
+           jahreszeiten: jz.length,
+           jetzt: jz.filter(function (x) { return x.classList.contains('jetzt'); }).length,
+           ereignisse: document.querySelectorAll('#kalender-liste .kalender-ereignis').length,
+           echtzeit: document.querySelectorAll('#kalender-liste .kalender-ereignis.echtzeit').length,
+           zeile: zeile && !zeile.hidden ? zeile.textContent : '',
+           sub: (document.getElementById('kalender-sub') || {}).textContent || '',
+         };
+       })())`,
+    ),
+  ) as { monat: string; tag: string; monate: string[]; heute: number; jahreszeiten: number; jetzt: number; ereignisse: number; echtzeit: number; zeile: string; sub: string };
+  const monatBekannt = kalender.monate.includes(kalender.monat);
+  check(
+    'Das Kalenderblatt zeigt Hofmonat, Tag von 31 und Uhrzeit, ein Tag ist heute, vier Jahreszeiten, eine davon jetzt',
+    monatBekannt && /^Tag \d+ von 31 · \d+:\d\d Uhr · (Tag|Nacht)$/.test(kalender.tag) && kalender.heute === 1 && kalender.jahreszeiten === 4 && kalender.jetzt === 1,
+    JSON.stringify(kalender),
+  );
+  check(
+    'Die Ereignisliste nennt Hofzeit- und Echtzeit-Termine mit Countdown',
+    kalender.ereignisse >= 5 && kalender.echtzeit >= 2,
+    `${kalender.ereignisse} Ereignisse, davon ${kalender.echtzeit} nach echter Uhr`,
+  );
+  check(
+    'Wetterzeile und Kalenderkarte nennen denselben Hofmonat',
+    (kalender.zeile === '' || kalender.zeile.indexOf(kalender.monat) === 0 || /Regen/.test(kalender.zeile)) && kalender.sub.indexOf(kalender.monat) >= 0,
+    `Zeile: ${kalender.zeile} · Karte: ${kalender.sub}`,
+  );
+  await evaluate(cdp, `document.getElementById('kalender-close').click()`);
   await sleep(200);
 
   const werkzeugStand = await evaluate<{ saege: boolean; kaeseGesperrt: boolean; kaeseText: string }>(

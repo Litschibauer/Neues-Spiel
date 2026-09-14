@@ -420,6 +420,15 @@ export class Server {
       state = fest;
     }
 
+    // Die Hofzeit: einmal den Versatz zur echten Uhr stempeln. Der Tick des
+    // Snapshots gehört zu seinem serverTs — daraus folgt, welche Unix-Sekunde
+    // Tick null war. Danach nie wieder anfassen: Er ist die Uhr aller Höfe.
+    if (!state.zeitVersatz) {
+      const gestempelt = cloneState(state);
+      gestempelt.zeitVersatz = Math.floor(this.snapshot.serverTs / 1000) - this.snapshot.state.tick;
+      state = gestempelt;
+    }
+
     if (this.pendingXp > 0) {
       const belohnt = cloneState(state);
       belohnt.xp = state.xp + this.pendingXp;

@@ -388,6 +388,8 @@ export const MIGRATIONS: ReadonlyMap<string, MigrationStep> = new Map([
   ['50->51', AUFS_RASTER],
   // Jahreszeiten: reine Regel, der Stand bleibt wie er ist.
   ['51->52', AUFS_RASTER],
+  // Hofzeit: die Jahreszeit kommt aus dem Kalender; der Stand bleibt.
+  ['52->53', AUFS_RASTER],
 ]);
 
 export function assertInvariants(state: State, rules: Ruleset): void {

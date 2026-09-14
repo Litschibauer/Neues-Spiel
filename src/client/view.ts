@@ -1,4 +1,5 @@
 import type { Ruleset, WetterArt } from '../sim/rules.ts';
+import { hofzeit, jahreszeitGrenzen } from '../sim/zeit.ts';
 import { erfolgsStand } from '../sim/sim.ts';
 import {
   levelOf,
@@ -19,7 +20,7 @@ import {
   wochenAufgabenFuer,
   wetterBei,
   wetterWechselIn,
-  saisonBei,
+  saisonVon,
   saisonWechselInWochen,
   meisterFaehig,
   meisterGrenzen,
@@ -44,8 +45,7 @@ import {
   tagesFortschritt,
   wocheVonTag,
   wochenAbgenommen,
-  wochenFortschritt,
-} from '../sim/state.ts';
+  wochenFortschritt, unixVon } from '../sim/state.ts';
 
 export type Stack = { item: number; amount: number };
 
@@ -338,7 +338,9 @@ export type FarmView = {
   // Das Wetter der Sim — was der Himmel zeigt, ist das, was wirkt.
   wetter: { art: WetterArt; wechselIn: number; wirkt: boolean; regenSchubProzent: number } | null;
   // Die Jahreszeit der Serverwoche: Name, Saisonware, und wie viele Wochen sie noch hat.
-  saison: { name: string; index: number; bonusItem: number; nochWochen: number } | null;
+  saison: { name: string; index: number; bonusItem: number; nochWochen: number; wechselIn: number } | null;
+  // Die Hofzeit des Standes (ab V53): Kalender und Tageszeit aus dem Tick.
+  hofzeit: { jahr: number; monat: number; monatName: string; tag: number; stunde: number; minute: number; tagesphase: 'tag' | 'nacht'; jahreszeit: number } | null;
   // Booster: Vorrat und Restlaufzeit. null, wenn das Regelwerk keine kennt.
   booster: {
     xpItem: number;
@@ -894,11 +896,22 @@ export function farmView(state: State, rules: Ruleset, online = true): FarmView 
     wochenaufgaben: wochenView(state, rules),
     feste: festView(state, rules),
     saison: (() => {
-      const s = saisonBei(rules, state.wochenNummer ?? 0);
+      const unix = unixVon(state);
+      const s = saisonVon(rules, unix, state.wochenNummer ?? 0);
       if (!s) return null;
       const alle = rules.jahreszeiten!.saisons;
-      return { name: s.name, index: alle.indexOf(s), bonusItem: s.bonusItem, nochWochen: saisonWechselInWochen(rules, state.wochenNummer ?? 0) };
+      const nachHofzeit = rules.jahreszeiten!.quelle === 'hofzeit';
+      return {
+        name: s.name,
+        index: alle.indexOf(s),
+        bonusItem: s.bonusItem,
+        nochWochen: nachHofzeit ? 0 : saisonWechselInWochen(rules, state.wochenNummer ?? 0),
+        wechselIn: nachHofzeit && unix !== null ? jahreszeitGrenzen(unix).ende - unix : 0,
+      };
     })(),
+    hofzeit: rules.jahreszeiten?.quelle === 'hofzeit' && unixVon(state) !== null
+      ? (() => { const z = hofzeit(unixVon(state)!); return { jahr: z.jahr, monat: z.monat, monatName: z.monatName, tag: z.tag, stunde: z.stunde, minute: z.minute, tagesphase: z.tagesphase, jahreszeit: z.jahreszeit }; })()
+      : null,
     wetter: rules.wetter
       ? {
           art: wetterBei(rules, state.tick),
